@@ -131,10 +131,21 @@
     }
   }
 
+  /* ---------- placeholder links: keep them focusable, stop the jump ---------- */
+  function initPlaceholderLinks() {
+    var links = document.querySelectorAll('a[href="#"]');
+    for (var i = 0; i < links.length; i++) {
+      links[i].addEventListener("click", function (e) {
+        e.preventDefault();
+      });
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initLang();
     initMenu();
     initStats();
     initSubscribe();
+    initPlaceholderLinks();
   });
 })();
