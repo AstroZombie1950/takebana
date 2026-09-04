@@ -1,0 +1,658 @@
+@font-face {
+    font-family: Inter;
+    src: url("../fonts/Inter-VariableFont_opszwght.ttf");
+}
+
+*{
+    font-family: Inter;
+    padding: 0;
+    margin: 0;
+}
+
+html{
+    width: 100%;
+}
+
+body{
+    width: 100%;
+}
+
+
+.shadow{
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: black;
+}
+.profile__box{
+    width: 335px;
+    position: absolute;
+    background-color: rgba(255, 255, 255, 1);
+    border-radius: 16px;
+    padding: 24px;
+    display: none;
+    top: 50px;
+    right:  56px;
+    z-index: 2;
+    box-shadow: 5px 5px 9px rgba(0, 0, 0, 0.6);
+}
+
+.profil__image{
+    width: 62px;
+    height: 62px;
+}
+
+.profile{
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 48px;
+}
+
+.profil__you-name{
+    color: rgba(38, 38, 38, 1);
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.profil__title{
+    color: rgba(195, 195, 195, 1);
+    margin-left: 19px;
+}
+
+
+.button__profil{
+    border: 0;
+    background-color: transparent;
+    display: flex;
+    gap: 10px;
+    cursor: pointer;
+    margin-top: 7px;
+}
+
+.button__profil p {
+    margin-top: -2px;
+}
+
+.wrapper__button-profil,
+.wrappr__my-channel{
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+.wrappr__my-channel{
+    gap: 12px;
+}
+
+.hr{
+    width: 1px;
+    background-color: black;
+    height: 48px;
+    padding-bottom:10px ;
+    position: absolute;
+}
+
+.color__pink{
+    color: rgba(102, 107, 207, 1);
+}
+
+.line{
+    width: 1px;
+    height: 825px;
+}
+
+.chat__messeg{
+    border-left: 1px solid rgba(208, 208, 212, 1);
+}
+
+.business{
+    background-image: url(../images/image\ \(2\).png);
+}
+
+.notifications__box{
+    position: absolute;
+    background-color: rgba(255, 255, 255, 1);
+    padding: 32px 24px 32px 24px;
+    width: 664px;
+    height: fit-content;
+    border-radius: 16px;
+    display: none;
+    top: 47px;
+    right: 167px;
+    z-index: 2;
+    box-shadow: 7px 7px 9px rgba(0, 0, 0, 0.6);
+}
+
+.notification__title-box{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.title__notifications-box{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+}
+
+.btn_header_style1 {
+    border: 2px solid rgba(102, 107, 207, 0.5);
+    border-radius: 50px;
+    background-color: transparent;
+    color: rgba(102, 107, 207, 1);
+    font-weight: 700;
+    padding: 7px 16px;
+    cursor: pointer;
+}
+
+
+.notification{
+    padding: 10px 24px 15px 24px;
+    background-color: rgba(240, 240, 250, 1);
+    margin-bottom: 10px;
+}
+
+.time{
+    color: rgba(128, 128, 128, 1);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.notification__title{
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(38, 38, 38, 1);
+}
+
+.notification__text{
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(102, 102, 102, 1);
+}
+
+.shodow{
+    display: none;
+    width: 100%;
+    height: 100%;
+    background-color:  transparent;
+    position: absolute;
+    z-index: 2;
+}
+
+textarea {
+    resize:none;
+    height: 50px;
+    outline: none;
+}
+
+
+
+
+.display-none{
+    display: none;
+}
+
+.display-flex{
+    display: flex;
+}
+
+.display-block{
+    display: block;
+}
+
+
+
+
+.close{
+    cursor: pointer;
+}
+
+
+a{
+    text-decoration: none;
+    cursor: pointer;
+    color: rgba(38, 38, 38, 1);
+}
+.profil__icons{
+    width: 17px;
+    height: 17px;
+}
+
+.z-index{
+    z-index: 4;
+}
+
+
+
+
+.profileInfo {
+    padding: 0 24px;
+    position: fixed;
+    width: 664px;
+    background-color: white;
+    border-radius: 16px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    display: none;
+    height: auto;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.profileInfo.active {
+    display: block;
+}
+
+.profileInfo .head {
+    height: 72px;
+    width: 100%;
+    position: relative;
+    border-bottom: 1px solid rgba(227, 227, 227, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.profileInfo .head p {
+    font-size: 16px;
+    font-weight: 600;
+    color: black;
+}
+
+.profileInfo .close_modal {
+    position: absolute;
+    right: 25px;
+    top: 25px;
+    cursor: pointer;
+}
+
+.profileInfo .bio {
+
+    margin-top: 27px;
+    border-bottom: 1px solid rgba(227, 227, 227, 1);
+    padding-bottom: 32px;
+}
+
+.profileInfo .bio input {
+    border: 1px solid rgba(179, 179, 179, 1);
+    width: 304px;
+}
+
+.profileInfo .private {
+    border-bottom: 1px solid rgba(227, 227, 227, 1);
+    padding-bottom: 32px;
+}
+
+.profileInfo .private .slide_wrap {
+    overflow: hidden;
+    height: 0px;
+    transition: .2s;
+}
+
+.profileInfo .private .slide_wrap.active {
+    height: 136px;
+}
+
+.profileInfo .private p {
+    font-size: 24px;
+    font-weight: 600;
+    color: black;
+    margin: 0;
+    margin-top: 32px;
+    margin-bottom: 22px;
+    cursor: pointer;
+}
+
+
+.profileInfo .private p span {
+    color: #00000070;
+    font-size: 20px;
+    margin-left: 10px;
+}
+
+.profileInfo .private .old {
+    display: flex;
+    align-items: center;
+}
+
+.profileInfo .private .old input {
+    width: 304px;
+    border: 1px solid rgba(179, 179, 179, 1)
+}
+
+.profileInfo .private .old a {
+    color: rgba(102, 107, 207, 1);
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    margin-left: 16px;
+}
+
+.profileInfo .private .new {
+    display: flex;
+}
+
+.profileInfo .private .new input {
+    width: 304px;
+    border: 1px solid rgba(179, 179, 179, 1);
+
+}
+
+.profileInfo .private .new input.newPass {
+    margin-right: 8px;
+}
+
+.profileInfo .logout {
+
+}
+
+.profileInfo .logout a {
+    display: inline-block;
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(38, 38, 38, 1);
+    text-decoration: none;
+    margin: 0;
+    margin: 32px 0;
+}
+
+.profileInfo .logout a:hover {
+    text-decoration: underline;
+}
+
+.profileInfo .save {
+    padding-top: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    /* height: 112px; */
+    border-top: 1px solid rgba(227, 227, 227, 1);
+    padding-bottom: 30px;
+}
+
+input.transparent {
+    width: 392px;
+    border-radius: 16px;
+    height: 56px;
+    border: 1px solid rgba(0, 0, 0, 1);
+    background-color: transparent;
+    margin-top: 8px;
+    padding: 0 16px;
+}
+
+.btn {
+    /* width: 297px; */
+    text-decoration: none;
+    /* height: 56px; */
+    top: 964px;
+    left: 716px;
+    padding: 9px 22px 9px 22px;
+    border-radius: 50px;
+    background: rgba(102, 107, 207, 1);
+    color: rgba(255, 255, 255, 1);
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+}
+
+
+
+.streamControls {
+    margin-top: 20px;
+}
+
+
+
+.streamSettingsModal {
+    padding: 0 24px;
+    position: fixed;
+    width: 480px;
+    background-color: white;
+    border-radius: 16px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    display: none;
+    height: auto;
+    padding-bottom: 35px;
+  }
+
+  .streamSettingsModal .head {
+    height: 72px;
+    width: 100%;
+    position: relative;
+    border-bottom: 1px solid rgba(227, 227, 227, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.streamSettingsModal .head p {
+    font-size: 16px;
+    font-weight: 600;
+    color: black;
+}
+
+.streamSettingsModal .close_modal_stream {
+    position: absolute;
+    right: 25px;
+    top: 25px;
+    cursor: pointer;
+}
+  
+  .streamSettingsModal.active {
+    display: block; /* При добавлении класса 'active' модалка отображается */
+    /* Дополнительные стили, если необходимо */
+  }
+
+
+
+
+
+/* Общие стили для input и select */
+.streamSettingsModal .styled-input,
+.streamSettingsModal .styled-select {
+    box-sizing: border-box;
+    width: 100%;
+    border-radius: 16px;
+    height: 56px;
+    border: 1px solid rgba(0, 0, 0, 1);
+    background-color: transparent;
+    margin-top: 8px;
+    padding: 0 16px;
+    font-size: 16px;
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    color: #000;
+}
+
+/* Плейсхолдер */
+.streamSettingsModal .styled-input::placeholder,
+.streamSettingsModal .styled-textarea::placeholder {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+/* Стили для textarea */
+.streamSettingsModal .styled-textarea {
+    width: 100%;
+    border-radius: 16px;
+    border: 1px solid rgba(0, 0, 0, 1);
+    background-color: transparent;
+    margin-top: 8px;
+    padding: 16px;
+    font-size: 16px;
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    resize: vertical;
+    min-height: 120px;
+    color: #000;
+    box-sizing: border-box;
+}
+
+/* Убираем стрелку у select и добавляем кастомную */
+.streamSettingsModal .styled-select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url('path/to/arrow-down.svg'); /* Замените на путь к вашей иконке */
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    background-size: 16px;
+    cursor: pointer;
+    padding-right: 40px; /* Отступ для иконки */
+}
+
+/* Стиль при фокусе */
+.streamSettingsModal .styled-input:focus,
+.streamSettingsModal .styled-select:focus,
+.streamSettingsModal .styled-textarea:focus {
+    border-color: rgba(0, 0, 0, 0.8);
+}
+
+/* Стили для label */
+.streamSettingsModal .settingItem label {
+    font-size: 16px;
+    font-family: 'Inter', sans-serif;
+    color: #000;
+    margin-top: 16px;
+}
+
+/* Выравнивание текста внутри элементов */
+.streamSettingsModal .styled-input,
+.streamSettingsModal .styled-select,
+.streamSettingsModal .styled-textarea {
+    text-align: left;
+}
+
+
+.settingItem {
+    display: flex;
+    flex-direction: column;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@media(max-width : 1228px){
+    .hr{
+        width: 243px;
+        height: 1px;
+        position: relative;
+        padding: 0;
+    }
+
+    .video-js {
+        width: 100%;
+    }
+}
+
+@media(max-width : 909px){
+
+    .notifications__box{
+        padding: 32px 24px 32px 24px;
+        width: 364px;
+    }
+}
+
+@media(max-width : 760px) {
+    .profileInfo {
+        width: 80%;
+    }
+
+    .streamSettingsModal {
+        width: 90%;
+    }
+
+    .streamSettingsModal .styled-input, .streamSettingsModal .styled-select {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .streamSettingsModal .styled-textarea {
+        width: 100%;
+        box-sizing: border-box;
+    }
+}
+
+
+@media(max-width : 599px) {
+    .profileInfo {
+        width: 90%;
+    }
+
+    .profileInfo .private .new {
+        flex-direction: column;
+    }
+
+    .profileInfo .private .slide_wrap.active {
+        height: 200px;
+    }
+}
+
+@media(max-width : 415px) {
+    .profileInfo .private .old input {
+        width: 100%;
+    }
+
+    .profileInfo .private .new input {
+        width: 90%;
+    }
+
+    .profileInfo .bio input {
+        width: 90%;
+    }
+}
+
+@media(max-width : 592px){
+        
+    .notifications__box{
+        padding: 22px 14px ;
+        width: 264px;
+    }
+}
+
+@media(max-width : 472px){
+        
+    .notifications__box{
+        top: 50px;
+        right: 67px;
+    }
+}
+
+@media(max-width : 450px){
+    .profile__box{
+        right: 20px;
+        width: 220px;
+    }
+    .serh__wrapper{
+        width: 90px;
+        position: absolute;
+        left: 10px;
+    }
+}

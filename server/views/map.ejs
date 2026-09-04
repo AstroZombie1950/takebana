@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Takebana Map</title>
+    <style>
+      #map1, #map2 {
+        position: absolute;
+        width: 100%;
+        height: 100vh;
+        top: 0;
+        left: 0;
+      }
+
+      .layers {
+        position: relative;
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/ol@v8.1.0/dist/ol.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.1.0/ol.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/js/lightbox-plus-jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.inputmask/5.0.8/jquery.inputmask.min.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Urbanist:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/css/lightbox.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+</head>
+  <body>
+
+    <div class="message_alert">
+      <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+      <span>Ошибка ошибочка</span>
+    </div>
+    
+
+
+    <div class="left_menu">
+      <div class="close">
+        <img src="img/close_modal_gray.svg" alt="">
+      </div>
+
+      <div class="list">
+        <a href="/about" target="_blank" lng="73">О проекте</a>
+        <!-- <a href="/doc.pdf" target="_blank" lng="7">Политика <br> конфедициальности</a>
+        <a href="/doc.pdf" target="_blank" lng="8">Пользовательское <br> соглашение</a> -->
+        <a href="/terms_of_service">Terms Of Service</a>
+        <a href="/user_agreement">Пользовательское соглашение</a>
+        <a href="/personal_data_processing">Политика обработки персональных данных</a>
+      </div>
+
+    </div>
+
+<!-- 
+    <li>
+      <a href="/terms_of_service">Terms Of Service</a>
+    </li>
+    <li>
+      <a href="/user_agreement">Пользовательское соглашение</a>
+    </li>
+    <li>
+      <a href="/personal_data_processing">Политика обработки персональных данных</a>
+    </li> -->
+
+
+
+
+    <div class="redirect" style="opacity: 0;">
+      <p>Перейти на стриминговую платформу? </p>
+      <div class="btns">
+        <button class="btn yes">Да</button>
+        <button class="btn no">Остаться здесь</button>
+      </div>
+    </div>
+
+    <script>
+
+
+const redirectModal = document.querySelector('.redirect');
+
+      setTimeout(() => {
+        redirectModal.style.opacity = '1';
+      }, 3000);
+
+    const targetService = localStorage.getItem('targetService');
+    if (targetService === 'service2') {
+        window.location.href = '/streaming';
+    }
+
+       // Код для модального окна перехода на стриминговую платформу
+
+    const yesButton = redirectModal.querySelector('.redirect .btn.yes');
+    const noButton = redirectModal.querySelector('.redirect .btn.no');
+
+    yesButton.addEventListener('click', function () {
+        localStorage.setItem('targetService', 'service2');
+        window.location.href = '/streaming';
+    });
+
+    noButton.addEventListener('click', function () {
+        redirectModal.style.display = 'none';
+    });
+    </script>
+
+    <style>
+      .redirect {
+        z-index: 5000;
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        background-color: white;
+        border-radius: 10px;
+        width: 320px;
+        height: auto;
+        padding: 20px;
+        transform: translateX(-50%);
+      }
+
+      .redirect p {
+        text-align: center;
+      }
+
+      .redirect .btns {
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+      }
+
+      .redirect .btns button {
+        padding: 10px 25px 10px 25px;
+        height: auto;
+      }
+       
+
+    </style>
+
+	<div class="streamingFrame">
+		<img src="/img/close.svg" alt="">
+		<video id="myVideo" controls>
+			<source src="yourStreamSource" type="video/mp4">
+			Ваш браузер не поддерживает HTML5 видео.
+		</video>
+	</div>
+
+    <div class="settingsOverlay">
+      <div class="estateSettings">
+        <div class="head">
+          <p lng="60">Настройка заведения</p>
+          <img src="/img/close_modal_gray.svg" alt="close">
+        </div>
+        <div class="info">
+          <div class="first">
+            <p lng="61">Основная информация</p>
+            <span lng="62">
+              <img src="/img/pen.svg" alt="pen">
+              Изменить</span>
+          </div>
+          <div class="second">
+            <div class="inp">
+              <span lng="47">Страна</span>
+              <input class="blocked country" type="text">
+            </div>
+            <div class="inp">
+              <span lng="48">Город</span>
+              <input class="blocked city" type="text">
+            </div>
+          </div>
+          <div class="three">
+            <div class="inp">
+              <span lng="49">Название заведения</span>
+              <input class="blocked name" type="text">
+            </div>
+            <div class="inp">
+              <span lng="50">Адрес заведения</span>
+              <input class="blocked address" type="text">
+            </div>
+          </div>
+          <div class="four">
+            <p lng="52">Время работы в будни</p>
+            <div class="inp">
+              <span lng="63">С</span>
+              <input type="text" class="time blocked weekdaysOpen" placeholder="00:00">
+            </div>
+            <div class="inp">
+              <span lng="64">До</span>
+              <input type="text" class="time blocked weekdaysClose" placeholder="00:00">
+            </div>
+          </div>
+          <div class="five">
+            <p lng="53">Время работы в выходные</p>
+            <div class="inp">
+              <span lng="63">С</span>
+              <input type="text" class="time blocked weekendOpen" placeholder="00:00">
+            </div>
+            <div class="inp">
+              <span lng="64">До</span>
+              <input type="text" class="time blocked weekendClose" placeholder="00:00">
+            </div>
+          </div>
+        </div>
+        <div class="photo">
+          <p class="title" lng="65">Загрузка фото</p>
+          <div class="files">
+            <div id="drop_zone" >
+              <p lng="66">Перетяните сюда фотографию <br>
+                или</p>
+              <img src="/img/cloud.svg" alt="">
+              <span lng="67">Загрузить фото</span>
+              </div>
+              <input type="file" id="fileInput" multiple style="display:none">
+              <div id="preview"></div>
+          </div>
+        </div>
+        <div class="remove_block">
+          <span class="remove_estate blocked" lng="68">Удалить заведение</span>
+        </div>
+        <div class="buttons">
+          <button class="btn" lng="39">Сохранить</button>
+        </div>
+      </div>
+    </div>
+
+
+
+
+
+    <div class="myEstablishments">
+      <img class="close_estateModal" src="/img/close_modal.svg" alt="close modal">
+      <div class="left-tab">
+        <div class="title">
+          <h1 lng="55">Мои заведения</h1>
+          <a href="/company-register" lng="56">
+            <img src="/img/plus.svg" alt="">
+            Добавить заведение</a>
+        </div>
+        <div class="establishments">
+
+          <!-- <div class="item">
+            <div class="head">
+              <div class="online">
+                <span>Онлайн</span>
+              </div>
+              <div class="offline">
+                <span>Оффлайн</span>
+              </div>
+              <img class="settings" src="/img/settings.svg" alt="settings">
+            </div>
+            <div class="info">
+              <p>Название</p>
+              <span>Очень длинный адрес заведения</span>
+              <div class="time_stars">
+                <p class="rating">5 <img src="/img/rating_star.svg" alt="rating"></p>
+                <p class="rating_count">2 330 оценок</p>
+                <p class="opened">Открыто до 05:00</p>
+              </div>
+            </div>
+            <div class="foot">
+              <button class="btn startStream">
+                <img src="/img/start.svg" alt="start">
+                Запустить трансляцию</button>
+            </div>
+          </div> -->
+
+
+
+        </div>
+      </div>
+
+      <div class="right-tab">
+        <div class="title">
+          <h1 lng="69">Рейтинг заведений</h1>
+        </div>
+        <div class="table">
+          <p class="place" lng="70">Место</p>
+          <p class="name" lng="71">Название</p>
+          <p class="rating" lng="72">рейтинг по отзывам</p>
+        </div>
+        <div class="items">
+
+          <!-- <div class="item">
+            <span>1</span>
+            <p class="name">тест заведение</p>
+            <p class="rating">
+              4
+              <img src="/img/star.svg" alt="star">
+            </p>
+          </div> -->
+      
+        </div>
+      </div>
+
+    </div>
+
+    <div class="profileInfo">
+      <div class="head">
+        <p lng="32">Профиль</p>
+        <div class="close_modal">
+          <img class="close_img" src="/img/close_modal.svg" alt="close_icon">
+        </div>
+      </div>
+
+      <div class="bio">
+        <input class="transparent" type="text" placeholder="Укажите ваше имя" value="<%= userLogin %>" lng="33">
+      </div>
+
+      <div class="private">
+        <p lng="34">Безопасность <span><i class="fas fa-chevron-down"></i></span></p>
+        <div class="slide_wrap">
+          <div class="old">
+            <input class="transparent" type="text" placeholder="Старый пароль" lng="35">
+            <!-- <a href="">Забыли пароль?</a> -->
+          </div>
+          <div class="new">
+            <input class="transparent newPass" type="text" placeholder="Новый пароль" lng="36">
+            <input class="transparent" type="text" placeholder="Подтвердите пароль" lng="37">
+          </div>
+        </div>
+
+      </div>
+
+      <script>
+        // раскрывашка безопасность 
+        let bezopas = document.querySelector('.profileInfo .private p');
+        let slideWrap = document.querySelector('.profileInfo .private .slide_wrap');
+        bezopas.addEventListener('click', function() {
+          if (slideWrap.classList.contains('active')) {
+            slideWrap.classList.remove('active');
+          } else {
+            slideWrap.classList.add('active');
+          }
+        });
+      </script>
+
+
+      <div class="goStreaming" style="margin-top: 20px;">
+        <i class="fa fa-film"></i>
+        <a href="/streaming">Перейти к платформе для стриминга</a>
+      </div>
+
+      <script>
+        let goStreaming = document.querySelector('.goStreaming a');
+        goStreaming.addEventListener('click', function () {
+            localStorage.setItem('targetService', 'service2');
+        });
+      </script>
+
+      <div class="logout">
+        <a href="/logout" lng="38">Выйти из аккаунта</a>
+      </div>
+
+      <div class="save">
+        <button class="btn" lng="39">Сохранить</button>
+      </div>
+
+    </div>
+
+    <div class="bigBarInfo">
+      <div class="online_mark">
+        <span>Онлайн</span>
+      </div>
+      <div class="rating_mark">
+        <span>Рейтинг 27 395</span>
+      </div>
+      <!-- <div class="modal_bookmark">
+        <img src="/img/modal_bookmark.svg" alt="boockmark">
+      </div> -->
+      <div class="close_modal">
+        <img class="close_img" src="/img/close_modal.svg" alt="close_icon">
+      </div>
+
+      <div class="photo_slider">
+        <a href="/img/slider_1/1.png" data-lightbox="image-set" class="slide">
+          <img src="/img/slider_1/1.png" alt="">
+        </a>
+        <a href="/img/slider_1/2.png" data-lightbox="image-set" class="slide">
+          <img src="/img/slider_1/2.png" alt="">
+        </a>
+        <a href="/img/slider_1/3.png" data-lightbox="image-set" class="slide">
+          <img src="/img/slider_1/3.png" alt="">
+        </a>
+        <a href="/img/slider_1/4.png" data-lightbox="image-set" class="slide">
+          <img src="/img/slider_1/4.png" alt="">
+        </a>
+        <a href="/img/slider_1/5.png" data-lightbox="image-set" class="slide">
+          <img src="/img/slider_1/5.png" alt="">
+        </a>
+        <a href="/img/slider_1/6.png" data-lightbox="image-set" class="slide">
+          <img src="/img/slider_1/6.png" alt="">
+        </a>
+      </div>
+
+      <div class="info">
+        <p class="name">Мята Lounge</p>
+        <p class="description">Кальян-бар, проспект Независимости в очень длинном названии, 19</p>
+        <p class="time" lng="42">Открыто до 05:00</p>
+      </div>
+      <div class="stream_btn">
+        <button class="btn getStream" lng="43">Смотреть трансляцию</button>
+      </div>
+
+      <div class="rating_block">
+          <div class="wrap">
+            <p class="rate">4.5</p>
+            <div class="stars_wrap">
+              <div class="stars">
+
+              </div>
+
+              <p>840 оценок</p>
+
+            </div>
+          </div>
+          <div class="wrap_2">
+            <p>Оцените 
+              это место</p>
+            <div class="stars_vote">
+              <i class="fas fa-star"></i>
+              <i class="fas fa-star"></i>
+              <i class="fas fa-star"></i>
+              <i class="fas fa-star"></i>
+              <i class="fas fa-star"></i>
+            </div>
+          </div>
+      </div>
+    </div>
+
+    <div class="miniBarInfo">
+      <!-- <div class="online_mark">
+        <span>Онлайн</span>
+      </div>
+      <div class="top_mark">
+        <img src="/img/top_star.svg" alt="star">
+        <span>Топ 1000</span>
+      </div> -->
+      <!-- <div class="modal_bookmark">
+        <img src="/img/modal_bookmark.svg" alt="boockmark">
+      </div> -->
+      <div class="info">
+        <div class="text">
+          <p>Пинки Бандитски</p>
+          <span>Кальян-бар, проспект Независимости в очень длинном названии, 19</span>
+        </div>
+      
+        <div class="photo">
+          <img src="" alt="">
+          <div class="count">22</div>
+        </div>
+      </div>
+      <div class="time_stars">
+        <p class="rating">5 <img src="/img/rating_star.svg" alt="rating"></p>
+        <p class="rating_count">2 330 оценок</p>
+        <p class="opened" lng="42">Открыто до 05:00</p>
+      </div>
+    </div>
+
+    <div class="map_dark_overlay">
+
+    </div>
+
+    <div class="map_header">
+
+      <div class="search_panel">
+        <img src="/img/takebana.jpg" alt="logo">
+        <div class="search_wrap">
+          <div class="search_input">
+            <input type="text" placeholder="Поиск заведений" lng="31">
+            <img class="search_icon" src="/img/search.svg" alt="иконка поиска">
+            <img class="clear_input" src="/img/clear_input.svg" alt="очистить поиск">
+          </div>
+        </div>
+
+        <div class="burger">
+          <div class="line"></div>
+          <div class="line"></div>
+          <div class="line"></div>
+        </div>
+
+        <div class="search_results">
+          <!-- <div class="item">
+            <p>Мята Lounge</p>
+            <span>Кальян-бар, проспект Независимости,19</span>
+          </div>
+          <div class="item">
+            <p>Мята Lounge</p>
+            <span>Кальян-бар, проспект Независимости,19</span>
+          </div>
+          <div class="item">
+            <p>Мята Lounge</p>
+            <span>Кальян-бар, проспект Независимости,19</span>
+          </div>
+          <div class="item">
+            <p>Мята Lounge</p>
+            <span>Кальян-бар, проспект Независимости,19</span>
+          </div> -->
+
+        </div>
+      </div>
+
+      <div class="info_panels">
+
+        <div class="filters"> 
+          <img src="/img/filter.svg" alt="фильтры">
+          <p>Фильтры</p>
+        </div>
+
+        <!-- <div class="notif">  -->
+          <!-- <img class="bell" src="/img/bell.svg" alt="уведомления"> -->
+          <!-- <img class="bookmark" src="/img/bookmark.svg" alt="закладка"> -->
+        <!-- </div> -->
+
+        <div class="register"> 
+          <div class="prof">
+            <p></p>
+          </div>
+        
+          <% if (hasEstablishments) { %>
+            <a href="#" class="back_btn transparent_btn myEstates" lng="40">Мое заведение</a>
+          <% } else { %>
+            <a href="/company-register" class="back_btn transparent_btn" lng="41">Зарегистрировать заведение</a>
+          <% } %>
+
+          <div class="eng_swich">
+            <div class="sw">
+              <div class="circle"></div>
+              <div class="words">
+                <span class="ru active">RU</span>
+                <span class="en">EN</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <script src="/lang.js"></script>
+    <script>
+ 
+     let eng_switch = document.querySelector('.eng_swich');
+     let ru_span = eng_switch.querySelector('span.ru');
+     let en_span = eng_switch.querySelector('span.en');
+     let circle = eng_switch.querySelector('.circle');
+ 
+     if (localStorage.getItem('lang') == null) {
+       localStorage.setItem('lang', 'ru');
+     } else {
+       let lang = localStorage.getItem('lang');
+       if (lang == 'ru') {
+         eng_switch.classList.remove('active');
+         ru_span.classList.add('active');
+         en_span.classList.remove('active');
+         circle.classList.remove('active');
+         localStorage.setItem('lang', 'ru');
+       }
+       if (lang == 'en') {
+         eng_switch.classList.add('active');
+         ru_span.classList.remove('active');
+         en_span.classList.add('active');
+         circle.classList.add('active');
+         localStorage.setItem('lang', 'en');
+       }
+     }
+ 
+ 
+     eng_switch.addEventListener('click', function() {
+       if (!eng_switch.classList.contains('active')) {
+         eng_switch.classList.add('active');
+         ru_span.classList.remove('active');
+         en_span.classList.add('active');
+         circle.classList.add('active');
+         localStorage.setItem('lang', 'en');
+         updateLang();
+       } else {
+         eng_switch.classList.remove('active');
+         ru_span.classList.add('active');
+         en_span.classList.remove('active');
+         circle.classList.remove('active');
+         localStorage.setItem('lang', 'ru');
+         updateLang();
+       }
+     });
+ 
+ 
+     document.addEventListener('DOMContentLoaded', function() {
+       updateLang();
+     });
+ 
+     function updateLang() {
+         // Получаем текущий язык из localStorage
+         let currentLang = localStorage.getItem('lang');
+         // Находим все элементы с атрибутом lng
+         let elements = document.querySelectorAll('[lng]');
+         elements.forEach(function(element) {
+          // Получаем значение атрибута lng
+          let key = element.getAttribute('lng');
+          // Находим соответствующий перевод в объекте lang
+          let translation = lang[key];
+          if (translation) {
+              // Проверяем, является ли элемент input
+              if (element.tagName === 'INPUT') {
+                  // Обновляем плейсхолдер input
+                  element.placeholder = translation[currentLang];
+              } else {
+                  // Получаем исходный текст элемента
+                  let originalText = element.innerHTML;
+                  // Если исходный текст не является пробелом или переносом строки, продолжаем обработку
+                  if (!/^[\s\n]*$/.test(originalText)) {
+                      // Получаем новый текст
+                      let newText = translation[currentLang];
+                      // Устанавливаем новый текст элемента
+                      element.innerHTML = newText;
+                  }
+              }
+          }
+      });
+     };
+ 
+   </script>
+
+
+
+    <div class="layers">
+      <div id="map1"></div>
+      <div class="blue_filter"></div>
+      <div id="map2"></div>
+    </div>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+
+
+
+
+
+
+
+
+    <script>
+      let userId = "<%= userId %>";
+      console.log(userId)
+
+
+
+      $(document).ready(function(){
+      $(".time").inputmask("99:99");
+    });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// localStorage.setItem('userId', userId);
+
+      // PEER 
+    // Создание нового Peer объекта
+    // Создание нового Peer объекта с использованием облачного сервера PeerJS
+//     const peer = new Peer();
+
+
+//     peer.on('call', function(call) {
+//     navigator.mediaDevices.getUserMedia({ video: false, audio: true })
+//       .then(function(stream) {
+//         call.answer(stream);
+//         call.on('stream', function(remoteStream) {
+//           // Здесь вы можете обработать входящий стрим
+//         });
+//       })
+//       .catch(function(err) {
+//         console.error('Error answering call:', err);
+//       });
+//   });
+
+
+// document.addEventListener('click', (e) => {
+//   if (e.target.classList.contains('startStream')) {
+//     navigator.mediaDevices.getUserMedia({ video: false, audio: true }).then(function(stream) {
+//       const call = peer.call('pendo', stream);
+//       const streamId = call.peer;
+//       console.log(`Stream started with ID: ${streamId}`);
+//     }).catch(function(err) {
+//       console.error('Error starting stream:', err);
+//     });
+//   }
+
+//   if (e.target.classList.contains('getStream')) {
+//     const streamId = 'pendo'; // Replace 'pendo' with the actual stream ID
+//     if (!streamId) {
+//       console.error('Stream ID is undefined');
+//       return;
+//     }
+//     const call = peer.call(streamId);
+//     if (!call) {
+//       console.error('Call is undefined');
+//       return;
+//     }
+//     call.on('stream', function(remoteStream) {
+//       document.getElementById('stream-video').srcObject = remoteStream;
+//     }).catch(function(err) {
+//       console.error('Error receiving stream:', err);
+//     });
+//   }
+// });
+
+
+// Начало стрима при нажатии кнопки
+// let startStream = document.querySelector('.myEstablishments .left-tab .item .foot button.startStream');
+
+
+// if (startStream ) {
+//   startStream.addEventListener('click', function() {
+//       // Получение медиапотока с веб-камеры
+//       console.log('11')
+//       // navigator.mediaDevices.getUserMedia({ video: false, audio: true }).then(function(stream) {
+//       //     console.log('запустили')
+//       //     // Создание вызова с медиапотоком
+//       //     const call = peer.call('pipeone', stream);
+
+//       //     // Получение ID стрима
+//       //     const streamId = call.peer;
+
+//       //     console.log(streamId)
+//       // }).catch(function(err) {
+//       //     console.log(err);
+//       // });
+//   });
+// }
+
+
+// Просмотр стрима при нажатии кнопки
+// document.querySelector('.bigBarInfo .stream_btn button').addEventListener('click', function() {
+//     const streamId = 'pipeone'; // Замените 'stream-id' на реальный идентификатор стрима
+//     console.log('смотрим')
+//     // Инициирование вызова к другому пиру
+//     const call = peer.call(streamId);
+
+//     call.on('stream', function(remoteStream) {
+//         // Показ стрима в видеоэлементе
+//         document.getElementById('stream-video').srcObject = remoteStream;
+//     });
+// });
+
+    
+    
+    
+    </script>
+    
+    
+    
+    
+
+
+
+
+
+    <script>
+
+
+      // BURGER & LEFT MENU
+      let burg = document.querySelector('.burger');
+      let left_menu = document.querySelector('.left_menu');
+      let close_left_menu = document.querySelector('.left_menu .close');
+      if (burg) {
+        left_menu.addEventListener('click', function(e) {
+          e.stopPropagation();
+        });
+        burg.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (left_menu.classList.contains('active')) {
+            left_menu.classList.remove('active');
+          } else {
+            left_menu.classList.add('active');
+          }
+        });
+        close_left_menu.addEventListener('click', function() {
+          left_menu.classList.remove('active');
+        });
+      }
+      document.addEventListener('click', function() {
+        left_menu.classList.remove('active');
+      });
+
+
+      // PROFILE CHARS 
+        document.addEventListener('DOMContentLoaded', function() {
+        const userLogin = "<%= userLogin %>"; // Получаем логин пользователя из EJS
+        let initials = 'anon';
+
+        if (userLogin) {
+          const words = userLogin.split(' ');
+          if (words.length > 1) {
+            // Если имя пользователя состоит из двух слов, берем по одной букве из каждого слова
+            initials = words[0][0] + words[1][0];
+          } else {
+            // Если имя пользователя состоит из одного слова, берем первые две буквы
+            initials = userLogin.slice(0, 2);
+          }
+        }
+
+        const profileElement = document.querySelector('.prof p');
+        profileElement.textContent = initials.toUpperCase();
+      });
+
+
+
+      // Создаем слой для карты
+      var mapLayer = new ol.layer.Tile({
+        source: new ol.source.OSM()
+      });
+
+      // Создаем источник для маркеров
+      var source = new ol.source.Vector();
+
+
+
+      // Создаем источник для кластеров, используя источник маркеров
+      var clusterSource = new ol.source.Cluster({
+        distance: 40, // Расстояние в пикселях для группировки маркеров
+        source: source
+      });
+
+      // Создаем слой для кластеров
+      var clusters = new ol.layer.Vector({
+        source: clusterSource,
+        style: function(feature) {
+  var size = feature.get('features').length;
+  var style;
+  if (size > 1) {
+    // Если это кластер, отображаем его как круг с числом
+    style = new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 16, // Увеличьте это значение, чтобы увеличить размер круга.
+        stroke: new ol.style.Stroke({
+          color: '#fff'
+        }),
+        fill: new ol.style.Fill({
+          color: '#666BCF' // Здесь вы можете указать любой цвет, который вам нравится.
+        })
+      }),
+      text: new ol.style.Text({
+        text: size.toString(),
+        offsetY: 1,
+        font: 'bold 15px Inter', // Установите размер и стиль шрифта. 'bold' делает текст жирным, '20px' устанавливает размер шрифта.
+        fill: new ol.style.Fill({
+          color: '#fff' // Цвет текста черный.
+        })
+      })
+    });
+  } else {
+    // Если это отдельный маркер, отображаем его как иконку с названием
+    var originalFeature = feature.get('features')[0];
+    style = new ol.style.Style({
+      image: new ol.style.Icon({
+        anchor: [0.5, 1],
+        src: originalFeature.get('image')
+      }),
+      text: new ol.style.Text({
+        text: originalFeature.get('name'),
+        offsetY: 10,
+        font: 'bold 14px Inter',
+        fill: new ol.style.Fill({
+          color: '#000'
+        }),
+        stroke: new ol.style.Stroke({
+          color: '#fff',
+          width: 2
+        })
+      })
+    });
+  }
+  return style;
+}
+
+      });
+
+      // Создаем первую карту
+      var map1 = new ol.Map({
+        target: 'map1',
+        layers: [mapLayer],
+        view: new ol.View({
+          center: ol.proj.fromLonLat([37.41, 8.82]),
+          zoom: 4
+        })
+      });
+
+      // Создаем вторую карту
+      var map2 = new ol.Map({
+        target: 'map2',
+        layers: [clusters], // Используем слой кластеров
+        view: new ol.View({
+          center: ol.proj.fromLonLat([37.41, 8.82]),
+          zoom: 4
+        })
+      });
+
+      // Проверяем, поддерживает ли браузер геолокацию
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+          var pos = ol.proj.fromLonLat([position.coords.longitude, position.coords.latitude]);
+          map1.getView().setCenter(pos);
+          map2.getView().setCenter(pos);
+        }, function() {
+          // Если пользователь не дал разрешение на геолокацию, используем координаты Москвы
+          map1.getView().setCenter(ol.proj.fromLonLat([37.618423, 55.751244]));
+          map2.getView().setCenter(ol.proj.fromLonLat([37.618423, 55.751244]));
+        });
+      } else {
+        // Браузер не поддерживает геолокацию, используем координаты Москвы
+        map1.getView().setCenter(ol.proj.fromLonLat([37.618423, 55.751244]));
+        map2.getView().setCenter(ol.proj.fromLonLat([37.618423, 55.751244]));
+      }
+
+
+
+      var modal = document.querySelector('.miniBarInfo');
+
+      var isOverMarker = false;
+
+      map2.on('pointermove', function(e) {
+      var pixel = map2.getEventPixel(e.originalEvent);
+      var hit = map2.hasFeatureAtPixel(pixel);
+      map2.getTargetElement().style.cursor = hit ? 'pointer' : '';
+      if (hit) {
+          var feature = map2.forEachFeatureAtPixel(pixel, function(feature) {
+              return feature;
+          });
+          if (feature.get('features').length === 1) {
+              // Если это отдельный маркер и указатель только что наведен на него
+              if (!isOverMarker) {
+                  isOverMarker = true;
+                  var establishment = feature.get('features')[0];
+                  var id = establishment.get('id');
+
+                  // Отправьте запрос на сервер
+                  fetch(`/getEstablishments/${id}`)
+                  .then(response => response.json())
+                  .then(data => {
+                      // Заполните модальное окно данными заведения
+                      document.querySelector('.miniBarInfo .info .text p').innerText = data.name;
+                      document.querySelector('.miniBarInfo .info .text span').innerText = data.address;
+
+                      let open_till
+                      if (localStorage.getItem('lang') == 'ru') {
+                        open_till = 'Открыто до'
+                      } else if (localStorage.getItem('lang') == 'en') {
+                        open_till = 'Open till'
+                      }
+                      
+
+                      document.querySelector('.miniBarInfo .time_stars .opened').innerText = `${open_till} ${data.weekdayHours.close}`;
+
+                      // Если у заведения есть фотографии, обновите src первого изображения и количество фотографий
+                      if (data.photos && data.photos.length > 0) {
+                          document.querySelector('.miniBarInfo .info .photo img').src = data.photos[0];
+                          document.querySelector('.miniBarInfo .info .photo .count').innerText = data.photos.length;
+                      } else {
+                          // Если у заведения нет фотографий, оставьте src первого изображения пустым и установите количество фотографий равным 0
+                          document.querySelector('.miniBarInfo .info .photo img').src = '';
+                          document.querySelector('.miniBarInfo .info .photo .count').innerText = 0;
+                      }
+
+                      // Получите все оценки для этого заведения
+                      fetch(`/getRatings/${id}`)
+                          .then(response => response.json())
+                          .then(ratings => {
+                              var averageRating = 0;
+
+                              // Проверьте, есть ли оценки
+                              if (ratings.length > 0) {
+                                  // Вычислите средний рейтинг
+                                  var totalRating = 0;
+                                  ratings.forEach(rating => {
+                                      totalRating += rating.rating;
+                                  });
+                                  averageRating = totalRating / ratings.length;
+                              }
+
+                              // Заполните модальное окно данными о рейтинге
+                              document.querySelector('.miniBarInfo .time_stars .rating').innerHTML = averageRating.toFixed(1) + '<img src="/img/rating_star.svg" alt="rating">';
+                              
+                              let rating
+                            if (localStorage.getItem('lang') == 'ru') {
+                              rating = 'Оценок'
+                            } else if (localStorage.getItem('lang') == 'en') {
+                              rating = 'Rating'
+                            }
+                              
+                              document.querySelector('.miniBarInfo .time_stars .rating_count').innerText = `${ratings.length} ${rating}`;
+                              modal.classList.add('active');
+
+                        // Получите координаты маркера
+                        var coordinates = establishment.getGeometry().getCoordinates();
+                          // Преобразуйте координаты в пиксели экрана
+                          var screenPixel = map2.getPixelFromCoordinate(coordinates);
+                          // Установите позицию модального окна
+                          modal.style.top = (screenPixel[1] - modal.offsetHeight - 55) + 'px';
+                          modal.style.left = (screenPixel[0] - modal.offsetWidth / 2) + 'px';
+
+                            });
+                  });
+              }
+          } else {
+              isOverMarker = false;
+              modal.classList.remove('active'); // Скройте модальное окно
+          }
+      } else {
+          isOverMarker = false;
+          modal.classList.remove('active'); // Скройте модальное окно
+      }
+  });
+
+map2.getViewport().addEventListener('mouseout', function() {
+    isOverMarker = false;
+    modal.style.display = 'none'; // Скройте модальное окно
+});
+
+
+
+
+
+      // Синхронизируем две карты
+      // Синхронизируем две карты
+      // map1.getView().on('change:center', function() {
+      //   map2.getView().setCenter(map1.getView().getCenter());
+      // });
+      // map1.getView().on('change:resolution', function() {
+      //   map2.getView().setResolution(map1.getView().getResolution());
+      // });
+
+      map2.getView().on('change:center', function() {
+        map1.getView().setCenter(map2.getView().getCenter());
+      });
+      map2.getView().on('change:resolution', function() {
+        map1.getView().setResolution(map2.getView().getResolution());
+      });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      // Создайте div для модального окна по клику
+let clickModal = document.querySelector('.bigBarInfo');
+
+// Обработчик события pointermove
+map2.on('pointermove', function(e) {
+  var pixel = map2.getEventPixel(e.originalEvent);
+  var hit = map2.hasFeatureAtPixel(pixel);
+  if (hit) {
+    var feature = map2.forEachFeatureAtPixel(pixel, function(feature) {
+      return feature;
+    });
+    if (feature.get('features').length === 1) {
+      // Если это отдельный маркер, измените курсор и отобразите модальное окно
+      map2.getTargetElement().style.cursor = 'pointer';
+    } else {
+      map2.getTargetElement().style.cursor = '';
+    }
+  } else {
+    map2.getTargetElement().style.cursor = '';
+  }
+});
+
+
+function initPhotoSliderBigModal() {
+  // PHOTOS SLIDER IN BIG MODAL 
+var slider = $('.photo_slider').bxSlider({
+  pager: false,
+  minSlides: 4,
+  maxSlides: 4,
+  slideWidth: 300,
+  slideMargin: 10,
+  infiniteLoop: false,
+  auto: true,
+  pause: 5000,
+  hideControlOnEnd: true, // Скрывает стрелки, когда достигнут конец или начало слайдера
+  controls: $('.photo_slider').children().length > 4 // Показывает стрелки только если есть больше четырех слайдов
+});
+
+
+// END PHOTOS SLIDER IN BIG MODAL 
+};
+initPhotoSliderBigModal();
+
+// Обработчик события click
+var currentEstablishmentId = null; // Глобальная переменная для хранения идентификатора текущего заведения
+
+map2.on('click', function(e) {
+ 
+    var pixel = map2.getEventPixel(e.originalEvent);
+    var hit = map2.hasFeatureAtPixel(pixel);
+    if (hit) {
+        var feature = map2.forEachFeatureAtPixel(pixel, function(feature) {
+            return feature;
+        });
+        if (feature.get('features').length === 1) {
+
+          console.log('OPEN estate modal')
+
+            var establishment = feature.get('features')[0];
+            var id = establishment.get('id');
+            // Сохраните идентификатор заведения
+            currentEstablishmentId = id;
+            // Отправьте запрос на сервер
+            fetch(`/getEstablishments/${id}`)
+            .then(response => response.json())
+            .then(data => {
+                // Заполните модальное окно данными заведения
+                document.querySelector('.bigBarInfo .name').innerText = data.name;
+                document.querySelector('.bigBarInfo .description').innerText = data.address;
+                let open_till
+                if (localStorage.getItem('lang') == 'ru') {
+                  open_till = 'Открыто до'
+                } else if (localStorage.getItem('lang') == 'en') {
+                  open_till = 'Open till'
+                }
+                      
+                document.querySelector('.bigBarInfo .time').innerText = `${open_till} ${data.weekdayHours.close}`;
+
+
+
+                // Проверьте, есть ли фотографии
+                // Получите все слайды
+                var slides = document.querySelectorAll('.photo_slider .slide');
+                // Если у заведения есть фотографии, обновите src каждого изображения и href каждого слайда
+                if (data.photos && data.photos.length > 0) {
+                    for (var i = 0; i < slides.length; i++) {
+                        if (i < data.photos.length) {
+                            // Если у заведения есть фотография для этого слайда, обновите src и href
+                            slides[i].querySelector('img').src = data.photos[i];
+                            slides[i].href = data.photos[i];
+                        } else {
+                            // Если у заведения нет фотографии для этого слайда, оставьте src и href пустыми
+                            slides[i].querySelector('img').src = '';
+                            slides[i].href = '';
+                        }
+                    }
+                } else {
+                    // Если у заведения нет фотографий, оставьте src всех изображений и href всех слайдов пустыми
+                    slides.forEach(slide => {
+                        slide.querySelector('img').src = '';
+                        slide.href = '';
+                    });
+                }
+
+
+                  // Проверьте статус online
+                  var streamButton = document.querySelector('.stream_btn .btn');
+                  let closeStreamButton = document.querySelector('.streamingFrame img');
+                  streamButton.setAttribute('data-id', data._id);
+                  streamButton.setAttribute('peer-id', data.peerId);
+                  if (data.online) {
+                      // Если заведение онлайн, покажите кнопку трансляции
+                      streamButton.classList.add('active');
+
+                      console.log('sos')
+                      let watch
+                      if (localStorage.getItem('lang') == 'ru') {
+                        watch = 'Смотреть трансляцию'
+                      } else if (localStorage.getItem('lang') == 'en') {
+                        watch = 'Watch the broadcast'
+                      }
+
+                      streamButton.innerText = watch;
+                  } else {
+                    let watch
+                      if (localStorage.getItem('lang') == 'ru') {
+                        watch = 'Заведение оффлайн'
+                      } else if (localStorage.getItem('lang') == 'en') {
+                        watch = 'Offline establishment'
+                      }
+
+                      // Если заведение оффлайн, измените текст кнопки
+                      streamButton.classList.remove('active');
+                      streamButton.innerText = watch;
+                  }
+
+
+				  streamButton.addEventListener('click', function() {
+            console.log('подключаемся')
+            // Получаем идентификатор пира, к которому хотим подключиться
+            var another_peer_id = this.getAttribute('peer-id');
+            console.log('another peer');
+            console.log(another_peer_id)
+            var conn = peer.connect(another_peer_id);
+
+            conn.on('open', function() {
+              console.log('Connection established with: ' + another_peer_id);
+              conn.send('Hello from ' + peer_id + '!');
+            });
+            // Логируем полученные данные
+            conn.on('data', function(data) {
+              console.log('Received', data);
+            });
+				  });
+
+				  closeStreamButton.addEventListener('click', function() {
+            let streamFrame = document.querySelector('.streamingFrame');
+            let videoElement = document.querySelector('.streamingFrame video'); // Замените на класс вашего видеоэлемента
+            videoElement.srcObject.getTracks().forEach(track => track.stop());
+            streamFrame.classList.remove('active');
+            videoElement.srcObject = null;
+            // Отключитесь от пира
+            if (conn) {
+              conn.close();
+            }
+				  });
+
+
+
+                // Получите все оценки для этого заведения
+                fetch(`/getRatings/${id}`)
+            .then(response => response.json())
+            .then(ratings => {
+                var averageRating = 0;
+
+                // Проверьте, есть ли оценки
+                if (ratings.length > 0) {
+                    // Вычислите средний рейтинг
+                    var totalRating = 0;
+                    ratings.forEach(rating => {
+                        totalRating += rating.rating;
+                    });
+                    averageRating = totalRating / ratings.length;
+                }
+
+                drawMiniStars(averageRating);
+
+
+                // Заполните модальное окно данными о рейтинге
+                document.querySelector('.bigBarInfo .rating_block .wrap p.rate').innerText = averageRating.toFixed(1);
+
+                let rating
+                            if (localStorage.getItem('lang') == 'ru') {
+                              rating = 'Оценок'
+                            } else if (localStorage.getItem('lang') == 'en') {
+                              rating = 'Rating'
+                            }
+
+                document.querySelector('.bigBarInfo .rating_block .wrap .stars_wrap p').innerText = `${ratings.length} ${rating}`;
+
+                // Заполните звезды в соответствии с рейтингом
+                var stars = document.querySelectorAll('.bigBarInfo .rating_block .wrap .stars .fa-star');
+                for (var i = 0; i < Math.round(averageRating); i++) {
+                    stars[i].classList.add('active');
+                }
+            });
+
+                // Проверьте, оценивал ли пользователь это заведение ранее
+                fetch(`/getUserRating/${userId}/${id}`)
+                    .then(response => response.json())
+                    .then(ratingData => {
+                        if (ratingData) {
+
+
+                          let rating
+                            if (localStorage.getItem('lang') == 'ru') {
+                              rating = 'Вы уже оценили это заведение!'
+                            } else if (localStorage.getItem('lang') == 'en') {
+                              rating = 'You have already rated this place!'
+                            }
+                            // Если пользователь уже оценивал это заведение, покажите сообщение
+                            wrap.innerHTML = `<p class="done">${rating}</p>`;
+                        } else {
+
+                          let rating
+                            if (localStorage.getItem('lang') == 'ru') {
+                              rating = 'Оцените это место'
+                            } else if (localStorage.getItem('lang') == 'en') {
+                              rating = 'Rate this place'
+                            }
+
+                            // Если пользователь еще не оценивал это заведение, покажите звезды для оценки
+                            wrap.innerHTML = `  <p>${rating}</p>
+                            <div class="stars_vote">
+                              <i class="fas fa-star"></i>
+                              <i class="fas fa-star"></i>
+                              <i class="fas fa-star"></i>
+                              <i class="fas fa-star"></i>
+                              <i class="fas fa-star"></i>
+                            </div>`;
+                            updateStars();
+                        }
+                    });
+
+                // Покажите модальное окно
+                clickModal.classList.add('active');
+            });
+                }
+    } else {
+        clickModal.style.display = 'none'; // Скройте модальное окно
+    }
+});
+
+
+
+
+// RATING BIG BAR MODAL 
+
+
+function drawMiniStars(rating) {
+  let st = document.querySelector('.stars_wrap .stars');
+  st.innerHTML = "";
+  for (var i = 1; i <= 5; i++) {
+  var star = document.createElement('i');
+  if (rating >= i) {
+    star.className = 'fas fa-star'; // Полная звезда
+  } else if (rating > i - 1) {
+    star.className = 'fas fa-star-half-alt'; // Половинная звезда
+  } else {
+    star.className = 'far fa-star'; // Пустая звезда
+  }
+
+  if (st) {
+    st.appendChild(star);
+  }
+  
+}
+}
+
+
+// END RATING BIG MODAL 
+
+
+
+
+
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
+const debouncedLoadData = debounce(loadData, 300);
+
+// При изменении центра карты
+map2.getView().on('change:center', debouncedLoadData);
+
+// При изменении масштаба карты
+map2.getView().on('change:resolution', debouncedLoadData);
+
+
+function loadData() {
+  console.log('pens')
+    var extent = map2.getView().calculateExtent(map2.getSize());
+    var bottomLeft = ol.proj.toLonLat([extent[0], extent[1]]);
+    var topRight = ol.proj.toLonLat([extent[2], extent[3]]);
+
+    fetch(`/establishmentsLocation?bl_lat=${bottomLeft[1]}&bl_lng=${bottomLeft[0]}&tr_lat=${topRight[1]}&tr_lng=${topRight[0]}`)
+        .then(response => response.json())
+        .then(data => {
+            // Удалите все старые маркеры
+            source.clear();
+
+            // Добавьте новые маркеры
+            data.forEach(establishment => {
+                var marker = new ol.Feature(
+                    new ol.geom.Point(
+                        ol.proj.fromLonLat([establishment.location.lng, establishment.location.lat])
+                    )
+                );
+                marker.set('image', './img/mark.svg');
+                marker.set('name', establishment.name);
+                marker.set('id', establishment._id); // Добавьте идентификатор заведения
+                source.addFeature(marker);
+            });
+        });
+}
+
+
+    </script>
+
+
+
+
+
+    <script>
+      // STREAMS 
+      function generateId(length) {
+          var result = '';
+          var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+          var charactersLength = characters.length;
+          for (var i = 0; i < length; i++) {
+              result += characters.charAt(Math.floor(Math.random() * charactersLength));
+          }
+          return result;
+      }
+
+      var peer_id = generateId(128);
+        var localStream;
+
+        // var peer = new Peer(peer_id, {
+        //     host: 'takebana.com',
+        //     path: '/peerjs',
+        //     proxied: true,
+        //     config: {
+        //         iceServers: [
+        //             { urls: 'stun:stun.l.google.com:19302' },
+        //             { urls: 'stun:stun1.l.google.com:19302' }
+        //         ]
+        //     },
+        //     secure: true
+        // });
+
+        var peer = new Peer(peer_id);
+
+
+        console.log('peer')
+        console.log(peer)
+
+        // Логируем идентификатор пира при открытии соединения
+        peer.on('open', function(id) {
+            console.log('My peer ID is: ' + id);
+        });
+
+		// Обновляем список подключенных пиров, когда к нам подключается новый пир
+        peer.on('connection', function(conn) {
+
+            conn.on('open', function() {
+				console.log('peer conected')
+				console.log(conn.peer)
+                // var li = document.createElement('li');
+                // li.textContent = conn.peer;
+                // li.id = conn.peer;
+                // document.getElementById('connected_peers').appendChild(li);
+
+
+                if (localStream) {
+                    var call = peer.call(conn.peer, localStream);
+                    call.on('stream', function(remoteStream) {
+                        // Показываем входящий поток в нашем видеоэлементе
+                        document.getElementById('video').srcObject = remoteStream;
+                    });
+                }
+
+            });
+
+            conn.on('error', function(err) {
+                console.log('Connection error: ', err);
+				console.log('ошибка');
+            });
+            
+
+        	// Обрабатываем отключение пира
+			conn.on('close', function() {
+				console.log('closed');
+			});
+
+        });
+
+
+		 // Обрабатываем входящие видеопотоки
+		 peer.on('call', function(call) {
+			let videoFrame = document.querySelector('.streamingFrame');
+			let videoElement = document.querySelector('.streamingFrame video');
+			videoFrame.classList.add('active');
+            call.answer(localStream); // Отвечаем на вызов с нашим потоком
+            call.on('stream', function(remoteStream) {
+                // Показываем входящий поток в нашем видеоэлементе
+                videoElement.srcObject = remoteStream;
+
+                // Обрабатываем окончание стрима
+                remoteStream.onended = function() {
+                    alert('Стрим закончился');
+                };
+
+            });
+        });
+
+
+
+		// document.getElementById('connect').addEventListener('click', function() {
+
+        // });
+
+        // document.getElementById('start').addEventListener('click', function() {
+
+        // });
+
+
+
+
+		
+
+
+
+		window.addEventListener('beforeunload', function (e) {
+			// Отмените событие по умолчанию
+			e.preventDefault();
+
+			// Отправьте запрос на сервер для обновления статуса всех заведений, принадлежащих пользователю
+			fetch('/updateEstablishmentsOnlineStatus', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					userId: userId,
+					online: false,
+					peerId: ""
+				})
+			});
+
+			// Chrome требует возврата строки
+			e.returnValue = '';
+		});
+
+
+    </script>
+
+
+
+
+
+
+
+    <script src="main.js"></script>
+    <script src="service.js"></script>
+  </body>
+</html>

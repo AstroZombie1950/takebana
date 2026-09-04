@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Takebana</title>
+  <link rel="stylesheet" href="css/style.css">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Urbanist:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+</head>
+<body>
+
+
+
+  <div class="message_alert">
+    <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+    <span>Ошибка ошибочка</span>
+  </div>
+  <!-- <div class="header">
+
+
+    <% if (userLoggedIn) { %>
+      <button id="logoutButton">Выход</button>
+    <% } else { %>
+      <button id="openModalButton">Register</button>
+      <button id="openLoginModalButton">Login</button>
+    <% } %>
+
+
+
+
+
+
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <form id="registrationForm">
+        <label for="email">Email:</label><br>
+        <input type="email" id="email" name="email"><br>
+        <label for="login">Login:</label><br>
+        <input type="text" id="login" name="login"><br>
+        <label for="password">Password:</label><br>
+        <input type="password" id="password" name="password"><br>
+        <input type="submit" value="Register">
+      </form>
+      
+    </div>
+  </div>
+
+  <div id="loginModal" class="modal">
+    <div class="modal-content">
+      <form id="loginForm">
+        <label for="loginEmail">Email:</label><br>
+        <input type="email" id="loginEmail" name="email"><br>
+        <label for="loginPassword">Password:</label><br>
+        <input type="password" id="loginPassword" name="password"><br>
+        <input type="submit" value="Login">
+      </form>
+      <a href="https://accounts.google.com/o/oauth2/v2/auth?scope=profile&access_type=online&redirect_uri=http://localhost:3000/auth/google/callback&response_type=code&client_id=339918182318-mnao9hirveih24d8r4vfo5tp8abl66tf.apps.googleusercontent.com" target="_blank">GOOGLE</a>
+    </div>
+  </div>
+
+  </div>
+   -->
+  
+   <header>
+
+    <div class="logo">
+      <img src="/img/takebana.png" alt="logo">
+    </div>
+
+    <div class="eng_swich mod">
+      <div class="sw">
+        <div class="circle"></div>
+        <div class="words">
+          <span class="ru active">RU</span>
+          <span class="en">EN</span>
+        </div>
+      </div>
+    </div>
+
+   </header>
+
+   <script src="/lang.js"></script>
+   <script>
+
+    let eng_switch = document.querySelector('.eng_swich');
+    let ru_span = eng_switch.querySelector('span.ru');
+    let en_span = eng_switch.querySelector('span.en');
+    let circle = eng_switch.querySelector('.circle');
+
+    if (localStorage.getItem('lang') == null) {
+      localStorage.setItem('lang', 'ru');
+    } else {
+      let lang = localStorage.getItem('lang');
+      if (lang == 'ru') {
+        eng_switch.classList.remove('active');
+        ru_span.classList.add('active');
+        en_span.classList.remove('active');
+        circle.classList.remove('active');
+        localStorage.setItem('lang', 'ru');
+      }
+      if (lang == 'en') {
+        eng_switch.classList.add('active');
+        ru_span.classList.remove('active');
+        en_span.classList.add('active');
+        circle.classList.add('active');
+        localStorage.setItem('lang', 'en');
+      }
+    }
+
+    localStorage.setItem('lang', 'en');
+
+
+    eng_switch.addEventListener('click', function() {
+      if (!eng_switch.classList.contains('active')) {
+        eng_switch.classList.add('active');
+        ru_span.classList.remove('active');
+        en_span.classList.add('active');
+        circle.classList.add('active');
+        localStorage.setItem('lang', 'en');
+        updateLang();
+      } else {
+        eng_switch.classList.remove('active');
+        ru_span.classList.add('active');
+        en_span.classList.remove('active');
+        circle.classList.remove('active');
+        localStorage.setItem('lang', 'ru');
+        updateLang();
+      }
+    });
+
+
+    document.addEventListener('DOMContentLoaded', function() {
+      updateLang();
+    });
+
+    function updateLang() {
+        // Получаем текущий язык из localStorage
+        let currentLang = localStorage.getItem('lang');
+        // Находим все элементы с атрибутом lng
+        let elements = document.querySelectorAll('[lng]');
+        elements.forEach(function(element) {
+         // Получаем значение атрибута lng
+         let key = element.getAttribute('lng');
+         // Находим соответствующий перевод в объекте lang
+         let translation = lang[key];
+         if (translation) {
+             // Проверяем, является ли элемент input
+             if (element.tagName === 'INPUT') {
+                 // Обновляем плейсхолдер input
+                 element.placeholder = translation[currentLang];
+             } else {
+                 // Получаем исходный текст элемента
+                 let originalText = element.innerHTML;
+                 // Если исходный текст не является пробелом или переносом строки, продолжаем обработку
+                 if (!/^[\s\n]*$/.test(originalText)) {
+                     // Получаем новый текст
+                     let newText = translation[currentLang];
+                     // Устанавливаем новый текст элемента
+                     element.innerHTML = newText;
+                 }
+             }
+         }
+     });
+    };
+
+  </script>
+
+   <!-- <div class="main_tabs">
+    <div class="overlay"></div>
+    <button data-id="1" class="active" lng="1">Смотреть заведения</button>
+    <button data-id="2" lng="2">Найти друзей
+      <img src="/img/chip.svg" alt="chips">
+    </button>
+   </div> -->
+
+
+   <!-- <div class="info_tabs">
+
+    <img class="item_2" src="/img/bar2.svg" alt="bar">
+
+
+
+    <div class="item">
+
+      <img src="/img/main.png" alt="bar">
+      <div class="overl">
+
+      </div>
+      <p lng="3">В прямом эфире смотрите обстановку внутри баров, <br> ресторанов, кальянных и других заведений</p>
+      
+      <div class="buttons">
+        <button class="more" lng="4">Подробнее</button>
+        <a href="/main" class="run btn" lng="5">Смотреть заведения</a>
+      </div>
+    </div>
+   </div>  -->
+
+
+
+
+
+   <div class="main__content-box">
+    <div class="wrapper__bar">
+    <h2 class="title" lng="1">Смотреть заведения</h2>
+    <div class="stream__bar-box">
+        <div class="stream__bar-content">
+        <p class="text__main-blok" lng="3">В прямом эфире смотрите обстановку внутри баров, ресторанов, кальянных и других заведений</p>
+        <div class="box__button">
+            <button class="button__more more" lng="4">Подробнее</button>
+            <a href="/set-next?next=service1" class="run btn" lng="5">Смотреть заведения</a>
+            <!-- <button class="button__look run btn" lng="5">Смотреть заведения</button> -->
+        </div>
+        </div>
+    </div>
+</div>
+<div class="wrapper__platform">
+        <div class="hr"></div>   
+    <h2 class="title" lng="136">Стрим-платформа</h2>
+    <div class="stream__platform-box">
+        <div class="stream__platform-content">
+        <p class="text__main-blok" lng="137">Адаптивная стриминговая платформа для развлекательного,  делового и образовательного контента</p>
+        <!-- <a class="cursor"  href="StreamPlatformPopular.html"> -->
+        <div class="box__button" style="margin-bottom: 17px;">
+          <a href="/set-next?next=service2" class="run btn" lng="88">Начать</a>
+            </div>
+        </a>
+    </div>
+    </div>
+</div>
+</div>
+
+
+<script>
+    // Код для установки значения в localStorage при переходе по ссылкам
+    const service1Link = document.querySelector('a[href="/set-next?next=service1"]');
+    const service2Link = document.querySelector('a[href="/set-next?next=service2"]');
+
+    if (service1Link) {
+        service1Link.addEventListener('click', function () {
+            localStorage.setItem('targetService', 'service1');
+        });
+    }
+
+    if (service2Link) {
+        service2Link.addEventListener('click', function () {
+            localStorage.setItem('targetService', 'service2');
+        });
+    }
+</script>
+
+
+   <div class="dark_overlay">
+    <div class="big_modal">
+      <div class="close">
+        <img src="/img/close.svg" alt="">
+      </div>
+    
+      <h1 lng="9">Онлайн трансляции <br> ваших любимых мест <br> в Takebana</h1>
+      <p class="description" lng="10">
+        Предоставляем уникальную возможность прямого эфира в любом <br> зарегистрированном заведении. Будь-то кафе, музей или даже <br> зоопарк - вы всегда на связи с вашими любимыми местами
+      </p>
+
+      <div class="slider">
+        <div class="slider_wrap">
+          <div class="item">
+            <img src="/img/slider_1/1.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/2.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/3.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/4.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/5.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/6.png" alt="slider image">
+          </div>
+          <!-- Дублирование изображений для бесконечного эффекта -->
+          <div class="item">
+            <img src="/img/slider_1/1.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/2.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/3.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/4.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/5.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/6.png" alt="slider image">
+          </div>
+                    <!-- Дублирование изображений для бесконечного эффекта -->
+          <div class="item">
+            <img src="/img/slider_1/1.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/2.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/3.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/4.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/5.png" alt="slider image">
+          </div>
+          <div class="item">
+            <img src="/img/slider_1/6.png" alt="slider image">
+          </div>
+        </div>
+      </div>
+
+
+      <div class="button">
+        <a href="/main" class="btn" lng="11">Посмотреть заведение</a>
+      </div>
+    
+    <h2 lng="12">Отзывы <br> о Takebana</h2>
+
+
+    <div class="reviews">
+
+      <div data-id="1" class="review_line">
+        <div class="review_line_wrap">
+          
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+
+        </div>
+      </div>
+
+      <div data-id="2" class="review_line">
+        <div class="review_line_wrap">
+          
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+          <div class="item">
+            <div class="title">
+              <div class="rating">5 
+                <img src="/img/star.svg" alt="star">
+              </div>
+              <p class="name">Елена</p>
+            </div>
+            <p class="text">Takebana - это как магия! Ощущение, будто ты путешествуешь, не выходя из своей комнаты. Сервис, который дарит удовольствие от путешествий еще до самого отъезда. Просто восторг!</p>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+
+
+
+    <div class="sliderSection">
+      <h2 lng="13">Планируйте <br> свой отдых</h2>
+
+      <div class="bxslider">
+        <div class="slide">
+          <img src="/img/slider/1.png" title="Image 1">
+          <p lng="14">Наблюдайте за жизнью <br> заведений 24/7</p>
+        </div>
+        <div class="slide">
+          <img src="/img/slider/2.png" title="Image 2">
+          <p lng="15">Спонтанные путешествия, <br> не покидая дивана</p>
+        </div>
+        <div class="slide">
+          <img src="/img/slider/3.png" title="Image 3">
+          <p lng="16">Обзор места <br>
+            без выхода из дома</p>
+        </div>
+        <div class="slide">
+          <img src="/img/slider/4.png" title="Image 4">
+          <p lng="17">Предварительно смотрите <br> заведения перед <br> посещением</p>
+        </div>
+      </div>
+
+    </div>
+
+
+
+    <div class="map_section">
+		<div class="map_item">
+			<div class="image">
+				<img src="/img/map_preview.png" alt="map preview">
+			</div>
+			<div class="info">
+				<h3 lng="18">Просто выберите заведение <br>
+					на карте</h3>
+				<p lng="19">И вы моментально окажетесь в центре событий.</p>
+				<p lng="20">Заведения могут транслировать свою атмосферу в любое время дня и ночи.</p>
+				<a href="/main" class="btn" lng="21">Выбрать заведение</a>
+			</div>
+    	</div>
+    </div>
+
+    </div>
+   </div>
+
+	<footer>
+
+		<div class="logo">
+		  <img src="/img/takebana.png" alt="footer-logo">
+		</div>
+	
+		<div class="alert">
+		  <span lng="6">Вы владелец заведения? Присоединяйтесь к Takebana <br>
+			и делитесь своей уникальной атмосферой с миром!</span>
+		  <!-- <a href="/register">Зарегистрировать заведение</a> -->
+		</div>
+	
+		<div class="links">
+		  <a href="/" lng="7">Политика конфедициальности</a>
+		  <a href="/" lng="8">Пользовательское соглашение</a>
+		</div>
+	
+	</footer>
+
+
+
+
+
+
+
+  <script src="main.js"></script>
+
+</body>
+</html>

@@ -1,3 +1,37 @@
-/.DS_Store
+# ОС и редакторы
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Рабочая папка: черновики, архивы, секреты клиента. В репозиторий не идёт.
 /temp
-assets/.DS_Store
+/docs
+
+# Зависимости
+node_modules/
+
+# Секреты
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+certs/
+
+# Пользовательский контент (переезжает в объектное хранилище)
+server/public/uploads/
+
+# Медиа-конвейер
+server/media/
+server/live/
+server/**/*.m3u8
+# сегменты MPEG-TS (не путать с TypeScript — потому и с путём)
+server/**/hls/*.ts
+
+# Логи и рантайм
+logs/
+*.log
+npm-debug.log*
+pids/
+*.pid

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Takebana about</title>
+  <link rel="stylesheet" href="css/style.css">
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.min.js"></script>
+
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Urbanist:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+
+    <div class="message_alert">
+        <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+        <span>Ошибка ошибочка</span>
+      </div>
+  
+   <header>
+
+    <div class="logo">
+      <img src="/img/takebana.jpg" alt="logo">
+    </div>
+
+    <div class="eng_swich mod">
+        <div class="sw">
+          <div class="circle"></div>
+          <div class="words">
+            <span class="ru active">RU</span>
+            <span class="en">EN</span>
+          </div>
+        </div>
+      </div>
+
+   </header>
+
+   <script src="/lang.js"></script>
+   <script>
+
+    let eng_switch = document.querySelector('.eng_swich');
+    let ru_span = eng_switch.querySelector('span.ru');
+    let en_span = eng_switch.querySelector('span.en');
+    let circle = eng_switch.querySelector('.circle');
+
+    if (localStorage.getItem('lang') == null) {
+      localStorage.setItem('lang', 'ru');
+    } else {
+      let lang = localStorage.getItem('lang');
+      if (lang == 'ru') {
+        eng_switch.classList.remove('active');
+        ru_span.classList.add('active');
+        en_span.classList.remove('active');
+        circle.classList.remove('active');
+        localStorage.setItem('lang', 'ru');
+      }
+      if (lang == 'en') {
+        eng_switch.classList.add('active');
+        ru_span.classList.remove('active');
+        en_span.classList.add('active');
+        circle.classList.add('active');
+        localStorage.setItem('lang', 'en');
+      }
+    }
+
+
+    eng_switch.addEventListener('click', function() {
+      if (!eng_switch.classList.contains('active')) {
+        eng_switch.classList.add('active');
+        ru_span.classList.remove('active');
+        en_span.classList.add('active');
+        circle.classList.add('active');
+        localStorage.setItem('lang', 'en');
+        updateLang();
+      } else {
+        eng_switch.classList.remove('active');
+        ru_span.classList.add('active');
+        en_span.classList.remove('active');
+        circle.classList.remove('active');
+        localStorage.setItem('lang', 'ru');
+        updateLang();
+      }
+    });
+
+
+    document.addEventListener('DOMContentLoaded', function() {
+      updateLang();
+    });
+
+    function updateLang() {
+        // Получаем текущий язык из localStorage
+        let currentLang = localStorage.getItem('lang');
+        // Находим все элементы с атрибутом lng
+        let elements = document.querySelectorAll('[lng]');
+        elements.forEach(function(element) {
+         // Получаем значение атрибута lng
+         let key = element.getAttribute('lng');
+         // Находим соответствующий перевод в объекте lang
+         let translation = lang[key];
+         if (translation) {
+             // Проверяем, является ли элемент input
+             if (element.tagName === 'INPUT') {
+                 // Обновляем плейсхолдер input
+                 element.placeholder = translation[currentLang];
+             } else {
+                 // Получаем исходный текст элемента
+                 let originalText = element.innerHTML;
+                 // Если исходный текст не является пробелом или переносом строки, продолжаем обработку
+                 if (!/^[\s\n]*$/.test(originalText)) {
+                     // Получаем новый текст
+                     let newText = translation[currentLang];
+                     // Устанавливаем новый текст элемента
+                     element.innerHTML = newText;
+                 }
+             }
+         }
+     });
+    };
+
+  </script>
+
+   <section class="login">
+    <img class="left" src="/img/login_left.png" alt="bar">
+    <img class="right" src="/img/login_right.png" alt="resto">
+
+    <div class="main">
+        <a href="/" class="back_btn transparent_btn" lng="22">
+            <img src="/img/back_arrow.svg" alt="back arrow">
+            На главную
+        </a>
+
+
+        <div class="text_section">
+            <h1>Takebana</h1>
+            <p lng="74"><strong>Уникальный проект Takebana. Путешествуй по ресторанам мира, не выходя из дома.</strong></p>
+            <p lng="75"><strong>Takebana сокращает расстояния.</strong> Интернет – сколько полезного и доступного можно найти в сети. И это не только досуг или игры, но и рабочие моменты, учеба, общение онлайн и даже консультации специалистов. Понимая эти
+                факты, пришла идея создать уникальный проект, где можно без выхода из дома или офиса посещать крутые локации.</p>
+            <p lng="76">Путешествия, не вставая с дивана, новые знакомства, общение с друзьями или родственниками. Все это и не только будет возможно с проектом Takebana. Просто берем ноутбук или смартфон, включаем вебку и попадаем в мир реальности, но на другом конце света.</p>
+
+            <h2 lng="77">Особенности сервиса:</h2>
+            <p lng="78">1. <strong>Возможность лично оценить обстановку</strong> внутри ресторана, бара или кальянной. Любые заведения в режиме онлайн.</p>
+            <p lng="79">2. <strong>Лучшие места и локации стран мира</strong>, крутые заведения, необычная и чарующая обстановка. Многие рестораны люди не смогут посетить в реальности, но сервис позволят «прикоснуться» к реальности.</p>
+            <p lng="80">3. С помощью сайта Takebana можно <strong>поддерживать связь с посетителями из разных стран</strong> и локаций.</p>
+            <p lng="81">4. Сервис <strong>Takebana работает по принципу чат-рулетки</strong>, когда пользователь может подключиться к любому заведению на выбор. Такая возможность позволяет изучить обстановку, понять для себя, куда лучше отправиться в реальное путешествие.</p>
+            <p lng="82">5. Гастроблогеры, туристы и путешественники смогут <strong>оценить качество обслуживания, интерьер и меню заведения в режиме онлайн</strong>. Это шикарная возможно выбрать направления для отдых</p>
+        </div>
+        
+        <p class="signin" lng="25">Нет аккаунта <a href="/register">Зарегистрироваться</a></p>
+    </div>
+   </section>
+
+
+
+  <script src="main.js"></script>
+  <script src="service.js"></script>
+
+  <script>
+        let hide = document.querySelectorAll('.input_wrap img');
+    hide.forEach((el) => {
+        el.addEventListener('click', function() {
+            let input = this.previousElementSibling; // Находим input перед картинкой
+            if (input.type === 'password') {
+                input.type = 'text';
+            } else if (input.type === 'text') {
+                input.type = 'password';
+            }
+        });
+    });
+  </script>
+</body>
+</html>

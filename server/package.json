@@ -1,0 +1,46 @@
+{
+  "name": "takebana-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Takebana — платформа прямых эфиров. Сервер: Express + EJS + Socket.IO + MongoDB.",
+  "engines": {
+    "node": ">=20 <25"
+  },
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "@alttiri/base85": "^1.8.0",
+    "ascii85": "^1.0.2",
+    "axios": "^1.6.1",
+    "bcrypt": "^5.1.1",
+    "bull": "^4.16.4",
+    "connect-mongodb-session": "^3.1.1",
+    "dotenv": "^16.3.1",
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "fs-extra": "^11.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "media-stream-library": "^13.1.1",
+    "mongodb": "^6.2.0",
+    "mongoose": "^7.6.3",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^2.7.0",
+    "node-media-server": "^2.7.0",
+    "passport": "^0.6.0",
+    "passport-google-oauth2": "^0.2.0",
+    "peer": "^1.0.2",
+    "peerjs": "^1.5.2",
+    "recordrtc": "^5.6.2",
+    "simple-peer": "^9.11.1",
+    "socket.io": "^4.8.0",
+    "socket.io-stream": "^0.9.1",
+    "uuid": "^9.0.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

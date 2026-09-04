@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Takebana New User</title>
+  <link rel="stylesheet" href="css/style.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Urbanist:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+    <div class="message_alert">
+        <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+        <span>Ошибка ошибочка</span>
+      </div>
+
+      
+   <header>
+
+    <div class="logo">
+      <img src="/img/takebana.jpg" alt="logo">
+    </div>
+
+    <div class="eng_swich mod">
+        <div class="sw">
+          <div class="circle"></div>
+          <div class="words">
+            <span class="ru active">RU</span>
+            <span class="en">EN</span>
+          </div>
+        </div>
+      </div>
+
+   </header>
+
+
+   <script src="/lang.js"></script>
+   <script>
+
+    let eng_switch = document.querySelector('.eng_swich');
+    let ru_span = eng_switch.querySelector('span.ru');
+    let en_span = eng_switch.querySelector('span.en');
+    let circle = eng_switch.querySelector('.circle');
+
+    if (localStorage.getItem('lang') == null) {
+      localStorage.setItem('lang', 'ru');
+    } else {
+      let lang = localStorage.getItem('lang');
+      if (lang == 'ru') {
+        eng_switch.classList.remove('active');
+        ru_span.classList.add('active');
+        en_span.classList.remove('active');
+        circle.classList.remove('active');
+        localStorage.setItem('lang', 'ru');
+      }
+      if (lang == 'en') {
+        eng_switch.classList.add('active');
+        ru_span.classList.remove('active');
+        en_span.classList.add('active');
+        circle.classList.add('active');
+        localStorage.setItem('lang', 'en');
+      }
+    }
+
+
+    eng_switch.addEventListener('click', function() {
+      if (!eng_switch.classList.contains('active')) {
+        eng_switch.classList.add('active');
+        ru_span.classList.remove('active');
+        en_span.classList.add('active');
+        circle.classList.add('active');
+        localStorage.setItem('lang', 'en');
+        updateLang();
+      } else {
+        eng_switch.classList.remove('active');
+        ru_span.classList.add('active');
+        en_span.classList.remove('active');
+        circle.classList.remove('active');
+        localStorage.setItem('lang', 'ru');
+        updateLang();
+      }
+    });
+
+
+    document.addEventListener('DOMContentLoaded', function() {
+      updateLang();
+    });
+
+    function updateLang() {
+        // Получаем текущий язык из localStorage
+        let currentLang = localStorage.getItem('lang');
+        // Находим все элементы с атрибутом lng
+        let elements = document.querySelectorAll('[lng]');
+        elements.forEach(function(element) {
+         // Получаем значение атрибута lng
+         let key = element.getAttribute('lng');
+         // Находим соответствующий перевод в объекте lang
+         let translation = lang[key];
+         if (translation) {
+             // Проверяем, является ли элемент input
+             if (element.tagName === 'INPUT') {
+                 // Обновляем плейсхолдер input
+                 element.placeholder = translation[currentLang];
+             } else {
+                 // Получаем исходный текст элемента
+                 let originalText = element.innerHTML;
+                 // Если исходный текст не является пробелом или переносом строки, продолжаем обработку
+                 if (!/^[\s\n]*$/.test(originalText)) {
+                     // Получаем новый текст
+                     let newText = translation[currentLang];
+                     // Устанавливаем новый текст элемента
+                     element.innerHTML = newText;
+                 }
+             }
+         }
+     });
+    };
+
+  </script>
+   <section class="register">
+    <img class="left" src="/img/reg_left.png" alt="bar">
+    <img class="right" src="/img/reg_right.png" alt="resto">
+
+    <div class="main">
+        <a href="/" class="back_btn transparent_btn" lng="22">
+            <img src="/img/back_arrow.svg" alt="back arrow">
+            На главную
+        </a>
+        <h1 lng="26">Регистрация</h1>
+        <button class="transparent_btn google">
+            <img src="/img/google.svg" alt="back arrow">
+            Sign in with Google
+        </button>
+        <span class="or" lng="28">или</span>
+        <form>
+            <input class="transparent" type="email" id="email" name="email" placeholder="Email">
+            <div class="input_wrap">
+                <input class="transparent" type="password" id="password" name="password" placeholder="Password">
+                <img src="/img/hide.svg" alt="hide icon">
+            </div>
+            <div class="input_wrap">
+                <input class="transparent" type="password" id="confirmPassword" name="confirmPassword" placeholder="Repeat the password">
+                <img src="/img/hide.svg" alt="hide icon">
+            </div>
+            
+            <input class="btn" type="submit" value="Create an account">
+        </form>
+        <span class="politics" lng="29">Регистрируясь, вы соглашаетесь с <a href="/">Политикой Конфиденциальности</a> и <a href="/">Пользовательским соглашением</a></span>
+        <p class="signin" lng="30">Уже есть аккаунт? <a href="/login">Войти</a></p>
+    </div>
+   </section>
+
+
+
+  <script src="main.js"></script>
+  <script src="service.js"></script>
+
+  <script>
+    let hide = document.querySelectorAll('.input_wrap img');
+    hide.forEach((el) => {
+        el.addEventListener('click', function() {
+            let input = this.previousElementSibling; // Находим input перед картинкой
+            if (input.type === 'password') {
+                input.type = 'text';
+            } else if (input.type === 'text') {
+                input.type = 'password';
+            }
+        });
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,123 @@
+.footer__box{
+    display: none;
+    gap: 115.33px;
+    justify-content: center;
+    align-items: center;
+    height: 120px;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.footer__logo{
+    width: 100px;
+    height: 48px;
+    padding: 6px 8px;
+}
+
+.footer__box-conect{
+    height: 88px;
+    width: 814px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 32px;
+    border-radius: 24px;
+    padding: 16px 16px 16px 32px;
+    background-color:  rgba(242, 242, 242, 1);
+}
+
+.text-conect{
+    max-width: 410px;
+    font-family: initial;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.footer__button-register{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 324px;
+    height: 56px;
+    border-radius: 16px;
+    padding: 16px 56px 16px 56px;
+    border: 1px solid rgba(38, 38, 38, 1);
+    font-size: 14px;
+}
+
+.background{
+    background-color: rgba(255, 255, 255, 1);
+    width: 201px;
+}
+
+.text__agreement,
+.text__agreement-2{
+    font-size: 10px;
+    height: fit-content;
+    padding: 0;
+    margin: 0;
+    font-weight: 500;
+    width: fit-content;
+}
+.text__agreement-2{
+    width: fit-content;
+}
+
+.box-text-agreement{
+    display: flex;
+    flex-direction: column;
+    color: rgba(38, 38, 38, 0.4);
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+@media(max-width : 1700px){
+    .footer__box{
+        gap: 50px;
+    }
+
+}
+@media(max-width : 1496px){
+    .footer__box{
+        gap: 20px;
+    }
+}
+@media(max-width : 1404px){
+    .footer__box{
+        gap: 10px;
+    }
+}
+
+@media(max-width : 1228px){
+    .footer__box{
+        flex-direction: column;
+    }
+    .footer__box{
+        gap: 20px;
+        height: fit-content;
+        width:100%;
+    }
+    .footer__box-conect{
+        flex-direction: column;
+        width: 400px;
+        height: fit-content;
+        padding: 0;
+    }
+    .text-conect{
+        width: 279px;
+    }
+
+    .footer__box-conect{
+        width: 343px;
+    }
+}
+@media(max-width : 563px){
+    .footer__box{
+        display: flex;
+    }
+    /* .title__categories{
+        display: none;
+    } */
+
+}

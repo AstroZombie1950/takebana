@@ -1,0 +1,2867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'brand': {
+                            50: '#f0f2ff',
+                            100: '#e5e7ff',
+                            200: '#cdcfff',
+                            300: '#a5a9ff',
+                            400: '#7a7aff',
+                            500: '#666bcf',
+                            600: '#5a5cba',
+                            700: '#4c4e9a',
+                            800: '#3f417e',
+                            900: '#363865'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
+    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Daily.co библиотека (обновлено до 0.83.1+ для совместимости с Chrome) -->
+    <script src="https://unpkg.com/@daily-co/daily-js@0.83.1/dist/daily-iframe.js"></script>  
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Urbanist:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+  
+    <title>Stream Page</title>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .video-js { font-family: 'Inter', sans-serif; }
+        .video-container { aspect-ratio: 16/9; }
+        .gradient-border {
+            background: linear-gradient(135deg, rgba(102, 107, 207, 0.1), rgba(102, 107, 207, 0.2));
+            padding: 1px;
+            border-radius: 1rem;
+        }
+        .chat-message {
+            animation: slideInRight 0.3s ease-out;
+        }
+        @keyframes slideInRight {
+            from { transform: translateX(20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .stream-indicator {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Кастомный скроллбар для чата */
+        .messeg-box::-webkit-scrollbar {
+            width: 6px;
+        }
+        .messeg-box::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+        .messeg-box::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        .messeg-box::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        
+
+        
+        /* Адаптив для блока информации о стриме */
+        @media (max-width: 768px) {
+            .stream-info {
+                padding: 0.75rem;
+            }
+            
+            .stream-meta {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .stats-section {
+                gap: 0.25rem;
+                flex-wrap: wrap;
+            }
+            
+            /* Компактные индикаторы для мобильных */
+            .stream-paused-message,
+            .stream-active-message {
+                padding: 0.25rem 0.5rem !important;
+                font-size: 0.625rem !important;
+                top: 0.5rem !important;
+                left: 0.5rem !important;
+                border-radius: 0.5rem !important;
+            }
+            
+            .stream-paused-message span,
+            .stream-active-message span {
+                font-size: 0.625rem !important;
+                line-height: 1 !important;
+            }
+            
+            .stream-paused-message svg,
+            .stream-active-message svg {
+                width: 0.75rem !important;
+                height: 0.75rem !important;
+            }
+            
+            /* Плейсхолдер видео */
+            #videoPlaceholder {
+                font-size: 0.875rem !important;
+                padding: 1rem !important;
+                text-align: center;
+                line-height: 1.4;
+            }
+            
+            /* Компактные статистики */
+            .live-indicator {
+                padding: 0.375rem 0.5rem !important;
+            }
+            
+            .live-indicator span {
+                font-size: 0.75rem !important;
+            }
+            
+            .viewer-count {
+                padding: 0.375rem 0.5rem !important;
+            }
+            
+            .viewer-count span {
+                font-size: 0.75rem !important;
+            }
+            
+            /* Компактные кнопки управления */
+            .control-buttons button {
+                padding: 0.5rem 1rem !important;
+                font-size: 0.875rem !important;
+            }
+            
+            /* Заголовок стрима */
+            .stream-title {
+                font-size: 1.125rem !important;
+                line-height: 1.4 !important;
+            }
+            
+            /* Описание стрима */
+            .stream-description {
+                font-size: 0.875rem !important;
+                line-height: 1.4 !important;
+            }
+            
+            /* Улучшенное видео для мобильных */
+            #localVideo,
+            #remoteVideo,
+            video {
+                object-fit: cover !important;
+                object-position: center !important;
+            }
+            
+            /* Контейнер видео - обеспечиваем правильное соотношение сторон */
+            .video-container,
+            [style*="aspect-ratio: 16/9"] {
+                aspect-ratio: 16/9 !important;
+                width: 100% !important;
+                height: auto !important;
+                overflow: hidden;
+            }
+            
+            /* Для мобильных устройств - предотвращаем обрезание */
+            .mobile-video-fix {
+                width: 100% !important;
+                height: 100% !important;
+                object-fit: contain !important; /* Покажет всё видео с чёрными полосами если нужно */
+                background: #000;
+            }
+        }
+        
+        /* Очень маленькие экраны (до 480px) */
+        @media (max-width: 480px) {
+            .main-content {
+                padding: 0.5rem !important;
+            }
+            
+            .stream-paused-message,
+            .stream-active-message {
+                padding: 0.375rem 0.5rem !important;
+                font-size: 0.625rem !important;
+                top: 0.5rem !important;
+                left: 0.5rem !important;
+                border-radius: 0.75rem !important;
+            }
+            
+            #videoPlaceholder {
+                font-size: 0.75rem !important;
+                padding: 0.75rem !important;
+            }
+            
+            .stats-section {
+                gap: 0.125rem;
+            }
+            
+            .live-indicator,
+            .viewer-count {
+                padding: 0.25rem 0.375rem !important;
+            }
+            
+            .live-indicator span,
+            .viewer-count span {
+                font-size: 0.625rem !important;
+            }
+            
+            /* Индикаторы точек */
+            .w-2.h-2 {
+                width: 0.375rem !important;
+                height: 0.375rem !important;
+            }
+        }
+        
+        /* Стили для лучшего отображения видео */
+        .video-fit-cover {
+            object-fit: cover;
+            object-position: center;
+        }
+        
+        .video-fit-contain {
+            object-fit: contain;
+            object-position: center;
+            background: #000;
+        }
+        
+        /* Мобильные: делаем контейнер выше и избегаем обрезания */
+        @media (max-width: 500px) {
+            .video-player-area {
+                aspect-ratio: auto;
+                height: 64vh;
+                min-height: 300px;
+            }
+            #localVideo {
+                object-fit: contain;
+                object-position: center;
+                background: #000;
+            }
+        }
+        
+        /* Анимированные переходы для мобильных */
+        @media (max-width: 768px) {
+            .stream-indicator {
+                animation: pulse 1.5s infinite;
+            }
+        }
+        
+        @media (max-width: 350px) {
+            .stream-info {
+                padding: 0.5rem;
+            }
+            
+            .stream-title {
+                font-size: 0.875rem;
+                line-height: 1.25rem;
+                margin-bottom: 0.5rem;
+            }
+            
+            .stream-meta {
+                gap: 0.5rem;
+            }
+            
+            .author-section {
+                space-x: 0.375rem;
+            }
+            
+            .avatar {
+                width: 1.75rem;
+                height: 1.75rem;
+                border-radius: 0.5rem;
+            }
+            
+            .avatar span {
+                font-size: 0.75rem;
+            }
+            
+            .author-name {
+                font-size: 0.75rem;
+            }
+            
+            .streamer-badge {
+                font-size: 0.625rem;
+            }
+            
+            .stats-section {
+                gap: 0.375rem;
+                font-size: 0.625rem;
+            }
+            
+            .duration-text {
+                font-size: 0.5625rem;
+            }
+            
+            .viewers-text {
+                display: none;
+            }
+            
+            .stream-description {
+                font-size: 0.625rem;
+                line-height: 1rem;
+            }
+        }
+        
+        /* Ультра-маленькие экраны до 250px */
+        @media (max-width: 250px) {
+            .stream-info {
+                padding: 0.375rem;
+            }
+            
+            .stream-title {
+                font-size: 0.75rem;
+                line-height: 1.125rem;
+                margin-bottom: 0.375rem;
+            }
+            
+            .stream-meta {
+                gap: 0.375rem;
+            }
+            
+            .author-section {
+                space-x: 0.25rem;
+            }
+            
+            .avatar {
+                width: 1.5rem;
+                height: 1.5rem;
+                border-radius: 0.375rem;
+            }
+            
+            .avatar span {
+                font-size: 0.625rem;
+            }
+            
+            .author-name {
+                font-size: 0.6875rem;
+            }
+            
+            .streamer-badge {
+                font-size: 0.5625rem;
+            }
+            
+            .stats-section {
+                gap: 0.25rem;
+                font-size: 0.5625rem;
+            }
+            
+            .live-indicator, .viewer-count {
+                gap: 0.125rem;
+                padding: 0.375rem 0.5rem;
+                font-size: 0.5625rem;
+            }
+            
+            .live-indicator .duration-text,
+            .viewer-count .online__pepole-count {
+                font-size: 0.5rem;
+            }
+            
+            .live-indicator .duration-text {
+                padding: 0.125rem 0.375rem;
+            }
+            
+            .stream-description {
+                font-size: 0.5625rem;
+                line-height: 0.875rem;
+            }
+        }
+        
+        /* Улучшенная типографика */
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .line-clamp-3 {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        /* Дополнительная поддержка xs breakpoint */
+        @media (min-width: 475px) {
+            .xs\:inline {
+                display: inline;
+            }
+        }
+        
+        /* Адаптивный чат - стили как на странице зрителя */
+        .chat-overlay {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            display: none;
+        }
+        
+        .chat-tab {
+            position: fixed;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            background: white;
+            padding: 12px 8px;
+            border-radius: 12px 0 0 12px;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            z-index: 998;
+            transition: all 0.3s ease;
+            border-right: none;
+        }
+        
+        .chat-tab:hover {
+            background: #f3f4f6;
+            transform: translateY(-50%) translateX(-2px);
+        }
+        
+        /* Адаптив для мобильных устройств */
+        @media (max-width: 1279px) {
+            .chat-container {
+                position: fixed;
+                top: 0;
+                right: 0;
+                width: 100%;
+                max-width: 400px;
+                height: 100%;
+                z-index: 1000;
+                transform: translateX(100%);
+                transition: transform 0.3s ease;
+            }
+            
+            .chat-container.open {
+                transform: translateX(0);
+            }
+            
+            .chat__box {
+                height: 100% !important;
+                border-radius: 0 !important;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 1rem;
+            }
+            
+            .video-container {
+                margin-bottom: 1rem;
+            }
+            
+            .chat-container {
+                max-width: 350px;
+            }
+            
+            .chat-tab {
+                padding: 10px 6px;
+                right: -2px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .main-content {
+                padding: 0.5rem;
+            }
+            
+            .video-container {
+                border-radius: 12px;
+                overflow: hidden;
+            }
+            
+            .chat-container {
+                max-width: 320px;
+            }
+            
+            .chat-tab {
+                padding: 8px 5px;
+                right: -3px;
+                font-size: 0.75rem;
+            }
+        }
+        
+        @media (max-width: 350px) {
+            .main-content {
+                padding: 0.25rem;
+            }
+            
+            .video-container {
+                border-radius: 8px;
+                margin-bottom: 0.5rem;
+            }
+            
+            .chat-container {
+                max-width: 280px;
+            }
+            
+            .chat-tab {
+                padding: 6px 4px;
+                right: -4px;
+                font-size: 0.7rem;
+                border-radius: 8px 0 0 8px;
+            }
+        }
+        
+        /* Ультра-маленькие экраны до 250px */
+        @media (max-width: 250px) {
+            .main-content {
+                padding: 0.125rem;
+            }
+            
+            .video-container {
+                border-radius: 8px;
+                margin-bottom: 0.5rem;
+            }
+            
+            .chat-container {
+                max-width: 240px;
+            }
+            
+            .chat-tab {
+                padding: 4px 3px;
+                font-size: 0.625rem;
+            }
+        }
+        
+    </style>
+</head>
+<body class="bg-gray-50"
+      data-obs-only="<%= (typeof obsOnly !== 'undefined' && obsOnly) ? '1' : '0' %>"
+      data-stream-id="<%= stream._id %>"
+      data-stream-active="<%= stream.isActive ? '1' : '0' %>">
+    
+    <%- include('partials/header') %>
+
+    <!-- Основной контейнер с отступом слева -->
+    <div class="lg:pl-80 min-h-screen bg-gray-50">
+        
+        <%- include('partials/leftBar') %>
+
+        <!-- Главный контент -->
+        <div class="main-content p-4 sm:p-6 lg:p-8">
+            <div class="max-w-7xl mx-auto">
+
+                <!-- Главные переключатели режима стрима (всегда сверху) -->
+                <div class="mb-4 sm:mb-6">
+                    <div class="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
+                        <div class="p-4 sm:p-5 md:p-6">
+                            <div class="flex flex-col gap-3 sm:gap-4">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="text-sm sm:text-base font-semibold text-gray-900">
+                                        <span lng="230">Режим трансляции</span>
+                                    </div>
+                                    <div class="text-xs sm:text-sm text-gray-500">
+                                        <span lng="231">Стрим:</span> <span class="font-mono"><%= stream._id %></span>
+                                    </div>
+                                </div>
+
+                                <div class="flex bg-gray-100 rounded-2xl p-1">
+                                    <% if (typeof obsOnly !== 'undefined' && obsOnly) { %>
+                                        <button class="web_stream flex-1 py-3 sm:py-3.5 px-4 text-sm sm:text-base font-bold rounded-xl transition-all duration-200 text-gray-600 hover:text-gray-900">
+                                            <span lng="232">WEB (браузер)</span>
+                                        </button>
+                                        <button class="obs_stream flex-1 py-3 sm:py-3.5 px-4 text-sm sm:text-base font-bold rounded-xl transition-all duration-200 active bg-white text-brand-600 shadow-sm">
+                                            <span lng="233">OBS</span>
+                                        </button>
+                                    <% } else { %>
+                                        <button class="web_stream flex-1 py-3 sm:py-3.5 px-4 text-sm sm:text-base font-bold rounded-xl transition-all duration-200 active bg-white text-brand-600 shadow-sm">
+                                            <span lng="232">WEB (браузер)</span>
+                                        </button>
+                                        <button class="obs_stream flex-1 py-3 sm:py-3.5 px-4 text-sm sm:text-base font-bold rounded-xl transition-all duration-200 text-gray-600 hover:text-gray-900">
+                                            <span lng="233">OBS</span>
+                                        </button>
+                                    <% } %>
+                                </div>
+
+                                <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                    <div class="font-semibold mb-1" lng="234">Важно</div>
+                                    <div class="text-amber-800">
+                                        <span lng="235">Не закрывайте эту страницу и не уходите с неё во время трансляции — иначе стрим может считаться неактивным и отключиться. Обновлять страницу можно.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+                    
+                    <!-- Левая колонка - Видео плеер -->
+                    <div class="xl:col-span-2">
+                        <div class="bg-white rounded-3xl shadow-xl overflow-hidden">
+                            
+                            <!-- Видео контейнер -->
+                            <div id="playerContainer" class="video-player-area relative bg-black rounded-t-3xl overflow-hidden h-[64vh] min-h-[300px] sm:h-auto" style="aspect-ratio: 16/9;">
+                                
+                                <!-- Daily.co видео контейнер -->
+                                <video id="localVideo" class="w-full h-full video-fit-cover" autoplay muted playsInline webkit-playsinline x5-playsinline x5-video-player-type="h5" style="display: none;"></video>
+
+                                <!-- OBS preview (HTTP-FLV через /live) -->
+                                <video id="video" class="w-full h-full video-fit-cover" autoplay muted playsInline webkit-playsinline x5-playsinline x5-video-player-type="h5" style="display: none; position:absolute; inset:0; z-index: 12;"></video>
+                                <div id="obsPreviewHint" class="w-full h-full flex items-center justify-center text-white text-sm sm:text-lg px-4" style="display:none; position:absolute; inset:0; z-index: 13;">
+                                    <div class="text-center">
+                                        <div class="mb-2 font-semibold" lng="236">Предпросмотр OBS</div>
+                                        <div class="text-xs sm:text-sm md:text-base text-white/80">
+                                            <span lng="237">Запустите трансляцию в OBS — здесь появится видео.</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="videoPlaceholder" class="w-full h-full flex items-center justify-center text-white text-sm sm:text-lg px-4">
+                                    <div class="text-center">
+                                        <div class="mb-2">
+                                            <svg class="w-8 h-8 sm:w-12 sm:h-12 mx-auto text-white/60 mb-3" fill="currentColor" viewBox="0 0 24 24">
+                                                <path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clip-rule="evenodd"/>
+                                            </svg>
+                                        </div>
+                                        <div class="text-xs sm:text-sm md:text-base">
+                                            <span lng="238">Нажмите</span> <span class="font-semibold" lng="239">"Начать стрим"</span><br class="sm:hidden">
+                                            <span class="hidden sm:inline"> </span><span lng="240">для запуска</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+
+                                
+                                <!-- Индикатор статуса стрима -->
+                                <div class="absolute top-6 left-6">
+                                    <% if (!stream.isActive) { %>
+                                        <div class="stream-paused-message flex items-center bg-white/95 text-gray-700 px-4 py-2.5 rounded-2xl backdrop-blur-md border border-gray-200/50 shadow-lg">
+                                            <svg class="w-4 h-4 mr-2 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d="M5.25 5.25v13.5h3v-13.5h-3zm10.5 0v13.5h3v-13.5h-3z"/>
+                                            </svg>
+                                            <span class="font-semibold text-sm" lng="126">Стрим на паузе или не начат</span>
+                                        </div>
+                                        <div class="stream-active-message hidden flex items-center bg-gradient-to-r from-brand-500/95 to-purple-500/95 text-white px-4 py-2.5 rounded-2xl backdrop-blur-md shadow-lg border border-brand-400/30">
+                                            <div class="relative mr-2">
+                                                <div class="w-2 h-2 bg-white rounded-full stream-indicator shadow-sm"></div>
+                                                <div class="absolute inset-0 w-2 h-2 bg-white rounded-full animate-pulse opacity-40"></div>
+                                            </div>
+                                            <span class="font-semibold text-sm" lng="127">В эфире</span>
+                                        </div>
+                                    <% } else { %>
+                                        <div class="stream-paused-message hidden flex items-center bg-gradient-to-r from-brand-50/95 to-purple-50/95 text-brand-700 px-4 py-2.5 rounded-2xl backdrop-blur-md border border-brand-200/50 shadow-lg">
+                                            <div class="p-1 bg-white/70 rounded-lg mr-2">
+                                                <svg class="w-3 h-3 text-brand-600" fill="currentColor" viewBox="0 0 24 24">
+                                                    <path d="M5.25 5.25v13.5h3v-13.5h-3zm10.5 0v13.5h3v-13.5h-3z"/>
+                                                </svg>
+                                            </div>
+                                            <span class="font-semibold text-sm" lng="126">Стрим на паузе или не начат</span>
+                                        </div>
+                                        <div class="stream-active-message flex items-center bg-gradient-to-r from-brand-500/95 to-purple-500/95 text-white px-4 py-2.5 rounded-2xl backdrop-blur-md shadow-lg border border-brand-400/30">
+                                            <div class="relative mr-2">
+                                                <div class="w-2 h-2 bg-white rounded-full stream-indicator shadow-sm"></div>
+                                                <div class="absolute inset-0 w-2 h-2 bg-white rounded-full animate-pulse opacity-40"></div>
+                                            </div>
+                                            <span class="font-semibold text-sm" lng="127">В эфире</span>
+                                        </div>
+                                    <% } %>
+                                </div>
+
+                                <!-- Кнопка полноэкранного режима -->
+                                <button id="streamerFsButton" class="absolute top-6 right-6 z-20 bg-black/50 hover:bg-black/60 text-white rounded-lg p-2 border border-white/10 transition-colors" title="На весь экран">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 9V4.5H9M15 4.5h4.5V9M4.5 15V19.5H9M15 19.5h4.5V15M9 4.5 4.5 9M19.5 9 15 4.5M9 19.5 4.5 15M19.5 15 15 19.5" />
+                                    </svg>
+                                </button>
+
+                
+                            </div>
+
+                            <!-- Информация о стриме -->
+                            <div class="stream-info p-3 sm:p-4 md:p-6">
+                                <!-- Заголовок стрима -->
+                                <h1 class="stream-title text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-3 sm:mb-4 line-clamp-2"><%= stream.title %></h1>
+
+                                <!-- Автор и статистика -->
+                                <div class="stream-meta flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                                    <div class="author-section flex items-center space-x-2 sm:space-x-3 md:space-x-4 min-w-0">
+                                        <!-- Аватар стримера -->
+                                        <a href="/userPage/<%= user._id %>" class="flex-shrink-0">
+                                            <% if (user.avatarStyle.url) { %>
+                                                <img class="avatar w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-xl sm:rounded-2xl object-cover shadow-lg hover:scale-105 transition-transform duration-200" 
+                                                     src="<%= user.avatarStyle.url %>" alt="<%= user.displayName %>">
+                                            <% } else { %>
+                                                <div class="avatar w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center text-white font-bold shadow-lg hover:scale-105 transition-transform duration-200"
+                                                     data-avatar-gradient="<%= user.avatarStyle.gradient %>">
+                                                    <span class="text-xs sm:text-sm md:text-base"><%= user.avatarStyle.initial %></span>
+                                                </div>
+                                            <% } %>
+                                        </a>
+
+                                        <!-- Имя стримера -->
+                                        <div class="author-info min-w-0 flex-1">
+                                            <a href="/userPage/<%= user._id %>" class="author-name block text-sm sm:text-base md:text-lg font-semibold text-gray-900 hover:text-brand-500 transition-colors truncate">
+                                                <%= user.displayName %>
+                                            </a>
+                                            <span class="streamer-badge text-xs text-brand-600 font-medium">Стример</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Статистика -->
+                                    <div class="stats-section flex flex-wrap items-center gap-3 sm:gap-4 md:gap-6 flex-shrink-0">
+                                        <!-- Индикатор времени стрима -->
+                                        <div class="live-indicator bg-gradient-to-r from-brand-50 to-purple-50 px-3 py-2 rounded-2xl border border-brand-200/50 shadow-sm hover:shadow-md transition-all duration-300">
+                                            <div class="flex items-center gap-2">
+                                                <div class="relative">
+                                                    <div class="w-2 h-2 bg-gradient-to-r from-brand-500 to-purple-500 rounded-full stream-indicator shadow-sm"></div>
+                                                    <div class="absolute inset-0 w-2 h-2 bg-gradient-to-r from-brand-500 to-purple-500 rounded-full animate-ping opacity-30"></div>
+                                                </div>
+                                                <span class="live-text text-brand-700 font-semibold text-xs sm:text-sm">Онлайн</span>
+                                                <span id="streamDuration" class="duration-text text-brand-600 font-mono font-medium text-xs sm:text-sm bg-white/60 px-2 py-0.5 rounded-lg w-16 text-center">00:00:00</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Счетчик зрителей -->
+                                        <div class="viewer-count bg-gradient-to-r from-slate-50 to-gray-50 px-3 py-2 rounded-2xl border border-slate-200/50 shadow-sm hover:shadow-md transition-all duration-300">
+                                            <div class="flex items-center gap-2">
+                                                <div class="p-1 bg-white/70 rounded-lg">
+                                                    <svg class="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-600" fill="currentColor" viewBox="0 0 24 24">
+                                                        <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
+                                                        <path fill-rule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z" clip-rule="evenodd"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="online__pepole-count text-slate-700 font-semibold text-xs sm:text-sm">
+                                                    <span class="viewers-number"><%= stream.viewers %></span>
+                                                    <span class="viewers-text hidden xs:inline ml-1">зрителей</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Описание -->
+                                <% if (stream.description) { %>
+                                    <div class="description-section">
+                                        <p class="stream-description text-xs sm:text-sm md:text-base text-gray-600 leading-relaxed line-clamp-3"><%= stream.description %></p>
+                                    </div>
+                                <% } %>
+                            </div>
+
+                            <!-- Контролы стримера -->
+                            <div class="border-t border-gray-100 p-6">
+                                <!-- Переключатели вынесены наверх как главные (см. блок "Режим трансляции") -->
+
+                                <!-- Веб-стрим -->
+                                <div class="web_tab <%= (typeof obsOnly !== 'undefined' && obsOnly) ? 'hidden' : 'active' %>">
+                                    <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4">
+                                        <p class="text-blue-800 text-sm font-medium mb-3" lng="144">Выберите камеру и начните стрим из браузера нажав кнопку Старт.</p>
+                                        <select id="cameraSelect" class="w-full px-4 py-3 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white">
+                                            <!-- Камеры загружаются динамически -->
+                                        </select>
+                                    </div>
+                                    <div class="flex gap-3">
+                                        <!-- Кнопка "Поставить на паузу" - показывается когда стрим активен -->
+                                        <button class="btn pause_stream flex-1 px-6 py-3.5 bg-gradient-to-r from-orange-400 to-amber-500 hover:from-orange-500 hover:to-amber-600 text-white rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl border border-orange-300/40 <%= !stream.isActive ? 'hidden' : '' %>" lng="120">
+                                            <span class="flex items-center justify-center gap-2">
+                                                <div class="flex gap-1">
+                                                    <div class="w-1 h-4 bg-white rounded-sm"></div>
+                                                    <div class="w-1 h-4 bg-white rounded-sm"></div>
+                                                </div>
+                                                <span lng="120">Поставить на паузу</span>
+                                            </span>
+                                        </button>
+                                        
+                                        <!-- Кнопка "Начать стрим" - показывается когда стрим НЕ активен -->
+                                        <button class="btn start_stream flex-1 px-6 py-3.5 bg-gradient-to-r from-brand-500 to-purple-500 hover:from-brand-600 hover:to-purple-600 text-white rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl border border-brand-400/30 <%= stream.isActive ? 'hidden' : '' %>" id="startStream" lng="119">
+                                            <span class="flex items-center justify-center gap-2">
+                                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                                    <path d="M8 5v14l11-7z"/>
+                                                </svg>
+                                                <span lng="119">Начать стрим</span>
+                                            </span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- OBS стрим -->
+                                <div class="obs_tab <%= (typeof obsOnly !== 'undefined' && obsOnly) ? 'active' : 'hidden' %>">
+                                    <div class="bg-purple-50 border border-purple-200 rounded-2xl p-6 space-y-4">
+                                        <div class="flex items-center mb-4">
+                                            <div class="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center mr-3">
+                                                <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d="M12 1.5a.75.75 0 01.75.75V7.5h-1.5V2.25A.75.75 0 0112 1.5zM11.25 7.5v5.69l-1.72-1.72a.75.75 0 00-1.06 1.06l3 3a.75.75 0 001.06 0l3-3a.75.75 0 10-1.06-1.06l-1.72 1.72V7.5h3.75a3 3 0 013 3v9a3 3 0 01-3 3h-9a3 3 0 01-3-3v-9a3 3 0 013-3h3.75z"/>
+                                            </svg>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-gray-900" lng="145">Скачайте и запустите OBS:</p>
+                                                <a href="https://obsproject.com/ru/download" target="_blank" 
+                                                   class="text-brand-500 hover:text-brand-600 font-medium text-sm" lng="146">Скачать OBS Studio</a>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="space-y-3 text-sm text-gray-700">
+                                            <p lng="147">1. Настройте сцену (камера, рабочий стол, игра и тд)</p>
+                                            <p lng="148">2. Перейдите в настройки → трансляция</p>
+                                            <p lng="149">3. В поле сервер вставьте:</p>
+                                            <div class="bg-gray-100 p-3 rounded-lg border">
+                                                <code class="text-brand-600 font-mono"><%= (start_server_env === 'local') ? 'rtmp://localhost:1935/live' : 'rtmp://takebana.com:1935/live' %></code>
+                                            </div>
+                                            <p lng="150">4. В поле Ключ потока вставьте свой ключ (не показывайте его никому):</p>
+                                            <div class="bg-gray-100 p-3 rounded-lg border">
+                                                <code class="text-brand-600 font-mono"><%= streamKey %></code>
+                                            </div>
+                                            <p lng="151">5. Нажмите Применить и начинайте трансляцию в программе</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Кнопка завершения стрима -->
+                                <div class="mt-6 pt-6 border-t border-gray-100">
+                                    <button class="btn stop_stream w-full px-6 py-3.5 bg-gradient-to-r from-rose-500 to-red-500 hover:from-rose-600 hover:to-red-600 text-white rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.99] shadow-lg hover:shadow-xl border border-rose-400/30" lng="122">
+                                        <span class="flex items-center justify-center gap-2">
+                                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                            </svg>
+                                            <span lng="229">Полностью завершить и удалить стрим</span>
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Правая колонка - Чат -->
+                    <div class="xl:col-span-1 chat-container">
+                        <div class="chat__box bg-white rounded-2xl sm:rounded-3xl shadow-xl overflow-hidden h-[calc(100vh-100px)] sm:h-[calc(100vh-120px)] md:h-[calc(100vh-160px)] lg:h-[calc(100vh-200px)] flex flex-col">
+                            
+                            <!-- Заголовок чата -->
+                            <div class="flex items-center justify-between p-4 sm:p-6 border-b border-gray-100">
+                                <h3 class="text-lg font-bold text-gray-900" lng="135">Чат трансляции</h3>
+                                <button class="close-chat-btn p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors xl:hidden">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <!-- Сообщения чата -->
+                            <div class="wrapper__masseg flex-1 flex flex-col min-h-0">
+                                <div class="messeg-box flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 max-h-full">
+                                    <!-- Сообщения загружаются динамически -->
+                                </div>
+
+                                <!-- Поле ввода -->
+                                <div class="input__messeng-box p-3 sm:p-4 border-t border-gray-100">
+                                    <div class="flex gap-2 sm:gap-3">
+                                        <textarea class="input__messeng flex-1 px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg sm:rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm sm:text-base" 
+                                                  rows="1" placeholder="Введите сообщение..." maxlength="140"></textarea>
+                                        <button class="starting__buttone px-4 sm:px-6 py-2.5 sm:py-3.5 bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white rounded-xl sm:rounded-2xl font-semibold transition-all duration-300 transform hover:scale-105 active:scale-95 flex-shrink-0 text-sm sm:text-base shadow-lg hover:shadow-xl border border-brand-400/30">
+                                            <span class="hidden sm:inline flex items-center gap-2" lng="109">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                                                </svg>
+                                                Отправить
+                                            </span>
+                                            <svg class="w-4 h-4 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-1 sm:mt-2" lng="247">Максимум 140 символов</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ярлычок чата для мобильных -->
+        <div class="chat-tab xl:hidden" id="chatTab">
+            <div class="flex flex-col items-center text-gray-600">
+                <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a9.863 9.863 0 01-4.906-1.285A1.001 1.001 0 017 19L3 20l1-4a8.969 8.969 0 01-1.285-4.906C2.715 5.582 6.297 2 10.715 2S21 7.582 21 12z"></path>
+                </svg>
+                <span class="text-xs font-medium">Чат</span>
+            </div>
+        </div>
+
+        <!-- Overlay для мобильного чата -->
+        <div class="chat-overlay xl:hidden" id="chatOverlay"></div>
+    </div>
+
+        <!-- Подключаем необходимые библиотеки -->
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
+    <% if (typeof obsOnly !== 'undefined' && obsOnly) { %>
+        <!-- flv.js для предпросмотра OBS на странице стримера -->
+        <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+    <% } %>
+    
+    
+
+    <script src="/lang.js"></script>
+
+    <script>
+        // Глобальные переменные
+        const streamKey = "<%= streamKey %>";
+        const streamUrl = "<%= streamUrl %>";
+        const serverEnv = '<%= start_server_env || "local" %>';
+        
+        console.log('=== STREAMER PAGE DEBUG ===');
+        console.log('StreamKey from template:', streamKey);
+        console.log('StreamKey type:', typeof streamKey);
+        console.log('StreamKey length:', streamKey ? streamKey.length : 0);
+        let currentStream;
+        let lastMessageTime = null;
+        let socket;
+
+        // ОТЛАДКА: Проверяем что переменные определены правильно
+        console.log('🔍 ОТЛАДКА переменных:');
+        console.log('- streamKey:', streamKey);
+        console.log('- streamUrl:', streamUrl);
+        console.log('- serverEnv:', serverEnv);
+
+        // Инициализация Socket.IO
+        console.log('[Streamer] Initializing socket with serverEnv:', serverEnv);
+        if (serverEnv == 'prod') {
+            socket = io('https://takebana.com', {
+                transports: ['websocket'],
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 5
+            });
+        }
+        if (serverEnv == 'local') {
+            socket = io('https://localhost:3000', {
+                transports: ['websocket'],
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 5,
+                rejectUnauthorized: false // Для self-signed SSL
+            });
+        }
+        
+        // Регистрируем обработчики ДО подключения
+        console.log('[Streamer] Registering event handlers before connection...');
+        
+        // Функция для присоединения к комнате стрима
+        const joinStreamRoom = () => {
+            if (!streamKey || streamKey === 'undefined' || streamKey === 'null' || streamKey === '') {
+                console.error('[Streamer] Cannot join: streamKey is invalid!', streamKey);
+                return;
+            }
+            
+            if (!socket.connected) {
+                console.warn('[Streamer] Socket not connected, cannot join stream room');
+                return;
+            }
+            
+            console.log('[Streamer] Emitting join-stream-room, socket.connected:', socket.connected, 'socket.id:', socket.id);
+            socket.emit('join-stream-room', streamKey, (response) => {
+                console.log('[Streamer] join-stream-room callback response:', response);
+            });
+            console.log('[Streamer] Sent join-stream-room event with key:', streamKey);
+        };
+
+        // Стример тоже присоединяется к комнате, чтобы видеть счетчик
+        socket.on('connect', () => {
+            console.log('[Streamer] Socket connected! Socket ID:', socket.id);
+            console.log('[Streamer] Socket connected state:', socket.connected);
+            console.log('[Streamer] Attempting to join stream room with key:', streamKey);
+            
+            // Небольшая задержка чтобы убедиться что socket полностью подключен
+            setTimeout(() => {
+                joinStreamRoom();
+            }, 100);
+        });
+        
+        socket.on('connect_error', (error) => {
+            console.error('[Streamer] Socket connection error:', error);
+        });
+        
+        socket.on('disconnect', (reason) => {
+            console.log('[Streamer] Socket disconnected, reason:', reason);
+        });
+        
+        socket.on('reconnect', (attemptNumber) => {
+            console.log('[Streamer] Socket reconnected after', attemptNumber, 'attempts');
+            // При переподключении снова присоединяемся к комнате
+            if (streamKey && streamKey !== 'undefined' && streamKey !== 'null' && streamKey !== '') {
+                setTimeout(() => {
+                    joinStreamRoom();
+                }, 100);
+            }
+        });
+        
+        // Если socket уже подключен (например, при переподключении), сразу присоединяемся
+        if (socket.connected) {
+            console.log('[Streamer] Socket already connected, joining immediately');
+            setTimeout(() => {
+                joinStreamRoom();
+            }, 100);
+        }
+
+
+
+        // Регистрируем обработчик ДО подключения, чтобы не пропустить события
+        console.log('[Streamer] Registering viewers-count-updated handler...');
+        
+        // Обновление счетчика зрителей
+        socket.on('viewers-count-updated', (data) => {
+            console.log('[Streamer] ===== VIEWERS COUNT UPDATED EVENT RECEIVED =====');
+            console.log('[Streamer] Full data:', JSON.stringify(data, null, 2));
+            console.log('[Streamer] Received viewers count:', data);
+            console.log('[Streamer] Comparing streamKey - received:', data.streamKey, 'local:', streamKey, 'match:', data.streamKey === streamKey);
+            if (data.streamKey === streamKey) {
+                // Пробуем обновить через .viewers-number (вложенный span)
+                const viewersNumber = document.querySelector('.viewers-number');
+                const countElement = document.querySelector('.online__pepole-count');
+                
+                console.log('[Streamer] Count element found:', !!countElement);
+                console.log('[Streamer] Viewers number element found:', !!viewersNumber);
+                
+                if (viewersNumber) {
+                    // Обновляем число зрителей
+                    const oldText = viewersNumber.textContent;
+                    viewersNumber.textContent = data.count;
+                    console.log('[Streamer] Updated viewers-number from', oldText, 'to', data.count);
+                } else if (countElement) {
+                    // Fallback: обновляем весь элемент
+                    const oldText = countElement.textContent;
+                    countElement.textContent = `${data.count} зрителей`;
+                    console.log('[Streamer] Updated count element from', oldText, 'to', countElement.textContent);
+                } else {
+                    console.error('[Streamer] ERROR: Neither .viewers-number nor .online__pepole-count element found!');
+                    // Попробуем найти через другой селектор
+                    const allCountElements = document.querySelectorAll('[class*="pepole"], [class*="viewer"]');
+                    console.log('[Streamer] Found potential count elements:', allCountElements.length);
+                }
+            } else {
+                console.warn('[Streamer] StreamKey mismatch! Received:', data.streamKey, 'Expected:', streamKey);
+            }
+        });
+
+        // OBS preview для стримера на OBS-странице
+        document.addEventListener('DOMContentLoaded', function () {
+            const OBS_ONLY = document.body?.dataset?.obsOnly === '1';
+            if (!OBS_ONLY) return;
+
+            const previewVideo = document.getElementById('video');
+            const hint = document.getElementById('obsPreviewHint');
+            const placeholder = document.getElementById('videoPlaceholder');
+
+            if (placeholder) placeholder.style.display = 'none';
+            if (hint) hint.style.display = 'flex';
+
+            if (!previewVideo) return;
+
+            // Автоплей в браузерах почти всегда требует muted
+            previewVideo.muted = true;
+
+            const flvUrl = `/live/${streamKey}.flv`;
+            console.log('[OBS Preview] Trying to play:', flvUrl);
+
+            if (!(window.flvjs && flvjs.isSupported())) {
+                console.error('[OBS Preview] flv.js is not supported in this browser');
+                return;
+            }
+
+            let player = null;
+            let retryTimer = null;
+            const RETRY_MS = 2000;
+
+            function cleanupPlayer() {
+                if (!player) return;
+                try { player.pause(); } catch (_) {}
+                try { player.unload(); } catch (_) {}
+                try { player.detachMediaElement(); } catch (_) {}
+                try { player.destroy(); } catch (_) {}
+                player = null;
+            }
+
+            function showHint() {
+                if (hint) hint.style.display = 'flex';
+                previewVideo.style.display = 'none';
+            }
+
+            function startPreview() {
+                cleanupPlayer();
+                showHint();
+
+                player = flvjs.createPlayer(
+                    { type: 'flv', url: flvUrl, isLive: true },
+                    { enableStashBuffer: false, stashInitialSize: 128 }
+                );
+
+                player.attachMediaElement(previewVideo);
+                player.load();
+                player.play().catch((e) => console.warn('[OBS Preview] Autoplay blocked:', e));
+
+                player.on(flvjs.Events.ERROR, (type, detail, info) => {
+                    const status = info?.code;
+                    // Ожидаемо, когда OBS еще не начал пушить: 404/502/503 и т.п.
+                    if (detail === 'HttpStatusCodeInvalid' && (status === 404 || status === 502 || status === 503)) {
+                        console.warn('[OBS Preview] Stream not ready yet. Retrying...', { type, detail, info });
+                    } else {
+                        console.error('[OBS Preview] Player error:', { type, detail, info });
+                    }
+                    cleanupPlayer();
+                    showHint();
+                    if (retryTimer) clearTimeout(retryTimer);
+                    retryTimer = setTimeout(startPreview, RETRY_MS);
+                });
+            }
+
+            previewVideo.addEventListener('playing', () => {
+                if (hint) hint.style.display = 'none';
+                previewVideo.style.display = 'block';
+            });
+
+            startPreview();
+
+            window.addEventListener('beforeunload', () => {
+                if (retryTimer) clearTimeout(retryTimer);
+                cleanupPlayer();
+            });
+        });
+
+        // Переключение между типами стрима
+        document.addEventListener('DOMContentLoaded', function() {
+            const OBS_ONLY = document.body?.dataset?.obsOnly === '1';
+            const STREAM_ID = document.body?.dataset?.streamId;
+            const choiceWebBtn = document.querySelector('.web_stream');
+            const choiceObsBtn = document.querySelector('.obs_stream');
+            const choiceWebTab = document.querySelector('.web_tab');
+            const choiceObsTab = document.querySelector('.obs_tab');
+
+            // Применяем градиенты аватаров из data-атрибутов
+            try {
+                document.querySelectorAll('[data-avatar-gradient]').forEach((el) => {
+                    const g = el.getAttribute('data-avatar-gradient');
+                    if (g) el.style.background = g;
+                });
+            } catch (e) {}
+
+            if (choiceWebBtn && choiceObsBtn) {
+                choiceWebBtn.addEventListener('click', function() {
+                    // Если это OBS-страница — кнопка WEB переводит на WEB-страницу
+                    if (OBS_ONLY) {
+                        window.location.href = `/stream/${STREAM_ID}`;
+                        return;
+                    }
+                    choiceObsBtn.classList.remove('active', 'bg-white', 'text-brand-600', 'shadow-sm');
+                    choiceObsBtn.classList.add('text-gray-600', 'hover:text-gray-900');
+                    choiceWebBtn.classList.add('active', 'bg-white', 'text-brand-600', 'shadow-sm');
+                    choiceWebBtn.classList.remove('text-gray-600', 'hover:text-gray-900');
+
+                    choiceWebTab.classList.remove('hidden');
+                    choiceWebTab.classList.add('active');
+                    choiceObsTab.classList.add('hidden');
+                    choiceObsTab.classList.remove('active');
+                });
+
+                choiceObsBtn.addEventListener('click', function() {
+                    // Если это WEB-страница — кнопка OBS ведёт на отдельную OBS-страницу
+                    if (!OBS_ONLY) {
+                        window.location.href = `/stream-obs/${STREAM_ID}`;
+                        return;
+                    }
+                    choiceWebBtn.classList.remove('active', 'bg-white', 'text-brand-600', 'shadow-sm');
+                    choiceWebBtn.classList.add('text-gray-600', 'hover:text-gray-900');
+                    choiceObsBtn.classList.add('active', 'bg-white', 'text-brand-600', 'shadow-sm');
+                    choiceObsBtn.classList.remove('text-gray-600', 'hover:text-gray-900');
+
+                    choiceWebTab.classList.add('hidden');
+                    choiceWebTab.classList.remove('active');
+                    choiceObsTab.classList.remove('hidden');
+                    choiceObsTab.classList.add('active');
+                });
+            }
+
+            // Скрытие чата на мобильных устройствах
+            const hideChatButton = document.querySelector('.hide_chat_btn');
+            const chatBox = document.querySelector('.chat__box');
+            
+            if (hideChatButton && chatBox) {
+                hideChatButton.addEventListener('click', function () {
+                    chatBox.classList.toggle('hidden');
+                    const arrowIcon = hideChatButton.querySelector('i');
+                    if (chatBox.classList.contains('hidden')) {
+                        arrowIcon.classList.remove('fa-angle-right');
+                        arrowIcon.classList.add('fa-angle-left');
+                    } else {
+                        arrowIcon.classList.remove('fa-angle-left');
+                        arrowIcon.classList.add('fa-angle-right');
+                    }
+                });
+            }
+        });
+
+
+
+
+    </script>
+
+    <script>
+        // JavaScript код для управления модальными окнами и поведением на странице
+
+        let profile = document.querySelector(".profile__box")
+        let Avatar = document.querySelector(".AVATAR")
+        let buttonExit = document.querySelector(".button__exit")
+        let shodow = document.querySelector(".shodow")
+        let chatMessegProfil = document.querySelectorAll(".chat__profile")
+        let chatListBox = document.querySelector(".chat__list-box")
+        let chatMesseg = document.querySelector(".chat__messeg")
+        let buttonBackChat = document.querySelector(".button__back")
+        let serhButton = document.querySelector(".serh-button")
+        let serhWrapper = document.querySelector(".serh__wrapper")
+        let inputSerh = document.querySelector(".input__serh")
+        let buttonLine = document.querySelector(".button__line")
+        let categoriesBox = document.querySelector(".categories__box")
+        let titleCategories = document.querySelectorAll(".title__categories")
+        let titleBox = document.querySelector(".title__box")
+        let profilName = document.querySelectorAll(".profil__name")
+        let priwMore = document.querySelector(".priw__more")
+
+
+
+        if (Avatar) {
+            Avatar.addEventListener("click", () => {
+                if (profile) profile.classList.add("display-block")
+                if (notification) notification.classList.remove("display-block")
+                if (shodow) shodow.classList.add("display-block")
+            });
+        }
+
+        if (buttonExit) {
+            buttonExit.addEventListener("click", () => {
+                if (profile) profile.classList.remove("display-block")
+                if (shodow) shodow.classList.remove("display-block")
+            });
+        }
+
+        if (shodow) {
+            shodow.addEventListener("click", () => {
+                if (notification) notification.classList.remove("display-block")
+                if (profile) profile.classList.remove("display-block")
+                if (shodow) shodow.classList.remove("display-block")
+                if (categoriesBox) categoriesBox.style = null;
+                if (titleBox) titleBox.style = null;
+                if (titleCategories) {
+                    titleCategories.forEach((el) => {
+                        el.style = null;
+                    });
+                }
+                if (profilName) {
+                    profilName.forEach((el) => {
+                        el.style = null;
+                    });
+                }
+                if (priwMore) priwMore.style = null;
+            });
+        }
+
+        if (chatMessegProfil) {
+            chatMessegProfil.forEach((el) => {
+                if (el) {
+                    el.addEventListener("click", () => {
+                        if (chatListBox) chatListBox.classList.add("no-look")
+                        if (chatMesseg) chatMesseg.classList.add("look")
+                    })
+                }
+            });
+        }
+
+        if (buttonBackChat) {
+            buttonBackChat.addEventListener("click", () => {
+                if (chatListBox) chatListBox.classList.remove("no-look")
+                if (chatMesseg) chatMesseg.classList.remove("look")
+            });
+        }
+
+        function CheckEntr(event) {
+            if (event.keyCode == "13") {
+                serhWrapper.style.display = "none"
+                inputSerh.style.display = "none"
+                serhButton.style.display = "block"
+            }
+        }
+
+        if (serhButton) {
+            serhButton.addEventListener("click", () => {
+                if (serhWrapper) serhWrapper.style.display = "flex"
+                if (inputSerh) inputSerh.style.display = "flex"
+                if (serhButton) serhButton.style.display = "none"
+                window.addEventListener("keydown", CheckEntr, false);
+            });
+        }
+
+
+    // BURGER BUTTON 
+        let buttonLin = document.querySelector('.button__line');
+        let leftMenu = document.querySelector('.categories__box');
+        if (buttonLin) {
+            buttonLin.addEventListener('click', function() {
+                if (leftMenu) {
+                    if (leftMenu.classList.contains('open')) {
+                        leftMenu.classList.remove('open');
+                    } else {
+                        leftMenu.classList.add('open');
+                    }
+                }
+            });
+        }
+
+
+    </script>
+
+    <!-- // ПРОВЕРКА АКТИВНОСТИ СТРИМЕРА  -->
+    <!-- // ПРОВЕРКА АКТИВНОСТИ СТРИМЕРА  -->
+    <!-- // ПРОВЕРКА АКТИВНОСТИ СТРИМЕРА  -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const streamId = '<%= stream._id %>';
+
+            // Устойчивый heartbeat активности стримера (обновляет updatedAt)
+            const HEARTBEAT_MS = 20000; // базовая частота
+            let lastPing = 0;
+
+            async function pingActivity(reason) {
+                const now = Date.now();
+                // анти-спам если события прилетают часто
+                if (now - lastPing < 3000) return;
+                lastPing = now;
+                try {
+                    // keepalive помогает при закрытии вкладки (не везде, но лучше чем ничего)
+                    await fetch(`/stream/active/${streamId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        keepalive: true
+                    });
+                } catch (error) {
+                    console.error('Ошибка при отправке активности стримера:', reason, error);
+                }
+            }
+
+            // Основной интервал (может троттлиться в фоне)
+            setInterval(() => pingActivity('interval'), HEARTBEAT_MS);
+            // Первый пинг сразу
+            pingActivity('init');
+
+            // При возврате на вкладку — пингуем сразу
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    pingActivity('visible');
+                } else {
+                    // При уходе в фон / закрытии — стараемся отправить beacon
+                    try {
+                        const ok = navigator.sendBeacon && navigator.sendBeacon(`/stream/active/${streamId}`);
+                        if (!ok) pingActivity('hidden_fallback');
+                    } catch (_) {
+                        pingActivity('hidden_exception');
+                    }
+                }
+            });
+
+            // При закрытии/перезагрузке
+            window.addEventListener('pagehide', () => {
+                try { navigator.sendBeacon && navigator.sendBeacon(`/stream/active/${streamId}`); } catch (_) {}
+            });
+        });
+    </script>
+        
+
+
+
+
+
+
+
+
+
+
+
+<script>
+    
+    console.log("🎥 Подготовка для Dallyy.co стриминга...");
+
+
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log("🎥 Инициализация системы стриминга...");
+    // Запрашиваем разрешения на камеру/микрофон для стримера
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true
+        });
+        
+        // Если пользователь дал разрешение, код доходит сюда
+        console.log('✅ Доступ к камере/микрофону получен');
+        
+        // Останавливаем поток, он нужен был только для получения разрешений
+        stream.getTracks().forEach(track => track.stop());
+        
+    } catch (err) {
+        console.error('❌ Ошибка при запросе доступа к камере/микрофону:', err);
+        
+        // Можно отследить конкретные типы ошибок 
+        if (err.name === 'NotAllowedError') {
+            alert('Вы не разрешили доступ к камере/микрофону. Работа с видео невозможна.');
+        } else {
+            alert(`Не удалось получить доступ к камере/микрофону: ${err.name} - ${err.message}`);
+        }
+    }
+});
+
+// ========== ОБРАБОТЧИКИ ДЛЯ КНОПКИ ПАУЗЫ ==========
+const pauseButton = document.querySelector('.pause_stream');
+if (pauseButton) {
+    pauseButton.addEventListener('click', async function() {
+        console.log('🛑 Кнопка паузы нажата!');
+        
+        // Проверяем что кнопка видима (не на паузе уже)
+        if (pauseButton.classList.contains('hidden')) {
+            console.log('⚠️ Кнопка паузы скрыта, игнорируем клик');
+            return;
+        }
+        
+        // Временно отключаем кнопку чтобы избежать двойных кликов
+        pauseButton.disabled = true;
+        try {
+            // Проверяем какая система стриминга активна
+            // Если это Daily.co система - останавливаем её через класс
+            if (window.dailyStreamer && window.dailyStreamer.isConnected) {
+                console.log('🛑 Останавливаем Daily.co стрим...');
+                await window.dailyStreamer.stopStream();
+            }
+            
+            // Деактивируем стрим в базе данных
+            console.log('🔄 Деактивация стрима в базе...');
+            await diactivateStream();
+
+            alert((window.langDict?.['245']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Стрим поставлен на паузу');
+        } catch (error) {
+            console.error('❌ Ошибка при постановке на паузу:', error);
+            alert((window.langDict?.['246']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Произошла ошибка при постановке на паузу');
+        } finally {
+            // Включаем кнопку обратно
+            pauseButton.disabled = false;
+        }
+    });
+}
+
+// Обработчик для кнопки "Полностью завершить стрим"
+const stopButton = document.querySelector('.stop_stream');
+if (stopButton) {
+    stopButton.addEventListener('click', async function() {
+        console.log('🛑 Кнопка "Полностью завершить стрим" нажата!');
+        
+        // Подтверждение от пользователя
+        const confirmed = confirm((window.langDict?.['241']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Вы уверены, что хотите полностью завершить стрим? Это действие нельзя отменить.');
+        if (!confirmed) {
+            console.log('⚠️ Пользователь отменил завершение стрима');
+            return;
+        }
+        
+        // Временно отключаем кнопку чтобы избежать двойных кликов
+        stopButton.disabled = true;
+        stopButton.textContent = (window.langDict?.['242']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Завершение...';
+        
+        try {
+            // Проверяем какая система стриминга активна
+            // Если это Daily.co система - останавливаем её через класс
+            if (window.dailyStreamer && window.dailyStreamer.isConnected) {
+                console.log('🛑 Останавливаем Daily.co стрим...');
+                await window.dailyStreamer.stopStream();
+            }
+            
+            // Полностью удаляем стрим из базы данных
+            console.log('🗑️ Удаление стрима из базы...');
+            await terminateStream();
+
+            alert((window.langDict?.['243']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Стрим полностью завершен');
+            
+            // Перенаправляем на главную страницу или страницу стримера
+            window.location.href = '/streaming';
+            
+        } catch (error) {
+            console.error('❌ Ошибка при завершении стрима:', error);
+            alert(((window.langDict?.['244']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Произошла ошибка при завершении стрима: ') + error.message);
+        } finally {
+            // Включаем кнопку обратно
+            stopButton.disabled = false;
+            stopButton.textContent = (window.langDict?.['229']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Полностью завершить стрим';
+        }
+    });
+}
+
+
+
+    // Функция для активации стрима на сервере (упрощенная для Daily.co)
+    async function activateStream() {
+        // устанавливает исЭктив в ACTIVE наш экземпляр стрима в базе
+        const serverUrl = serverEnv === 'local'
+            ? 'https://localhost:3000/set-active'
+            : 'https://takebana.com/set-active';
+
+        try {
+            const response = await fetch(serverUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ streamKey: streamKey }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Ошибка активации стрима на сервере');
+            }
+
+            const data = await response.json();
+            console.log('✅ Стрим активирован в базе данных:', data);
+        } catch (err) {
+            console.error('❌ Ошибка активации стрима:', err);
+            throw err;
+        }
+    }
+
+    async function activateStreamObs() {
+        // устанавливает исЭктив в ACTIVE наш экземпляр стрима в базе
+        const serverUrl = serverEnv === 'local'
+            ? 'https://localhost:3000/set-active'
+            : 'https://takebana.com/set-active';
+
+        try {
+            const response = await fetch(serverUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ streamKey: streamKey }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Ошибка активации стрима на сервере');
+            }
+
+            const data = await response.json();
+            console.log('✅ Стрим активирован (OBS):', data);
+        } catch (err) {
+            console.error('❌ Ошибка активации стрима:', err);
+        }
+
+        // Обновляем UI - показываем что стрим активен
+        const activeMessage = document.querySelector('.stream-active-message');
+        const pausedMessage = document.querySelector('.stream-paused-message');
+        if (activeMessage && pausedMessage) {
+            activeMessage.classList.remove('hidden');
+            pausedMessage.classList.add('hidden');
+        }
+
+        // Переключаем кнопки: скрываем "Начать стрим", показываем "Поставить на паузу"
+        const startButton = document.querySelector('.start_stream');
+        const pauseButton = document.querySelector('.pause_stream');
+        if (startButton && pauseButton) {
+            startButton.classList.add('hidden');
+            pauseButton.classList.remove('hidden');
+            console.log('🔄 Кнопки переключены: показана "Поставить на паузу" (OBS)');
+        }
+
+        const serverUrle = serverEnv === 'local'
+            ? 'https://localhost:3000/obs-stream-start'
+            : 'https://takebana.com/obs-stream-start';
+
+        try {
+            const response = await fetch(serverUrle, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ streamKey: streamKey }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Ошибка установки OBS стрима');
+            }
+
+            const data = await response.json();
+            console.log('✅ OBS стрим установлен:', data);
+        } catch (err) {
+            console.error('❌ Ошибка установки OBS стрима:', err);
+        }
+    }
+
+
+    
+    async function diactivateStream() {
+        // устанавливает исЭктив в FALSE наш экземпляр стрима в базе
+        const serverUrl =
+            serverEnv === 'local'
+            ? 'https://localhost:3000/set-inactive'
+            : 'https://takebana.com/set-inactive';
+
+        try {
+            const response = await fetch(serverUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ streamKey: streamKey }),
+            });
+
+            if (!response.ok) {
+            throw new Error('Ошибка дизактивации стрима на сервере');
+            }
+
+            const data = await response.json();
+            console.log('Стрим дизактивирован:', data);
+        } catch (err) {
+            console.error('Ошибка дизактивации стрима:', err);
+        }
+        
+        // Обновляем UI - показываем что стрим на паузе
+        const activeMessage = document.querySelector('.stream-active-message');
+        const pausedMessage = document.querySelector('.stream-paused-message');
+        if (activeMessage && pausedMessage) {
+            activeMessage.classList.add('hidden');
+            pausedMessage.classList.remove('hidden');
+        }
+
+        // Переключаем кнопки: показываем "Начать стрим", скрываем "Поставить на паузу"
+        const startButton = document.querySelector('.start_stream');
+        const pauseButton = document.querySelector('.pause_stream');
+        if (startButton && pauseButton) {
+            startButton.classList.remove('hidden');
+            pauseButton.classList.add('hidden');
+            console.log('🔄 Кнопки переключены: показана "Начать стрим"');
+        }
+
+    }
+
+    // Функция для полного завершения стрима (удаление из базы данных)
+    async function terminateStream() {
+        const serverUrl = serverEnv === 'local'
+            ? 'https://localhost:3000/terminate-stream'
+            : 'https://takebana.com/terminate-stream';
+
+        try {
+            const response = await fetch(serverUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    streamId: '<%= stream._id %>'
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Ошибка завершения стрима на сервере');
+            }
+
+            const data = await response.json();
+            console.log('✅ Стрим полностью завершен и удален:', data);
+        } catch (err) {
+            console.error('❌ Ошибка завершения стрима:', err);
+            throw err; // Пробрасываем ошибку выше
+        }
+    }
+
+
+    async function diactivateStreamObs() {
+        // устанавливает исЭктив в FALSE наш экземпляр стрима в базе
+        const serverUrl =
+            serverEnv === 'local'
+            ? 'https://localhost:3000/set-inactive'
+            : 'https://takebana.com/set-inactive';
+
+        try {
+            const response = await fetch(serverUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ streamKey: streamKey }),
+            });
+
+            if (!response.ok) {
+            throw new Error('Ошибка дизактивации стрима на сервере');
+            }
+
+            const data = await response.json();
+            console.log('Стрим дизактивирован:', data);
+        } catch (err) {
+            console.error('Ошибка дизактивации стрима:', err);
+        }
+        
+        // Обновляем UI - показываем что стрим на паузе
+        const activeMessage = document.querySelector('.stream-active-message');
+        const pausedMessage = document.querySelector('.stream-paused-message');
+        if (activeMessage && pausedMessage) {
+            activeMessage.classList.add('hidden');
+            pausedMessage.classList.remove('hidden');
+        }
+
+        // Переключаем кнопки: показываем "Начать стрим", скрываем "Поставить на паузу"
+        const startButton = document.querySelector('.start_stream');
+        const pauseButton = document.querySelector('.pause_stream');
+        if (startButton && pauseButton) {
+            startButton.classList.remove('hidden');
+            pauseButton.classList.add('hidden');
+            console.log('🔄 Кнопки переключены: показана "Начать стрим" (OBS)');
+        }
+
+
+
+
+        const serverUrle = serverEnv === 'local'
+        ? 'https://localhost:3000/obs-stream-end'
+        : 'https://takebana.com/obs-stream-end';
+
+    try {
+        const response = await fetch(serverUrle, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ streamKey: streamKey }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Ошибка завершения OBS стрима');
+        }
+
+        const data = await response.json();
+        console.log('OBS стрим завершен:', data);
+    } catch (err) {
+        console.error('Ошибка завершения OBS стрима:', err);
+    }
+
+
+}
+
+
+
+
+
+
+
+
+
+// ========== ОБРАБОТЧИКИ ДЛЯ ЧАТА (ДЛЯ ВСЕХ) ==========
+// Кнопка отправки сообщения
+const sendButton = document.querySelector('.starting__buttone');
+const messageInput = document.querySelector('.input__messeng');
+
+if (sendButton && messageInput) {
+    sendButton.addEventListener('click', sendMessage);
+    
+    // Отправка по Enter
+    messageInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            sendMessage();
+        }
+    });
+}
+
+// Функция отправки сообщения в чат
+async function sendMessage() {
+    const messageContent = messageInput.value.trim();
+    const streamId = '<%= stream._id %>';
+    const userId = '<%= currentUser._id %>';
+    const username = '<%= currentUser.displayName %>';
+
+    if (messageContent === '') {
+        return; // Не отправляем пустое сообщение
+    }
+
+    // Проверка длины сообщения
+    if (messageContent.length > 140) {
+        alert((window.langDict?.['248']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Ошибка: Сообщение не должно превышать 140 символов');
+        return;
+    }
+
+    try {
+        // Отправка сообщения на бэкенд
+        const response = await fetch('/chat/message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                streamId,
+                userId,
+                username,
+                message: messageContent
+            }),
+        });
+
+        if (response.ok) {
+            // console.log('Сообщение отправлено успешно!');
+            messageInput.value = ''; // Очищаем поле ввода
+        } else {
+            console.error('Ошибка отправки сообщения');
+            alert('Ошибка при отправке сообщения');
+        }
+    } catch (error) {
+        console.error('Ошибка при отправке сообщения:', error);
+        alert('Произошла ошибка при отправке сообщения');
+    }
+}
+
+// ========== ЗАГРУЗКА НОВЫХ СООБЩЕНИЙ В ЧАТ (ДЛЯ ВСЕХ) ==========
+// console.log("✅ Определение функций чата для всех пользователей...");
+
+// Функция для подгрузки новых сообщений
+async function fetchNewMessages() {
+    const streamId = '<%= stream._id %>'; // Получаем ID стрима
+    
+    try {
+        // Запрашиваем сообщения, которые были созданы после последнего сообщения
+        const url = `/api/chat/messages/new?streamId=${streamId}&lastMessageTime=${lastMessageTime || ''}`;
+        
+        const response = await fetch(url);
+        
+        if (response.ok) {
+            const newMessages = await response.json();
+
+            if (newMessages.length > 0) {
+                const messageBox = document.querySelector('.messeg-box');
+                
+                // Добавляем каждое новое сообщение в конец чата
+                newMessages.forEach(message => {
+                    const messageElement = document.createElement('div');
+                    messageElement.classList.add('chat-message', 'p-3', 'rounded-xl', 'bg-gray-50');
+                    
+                    // Определяем цвет имени пользователя
+                    const isCurrentUser = message.userId === '<%= currentUser._id %>';
+                    const nameColorClass = isCurrentUser ? 'text-green-600' : 'text-blue-600';
+                    
+                    messageElement.innerHTML = `
+                        <div class="flex items-start space-x-3">
+                            <div class="flex-1">
+                                <p class="text-sm">
+                                    <span class="${nameColorClass} font-semibold">${message.username}:</span>
+                                    <span class="text-gray-900 ml-2">${message.message}</span>
+                                </p>
+                                <p class="text-xs text-gray-500 mt-1">${new Date(message.createdAt).toLocaleTimeString()}</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    messageBox.appendChild(messageElement);
+                    
+                    // Плавная прокрутка вниз к новому сообщению
+                    messageBox.scrollTo({
+                        top: messageBox.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                });
+
+                // Обновляем время последнего сообщения только если новые сообщения действительно пришли
+                lastMessageTime = newMessages[newMessages.length - 1].createdAt;
+            }
+        } else {
+            console.error('❌ Ошибка при получении новых сообщений, статус:', response.status);
+            const errorText = await response.text();
+            console.error('❌ Текст ошибки:', errorText);
+        }
+    } catch (error) {
+        console.error('❌ Ошибка при запросе новых сообщений:', error);
+    }
+}
+
+
+
+
+
+        // Получаем значение из EJS - isStreamer удален
+
+// OBS status polling должен работать ТОЛЬКО на OBS-странице стримера,
+// иначе на WEB-странице он будет переключать кнопки "Начать/Пауза" не по тому состоянию.
+const OBS_ONLY_PAGE = document.body?.dataset?.obsOnly === '1';
+if (OBS_ONLY_PAGE) {
+    // Проверяем статус OBS стрима
+    let isCurrentlyStreaming = false;
+
+    function checkStreamStatus() {
+        fetch(`/api/check-stream/${streamKey}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(async data => {
+                // Если статус изменился
+                if (data.isLive !== isCurrentlyStreaming) {
+                    if (data.isLive) {
+                        console.log('🟢 OBS Stream just started!');
+                        console.log('Stream key:', data.streamKey);
+                        console.log('Start time:', new Date(data.timestamp).toLocaleString());
+
+                        await activateStreamObs();
+                    } else {
+                        console.log('🔴 OBS Stream just ended!');
+                        await diactivateStreamObs();
+                    }
+                    isCurrentlyStreaming = data.isLive;
+                } else {
+                    console.log(`${data.isLive ? '🟢' : '🔴'} Obs Stream status: ${data.isLive ? 'Active' : 'Inactive'}`);
+                }
+            })
+            .catch(error => {
+                console.error('❌ Error checking stream status:', error);
+                isCurrentlyStreaming = false;
+            });
+    }
+
+    // Запускаем проверку OBS стрима
+    checkStreamStatus();
+    let checkInterval = setInterval(checkStreamStatus, 5000);
+
+    window.addEventListener('beforeunload', () => {
+        clearInterval(checkInterval);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            clearInterval(checkInterval);
+        } else {
+            checkStreamStatus();
+            checkInterval = setInterval(checkStreamStatus, 5000);
+        }
+    });
+}
+
+// ========== ИНИЦИАЛИЗАЦИЯ ЧАТА ДЛЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (В КОНЦЕ) ==========
+// Инициализация — ставим время последнего сообщения после загрузки страницы
+document.addEventListener('DOMContentLoaded', function () {
+    // console.log("🔥 Инициализация чата запущена для всех пользователей");
+    // console.log("🔍 Проверяем функцию fetchNewMessages:", typeof fetchNewMessages);
+    
+    const messages = document.querySelectorAll('.chat-message');
+    // console.log("📨 Найдено сообщений при загрузке:", messages.length);
+
+    if (messages.length > 0) {
+        lastMessageTime = messages[messages.length - 1].dataset.timestamp || null;
+        // console.log("⏰ Инициализировано время последнего сообщения:", lastMessageTime);
+    } else {
+        lastMessageTime = null;
+        // console.log("⏰ Нет сообщений, lastMessageTime установлен в null");
+    }
+    
+    // Прокручиваем чат вниз при загрузке страницы
+    const messageBox = document.querySelector('.messeg-box');
+    if (messageBox) {
+        setTimeout(() => {
+            messageBox.scrollTo({
+                top: messageBox.scrollHeight,
+                behavior: 'smooth'
+            });
+        }, 500); // Небольшая задержка для загрузки контента
+    }
+    
+    // Проверяем что функция fetchNewMessages доступна
+    if (typeof fetchNewMessages === 'function') {
+        // console.log("✅ Функция найдена! Запуск периодического обновления чата...");
+        // Запускаем периодическую загрузку новых сообщений каждые 2 секунды
+        const chatInterval = setInterval(fetchNewMessages, 2000);
+        
+        // Первая загрузка сразу
+        setTimeout(fetchNewMessages, 1000);
+    } else {
+        console.error("❌ Функция fetchNewMessages не найдена!");
+    }
+    
+    // ========== АВТОМАТИЧЕСКАЯ ДЕАКТИВАЦИЯ СТРИМА ПРИ ЗАГРУЗКЕ ==========
+    // Проверяем статус стрима при загрузке страницы
+    const INITIAL_STREAM_IS_ACTIVE = document.body?.dataset?.streamActive === '1';
+    if (INITIAL_STREAM_IS_ACTIVE) {
+        console.log('🔄 Стрим активен при загрузке страницы, автоматически деактивируем...');
+        setTimeout(async () => {
+            try {
+                await diactivateStream();
+                console.log('✅ Стрим автоматически деактивирован при загрузке страницы');
+            } catch (error) {
+                console.error('❌ Ошибка автоматической деактивации при загрузке:', error);
+            }
+        }, 2000); // Задержка в 2 секунды для полной загрузки страницы
+    }
+});
+
+        // ========== УПРАВЛЕНИЕ АДАПТИВНЫМ ЧАТОМ ==========
+        document.addEventListener('DOMContentLoaded', function () {
+            // Управление адаптивным чатом
+            const chatTab = document.getElementById('chatTab');
+            const chatContainer = document.querySelector('.chat-container');
+            const chatOverlay = document.getElementById('chatOverlay');
+            const closeChatBtn = document.querySelector('.close-chat-btn');
+
+            function openChat() {
+                if (chatContainer && chatOverlay) {
+                    chatOverlay.style.display = 'block';
+                    chatContainer.classList.add('open');
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+
+            function closeChat() {
+                if (chatContainer && chatOverlay) {
+                    chatContainer.classList.remove('open');
+                    chatOverlay.style.display = 'none';
+                    document.body.style.overflow = '';
+                }
+            }
+
+            if (chatTab) {
+                chatTab.addEventListener('click', openChat);
+            }
+
+            if (closeChatBtn) {
+                closeChatBtn.addEventListener('click', closeChat);
+            }
+
+            if (chatOverlay) {
+                chatOverlay.addEventListener('click', closeChat);
+            }
+
+            // Закрытие чата по Escape
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && window.innerWidth < 1280) {
+                    closeChat();
+                }
+            });
+                 });
+
+        // ========== ТАЙМЕР ВРЕМЕНИ СУЩЕСТВОВАНИЯ СТРИМА ==========
+        // Функция для форматирования времени
+        function formatDuration(seconds) {
+            const hours = String(Math.floor(seconds / 3600)).padStart(2, '0');
+            const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+            const secs = String(seconds % 60).padStart(2, '0');
+            return `${hours}:${minutes}:${secs}`;
+        }
+
+        // Глобальная переменная для хранения интервала таймера
+        let streamExistenceTimer = null;
+
+        // Функция для запуска таймера времени существования
+        function startStreamExistenceTimer(createdTimeISO) {
+            console.log('⏱️ Запускаем таймер времени существования стрима с:', createdTimeISO);
+            const durationElement = document.getElementById('streamDuration');
+            
+            if (!durationElement) {
+                console.warn('⚠️ Элемент streamDuration не найден');
+                return;
+            }
+
+            // Останавливаем предыдущий таймер если он был
+            if (streamExistenceTimer) {
+                clearInterval(streamExistenceTimer);
+            }
+
+            const createdTime = new Date(createdTimeISO).getTime();
+            
+            function updateDuration() {
+                const now = new Date().getTime();
+                let diffSeconds = Math.floor((now - createdTime) / 1000);
+                
+                if (diffSeconds < 0) diffSeconds = 0;
+                
+                durationElement.textContent = formatDuration(diffSeconds);
+            }
+            
+            // Первоначальный вызов и запуск интервала
+            updateDuration();
+            streamExistenceTimer = setInterval(updateDuration, 1000);
+            console.log('✅ Таймер времени существования стрима запущен');
+        }
+
+        // Функция для остановки таймера (не используется для времени существования)
+        function stopStreamExistenceTimer() {
+            console.log('⏹️ Останавливаем таймер времени существования стрима');
+            const durationElement = document.getElementById('streamDuration');
+            
+            if (streamExistenceTimer) {
+                clearInterval(streamExistenceTimer);
+                streamExistenceTimer = null;
+            }
+            
+            if (durationElement) {
+                durationElement.textContent = '00:00:00';
+            }
+            console.log('✅ Таймер времени существования стрима остановлен');
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Инициализация при загрузке страницы - показываем время существования стрима
+            console.log('🕐 Запускаем таймер времени существования стрима');
+            startStreamExistenceTimer('<%= stream.createdAt.toISOString() %>');
+        });
+
+        // ========== DAILY.CO STREAMER CLASS ==========
+        console.log('🚀 Скрипт Daily.co загружается...');
+        console.log('window.DailyIframe:', typeof window.DailyIframe !== 'undefined' ? 'ДОСТУПЕН' : 'НЕ ЗАГРУЖЕН!');
+        
+        class DailyStreamer {
+                constructor() {
+                console.log('🏗️ DailyStreamer конструктор вызван');
+                console.log('🔍 window.DailyIframe доступен:', typeof window.DailyIframe !== 'undefined');
+                this.callObject = null;
+                this.roomData = null;
+                this.authToken = null;
+                this.isConnected = false;
+                this.init();
+                console.log('✅ DailyStreamer инициализирован');
+            }
+
+    init() {
+        console.log('🔧 DailyStreamer.init() вызван');
+        this.initElements();
+        this.bindEvents();
+        console.log('✅ DailyStreamer.init() завершен');
+    }
+
+                initElements() {
+                console.log('🔍 DailyStreamer.initElements() - поиск элементов...');
+                this.startStreamBtn = document.getElementById('startStream');
+                this.stopStreamBtn = document.querySelector('.pause_stream');
+                this.videoPlaceholder = document.getElementById('videoPlaceholder');
+                this.activeMessage = document.querySelector('.stream-active-message');
+                this.pausedMessage = document.querySelector('.stream-paused-message');
+                
+
+                
+                console.log('🔍 Найденные элементы:');
+                console.log('- startStreamBtn:', !!this.startStreamBtn, this.startStreamBtn);
+                console.log('- stopStreamBtn:', !!this.stopStreamBtn, this.stopStreamBtn);
+                console.log('- videoPlaceholder:', !!this.videoPlaceholder);
+                console.log('- activeMessage:', !!this.activeMessage);
+                console.log('- pausedMessage:', !!this.pausedMessage);
+                
+                // Получаем streamId из EJS переменной
+                this.streamId = '<%= stream._id %>';
+                console.log('- streamId:', this.streamId);
+            }
+
+    bindEvents() {
+        console.log('🔗 Привязка обработчиков событий...');
+        console.log('Кнопка старта найдена:', !!this.startStreamBtn);
+        console.log('Кнопка остановки найдена:', !!this.stopStreamBtn);
+        
+        if (this.startStreamBtn) {
+            console.log('🔗 Привязываем onclick для кнопки старта...');
+            this.startStreamBtn.onclick = () => {
+                console.log('🎬 Кнопка "Начать стрим" нажата в Daily.co классе!');
+                this.startStream();
+            };
+            console.log('✅ onclick привязан к кнопке старта');
+        } else {
+            console.error('❌ Кнопка старта не найдена! Не могу привязать обработчик');
+        }
+        
+        if (this.stopStreamBtn) {
+            console.log('🔗 Привязываем onclick для кнопки остановки...');
+            this.stopStreamBtn.onclick = () => {
+                console.log('🛑 Кнопка "Остановить стрим" нажата в Daily.co классе!');
+                this.stopStream();
+            };
+            console.log('✅ onclick привязан к кнопке остановки');
+        } else {
+            console.error('❌ Кнопка остановки не найдена! Не могу привязать обработчик');
+        }
+        
+
+    }
+
+    async startStream() {
+        try {
+            this.log('Начинаем стрим...');
+            this.updateStatus('Создание комнаты...');
+            this.startStreamBtn.disabled = true;
+            this.startStreamBtn.textContent = 'Создание комнаты...';
+            
+            // 1. Создаем комнату
+            const response = await fetch('/api/create-room', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    streamId: this.streamId
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to create room');
+            }
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.message || 'Room creation failed');
+            }
+            
+            this.roomData = data.room;
+            this.log('Комната создана: ' + this.roomData.name);
+            
+            // 2. Получаем токен для стримера
+            this.updateStatus('Получение токена...');
+            this.startStreamBtn.textContent = 'Получение токена...';
+            
+            const tokenResponse = await fetch('/api/get-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomName: this.roomData.name,
+                    role: 'streamer'
+                })
+            });
+            
+            if (!tokenResponse.ok) {
+                throw new Error('Failed to get token');
+            }
+            
+            const tokenData = await tokenResponse.json();
+            
+            if (!tokenData.success) {
+                throw new Error(tokenData.message || 'Token generation failed');
+            }
+            
+            this.authToken = tokenData.token;
+            this.log('Токен получен, подключаемся к комнате...');
+            
+            // 3. Подключаемся к комнате и запускаем камеру
+            this.updateStatus('Подключение к комнате...');
+            this.startStreamBtn.textContent = 'Подключение...';
+            
+            // Проверяем поддержку getUserMedia (исправлено для Safari и Android)
+            if (!navigator.mediaDevices) {
+                navigator.mediaDevices = {};
+            }
+            
+            if (!navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia = function(constraints) {
+                    const getUserMedia = navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+                    if (!getUserMedia) {
+                        throw new Error('getUserMedia не поддерживается в этом браузере. Требуется HTTPS для Safari на iOS.');
+                    }
+                    return new Promise(function(resolve, reject) {
+                        getUserMedia.call(navigator, constraints, resolve, reject);
+                    });
+                }
+            }
+            
+            // ИСПРАВЛЕНИЕ: Добавляем fallback для enumerateDevices (Safari iOS)
+            if (!navigator.mediaDevices.enumerateDevices) {
+                navigator.mediaDevices.enumerateDevices = function() {
+                    console.log('⚠️ enumerateDevices не поддерживается в Safari iOS, используем fallback');
+                    return Promise.resolve([]);
+                }
+            }
+            
+            // Проверяем HTTPS для Safari и мобильных устройств
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                this.log('⚠️ Внимание: getUserMedia может не работать без HTTPS на Safari и мобильных устройствах');
+                this.updateStatus('⚠️ Требуется HTTPS для камеры на мобильных устройствах');
+            }
+            
+            // Определяем мобильное устройство для специальной обработки
+            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isAndroid = /Android/i.test(navigator.userAgent);
+            
+            if (isMobile) {
+                this.log('📱 Обнаружено мобильное устройство, применяем специальные настройки');
+            }
+            
+            // Получаем камеру и микрофон
+            this.log('📹 Запрашиваем доступ к камере и микрофону...');
+            this.updateStatus('Запрос доступа к камере...');
+            
+            // Настройки для мобильных устройств
+            const mediaConstraints = {
+                video: {
+                    width: isMobile ? { ideal: 640, max: 1280 } : { ideal: 1280, max: 1920 },
+                    height: isMobile ? { ideal: 480, max: 720 } : { ideal: 720, max: 1080 },
+                    frameRate: isMobile ? { ideal: 30, max: 30 } : { ideal: 30, max: 60 },
+                    facingMode: isAndroid ? { ideal: 'user' } : undefined // Предпочитаем фронтальную камеру на Android
+                },
+                audio: true
+            };
+            // Применяем выбранную камеру из селектора (и запомним её для повторного применения)
+            try {
+                const selectedVal = document.getElementById('cameraSelect')?.value;
+                if (selectedVal) {
+                    if (selectedVal.startsWith('device:')) {
+                        const id = selectedVal.slice('device:'.length);
+                        if (id) mediaConstraints.video.deviceId = { exact: id };
+                    } else if (selectedVal.startsWith('facing:')) {
+                        const mode = selectedVal.split(':')[1];
+                        if (mode) mediaConstraints.video.facingMode = { ideal: mode };
+                    }
+                    window._preferredCameraValue = selectedVal;
+                }
+            } catch(_) {}
+            
+            const localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+            this.log('✅ Доступ к камере и микрофону получен');
+            
+            // Специальная обработка для Android - проверяем треки
+            if (isAndroid) {
+                const videoTracks = localStream.getVideoTracks();
+                const audioTracks = localStream.getAudioTracks();
+                
+                this.log(`📱 Android: Видео треков: ${videoTracks.length}, Аудио треков: ${audioTracks.length}`);
+                
+                // Проверяем состояние треков
+                videoTracks.forEach((track, index) => {
+                    this.log(`📱 Android: Видео трек ${index}: ${track.readyState}, enabled: ${track.enabled}`);
+                    if (track.readyState === 'ended') {
+                        this.log(`⚠️ Android: Видео трек ${index} завершён, возможна проблема`);
+                    }
+                });
+                
+                audioTracks.forEach((track, index) => {
+                    this.log(`📱 Android: Аудио трек ${index}: ${track.readyState}, enabled: ${track.enabled}`);
+                    if (track.readyState === 'ended') {
+                        this.log(`⚠️ Android: Аудио трек ${index} завершён, возможна проблема`);
+                    }
+                });
+            }
+            
+            // Создаем call object
+            this.callObject = window.DailyIframe.createCallObject();
+            
+            // Настраиваем обработчики событий
+            this.setupEventListeners();
+            
+            // Подключаемся к комнате БЕЗ медиа сначала
+            this.log('Подключение к комнате: ' + this.roomData.name);
+            // Важно: используем URL, который возвращает Daily API при создании комнаты.
+            // Это предотвращает поломку при ребрендинге домена (например, webcatravel -> takebana),
+            // если Daily subdomain ещё не сменён.
+            const joinUrl = (this.roomData && (this.roomData.url || this.roomData.roomUrl)) 
+                ? (this.roomData.url || this.roomData.roomUrl)
+                : `https://webcatravel.daily.co/${this.roomData.name}`;
+
+            await this.callObject.join({
+                url: joinUrl,
+                token: this.authToken
+            });
+            
+            this.log('Подключились к комнате');
+            
+            // Включаем камеру и микрофон ПОСЛЕ подключения к комнате
+            this.updateStatus('Включение камеры...');
+            this.startStreamBtn.textContent = 'Включение камеры...';
+            
+            try {
+                // Небольшая пауза для iOS, чтобы объект комнаты стабилизировался
+                await new Promise(r => setTimeout(r, 500));
+                
+                this.log('Включаем локальный звук...');
+                await this.callObject.setLocalAudio(true);
+                this.log('Локальный звук включен');
+                
+                // На iOS иногда требуется отдельная пауза перед включением видео
+                await new Promise(r => setTimeout(r, 200));
+                // Применим выбранную камеру перед включением видео
+                try {
+                    const sel = document.getElementById('cameraSelect');
+                    const pref = (sel && sel.value) || window._preferredCameraValue || '';
+                    if (pref && pref.startsWith('device:')) {
+                        const id = pref.slice('device:'.length);
+                        if (id) { await this.callObject.setInputDevicesAsync({ videoDeviceId: id }); }
+                    } else if (pref && pref.startsWith('facing:')) {
+                        const mode = pref.split(':')[1];
+                        if (mode) { await this.callObject.startCamera({ facingMode: mode }); }
+                    }
+                } catch(_) {}
+                this.log('Включаем локальное видео...');
+                await this.callObject.setLocalVideo(true);
+                this.log('Локальное видео включено');
+                
+                // Показываем контроль громкости сразу после включения аудио
+                if (this.streamerVolumeControl) {
+                    this.streamerVolumeControl.style.display = 'block';
+                    this.log('Контроль громкости показан');
+                }
+                
+                // ПРИНУДИТЕЛЬНО показываем видео для iOS Safari
+                setTimeout(() => {
+                    this.log('Принудительное отображение видео...');
+                    const localVideo = document.getElementById('localVideo');
+                    if (localVideo) {
+                        try {
+                            const participants = this.callObject.participants();
+                            const localParticipant = participants.local;
+                            if (localParticipant && localParticipant.video) {
+                                this.log('Видео трек найден через participants, отображаем...');
+                                localVideo.style.display = 'block';
+                                localVideo.srcObject = new MediaStream([localParticipant.video]);
+                                this.videoPlaceholder.style.display = 'none';
+                            }
+                        } catch (error) {
+                            this.log('Ошибка получения видео трека: ' + error.message);
+                        }
+                    }
+                }, 800);
+                
+            } catch (mediaError) {
+                this.log('Ошибка включения медиа: ' + mediaError.message);
+                // Повторная попытка включения видео на iOS
+                try {
+                    await new Promise(r => setTimeout(r, 800));
+                    this.log('Повтор: включаем локальное видео...');
+                    await this.callObject.setLocalVideo(true);
+                    this.log('Локальное видео включено со второй попытки');
+                } catch (retryErr) {
+                    this.log('Повтор включения видео не удался: ' + retryErr.message);
+                }
+            }
+            
+            // 4. Активируем стрим в базе данных
+            this.updateStatus('Активация стрима...');
+            this.startStreamBtn.textContent = 'Активация...';
+            await activateStream();
+            
+            this.isConnected = true;
+            this.startStreamBtn.disabled = true;
+            this.startStreamBtn.textContent = 'Начать стрим';
+            this.startStreamBtn.classList.add('hidden');
+            this.stopStreamBtn.classList.remove('hidden');
+            this.stopStreamBtn.disabled = false;
+            this.updateStreamStatus(true);
+            this.videoPlaceholder.style.display = 'none';
+            
+            this.log('Стрим успешно запущен!');
+            
+        } catch (error) {
+            this.log('Ошибка запуска стрима: ' + error.message);
+            this.updateStatus('Ошибка: ' + error.message);
+            
+            // Сброс кнопки при ошибке
+            this.startStreamBtn.disabled = false;
+            this.startStreamBtn.textContent = 'Начать стрим';
+            
+            // Детальная диагностика
+            if (error.message.includes('getUserMedia')) {
+                this.log('💡 Решение: Используйте HTTPS URL (ngrok) для Safari на iOS');
+            }
+            
+            alert('Ошибка: ' + error.message);
+        }
+    }
+
+                async stopStream() {
+                try {
+                    this.log('Остановка стрима...');
+                    this.updateStatus('Остановка...');
+                    
+                    // Скрываем контроль громкости при остановке стрима
+                    if (this.streamerVolumeControl) {
+                        this.streamerVolumeControl.style.display = 'none';
+                        this.log('Контроль громкости скрыт');
+                    }
+                    
+                    if (this.callObject) {
+                        await this.callObject.leave();
+                        this.callObject.destroy();
+                        this.callObject = null;
+                    }
+                    
+                    // Деактивируем стрим в базе данных ПЕРЕД удалением комнаты
+                    try {
+                        await diactivateStream();
+                        this.log('✅ Стрим деактивирован в базе данных');
+                    } catch (error) {
+                        this.log('⚠️ Ошибка деактивации стрима в базе: ' + error.message);
+                    }
+                    
+                    // Удаляем комнату Daily.co и очищаем данные
+                    if (this.streamId) {
+                        try {
+                            await fetch(`/api/delete-room/${this.streamId}`, {
+                                method: 'DELETE'
+                            });
+                            this.log('✅ Комната Daily.co удалена');
+                        } catch (error) {
+                            this.log('⚠️ Ошибка удаления комнаты: ' + error.message);
+                        }
+                    }
+            
+            this.isConnected = false;
+            this.authToken = null;
+            this.roomData = null;
+            
+            // Сброс интерфейса
+            this.startStreamBtn.disabled = false;
+            this.startStreamBtn.textContent = 'Начать стрим';
+            this.startStreamBtn.classList.remove('hidden');
+            this.stopStreamBtn.classList.add('hidden');
+            this.stopStreamBtn.disabled = true;
+            this.updateStreamStatus(false);
+            this.videoPlaceholder.textContent = 'Нажмите "Начать стрим" для начала';
+            this.videoPlaceholder.style.display = 'block';
+            
+            // Скрываем видео
+            const localVideo = document.getElementById('localVideo');
+            if (localVideo) {
+                localVideo.style.display = 'none';
+                localVideo.srcObject = null;
+            }
+            
+            this.log('Стрим остановлен');
+            
+        } catch (error) {
+            this.log('Ошибка остановки стрима: ' + error.message);
+            console.error('Stop error:', error);
+        }
+    }
+
+    setupEventListeners() {
+        // Участники подключились/отключились
+        this.callObject.on('participant-joined', (event) => {
+            this.log('Участник присоединился: ' + (event.participant.user_name || 'Гость'));
+        });
+
+        this.callObject.on('participant-left', (event) => {
+            this.log('Участник покинул: ' + (event.participant.user_name || 'Гость'));
+        });
+
+        // Трек добавлен (видео участника)
+        this.callObject.on('track-started', (event) => {
+            this.log('Новое видео: ' + (event.participant.user_name || 'Участник') + ' (тип: ' + event.track.kind + ')');
+            
+            if (event.participant.local && event.track.kind === 'video') {
+                // Показываем локальное видео стримера
+                this.log('Локальное видео отображается');
+                const localVideo = document.getElementById('localVideo');
+                if (localVideo) {
+                    // Настройка видео элемента для iOS и Android (КРИТИЧНО!)
+                    localVideo.muted = true; // iOS и Android требуют muted для autoplay
+                    localVideo.playsInline = true; // iOS требует playsInline
+                    localVideo.autoplay = true;
+                    
+                    localVideo.style.display = 'block';
+                    
+                    // Безопасное создание MediaStream для Android
+                    try {
+                        // Проверяем валидность трека перед созданием MediaStream
+                        if (event.track && event.track.readyState === 'live') {
+                            const mediaStream = new MediaStream([event.track]);
+                            localVideo.srcObject = mediaStream;
+                            this.log('✅ MediaStream успешно создан для Android/iOS');
+                        } else {
+                            this.log('⚠️ Трек не готов, попробуем позже');
+                            // Повторная попытка через небольшую задержку
+                            setTimeout(() => {
+                                if (event.track && event.track.readyState === 'live') {
+                                    try {
+                                        const mediaStream = new MediaStream([event.track]);
+                                        localVideo.srcObject = mediaStream;
+                                        this.log('✅ MediaStream создан при повторной попытке');
+                                    } catch (retryError) {
+                                        this.log('❌ Повторная попытка создания MediaStream не удалась: ' + retryError.message);
+                                    }
+                                }
+                            }, 500);
+                        }
+                    } catch (streamError) {
+                        this.log('❌ Ошибка создания MediaStream: ' + streamError.message);
+                        
+                        // Fallback для Android - используем track напрямую
+                        if (/Android/i.test(navigator.userAgent)) {
+                            this.log('📱 Android fallback: пытаемся использовать track напрямую');
+                            try {
+                                // Создаём пустой MediaStream и добавляем трек
+                                const emptyStream = new MediaStream();
+                                emptyStream.addTrack(event.track);
+                                localVideo.srcObject = emptyStream;
+                                this.log('✅ Android fallback MediaStream создан');
+                            } catch (fallbackError) {
+                                this.log('❌ Android fallback также не удался: ' + fallbackError.message);
+                                this.updateStatus('Ошибка видео на Android: ' + fallbackError.message);
+                            }
+                        }
+                    }
+                    
+                    this.videoPlaceholder.style.display = 'none';
+                }
+            }
+        });
+
+        // Трек остановлен
+        this.callObject.on('track-stopped', (event) => {
+            this.log('Трек остановлен: ' + (event.participant.user_name || 'Участник') + ' (тип: ' + event.track.kind + ')');
+            
+            if (event.participant.local) {
+                if (event.track.kind === 'video') {
+                    // Скрываем локальное видео
+                    const localVideo = document.getElementById('localVideo');
+                    if (localVideo) {
+                        localVideo.style.display = 'none';
+                        this.videoPlaceholder.style.display = 'block';
+                    }
+                } else if (event.track.kind === 'audio') {
+                    this.log('Локальный аудио трек остановлен');
+                    
+                    // Скрываем контроль громкости
+                    if (this.streamerVolumeControl) {
+                        this.streamerVolumeControl.style.display = 'none';
+                    }
+                }
+            }
+        });
+
+        // Ошибки
+        this.callObject.on('error', (event) => {
+            this.log('Daily.co ошибка: ' + event.errorMsg);
+            console.error('Daily.co error:', event);
+            this.updateStatus('Ошибка: ' + event.errorMsg);
+        });
+
+        // Подключение установлено
+        this.callObject.on('joined-meeting', (event) => {
+            this.log('Успешно подключились к встрече');
+        });
+    }
+
+    updateStreamStatus(isActive) {
+        if (this.activeMessage && this.pausedMessage) {
+            if (isActive) {
+                this.activeMessage.classList.remove('hidden');
+                this.pausedMessage.classList.add('hidden');
+            } else {
+                this.activeMessage.classList.add('hidden');
+                this.pausedMessage.classList.remove('hidden');
+            }
+        }
+    }
+
+    updateStatus(status) {
+        this.log('Статус: ' + status);
+    }
+
+    log(message) {
+        console.log('[Daily Streamer]', message);
+    }
+    
+
+}
+
+// Старая инициализация удалена - теперь используется упрощенная версия выше
+
+// Инициализация DailyStreamer ТОЛЬКО для Daily.co (daily-stream).
+if ('<%= stream.streamType %>' === 'daily-stream') {
+    console.log('🎬 Инициализация Daily.co стримера (daily-stream)');
+    document.addEventListener('DOMContentLoaded', () => {
+        window.dailyStreamer = new DailyStreamer();
+        console.log('✅ Daily.co стример инициализирован и сохранен в window.dailyStreamer:', window.dailyStreamer);
+    });
+}
+    
+    // Мобильная оптимизация видео
+    document.addEventListener('DOMContentLoaded', function() {
+        const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+            console.log('📱 Применяем мобильную оптимизацию видео для стримера');
+            
+            // Функция для оптимизации видео элементов
+            function optimizeVideoForMobile(video) {
+                if (video) {
+                    // Для стримера используем cover, но с правильным позиционированием
+                    video.style.objectFit = 'cover';
+                    video.style.objectPosition = 'center';
+                    video.style.background = '#000';
+                    video.setAttribute('webkit-playsinline', 'true');
+                    video.setAttribute('playsinline', 'true');
+                    video.setAttribute('muted', 'true'); // Важно для автовоспроизведения
+                    console.log('📱 Видео стримера оптимизировано для мобильного:', video.id);
+                }
+            }
+            
+            // Оптимизируем видео стримера
+            const localVideo = document.getElementById('localVideo');
+            optimizeVideoForMobile(localVideo);
+            
+            // Наблюдаем за изменениями видео
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === 1) {
+                            const videos = node.tagName === 'VIDEO' ? [node] : node.querySelectorAll('video');
+                            videos.forEach(optimizeVideoForMobile);
+                        }
+                    });
+                });
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            
+            // Обработка изменения ориентации
+            window.addEventListener('orientationchange', function() {
+                setTimeout(function() {
+                    const videos = document.querySelectorAll('video');
+                    videos.forEach(optimizeVideoForMobile);
+                    console.log('📱 Видео стримера переоптимизировано после поворота экрана');
+                }, 500);
+            });
+        }
+    });
+</script>
+
+<script>
+(function(){
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  async function populateCameraSelector() {
+    try {
+      const select = document.getElementById('cameraSelect');
+      if (!select) return;
+      // Ensure permission first so labels/deviceIds are available (Safari)
+      // Запросим доступ только к видео для ускорения появления deviceId/label
+      try { await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); } catch(e) {}
+      let devices = [];
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        try { devices = await navigator.mediaDevices.enumerateDevices(); } catch(e) { devices = []; }
+      }
+      const videoInputs = devices.filter(d => d.kind === 'videoinput');
+      select.innerHTML = '';
+      if (videoInputs.length > 0) {
+        videoInputs.forEach((cam, idx) => {
+          const opt = document.createElement('option');
+          opt.value = 'device:' + (cam.deviceId || '');
+          opt.textContent = cam.label || `Камера ${idx + 1}`;
+          select.appendChild(opt);
+        });
+      } else {
+        // iOS fallback: front/back by facingMode
+        const front = document.createElement('option');
+        front.value = 'facing:user';
+        front.textContent = 'Фронтальная камера';
+        const back = document.createElement('option');
+        back.value = 'facing:environment';
+        back.textContent = 'Основная камера';
+        select.appendChild(front);
+        select.appendChild(back);
+      }
+    } catch (err) {
+      console.warn('populateCameraSelector error', err);
+    }
+  }
+
+  async function switchCameraByValue(value) {
+    try {
+      if (!window.dailyStreamer || !window.dailyStreamer.callObject) return;
+      if (value.startsWith('device:')) {
+        const deviceId = value.slice('device:'.length);
+        if (deviceId) {
+          // Мягкая смена устройства: сначала остановим локальное видео, затем применим девайс и включим заново
+          try { await window.dailyStreamer.callObject.setLocalVideo(false); } catch(_) {}
+          await window.dailyStreamer.callObject.setInputDevicesAsync({ videoDeviceId: deviceId });
+          // Небольшая пауза даёт драйверу время переключиться
+          await new Promise(r => setTimeout(r, 150));
+          await window.dailyStreamer.callObject.setLocalVideo(true);
+          // Принудительно обновим элемент localVideo, если трек ещё не отрисовался
+          try {
+            const localVideo = document.getElementById('localVideo');
+            if (localVideo) {
+              const parts = window.dailyStreamer.callObject.participants();
+              const lp = parts && parts.local;
+              if (lp && lp.video) {
+                localVideo.style.display = 'block';
+                localVideo.srcObject = new MediaStream([lp.video]);
+              }
+            }
+          } catch(_) {}
+          window._preferredCameraValue = value;
+        }
+      } else if (value.startsWith('facing:')) {
+        const mode = value.split(':')[1];
+        try { await window.dailyStreamer.callObject.setLocalVideo(false); } catch(_) {}
+        await window.dailyStreamer.callObject.startCamera({ facingMode: mode });
+        await new Promise(r => setTimeout(r, 150));
+        await window.dailyStreamer.callObject.setLocalVideo(true);
+        window._preferredCameraValue = value;
+      }
+    } catch (err) {
+      console.warn('switchCameraByValue error', err);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', async function(){
+    await populateCameraSelector();
+    const select = document.getElementById('cameraSelect');
+    if (select) {
+      select.addEventListener('change', (e)=> switchCameraByValue(e.target.value));
+      // При инициализации, если сохранён предпочтительный девайс — применим его
+      try {
+        const pref = window._preferredCameraValue;
+        if (pref && typeof pref === 'string') {
+          // Установим в селекте, если опция существует
+          const opt = Array.from(select.options).find(o => o.value === pref);
+          if (opt) { select.value = pref; await switchCameraByValue(pref); }
+        }
+      } catch(_) {}
+    }
+    // Автоматически обновлять список камер при изменении устройств
+    try {
+      if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
+        navigator.mediaDevices.addEventListener('devicechange', () => {
+          populateCameraSelector().catch(()=>{});
+        });
+      }
+    } catch(_) {}
+  });
+})();
+</script>
+
+<script>
+// ... existing code ...
+// Полноэкранный режим для стримера
+(function(){
+  function toggleFullscreenStreamer(){
+    try {
+      var container = document.querySelector('.video-player-area');
+      var video = document.getElementById('localVideo');
+      var doc = document;
+      if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
+        if (container.requestFullscreen) container.requestFullscreen();
+        else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen();
+        else if (video && video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+      } else {
+        if (doc.exitFullscreen) doc.exitFullscreen();
+        else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
+      }
+    } catch(e){ console.warn('fullscreen error', e); }
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    var btn = document.getElementById('streamerFsButton');
+    if (btn) btn.addEventListener('click', toggleFullscreenStreamer);
+  });
+})();
+</script>
+
+
+
+</body>
+</html>

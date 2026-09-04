@@ -1,0 +1,2367 @@
+<div class="shodow"></div>
+
+<!-- Кастомная конфигурация Tailwind для единообразия -->
+<script>
+  if (typeof tailwind !== 'undefined') {
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'brand': {
+              50: '#f0f2ff',
+              100: '#e5e7ff',
+              200: '#cdcfff',
+              300: '#a5a9ff',
+              400: '#7a7aff',
+              500: '#666bcf',
+              600: '#5a5cba',
+              700: '#4c4e9a',
+              800: '#3f417e',
+              900: '#363865'
+            }
+          },
+          screens: {
+            'xs': '475px',
+          },
+          fontFamily: {
+            'inter': ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  }
+</script>
+
+<!-- Кастомные стили для мобильной адаптации и единообразия хедера -->
+<style>
+  /* Базовые стили для единообразия на всех страницах */
+  * {
+    font-family: 'Inter', sans-serif !important;
+  }
+  
+  /* Переопределение старых стилей header.css */
+  .header__box,
+  .serch__block,
+  .blocl__arhon-buttons,
+  .box__button-profil,
+  .header-1,
+  .header-2 {
+    display: none !important;
+  }
+  
+  /* Основные стили хедера */
+  header {
+    font-family: 'Inter', sans-serif !important;
+  }
+  
+  /* Дополнительные breakpoints для маленьких экранов */
+  @media (max-width: 350px) {
+    .header-mobile-tiny {
+      padding-left: 8px !important;
+      padding-right: 8px !important;
+    }
+    
+    .header-mobile-tiny .space-x-1 > * + * {
+      margin-left: 3px !important;
+    }
+    
+    .header-mobile-tiny .burger-btn {
+      padding: 6px !important;
+    }
+    
+    .header-mobile-tiny .avatar-tiny {
+      width: 28px !important;
+      height: 28px !important;
+    }
+    
+    .header-mobile-tiny .logo-tiny {
+      height: 20px !important;
+    }
+    
+    .header-mobile-tiny .notification-btn {
+      padding: 6px !important;
+    }
+    
+    .header-mobile-tiny .stream-btn {
+      padding: 6px 8px !important;
+      font-size: 10px !important;
+    }
+    
+    .header-mobile-tiny .stream-btn svg {
+      width: 14px !important;
+      height: 14px !important;
+    }
+    
+    /* Переключатель языка на очень маленьких экранах */
+    .header-mobile-tiny #languageToggle {
+      padding: 4px 6px !important;
+    }
+    
+    .header-mobile-tiny #languageToggle span {
+      font-size: 10px !important;
+    }
+    
+    .header-mobile-tiny #languageToggle svg {
+      width: 10px !important;
+      height: 10px !important;
+    }
+  }
+  
+  @media (max-width: 400px) {
+    .header-mobile-small {
+      padding-left: 12px !important;
+      padding-right: 12px !important;
+    }
+  }
+  
+  /* Оптимизация для планшетов и средних экранов 640-1000px */
+  @media (min-width: 640px) and (max-width: 1000px) {
+    .header-tablet-optimization {
+      padding-left: 16px !important;
+      padding-right: 16px !important;
+    }
+    
+    .header-tablet-optimization .space-x-1\.5 > * + * {
+      margin-left: 6px !important;
+    }
+    
+    /* Компактный режим для кнопок */
+    .header-tablet-optimization .stream-btn {
+      padding-left: 12px !important;
+      padding-right: 12px !important;
+    }
+    
+    .header-tablet-optimization .stream-btn span {
+      font-size: 12px !important;
+    }
+    
+    /* Уменьшение padding у кнопок */
+    .header-tablet-optimization .notification-btn,
+    .header-tablet-optimization #languageToggle {
+      padding: 8px !important;
+    }
+    
+    /* Компактный аватар */
+    .header-tablet-optimization .avatar-tiny {
+      width: 36px !important;
+      height: 36px !important;
+    }
+  }
+
+  /* PiP раскладка для видео-звонков */
+  .pip-call-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+  }
+  .pip-remote {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    object-fit: cover;
+    background: #000;
+  }
+  .pip-local {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    width: 100px;
+    height: 70px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    object-fit: cover;
+    background: #000;
+    z-index: 10;
+  }
+  @media (min-width: 640px) {
+    .pip-local { 
+      width: 140px; 
+      height: 90px; 
+      right: 12px;
+      bottom: 12px;
+    }
+  }
+  @media (min-width: 768px) {
+    .pip-local { 
+      width: 180px; 
+      height: 110px; 
+      right: 16px;
+      bottom: 16px;
+    }
+  }
+  
+  /* Оптимизация мобильного меню для маленьких экранов */
+  @media (max-width: 350px) {
+    #mobileMenu .fixed {
+      width: 280px !important;
+    }
+    
+    #mobileMenu .p-4 {
+      padding: 12px !important;
+    }
+    
+    #mobileMenu .space-y-2 > * + * {
+      margin-top: 6px !important;
+    }
+    
+    #mobileMenu .px-3 {
+      padding-left: 8px !important;
+      padding-right: 8px !important;
+    }
+    
+    #mobileMenu .py-3 {
+      padding-top: 8px !important;
+      padding-bottom: 8px !important;
+    }
+  }
+  
+  /* Анимация для выдвижного поиска */
+  #mobileSearchBar {
+    transform: translateY(-100%);
+    opacity: 0;
+    transition: all 0.3s ease-in-out;
+  }
+  
+  #mobileSearchBar:not(.hidden) {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  
+  #mobileSearchBar.opacity-100 {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  
+  /* Улучшение отображения градиентных аватарок в результатах поиска */
+  .search-result-item .gradient-avatar {
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+  
+  /* Исправление проблем с кликабельностью и z-index */
+  #mobileSearchField {
+    position: relative !important;
+    z-index: 10000 !important;
+    pointer-events: auto !important;
+  }
+  
+  #mobileSearchFieldResults {
+    position: absolute !important;
+    z-index: 9999 !important;
+    pointer-events: auto !important;
+  }
+  
+  .search-result-item {
+    position: relative !important;
+    z-index: 9998 !important;
+    pointer-events: auto !important;
+    cursor: pointer !important;
+  }
+  
+  /* Исправляем перекрытия */
+  #mobileSearchBar {
+    position: relative !important;
+    z-index: 9997 !important;
+  }
+  
+  /* Переопределение старых стилей для единообразия */
+  @media (max-width: 900px) {
+    .header__box {
+      display: none !important;
+    }
+  }
+
+  
+  @media (max-width: 553px) {
+    .header-2, .serh-button, .button__line {
+      display: none !important;
+    }
+    .logo, .serh__wrapper, .input__serh {
+      display: none !important;
+    }
+  }
+  
+
+</style>
+
+<!-- Модалка настроек трансляции -->
+<div class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden backdrop-blur-sm" id="streamSettingsModal">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl mx-auto transform transition-all duration-300 scale-95 opacity-0 flex flex-col max-h-[90vh]" id="streamModalContent">
+      <div class="flex items-center justify-between p-4 sm:p-6 md:p-8 border-b border-gray-100">
+        <h3 class="text-lg sm:text-xl font-bold text-gray-900" lng="110" style="color: rgba(102, 107, 207, 1);">Настройки трансляции</h3>
+        <button class="text-gray-400 hover:text-gray-600 transition-all duration-200 hover:rotate-90 p-1.5 sm:p-2 rounded-full hover:bg-gray-100" id="closeStreamModal">
+          <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      
+      <div class="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-5 md:space-y-6 flex-1 overflow-y-auto">
+      <% if (!currentUser.hasActiveStream) { %>
+          <div class="space-y-4 sm:space-y-5 md:space-y-6">
+            <div class="group">
+              <label class="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3" for="streamTitle" lng="111">Название трансляции</label>
+              <input class="w-full px-3 py-3 sm:px-4 sm:py-3 md:px-5 md:py-4 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300 group-hover:border-gray-300" type="text" id="streamTitle" placeholder="Введите название трансляции" lng="226">
+          </div>
+            
+            <div class="group">
+              <label class="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3" for="streamCategory" lng="112">Категория</label>
+              <select id="streamCategory" class="w-full px-3 py-3 sm:px-4 sm:py-3 md:px-5 md:py-4 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300 group-hover:border-gray-300 appearance-none bg-white">
+                  <option value="" lng="113">Выберите категорию</option>
+                  <option value="business" lng="85">Бизнес</option>
+                  <option value="entertainment" lng="84">Развлечения</option>
+              </select>
+          </div>
+            
+            <div class="group">
+              <label class="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3" for="streamSubcategory" lng="114">Подкатегория</label>
+              <select id="streamSubcategory" class="w-full px-3 py-3 sm:px-4 sm:py-3 md:px-5 md:py-4 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300 group-hover:border-gray-300 appearance-none bg-white opacity-50" disabled>
+                  <option value="" lng="115">Сначала выберите категорию</option>
+              </select>
+          </div>
+            
+            <div class="group">
+              <label class="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3" for="streamDescription" lng="116">Описание <span class="font-normal text-gray-400">(необязательно)</span></label>
+              <textarea id="streamDescription" class="w-full px-3 py-3 sm:px-4 sm:py-3 md:px-5 md:py-4 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300 resize-none group-hover:border-gray-300" rows="4" placeholder="Описание трансляции (необязательно)" lng="227"></textarea>
+            </div>
+          </div>
+      <% } else { %>
+          <div class="text-center py-8 sm:py-10 md:py-12">
+            <div class="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-6 rounded-full flex items-center justify-center" style="background: linear-gradient(135deg, rgba(102, 107, 207, 0.1), rgba(102, 107, 207, 0.2));">
+              <svg class="w-8 h-8 sm:w-10 sm:h-10" style="color: rgba(102, 107, 207, 1);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+              </svg>
+            </div>
+            <p class="text-gray-600 mb-6 text-base sm:text-lg" lng="117">У вас уже есть активный стрим.</p>
+            <a href="/stream/<%= currentUser.activeStreamId %>" class="inline-flex items-center px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-semibold transition-all duration-300 hover:scale-105 text-sm sm:text-base" style="background: rgba(102, 107, 207, 1); color: white;" lng="118">
+              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+              </svg>
+              Перейти к стриму
+            </a>
+          </div>
+      <% } %>
+  </div>
+      
+      <div class="flex gap-3 sm:gap-4 p-4 sm:p-6 md:p-8 border-t border-gray-100">
+      <% if (!currentUser.hasActiveStream) { %>
+          <button class="flex-1 py-3 px-3 sm:py-3 sm:px-4 md:py-4 md:px-6 rounded-xl font-semibold transition-all duration-300 hover:scale-105 transform hover:shadow-lg text-sm sm:text-base" style="background: linear-gradient(135deg, rgba(102, 107, 207, 1), rgba(102, 107, 207, 0.8)); color: white;" id="startStreamButton">
+            <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+            <span lng="228">Перейти на страницу настроек стрима</span>
+          </button>
+      <% } else { %>
+          <button class="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 px-3 sm:py-3 sm:px-4 md:py-4 md:px-6 rounded-xl font-semibold transition-all duration-300 hover:scale-105 transform hover:shadow-lg text-sm sm:text-base" id="terminateStreamButton">
+            <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m9 12 2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            <span lng="225">Завершить стрим</span>
+          </button>
+      <% } %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка профиля -->
+<div class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden backdrop-blur-sm" id="profileInfoModal">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md md:max-w-2xl lg:max-w-3xl mx-auto transform transition-all duration-300 max-h-[85vh] overflow-y-auto">
+      <div class="flex items-center justify-between p-6 border-b border-gray-100">
+        <h3 class="text-lg font-bold" style="color: rgba(102, 107, 207, 1);" lng="32">Профиль</h3>
+        <button class="text-gray-400 hover:text-gray-600 transition-all duration-200 hover:rotate-90 p-2 rounded-full hover:bg-gray-100" id="closeProfileModal">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="p-6 space-y-5">
+        <div class="group">
+          <label class="block text-sm font-medium text-gray-700 mb-2" lng="180">Ваше имя</label>
+          <input id="profileNameInput" class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:border-transparent transition-all duration-300 group-hover:border-gray-300 text-sm" type="text" placeholder="Укажите ваше имя" value="<%= currentUser.displayName %>" lng="33">
+          <button id="saveNameButton" type="button" class="mt-2 px-4 py-2 text-sm rounded-lg text-white transition-all duration-300 hover:scale-105 transform hover:shadow-lg" style="background: linear-gradient(135deg, rgba(102, 107, 207, 1), rgba(102, 107, 207, 0.8));" lng="181">Сохранить имя</button>
+        </div>
+
+        <!-- Аватар пользователя -->
+        <div class="mt-2 p-4 border border-gray-100 rounded-xl bg-white">
+          <p class="text-sm font-semibold text-gray-900 mb-3" lng="182">Фото профиля</p>
+          <div class="flex items-center gap-5">
+            <div class="relative">
+              <div class="w-20 h-20 rounded-xl overflow-hidden ring-1 ring-gray-200 shadow-sm bg-gray-100 flex items-center justify-center">
+                <% if (currentUser.avatarStyle && currentUser.avatarStyle.url) { %>
+                <img id="profileAvatarPreview" src="<%= currentUser.avatarStyle.url %>" class="w-full h-full object-cover" alt="avatar"/>
+              <% } else { %>
+                  <div id="profileAvatarEmpty" class="w-full h-full flex items-center justify-center text-gray-400 text-xs">Нет фото</div>
+                  <img id="profileAvatarPreview" src="" class="w-full h-full object-cover hidden" alt="avatar"/>
+                <% } %>
+              </div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-xs text-gray-500 mb-2">
+                <% if (currentUser.avatarStyle && currentUser.avatarStyle.url) { %>
+                  <span lng="183">Вы можете заменить изображение</span>
+                <% } else { %>
+                  <span lng="184">Загрузите изображение PNG/JPG до 5MB</span>
+                <% } %>
+              </p>
+              <div class="flex flex-col gap-2">
+                <input id="profileAvatarInput" type="file" accept="image/png,image/jpeg" class="hidden"/>
+                <button id="chooseAvatarBtn" type="button" class="px-3 py-2 text-sm rounded-lg bg-white border text-[rgba(102,107,207,1)]" style="border-color: rgba(102,107,207,0.4);" lng="185">Выбрать файл</button>
+                <button id="uploadAvatarBtn" type="button" class="px-3 py-2 text-sm rounded-lg text-white disabled:opacity-60 disabled:cursor-not-allowed" style="background: linear-gradient(135deg, rgba(102,107,207,0.7), rgba(102,107,207,0.5));" disabled lng="186">Сохранить фото профиля</button>
+              </div>
+              <div id="avatarHint" class="text-xs text-gray-500 mt-2" lng="187">PNG/JPG, до 5MB</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Личная галерея -->
+        <div class="mt-3 p-4 border border-gray-100 rounded-xl bg-white">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-sm font-semibold text-gray-900" lng="188">Личная галерея</p>
+            <div class="text-xs text-gray-500" lng="189">до 100 фото, PNG/JPG до 10MB</div>
+          </div>
+
+          <!-- Зона перетаскивания / выбора -->
+          <div id="galleryDropzone" class="rounded-xl border-2 border-dashed border-gray-200 hover:border-brand-300 bg-gray-50/60 p-4 cursor-pointer flex items-center justify-center text-center">
+            <div>
+              <svg class="mx-auto w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7M3 7l3.5-3.5M3 7h18M21 7L17.5 3.5"/>
+              </svg>
+              <p class="mt-1 text-xs text-gray-600" lng="190">Перетащите сюда фото или нажмите, чтобы выбрать</p>
+            </div>
+            <input id="galleryInput" type="file" accept="image/png,image/jpeg" multiple class="hidden" />
+          </div>
+
+          <!-- Кнопки -->
+          <div class="flex items-center gap-2 mt-3">
+            <button id="chooseGalleryBtn" type="button" class="px-3 py-2 text-sm rounded-lg bg-white border text-[rgba(102,107,207,1)]" style="border-color: rgba(102,107,207,0.4);" lng="191">Выбрать фото</button>
+            <button id="uploadGalleryBtn" type="button" class="px-3 py-2 text-sm rounded-lg text-white disabled:opacity-60 disabled:cursor-not-allowed" style="background: linear-gradient(135deg, rgba(102,107,207,0.7), rgba(102,107,207,0.5));" disabled><span lng="192">Загрузить</span> (<span id="galleryCount">0</span>)</button>
+            <div id="galleryHint" class="text-xs text-gray-500 ml-auto" lng="193">Файлы не выбраны</div>
+          </div>
+
+          <!-- Превью -->
+          <div id="galleryPreview" class="mt-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2"></div>
+
+          <!-- Уже загруженные -->
+          <% if (currentUser.gallery && currentUser.gallery.length) { %>
+          <div id="galleryPersisted" class="mt-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+            <% currentUser.gallery.forEach(function(url){
+               const name = url.split('/').pop(); %>
+              <div class="relative group">
+                <img src="<%= url %>" class="w-full h-24 object-cover rounded-lg ring-1 ring-gray-200 shadow-sm"/>
+                <button type="button" data-name="<%= name %>" class="absolute top-1 right-1 bg-black/60 hover:bg-black/70 text-white rounded-md p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            <% }); %>
+          </div>
+          <% } else { %>
+          <div id="galleryPersisted" class="mt-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2"></div>
+          <% } %>
+        </div>
+
+        <div class="space-y-4">
+          <button class="flex items-center w-full text-left p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-all duration-300 group" id="securityToggle">
+            <div class="flex items-center">
+              <div class="w-8 h-8 rounded-lg mr-3 flex items-center justify-center" style="background: linear-gradient(135deg, rgba(102, 107, 207, 0.1), rgba(102, 107, 207, 0.2));">
+                <svg class="w-4 h-4" style="color: rgba(102, 107, 207, 1);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+              </div>
+              <span class="font-medium text-gray-900 text-sm" lng="34">Безопасность</span>
+            </div>
+          </button>
+          
+          <div class="hidden space-y-3 transform transition-all duration-300" id="securityFields">
+            <input class="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:border-transparent transition-all duration-300 text-sm" type="password" placeholder="Старый пароль" id="oldPassword" lng="35">
+            <input class="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:border-transparent transition-all duration-300 text-sm" type="password" placeholder="Новый пароль" id="newPassword" lng="36">
+            <input class="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:border-transparent transition-all duration-300 text-sm" type="password" placeholder="Подтвердите пароль" id="confirmPassword" lng="37">
+            <button id="savePasswordButton" type="button" class="w-full px-4 py-2 text-sm rounded-lg text-white transition-all duration-300 hover:scale-105 transform hover:shadow-lg" style="background: linear-gradient(135deg, rgba(102, 107, 207, 1), rgba(102, 107, 207, 0.8));" lng="197">Сохранить пароль</button>
+          </div>
+          </div>
+        
+        <div class="pt-4 border-t border-gray-100">
+          <a href="/logout" class="flex items-center justify-center text-red-500 hover:text-red-600 font-medium py-2.5 px-4 rounded-lg hover:bg-red-50 transition-all duration-300 text-sm" lng="38">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+            </svg>
+            Выйти из аккаунта
+          </a>
+        </div>
+      </div>
+      
+      <div class="flex gap-3 p-6 border-t border-gray-100">
+        <a href="/userPage/<%= currentUser._id %>" class="flex-1 py-3 px-4 rounded-lg font-medium transition-all duration-300 hover:scale-105 transform hover:shadow-lg text-gray-700 bg-white border border-gray-200 text-sm text-center" lng="198">Открыть профиль</a>
+      </div>
+     </div>
+     </div>
+     </div>
+   </div>
+
+<!-- Модалка уведомлений -->
+<div class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden backdrop-blur-sm" id="notificationModal">
+  <div class="flex items-center justify-center min-h-screen p-2 sm:p-4">
+    <div class="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-sm sm:max-w-lg mx-auto transform transition-all duration-300">
+      <div class="flex items-center justify-between p-4 sm:p-6 md:p-8 border-b border-gray-100">
+        <h3 class="text-lg sm:text-xl font-bold" style="color: rgba(102, 107, 207, 1);" lng="106">Уведомления</h3>
+        <button class="text-gray-400 hover:text-gray-600 transition-all duration-200 hover:rotate-90 p-1.5 sm:p-2 rounded-full hover:bg-gray-100" id="closeNotificationModal">
+          <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      
+      <div class="p-4 sm:p-6 md:p-8 max-h-80 sm:max-h-96 overflow-y-auto" id="notificationsContent">
+        <div class="flex items-center justify-center py-8 sm:py-12">
+          <div class="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2" style="border-color: rgba(102, 107, 207, 1);"></div>
+          <p class="text-gray-500 ml-2 sm:ml-3 text-sm sm:text-base" lng="249">Загрузка уведомлений...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Глобальные модалки звонков -->
+<div id="outgoingCallModal" class="fixed inset-0 hidden items-center justify-center bg-black/60 z-50 p-2 sm:p-4">
+  <div class="bg-white rounded-2xl w-full max-w-md sm:max-w-2xl lg:max-w-4xl shadow-2xl overflow-hidden flex flex-col h-[90vh] sm:h-[85vh]">
+    <div class="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0" id="outgoingAvatar"></div>
+        <div class="min-w-0">
+          <div class="text-base sm:text-lg font-semibold text-gray-900 truncate" id="outgoingName">Пользователь</div>
+          <div class="text-xs sm:text-sm text-gray-500" id="outgoingType">Исходящий звонок...</div>
+        </div>
+      </div>
+      <button class="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0" id="outgoingCloseBtn">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-4 sm:p-5 flex-1 flex flex-col min-h-0">
+      <div class="flex items-center justify-center py-3 sm:py-4 flex-shrink-0">
+        <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+        <div class="ml-2 text-sm sm:text-base text-gray-700 font-medium" id="outgoingStatus">Соединение...</div>
+      </div>
+      <div class="text-center text-xs sm:text-sm text-gray-500 pb-2 flex-shrink-0">
+        <span id="outgoingTimer" class="hidden">00:00</span>
+      </div>
+      <div class="text-center text-xs sm:text-sm text-gray-500 pb-2 hidden flex-shrink-0" id="outgoingParticipants"></div>
+      <div class="flex-1 min-h-0 pb-3 sm:pb-4" id="outgoingVideos" style="display:none; position: relative;">
+        <div class="pip-call-container" style="width: 100%; height: 100%;">
+          <video id="outRemoteVideo" class="pip-remote" autoplay playsinline></video>
+          <video id="outLocalVideo" class="pip-local" autoplay playsinline muted></video>
+        </div>
+      </div>
+      <div class="space-y-2 pb-3 sm:pb-4 flex-shrink-0" id="outgoingAudioUI" style="display:none;">
+        <audio id="outRemoteAudio" autoplay playsinline></audio>
+      </div>
+      <div class="flex gap-3 flex-shrink-0">
+        <button id="outgoingCancelBtn" class="flex-1 py-3 sm:py-3.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm sm:text-base font-semibold transition-colors shadow-lg">Отменить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="incomingCallModal" class="fixed inset-0 hidden items-center justify-center bg-black/60 z-50 p-2 sm:p-4">
+  <div class="bg-white rounded-2xl w-full max-w-md sm:max-w-2xl lg:max-w-4xl shadow-2xl overflow-hidden flex flex-col h-[90vh] sm:h-[85vh]">
+    <div class="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0" id="incomingAvatar"></div>
+        <div class="min-w-0">
+          <div class="text-base sm:text-lg font-semibold text-gray-900 truncate" id="incomingName">Пользователь</div>
+          <div class="text-xs sm:text-sm text-gray-500" id="incomingType">Входящий видеозвонок</div>
+        </div>
+      </div>
+      <button class="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0" id="incomingCloseBtn">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-4 sm:p-5 flex-1 flex flex-col min-h-0">
+      <div class="flex items-center justify-center py-3 sm:py-4 flex-shrink-0">
+        <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+        <div class="ml-2 text-sm sm:text-base text-gray-700 font-medium" id="incomingStatus">Звонит...</div>
+      </div>
+      <div class="text-center text-xs sm:text-sm text-gray-500 pb-2 flex-shrink-0">
+        <span id="incomingTimer" class="hidden">00:00</span>
+      </div>
+      <div class="text-center text-xs sm:text-sm text-gray-500 pb-2 hidden flex-shrink-0" id="incomingParticipants"></div>
+      <div class="flex-1 min-h-0 pb-3 sm:pb-4" id="incomingVideos" style="display:none; position: relative;">
+        <div class="pip-call-container" style="width: 100%; height: 100%;">
+          <video id="inRemoteVideo" class="pip-remote" autoplay playsinline></video>
+          <video id="inLocalVideo" class="pip-local" autoplay playsinline muted></video>
+        </div>
+      </div>
+      <div class="space-y-2 pb-3 sm:pb-4 flex-shrink-0" id="incomingAudioUI" style="display:none;">
+        <audio id="inRemoteAudio" autoplay playsinline></audio>
+      </div>
+      <div class="grid grid-cols-2 gap-3 flex-shrink-0">
+        <button id="incomingDeclineBtn" class="py-3 sm:py-3.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm sm:text-base font-semibold transition-colors shadow-md">Отклонить</button>
+        <button id="incomingAcceptBtn" class="py-3 sm:py-3.5 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm sm:text-base font-semibold transition-colors shadow-lg">Принять</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Основной хедер -->
+<header class="bg-white/95 backdrop-blur-lg shadow-lg border-b border-gray-100 sticky top-0 z-30 transition-all duration-300">
+  <div class="w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-20 h-16 sm:h-18 md:h-20 flex items-center justify-between header-mobile-tiny header-mobile-small header-tablet-optimization">
+    <!-- Левая часть: меню и логотип -->
+    <div class="flex items-center space-x-2 sm:space-x-3 md:space-x-4">
+      <!-- Кнопка бургера - теперь видна на всех устройствах -->
+      <button class="p-2 sm:p-3 rounded-xl hover:bg-gray-100 transition-all duration-300 hover:scale-110 flex-shrink-0 burger-btn" id="mobileMenuButton">
+        <svg class="w-5 h-5 sm:w-6 sm:h-6" style="color: rgba(102, 107, 207, 1);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+      </button>
+      
+      <!-- Логотип -->
+      <a href="/" class="flex items-center group">
+        <div class="relative">
+          <img class="h-6 sm:h-7 md:h-8 w-auto transition-transform duration-300 group-hover:scale-105 logo-tiny" src="/img/takebana.png" alt="Takebana">
+        </div>
+      </a>
+    
+      <!-- Поиск - адаптивная ширина с ограничениями -->
+      <div class="flex-1 max-w-xs sm:max-w-sm md:max-w-md lg:max-w-2xl xl:max-w-3xl mx-1 sm:mx-2 md:mx-4 hidden sm:block min-w-[160px] md:min-w-[200px] lg:min-w-[300px] xl:min-w-[400px]">
+        <div class="relative group">
+          <input class="w-full pl-8 sm:pl-10 pr-4 py-2 sm:py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:border-transparent transition-all duration-300 group-hover:border-gray-400 bg-gray-50/80 focus:bg-white text-sm" type="text" placeholder="Поиск..." id="searchInput" lng="152">
+          <div class="absolute inset-y-0 left-0 pl-2 sm:pl-3 flex items-center pointer-events-none">
+            <svg class="h-4 w-4 text-gray-500 group-hover:text-purple-500 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+            </svg>
+          </div>
+        
+          <!-- Результаты поиска -->
+          <div class="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-100 z-40 hidden overflow-hidden" id="searchResults">
+            <!-- Результаты будут добавляться динамически -->
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Правая часть: кнопки -->
+    <div class="flex items-center space-x-1 sm:space-x-1.5 md:space-x-2 lg:space-x-3">
+      
+      <!-- Иконка поиска для мобильных устройств (показывается только на экранах меньше sm) -->
+      <button class="p-2 sm:hidden rounded-xl hover:bg-gray-100 transition-all duration-300 hover:scale-110 group" id="mobileSearchToggle">
+        <svg class="w-5 h-5 text-gray-600 group-hover:text-purple-600 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+        </svg>
+      </button>
+      
+      <!-- Переключатель языка - всегда виден, адаптивный размер -->
+      <div class="relative">
+        <button class="flex items-center space-x-1 sm:space-x-2 px-1 sm:px-2 md:px-3 py-2 sm:py-3 rounded-xl hover:bg-gray-100 transition-all duration-300 hover:scale-105 group flex-shrink-0" id="languageToggle">
+          <span class="text-xs sm:text-sm font-bold" style="color: rgba(102, 107, 207, 1);">RU</span>
+          <svg class="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 group-hover:text-purple-500 transition-all duration-300 group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+          </svg>
+        </button>
+        
+        <div class="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-100 hidden min-w-[120px] overflow-hidden z-[9999] pointer-events-auto" id="languageDropdown">
+          <button class="block w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors duration-200 font-medium" data-lang="ru">🇷🇺 Русский</button>
+          <button class="block w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors duration-200 font-medium" data-lang="en">🇺🇸 English</button>
+        </div>
+      </div>
+
+      <!-- Уведомления -->
+      <button class="relative p-2 sm:p-3 rounded-xl hover:bg-gray-100 transition-all duration-300 hover:scale-110 group notification-btn" id="notificationButton">
+        <svg class="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-gray-600 group-hover:text-purple-600 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+        </svg>
+        <% if (notifications && notifications.hasUnread) { %>
+          <div class="absolute top-1 sm:top-2 right-1 sm:right-2 w-2 h-2 sm:w-3 sm:h-3 rounded-full animate-pulse" style="background: rgba(102, 107, 207, 1);"></div>
+        <% } %>
+      </button>
+      
+      <!-- Чат - всегда виден, адаптивный размер -->
+      <a href="/chatsPage" class="p-2 sm:p-3 rounded-xl hover:bg-gray-100 transition-all duration-300 hover:scale-110 group">
+        <svg class="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-gray-600 group-hover:text-purple-600 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+        </svg>
+      </a>
+      
+      <!-- Аватар пользователя -->
+      <div class="relative">
+        <button class="relative group" id="avatarButton">
+          <% if (currentUser.avatarStyle.url) { %>
+            <div class="relative">
+              <img class="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-xl sm:rounded-2xl object-cover border-2 sm:border-3 border-gray-200 group-hover:border-purple-300 transition-all duration-300 group-hover:scale-105 avatar-tiny" src="<%= currentUser.avatarStyle.url %>" alt="<%= currentUser.displayName %>">
+              <div class="absolute inset-0 rounded-xl sm:rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300" style="background: rgba(102, 107, 207, 1);"></div>
+            </div>
+          <% } else { %>
+            <div class="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-xl sm:rounded-2xl border-2 sm:border-3 border-gray-200 group-hover:border-purple-300 flex items-center justify-center text-white font-bold text-sm sm:text-base md:text-lg transition-all duration-300 group-hover:scale-105 shadow-lg avatar-tiny" data-bg="<%= currentUser.avatarStyle.gradient %>">
+              <%= currentUser.avatarStyle.initial %>
+            </div>
+          <% } %>
+        </button>
+        
+        <!-- Выпадающее меню профиля -->
+        <div class="absolute top-full right-0 mt-3 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-40 hidden overflow-hidden" id="profileDropdown">
+          <div class="p-4 sm:p-6 border-b border-gray-100" style="background: linear-gradient(135deg, rgba(102, 107, 207, 0.05), rgba(102, 107, 207, 0.1));">
+            <div class="flex items-center space-x-3 sm:space-x-4">
+              <% if (currentUser.avatarStyle.url) { %>
+                <img class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover shadow-lg" src="<%= currentUser.avatarStyle.url %>" alt="<%= currentUser.displayName %>">
+              <% } else { %>
+                <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-white font-bold text-lg sm:text-xl shadow-lg" data-bg="<%= currentUser.avatarStyle.gradient %>">
+                  <%= currentUser.avatarStyle.initial %>
+                </div>
+              <% } %>
+              <div class="flex-1 min-w-0">
+                <p class="font-bold text-gray-900 text-base sm:text-lg truncate"><%= currentUser.displayName %></p>
+                <p class="text-xs sm:text-sm text-gray-600 truncate"><%= currentUser.email %></p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="p-2 sm:p-3">
+            <button class="w-full flex items-center space-x-3 sm:space-x-4 px-3 sm:px-4 py-3 sm:py-4 text-left text-gray-700 hover:bg-gray-50 rounded-xl transition-all duration-300 group" id="profileButton">
+              <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300" style="background: linear-gradient(135deg, rgba(102, 107, 207, 0.1), rgba(102, 107, 207, 0.2));">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" style="color: rgba(102, 107, 207, 1);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
+              </div>
+              <span class="font-semibold text-sm sm:text-base" lng="32">Настройки профиля</span>
+            </button>
+            
+            <button class="w-full flex items-center space-x-3 sm:space-x-4 px-3 sm:px-4 py-3 sm:py-4 text-left text-gray-700 hover:bg-gray-50 rounded-xl transition-all duration-300 group myChannelButton">
+              <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300" style="background: linear-gradient(135deg, rgba(102, 107, 207, 0.1), rgba(102, 107, 207, 0.2));">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" style="color: rgba(102, 107, 207, 1);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                </svg>
+              </div>
+              <span class="font-semibold text-sm sm:text-base" lng="123">Страница моего профиля</span>
+            </button>
+            
+            <a href="/main" class="w-full flex items-center space-x-3 sm:space-x-4 px-3 sm:px-4 py-3 sm:py-4 text-left text-gray-700 hover:bg-gray-50 rounded-xl transition-all duration-300 group goMap">
+              <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300" style="background: linear-gradient(135deg, rgba(102, 107, 207, 0.1), rgba(102, 107, 207, 0.2));">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" style="color: rgba(102, 107, 207, 1);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                </svg>
+              </div>
+              <span class="font-semibold text-sm sm:text-base" lng="124">Перейти к сервису заведений</span>
+            </a>
+          </div>
+
+          <div class="p-2 sm:p-3 border-t border-gray-100">
+            <a href="/logout" class="w-full flex items-center space-x-3 sm:space-x-4 px-3 sm:px-4 py-3 sm:py-4 text-left text-red-600 hover:bg-red-50 rounded-xl transition-all duration-300 group">
+              <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-red-100 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                </svg>
+              </div>
+              <span class="font-semibold text-sm sm:text-base" lng="125">Выход</span>
+            </a>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Кнопка запуска стрима -->
+      <button class="px-2 sm:px-3 md:px-4 lg:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl sm:rounded-2xl font-bold text-white shadow-lg transition-all duration-300 hover:scale-105 transform hover:shadow-xl flex items-center space-x-1 sm:space-x-2 stream-btn flex-shrink-0" style="background: linear-gradient(135deg, rgba(102, 107, 207, 1), rgba(102, 107, 207, 0.8));" id="startStreamButtonHeader">
+        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+        </svg>
+        <span class="hidden sm:inline text-xs sm:text-sm md:text-base lg:text-base" lng="171">Запустить стрим</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- Выдвижное поле поиска для мобильных устройств -->
+<div class="sm:hidden bg-white border-b border-gray-100 shadow-lg hidden transition-all duration-300 ease-in-out relative z-50" id="mobileSearchBar">
+  <div class="px-4 py-3 relative">
+    <div class="relative group">
+      <input class="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:border-transparent transition-all duration-300 group-hover:border-gray-400 bg-white focus:bg-white text-sm relative z-10" type="text" placeholder="Поиск пользователей..." id="mobileSearchField" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);" lng="153">
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-20">
+        <svg class="h-4 w-4 text-gray-500 group-hover:text-purple-500 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+        </svg>
+      </div>
+      <button class="absolute inset-y-0 right-0 pr-3 flex items-center z-20 hover:bg-gray-100 rounded-r-xl transition-colors duration-300" id="closeMobileSearch">
+        <svg class="h-4 w-4 text-gray-400 hover:text-gray-600 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    
+    <!-- Результаты поиска для мобильного выдвижного поля -->
+    <div class="absolute left-4 right-4 mt-3 bg-white rounded-xl shadow-xl border border-gray-100 z-50 hidden overflow-hidden" id="mobileSearchFieldResults">
+      <!-- Результаты будут добавляться динамически -->
+    </div>
+  </div>
+</div>
+
+<!-- Мобильное меню -->
+<div class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden backdrop-blur-sm" id="mobileMenu">
+  <div class="fixed inset-y-0 left-0 w-72 sm:w-80 bg-white shadow-2xl">
+    <div class="flex items-center justify-between p-4 border-b border-gray-100" style="background: linear-gradient(135deg, rgba(102, 107, 207, 0.05), rgba(102, 107, 207, 0.1));">
+      <h3 class="text-lg font-bold" style="color: rgba(102, 107, 207, 1);">Меню</h3>
+      <button class="text-gray-400 hover:text-gray-600 transition-all duration-200 hover:rotate-90 p-1.5 rounded-full hover:bg-gray-100" id="closeMobileMenu">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+          
+    <div class="p-4 space-y-2">
+      <a href="/terms_of_service" class="flex items-center space-x-3 px-3 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-all duration-300 group">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300" style="background: linear-gradient(135deg, rgba(102, 107, 207, 0.1), rgba(102, 107, 207, 0.2));">
+          <svg class="w-4 h-4" style="color: rgba(102, 107, 207, 1);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+          </svg>
+        </div>
+        <span class="font-medium text-sm">Terms Of Service</span>
+      </a>
+      <a href="/user_agreement" class="flex items-center space-x-3 px-3 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-all duration-300 group">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300" style="background: linear-gradient(135deg, rgba(102, 107, 207, 0.1), rgba(102, 107, 207, 0.2));">
+          <svg class="w-4 h-4" style="color: rgba(102, 107, 207, 1);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+          </svg>
+        </div>
+        <span class="font-medium text-sm">Пользовательское соглашение</span>
+      </a>
+      <a href="/personal_data_processing" class="flex items-center space-x-3 px-3 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-all duration-300 group">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300" style="background: linear-gradient(135deg, rgba(102, 107, 207, 0.1), rgba(102, 107, 207, 0.2));">
+          <svg class="w-4 h-4" style="color: rgba(102, 107, 207, 1);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25Z" />
+          </svg>
+        </div>
+        <span class="font-medium text-sm">Политика обработки персональных данных</span>
+      </a>
+    </div>
+          </div>
+        </div>
+
+<!-- Socket.IO client -->
+<script src="/socket.io/socket.io.js"></script>
+
+        <script>
+// Мобильное меню
+          document.addEventListener('DOMContentLoaded', () => {
+  const mobileMenuButton = document.getElementById('mobileMenuButton');
+  const mobileMenu = document.getElementById('mobileMenu');
+  const closeMobileMenu = document.getElementById('closeMobileMenu');
+
+  mobileMenuButton.addEventListener('click', () => {
+    mobileMenu.classList.remove('hidden');
+  });
+
+  closeMobileMenu.addEventListener('click', () => {
+    mobileMenu.classList.add('hidden');
+  });
+
+  mobileMenu.addEventListener('click', (e) => {
+    if (e.target === mobileMenu) {
+      mobileMenu.classList.add('hidden');
+    }
+  });
+});
+
+// Выпадающее меню профиля
+document.addEventListener('DOMContentLoaded', () => {
+  const avatarButton = document.getElementById('avatarButton');
+  const profileDropdown = document.getElementById('profileDropdown');
+
+  console.log('🔍 Debug avatarButton:', avatarButton);
+  console.log('🔍 Debug profileDropdown:', profileDropdown);
+
+  if (avatarButton && profileDropdown) {
+    avatarButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      console.log('🎯 Avatar clicked - toggling dropdown');
+      console.log('📋 Current classes:', profileDropdown.className);
+      profileDropdown.classList.toggle('hidden');
+      console.log('📋 New classes:', profileDropdown.className);
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!profileDropdown.contains(e.target) && !avatarButton.contains(e.target)) {
+        console.log('👆 Clicked outside - hiding dropdown');
+        profileDropdown.classList.add('hidden');
+      }
+    });
+  } else {
+    console.error('❌ Avatar button or dropdown not found!');
+  }
+});
+
+// Переключатель языка
+document.addEventListener('DOMContentLoaded', () => {
+  const languageToggle = document.getElementById('languageToggle');
+  const languageDropdown = document.getElementById('languageDropdown');
+
+  if (!languageToggle || !languageDropdown) return;
+
+  // Sync current label from localStorage (used by /lang.js)
+  try {
+    const saved = localStorage.getItem('lang');
+    if (saved === 'ru' || saved === 'en') {
+      const label = languageToggle.querySelector('span');
+      if (label) label.textContent = saved.toUpperCase();
+    }
+  } catch (e) {}
+
+  languageToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    languageDropdown.classList.toggle('hidden');
+  });
+
+  // Direct handlers on dropdown items (in case global document handler is blocked somewhere)
+  languageDropdown.addEventListener('click', (e) => {
+    const btn = e.target && e.target.closest ? e.target.closest('[data-lang]') : null;
+    if (!btn) return;
+    const next = btn.getAttribute('data-lang');
+    if (next !== 'ru' && next !== 'en') return;
+
+    try { localStorage.setItem('lang', next); } catch (e) {}
+    if (typeof window.applyLang === 'function') window.applyLang(next);
+
+    const label = languageToggle.querySelector('span');
+    if (label) label.textContent = next.toUpperCase();
+    languageDropdown.classList.add('hidden');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!languageDropdown.contains(e.target) && !languageToggle.contains(e.target)) {
+      languageDropdown.classList.add('hidden');
+    }
+  });
+});
+
+// Безопасность в профиле
+document.addEventListener('DOMContentLoaded', () => {
+  const securityToggle = document.getElementById('securityToggle');
+  const securityFields = document.getElementById('securityFields');
+
+  securityToggle.addEventListener('click', () => {
+    securityFields.classList.toggle('hidden');
+  });
+});
+
+// Apply gradients from data-bg (used across multiple pages)
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-bg]').forEach((el) => {
+    const bg = el.getAttribute('data-bg');
+    if (bg) el.style.background = bg;
+  });
+});
+
+// Apply animation delays from data-anim-delay (EJS-friendly, linter-safe)
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-anim-delay]').forEach((el) => {
+    const d = el.getAttribute('data-anim-delay');
+    if (d) el.style.animationDelay = d;
+  });
+});
+
+// Модальные окна
+document.addEventListener('DOMContentLoaded', () => {
+  const modals = {
+    streamSettings: document.getElementById('streamSettingsModal'),
+    profileInfo: document.getElementById('profileInfoModal'),
+    notification: document.getElementById('notificationModal')
+  };
+
+  const closeButtons = {
+    streamSettings: document.getElementById('closeStreamModal'),
+    profileInfo: document.getElementById('closeProfileModal'),
+    notification: document.getElementById('closeNotificationModal')
+  };
+
+  // Закрытие модальных окон
+  Object.keys(closeButtons).forEach(key => {
+    if (closeButtons[key]) {
+      closeButtons[key].addEventListener('click', () => {
+        modals[key].classList.add('hidden');
+        // Убираем overlay тень
+        const shodow = document.querySelector('.shodow');
+        if (shodow) {
+          shodow.classList.remove('display-block');
+        }
+      });
+    }
+  });
+
+  // Закрытие по клику вне модального окна
+  Object.keys(modals).forEach(key => {
+    if (modals[key]) {
+      modals[key].addEventListener('click', (e) => {
+        if (e.target === modals[key]) {
+          modals[key].classList.add('hidden');
+          // Убираем overlay тень
+          const shodow = document.querySelector('.shodow');
+          if (shodow) {
+            shodow.classList.remove('display-block');
+          }
+        }
+      });
+    }
+  });
+
+  // Открытие модальных окон
+  const notificationButton = document.getElementById('notificationButton');
+  const startStreamButtonHeader = document.getElementById('startStreamButtonHeader');
+
+  console.log('Debug - notificationButton:', notificationButton);
+  console.log('Debug - startStreamButtonHeader:', startStreamButtonHeader);
+
+  if (notificationButton) {
+    notificationButton.addEventListener('click', async () => {
+      console.log('Notification button clicked');
+      modals.notification.classList.remove('hidden');
+      const notificationsContent = document.getElementById('notificationsContent');
+      notificationsContent.innerHTML = `<p class='text-gray-500 text-center text-sm sm:text-base' lng="249">${t('249')}</p>`;
+
+      try {
+              const response = await fetch("/api/notifications");
+        if (!response.ok) throw new Error(t('250'));
+
+              const notifications = await response.json();
+
+              if (notifications.length === 0) {
+          notificationsContent.innerHTML = `<p class='text-gray-500 text-center text-sm sm:text-base' lng="251">${t('251')}</p>`;
+                return;
+              }
+
+        notificationsContent.innerHTML = notifications.map(notification => {
+          const senderName = notification.sender?.login || notification.sender?.email || "неизвестный пользователь";
+                const message = notification.content || t('252');
+
+                return `
+            <div class="border-b border-gray-100 last:border-b-0 py-3 sm:py-4">
+              <div class="flex items-start justify-between mb-1.5 sm:mb-2">
+                <h4 class="font-medium text-gray-900 text-sm sm:text-base">${t('253')} ${senderName}</h4>
+                <span class="text-xs sm:text-sm text-gray-500">${new Date(notification.createdAt).toLocaleString()}</span>
+                    </div>
+              <p class="text-gray-600 text-xs sm:text-sm">${message}</p>
+                  </div>
+                `;
+        }).join("");
+            } catch (error) {
+              console.error("Ошибка:", error);
+        notificationsContent.innerHTML = `<p class='text-red-500 text-center text-sm sm:text-base' lng="250">${t('250')}</p>`;
+      }
+    });
+  }
+
+  if (startStreamButtonHeader) {
+    startStreamButtonHeader.addEventListener('click', () => {
+      console.log('Start stream button clicked');
+      modals.streamSettings.classList.remove('hidden');
+      // Анимация появления
+      setTimeout(() => {
+        const content = document.getElementById('streamModalContent');
+        if (content) {
+          content.style.transform = 'scale(1)';
+          content.style.opacity = '1';
+        }
+      }, 10);
+    });
+  }
+
+  // Завершение активного стрима из модалки (кнопка в header.ejs)
+  const terminateStreamButton = document.getElementById('terminateStreamButton');
+  if (terminateStreamButton) {
+    terminateStreamButton.addEventListener('click', async () => {
+      const streamId = '<%= (currentUser && currentUser.activeStreamId) ? currentUser.activeStreamId : "" %>';
+      console.log('[terminate] click', { streamId });
+
+      if (!streamId) {
+        alert('Не удалось определить активный стрим. Обновите страницу.');
+        return;
+      }
+
+      const ok = confirm('Завершить стрим? Он будет удалён.');
+      if (!ok) return;
+
+      terminateStreamButton.disabled = true;
+      const prevHtml = terminateStreamButton.innerHTML;
+      terminateStreamButton.innerHTML = 'Завершаем...';
+
+      try {
+        const response = await fetch('/terminate-stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ streamId })
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          console.error('[terminate] failed', response.status, data);
+          alert(data?.message || 'Ошибка завершения стрима');
+          return;
+        }
+
+        console.log('[terminate] success', data);
+        // Закрываем модалку и обновляем страницу, чтобы пропал "активный стрим"
+        if (modals.streamSettings) modals.streamSettings.classList.add('hidden');
+        window.location.reload();
+      } catch (e) {
+        console.error('[terminate] exception', e);
+        alert('Ошибка сети при завершении стрима');
+      } finally {
+        terminateStreamButton.disabled = false;
+        terminateStreamButton.innerHTML = prevHtml;
+      }
+    });
+  }
+
+  // Кнопка профиля в выпадающем меню
+  const profileButton = document.getElementById('profileButton');
+  const profileDropdown = document.getElementById('profileDropdown');
+  if (profileButton && profileDropdown) {
+    profileButton.addEventListener('click', () => {
+      console.log('Profile button in dropdown clicked');
+      modals.profileInfo.classList.remove('hidden');
+      profileDropdown.classList.add('hidden');
+    });
+  }
+});
+
+// Поиск
+document.addEventListener('DOMContentLoaded', function() {
+  const searchInput = document.getElementById('searchInput');
+  const searchResults = document.getElementById('searchResults');
+  const mobileSearchInput = document.getElementById('mobileSearchInput');
+  const mobileSearchResults = document.getElementById('mobileSearchResults');
+
+  // Функция поиска (общая для десктопа и мобильного)
+  async function performSearch(query, resultsContainer) {
+    if (!query) {
+      resultsContainer.classList.add('hidden');
+      resultsContainer.innerHTML = '';
+      return;
+    }
+
+    try {
+      const response = await fetch(`/search-users?q=${encodeURIComponent(query)}`);
+      const users = await response.json();
+
+      if (users.length > 0) {
+        resultsContainer.classList.remove('hidden');
+        resultsContainer.innerHTML = users.map(user => {
+          // Исправляем градиент для аватарок - правильный формат
+          let gradientStyle = '';
+          if (user.avatarStyle && user.avatarStyle.gradient) {
+            // Если градиент уже в правильном формате
+            if (user.avatarStyle.gradient.includes('linear-gradient')) {
+              gradientStyle = user.avatarStyle.gradient;
+            } else {
+              // Если градиент в старом формате, преобразуем
+              gradientStyle = `linear-gradient(135deg, ${user.avatarStyle.gradient})`;
+            }
+          } else {
+            // Дефолтный градиент
+            gradientStyle = 'linear-gradient(135deg, #6366f1, #8b5cf6)';
+          }
+          
+          const avatarHtml = user.avatarStyle?.url ? 
+            `<img class="w-12 h-12 rounded-full object-cover shadow-md group-hover:scale-105 transition-transform duration-200" src="${user.avatarStyle.url}" alt="Avatar">` : 
+            `<div class="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shadow-md group-hover:scale-105 transition-transform duration-200" style="background: ${gradientStyle};">${user.avatarStyle?.initial || user.displayName?.charAt(0)?.toUpperCase() || '?'}</div>`;
+          
+          return `
+            <a href="/userPage/${user._id}" class="search-result-item flex items-center space-x-4 p-4 hover:bg-gray-50 hover:shadow-sm transition-all duration-200 group border-b border-gray-50 last:border-b-0 relative z-10" data-user-id="${user._id}" data-presence-user="${user._id}" style="cursor: pointer;">
+              <div class="flex-shrink-0">
+                ${avatarHtml}
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-semibold text-gray-900 truncate group-hover:text-purple-600 transition-colors duration-200">${user.displayName || 'Безымянный'}</p>
+                <div class="flex items-center mt-1">
+                  <svg class="w-3 h-3 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                  </svg>
+                  <p class="text-sm text-gray-500">${user.followersCount || 0} подписчиков</p>
+                </div>
+                <div class="flex items-center gap-2 mt-1 text-xs">
+                  <span class="w-2.5 h-2.5 rounded-full presence-dot"></span>
+                  <span data-presence-text></span>
+                </div>
+              </div>
+              <div class="flex-shrink-0">
+                <svg class="w-4 h-4 text-gray-400 group-hover:text-purple-500 transition-colors duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+              </div>
+            </a>
+          `;
+        }).join('');
+        
+        // Добавляем обработчики кликов для результатов поиска
+        addSearchResultClickHandlers(resultsContainer);
+        // Инициализируем presence для новых результатов
+        const ids = Array.from(resultsContainer.querySelectorAll('[data-presence-user]')).map(n => n.getAttribute('data-presence-user'));
+        if (ids.length) {
+          fetch('/api/presence?ids=' + encodeURIComponent(ids.join(',')))
+            .then(r => r.json())
+            .then(data => {
+              (data.users || []).forEach(u => {
+                // используем глобальную функцию, если доступна
+                if (typeof window !== 'undefined') {
+                  const ev = new CustomEvent('presence:init', { detail: u });
+                  window.dispatchEvent(ev);
+                }
+              });
+            })
+            .catch(() => {});
+        }
+      } else {
+        resultsContainer.classList.remove('hidden');
+        resultsContainer.innerHTML = `
+          <div class="p-8 text-center">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style="background: linear-gradient(135deg, rgba(102, 107, 207, 0.1), rgba(102, 107, 207, 0.2));">
+              <svg class="w-8 h-8" style="color: rgba(102, 107, 207, 1);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+              </svg>
+            </div>
+            <h3 class="font-semibold text-gray-900 mb-2">Ничего не найдено</h3>
+            <p class="text-sm text-gray-500">Попробуйте изменить поисковый запрос</p>
+          </div>
+        `;
+      }
+    } catch (error) {
+      console.error('Ошибка поиска пользователей:', error);
+    }
+  }
+  
+  // Функция для добавления обработчиков кликов к результатам поиска
+  function addSearchResultClickHandlers(resultsContainer) {
+    // Убираем старые обработчики
+    const existingItems = resultsContainer.querySelectorAll('.search-result-item');
+    existingItems.forEach(item => {
+      const newItem = item.cloneNode(true);
+      item.parentNode.replaceChild(newItem, item);
+    });
+    
+    // Добавляем новые обработчики
+    const searchItems = resultsContainer.querySelectorAll('.search-result-item');
+    searchItems.forEach(item => {
+      item.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const href = this.getAttribute('href');
+        
+        // Скрываем результаты поиска
+        resultsContainer.classList.add('hidden');
+        
+        // Переходим на страницу пользователя
+        setTimeout(() => {
+          window.location.href = href;
+        }, 100);
+      });
+      
+      // Добавляем hover эффект
+      item.addEventListener('mouseenter', function() {
+        this.style.backgroundColor = '#f9fafb';
+      });
+      
+      item.addEventListener('mouseleave', function() {
+        this.style.backgroundColor = '';
+      });
+    });
+  }
+
+  // Обработчики для десктопного поиска
+  if (searchInput && searchResults) {
+
+    searchInput.addEventListener('input', async function() {
+      const query = searchInput.value.trim();
+      await performSearch(query, searchResults);
+    });
+
+    document.addEventListener('click', function(event) {
+      if (!searchInput.contains(event.target) && !searchResults.contains(event.target)) {
+        searchResults.classList.add('hidden');
+      }
+    });
+  }
+
+  // Обработчики для выдвижного мобильного поиска
+  const mobileSearchToggle = document.getElementById('mobileSearchToggle');
+  const mobileSearchBar = document.getElementById('mobileSearchBar');
+  const mobileSearchField = document.getElementById('mobileSearchField');
+  const closeMobileSearch = document.getElementById('closeMobileSearch');
+  const mobileSearchFieldResults = document.getElementById('mobileSearchFieldResults');
+  
+  if (mobileSearchToggle && mobileSearchBar) {
+    // Открытие поиска
+    mobileSearchToggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      mobileSearchBar.classList.remove('hidden');
+      mobileSearchBar.style.zIndex = '9999';
+      
+      setTimeout(() => {
+        mobileSearchBar.classList.add('opacity-100');
+        if (mobileSearchField) {
+          mobileSearchField.focus();
+          mobileSearchField.style.pointerEvents = 'auto';
+          mobileSearchField.style.zIndex = '10000';
+        }
+      }, 50);
+    });
+    
+    // Закрытие поиска
+    if (closeMobileSearch) {
+      closeMobileSearch.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeMobileSearchBar();
+      });
+    }
+    
+    // Функция закрытия мобильного поиска
+    function closeMobileSearchBar() {
+      mobileSearchBar.classList.remove('opacity-100');
+      setTimeout(() => {
+        mobileSearchBar.classList.add('hidden');
+        if (mobileSearchField) {
+          mobileSearchField.value = '';
+        }
+        if (mobileSearchFieldResults) {
+          mobileSearchFieldResults.classList.add('hidden');
+        }
+      }, 300);
+    }
+    
+    // Поиск в выдвижном поле
+    if (mobileSearchField && mobileSearchFieldResults) {
+      mobileSearchField.addEventListener('input', async function() {
+        const query = mobileSearchField.value.trim();
+        await performSearch(query, mobileSearchFieldResults);
+      });
+      
+      // Предотвращаем закрытие при клике на поле поиска
+      mobileSearchField.addEventListener('click', function(e) {
+        e.stopPropagation();
+      });
+      
+      // Предотвращаем закрытие при клике на результаты
+      mobileSearchFieldResults.addEventListener('click', function(e) {
+        e.stopPropagation();
+      });
+      
+      // Закрытие поиска при нажатии Escape
+      mobileSearchField.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          closeMobileSearchBar();
+        }
+      });
+      
+      // Закрытие результатов при клике вне (но не закрываем весь поиск)
+      document.addEventListener('click', function(event) {
+        if (!mobileSearchBar.contains(event.target) && !mobileSearchToggle.contains(event.target)) {
+          // Только скрываем результаты, но оставляем поле поиска открытым
+          if (mobileSearchFieldResults) {
+            mobileSearchFieldResults.classList.add('hidden');
+          }
+        }
+      });
+    }
+  }
+});
+
+// Сохранение пароля
+document.addEventListener('DOMContentLoaded', function() {
+  const savePasswordButton = document.getElementById('savePasswordButton');
+  const oldPasswordInput = document.getElementById('oldPassword');
+  const newPasswordInput = document.getElementById('newPassword');
+  const confirmPasswordInput = document.getElementById('confirmPassword');
+
+  if (!savePasswordButton) return;
+
+  savePasswordButton.addEventListener('click', async function(event) {
+    event.preventDefault();
+
+    const oldPassword = oldPasswordInput.value.trim();
+    const newPassword = newPasswordInput.value.trim();
+    const confirmPassword = confirmPasswordInput.value.trim();
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      alert('Пожалуйста, заполните все поля для смены пароля.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      alert('Новый пароль и подтверждение не совпадают.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/update-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          oldPassword: oldPassword,
+          newPassword: newPassword
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert('Пароль успешно обновлен!');
+        // Очищаем поля пароля
+        oldPasswordInput.value = '';
+        newPasswordInput.value = '';
+        confirmPasswordInput.value = '';
+        // Закрываем блок Security
+        document.getElementById('securityFields').classList.add('hidden');
+        window.location.reload();
+      } else {
+        alert('Ошибка: ' + (result.message || 'Не удалось обновить пароль'));
+      }
+    } catch (error) {
+      console.error('Ошибка:', error);
+      alert('Ошибка при обновлении пароля');
+    }
+  });
+});
+
+// Сохранение только имени
+document.addEventListener('DOMContentLoaded', function() {
+  const saveNameButton = document.getElementById('saveNameButton');
+  const nameInput = document.getElementById('profileNameInput');
+
+  if (!saveNameButton || !nameInput) return;
+
+  saveNameButton.addEventListener('click', async function(event) {
+    event.preventDefault();
+
+    const newName = nameInput.value.trim();
+    if (!newName) {
+      alert('Пожалуйста, введите имя');
+      return;
+    }
+
+    try {
+      const response = await fetch('/update-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          login: newName
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert('Имя успешно обновлено!');
+        window.location.reload();
+      } else {
+        alert('Ошибка: ' + (result.message || 'Не удалось обновить имя'));
+      }
+    } catch (error) {
+      console.error('Ошибка:', error);
+      alert('Ошибка при обновлении имени');
+    }
+  });
+});
+
+// Запуск стрима
+document.addEventListener('DOMContentLoaded', function() {
+  const startStreamButton = document.getElementById('startStreamButton');
+  const streamTitleInput = document.getElementById('streamTitle');
+  const streamCategoryInput = document.getElementById('streamCategory');
+  const streamSubcategoryInput = document.getElementById('streamSubcategory');
+  const streamDescriptionInput = document.getElementById('streamDescription');
+
+  if (!startStreamButton) return;
+
+  startStreamButton.addEventListener('click', async function(event) {
+    event.preventDefault();
+
+    const title = streamTitleInput.value.trim();
+    const category = streamCategoryInput.value;
+    const subcategory = streamSubcategoryInput.value;
+    const description = streamDescriptionInput.value.trim();
+
+    if (!title || !category) {
+      alert('Пожалуйста, заполните название и категорию трансляции.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/start-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          title,
+          category,
+          subcategory,
+          description
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        window.location.href = `/stream/${result.streamId}`;
+      } else {
+        alert(`Ошибка: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Ошибка при запуске трансляции:', error);
+      alert('Произошла ошибка при запуске трансляции. Пожалуйста, попробуйте снова.');
+    }
+  });
+});
+
+// Переход к сервису заведений
+document.addEventListener('DOMContentLoaded', function() {
+  const goMapButton = document.querySelector('.goMap');
+  if (goMapButton) {
+    goMapButton.addEventListener('click', function() {
+      localStorage.setItem('targetService', 'service1');
+    });
+  }
+});
+
+// Логика подкатегорий для стрима
+document.addEventListener('DOMContentLoaded', function() {
+  const streamCategorySelect = document.getElementById('streamCategory');
+  const streamSubcategorySelect = document.getElementById('streamSubcategory');
+
+  const subcategories = {
+      business: [
+        { value: 'real_estate', text: 'Недвижимость' },
+        { value: 'services', text: 'Услуги' },
+        { value: 'education', text: 'Образование' },
+        { value: 'auto', text: 'Авто' },
+        { value: 'horeca', text: 'HoReCa' },
+        { value: 'manufacturing', text: 'Производство' },
+        { value: 'presentation', text: 'Презентация' }
+      ],
+      entertainment: [
+        { value: 'podcasts', text: 'Подкасты' },
+        { value: 'tourism', text: 'Туризм' },
+        { value: 'creative', text: 'Креатив' },
+        { value: 'music', text: 'Музыка' }
+      ]
+    };
+
+  if (streamCategorySelect && streamSubcategorySelect) {
+  streamCategorySelect.addEventListener('change', function() {
+    const selectedCategory = this.value;
+
+    // Очищаем предыдущие подкатегории
+    streamSubcategorySelect.innerHTML = '';
+
+    if (selectedCategory && subcategories[selectedCategory]) {
+      // Активируем выбор подкатегории
+      streamSubcategorySelect.disabled = false;
+        streamSubcategorySelect.classList.remove('opacity-50');
+
+      // Добавляем опцию по умолчанию
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+        defaultOption.textContent = 'Выберите подкатегорию';
+      streamSubcategorySelect.appendChild(defaultOption);
+
+      // Заполняем подкатегории
+      subcategories[selectedCategory].forEach(function(subcategory) {
+        const option = document.createElement('option');
+        option.value = subcategory.value;
+        option.textContent = subcategory.text;
+        streamSubcategorySelect.appendChild(option);
+      });
+    } else {
+      // Если нет подкатегорий
+      streamSubcategorySelect.disabled = true;
+        streamSubcategorySelect.classList.add('opacity-50');
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'Сначала выберите категорию';
+      streamSubcategorySelect.appendChild(option);
+    }
+  });
+}
+});
+
+// Обработчик кнопки "Мой канал"
+document.addEventListener('DOMContentLoaded', function() {
+  const myChannelButton = document.querySelector('.myChannelButton');
+  const myUid = '<%= (currentUser && currentUser._id) ? currentUser._id : "" %>';
+  if (myChannelButton) {
+    myChannelButton.addEventListener('click', function() {
+      if (myUid) {
+        window.location.href = '/userPage/' + myUid;
+      } else {
+        console.error('Current user ID not found');
+        alert('Ошибка: не удалось найти ID пользователя');
+      }
+    });
+  }
+});
+
+// Аватар: выбор, предпросмотр и загрузка
+document.addEventListener('DOMContentLoaded', () => {
+  const chooseBtn = document.getElementById('chooseAvatarBtn');
+  const uploadBtn = document.getElementById('uploadAvatarBtn');
+  const fileInput = document.getElementById('profileAvatarInput');
+  const preview = document.getElementById('profileAvatarPreview');
+  const empty = document.getElementById('profileAvatarEmpty');
+  const hint = document.getElementById('avatarHint');
+
+  if (!chooseBtn || !uploadBtn || !fileInput) return;
+
+  chooseBtn.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) { uploadBtn.disabled = true; return; }
+    const valid = /image\/(png|jpeg)/.test(file.type) && file.size <= 5 * 1024 * 1024;
+    if (!valid) {
+      hint.textContent = 'Неверный формат или размер файла';
+      uploadBtn.disabled = true;
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (empty) empty.classList.add('hidden');
+      preview.src = e.target.result;
+      preview.classList.remove('hidden');
+      uploadBtn.disabled = false;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  uploadBtn.addEventListener('click', async () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    uploadBtn.disabled = true;
+    hint.textContent = 'Загрузка...';
+    try {
+      const form = new FormData();
+      form.append('avatar', file);
+      const res = await fetch('/profile/avatar', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Ошибка загрузки');
+      
+      // Обновляем превью в модалке
+      if (empty) empty.classList.add('hidden');
+      if (preview) {
+        preview.src = data.url + '?t=' + Date.now(); // Добавляем timestamp для обхода кеша
+        preview.classList.remove('hidden');
+      }
+      
+      // Обновляем все аватары в хедере
+      const headerAvatars = document.querySelectorAll('#avatarButton img, .avatar-tiny, [id*="avatar"] img');
+      const avatarUrl = data.url + '?t=' + Date.now();
+      headerAvatars.forEach(img => {
+        if (img) img.src = avatarUrl;
+      });
+      
+      // Обновляем аватары в выпадающем меню профиля
+      const dropdownAvatars = document.querySelectorAll('#profileDropdown img');
+      dropdownAvatars.forEach(img => {
+        if (img) img.src = avatarUrl;
+      });
+      
+      hint.textContent = 'Готово! Фото загружено';
+      
+      console.log('Аватар обновлен:', data.url);
+      
+      // Перезагружаем страницу через небольшую задержку, чтобы пользователь увидел сообщение
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } catch (e) {
+      console.error('Ошибка загрузки аватара:', e);
+    hint.textContent = ((localStorage.getItem('lang') === 'en') ? 'Error: ' : 'Ошибка: ') + (e.message || ((localStorage.getItem('lang') === 'en') ? 'Failed to upload photo' : 'Не удалось загрузить фото'));
+      uploadBtn.disabled = false;
+    }
+  });
+});
+
+// Галерея: превью и подготовка к загрузке (без отправки на сервер)
+document.addEventListener('DOMContentLoaded', () => {
+  const dz = document.getElementById('galleryDropzone');
+  const input = document.getElementById('galleryInput');
+  const chooseBtn = document.getElementById('chooseGalleryBtn');
+  const uploadBtn = document.getElementById('uploadGalleryBtn');
+  const countEl = document.getElementById('galleryCount');
+  const hint = document.getElementById('galleryHint');
+  const previewGrid = document.getElementById('galleryPreview');
+  const persistedGrid = document.getElementById('galleryPersisted');
+  let files = [];
+
+  if (!dz || !input || !chooseBtn || !uploadBtn) return;
+
+  function renderPreviews() {
+    previewGrid.innerHTML = '';
+    files.slice(0, 30).forEach((file, idx) => {
+      const url = URL.createObjectURL(file);
+      const item = document.createElement('div');
+      item.className = 'relative group';
+      item.innerHTML = `
+        <img src="${url}" class="w-full h-24 object-cover rounded-lg ring-1 ring-gray-200 shadow-sm"/>
+        <button type="button" data-idx="${idx}" class="absolute top-1 right-1 bg-black/60 hover:bg-black/70 text-white rounded-md p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      `;
+      previewGrid.appendChild(item);
+    });
+    countEl.textContent = String(files.length);
+    uploadBtn.disabled = files.length === 0;
+    hint.textContent = files.length
+      ? ((localStorage.getItem('lang') === 'en') ? 'Ready to upload' : 'Готово к загрузке')
+      : ((localStorage.getItem('lang') === 'en') ? 'No files selected' : 'Файлы не выбраны');
+  }
+
+  function addFiles(fileList) {
+    const incoming = Array.from(fileList).filter(f => /image\/(png|jpeg)/.test(f.type) && f.size <= 10 * 1024 * 1024);
+    files = [...files, ...incoming].slice(0, 30);
+    renderPreviews();
+  }
+
+  chooseBtn.addEventListener('click', () => input.click());
+  input.addEventListener('change', (e) => addFiles(e.target.files || []));
+
+  dz.addEventListener('click', () => input.click());
+  dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('border-brand-300'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('border-brand-300'));
+  dz.addEventListener('drop', (e) => { e.preventDefault(); dz.classList.remove('border-brand-300'); addFiles(e.dataTransfer.files || []); });
+
+  previewGrid.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-idx]');
+    if (!btn) return;
+    const idx = Number(btn.getAttribute('data-idx'));
+    files.splice(idx, 1);
+    renderPreviews();
+  });
+
+  uploadBtn.addEventListener('click', () => {
+    if (!files.length) return;
+    hint.textContent = 'Загрузка...';
+    uploadBtn.disabled = true;
+    const form = new FormData();
+    files.forEach(f => form.append('photos', f));
+    fetch('/profile/gallery', { method: 'POST', body: form })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) throw new Error(data.message || 'Ошибка загрузки');
+        // Очистим локальный список и обновим UI
+        files = [];
+        renderPreviews();
+        hint.textContent = `Загружено. Всего фото: ${data.total}`;
+        // Добавим загруженные в persisted сетку
+        if (persistedGrid && Array.isArray(data.urls)) {
+          data.urls.forEach(url => {
+            const name = (url || '').split('/').pop();
+            const div = document.createElement('div');
+            div.className = 'relative group';
+            div.innerHTML = `
+              <img src="${url}" class="w-full h-24 object-cover rounded-lg ring-1 ring-gray-200 shadow-sm"/>
+              <button type="button" data-name="${name}" class="absolute top-1 right-1 bg-black/60 hover:bg-black/70 text-white rounded-md p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>`;
+            persistedGrid.prepend(div);
+          });
+        }
+      })
+      .catch(e => {
+        hint.textContent = 'Ошибка: ' + e.message;
+      })
+      .finally(() => { uploadBtn.disabled = false; });
+  });
+
+  // Удаление из галереи (persisted)
+  if (persistedGrid) {
+    persistedGrid.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-name]');
+      if (!btn) return;
+      const name = btn.getAttribute('data-name');
+      btn.disabled = true;
+      fetch('/profile/gallery/' + encodeURIComponent(name), { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+          if (!data.success) throw new Error(data.message || 'Ошибка удаления');
+          const card = btn.closest('.group');
+          if (card) card.remove();
+        })
+        .catch(err => { hint.textContent = 'Ошибка удаления: ' + err.message; })
+        .finally(() => { btn.disabled = false; });
+    });
+  }
+});
+
+
+
+// ===== Presence Client (глобально) =====
+(function(){
+  function initPresenceAndCalls(){
+  try {
+    if (typeof io !== 'function') return; // socket.io клиент должен быть подключен
+    const socket = io(window.location.origin, { transports: ['websocket'] });
+    window.callSocket = socket;
+    console.log('[client] socket init');
+    socket.on('connect', () => console.log('[client] socket connected id=', socket.id));
+    socket.on('connect_error', (err) => console.error('[client] socket connect_error', err));
+    socket.on('disconnect', (reason) => console.log('[client] socket disconnected', reason));
+
+    function setPresence(userId, online, lastSeen) {
+      const getUILang = () => {
+        try {
+          const v = localStorage.getItem('lang');
+          return (v === 'en' || v === 'ru') ? v : 'ru';
+        } catch (e) {
+          return 'ru';
+        }
+      };
+      const t = (key, fallbackRu, fallbackEn) => {
+        const l = getUILang();
+        try {
+          if (window.langDict && window.langDict[key] && typeof window.langDict[key][l] !== 'undefined') {
+            return window.langDict[key][l];
+          }
+        } catch (e) {}
+        return l === 'en' ? fallbackEn : fallbackRu;
+      };
+
+      const nodes = document.querySelectorAll(`[data-presence-user="${userId}"]`);
+      nodes.forEach(el => {
+        el.classList.remove('presence-online', 'presence-offline');
+        el.classList.add(online ? 'presence-online' : 'presence-offline');
+        // Синхронизируем внутренние контейнеры, если есть
+        el.querySelectorAll('.presence-online, .presence-offline').forEach(n => {
+          n.classList.remove('presence-online', 'presence-offline');
+          n.classList.add(online ? 'presence-online' : 'presence-offline');
+        });
+        const textEl = el.querySelector('[data-presence-text]');
+        if (textEl) {
+          textEl.textContent = online ? t('159', 'онлайн', 'online') : t('160', 'оффлайн', 'offline');
+          textEl.title = lastSeen ? new Date(lastSeen).toLocaleString() : '';
+        }
+        const dot = el.querySelector('.presence-dot');
+        if (dot) {
+          dot.style.backgroundColor = online ? '#22c55e' : '#9ca3af';
+        }
+      });
+
+      // Обновим строку "Последний раз в сети"
+      const lastSeenNodes = document.querySelectorAll(`[data-presence-lastseen-user="${userId}"]`);
+      lastSeenNodes.forEach(lsEl => {
+        lsEl.textContent = online ? t('178', 'Сейчас', 'Now') : (lastSeen ? new Date(lastSeen).toLocaleString() : t('179', '—', '—'));
+      });
+    }
+
+    socket.on('presence:update', ({ userId, isOnline, lastSeen }) => {
+      if (!userId) return;
+      setPresence(String(userId), !!isOnline, lastSeen);
+    });
+
+    // Поддержка инициализации presence у динамически добавленных элементов (поиск)
+    window.addEventListener('presence:init', (e) => {
+      const u = e.detail || {};
+      if (!u || !u._id) return;
+      setPresence(String(u._id), !!u.isOnline, u.lastSeen);
+    });
+
+    // ===== Calls client bindings =====
+    window.startAudioCall = async function(calleeId){
+      try {
+        window._callType = 'audio';
+        const res = await fetch('/api/calls/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calleeId, type: 'audio' }) });
+        const data = await res.json();
+        console.log('[client] startAudioCall response', data);
+        if (!data.success) throw new Error(data.error || 'call_create_failed');
+        window.currentCallId = data.callId;
+        window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Ожидание ответа…');
+      } catch (e) {
+        console.error('[client] startAudioCall error', e);
+        alert('Не удалось начать звонок: ' + e.message);
+      }
+    };
+
+    window.startVideoCall = async function(calleeId){
+      try {
+        window._callType = 'video';
+        const res = await fetch('/api/calls/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calleeId, type: 'video' }) });
+        const data = await res.json();
+        console.log('[client] startVideoCall response', data);
+        if (!data.success) throw new Error(data.error || 'call_create_failed');
+        window.currentCallId = data.callId;
+        window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Ожидание ответа…');
+      } catch (e) {
+        console.error('[client] startVideoCall error', e);
+        alert('Не удалось начать звонок: ' + e.message);
+      }
+    };
+
+    socket.on('incoming_call', ({ callId, type, from, daily }) => {
+      console.log('[client] incoming_call', { callId, type, from, daily });
+      if (!from) return;
+      window._incomingCallType = type;
+      window._callType = type;
+      window.showIncomingCall && window.showIncomingCall({
+        userId: from.userId,
+        displayName: from.displayName,
+        avatarUrl: from.avatarUrl,
+        callType: type,
+        onAccept: () => socket.emit('call:accept', { callId }),
+        onDecline: () => socket.emit('call:decline', { callId })
+      });
+      window.pendingDaily = daily || null;
+    });
+
+    socket.on('call:accepted', async ({ callId, daily }) => {
+      console.log('[client] call:accepted', callId);
+      window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Соединение установлено');
+      window.currentCallId = callId;
+      try {
+        if (typeof window.DailyIframe === 'undefined') {
+          const s = document.createElement('script');
+          s.src = 'https://unpkg.com/@daily-co/daily-js@0.83.1/dist/daily-iframe.js';
+          document.head.appendChild(s);
+          await new Promise(r => { s.onload = r; s.onerror = r; });
+        }
+        const d = daily || window.pendingDaily || {};
+        if (d && (d.roomUrl || d.roomName)) {
+          // Предпочитаем roomUrl, присланный сервером (он уже содержит правильный daily subdomain).
+          // Fallback оставляем на исторический домен, чтобы ребрендинг не ломал звонки.
+          const url = d.roomUrl || `https://webcatravel.daily.co/${d.roomName}`;
+          window._audioCallObject = window.DailyIframe.createCallObject();
+          await window._audioCallObject.join({ url });
+          // Тип вызова (для обоих сторон)
+          const wantVideo = (window._callType === 'video');
+          // Включим echoCancellation/noiseSuppression на локальном аудио
+          try {
+            const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+            const track = mic.getAudioTracks()[0];
+            const devId = track && track.getSettings && track.getSettings().deviceId;
+            if (devId && window._audioCallObject.setInputDevicesAsync) {
+              await window._audioCallObject.setInputDevicesAsync({ audioDeviceId: devId });
+            }
+            try { mic.getTracks().forEach(t => t.stop()); } catch(_) {}
+          } catch(e) { console.warn('getUserMedia with echo cancel failed', e); }
+          await window._audioCallObject.setLocalVideo(!!wantVideo);
+          await window._audioCallObject.setLocalAudio(true);
+          // Постараемся разблокировать воспроизведение на iOS/Safari
+          async function unlockAudio(){
+            try { await window._audioCallObject.startAudio(); console.log('[client] startAudio ok'); return true; } catch(e){ console.warn('[client] startAudio failed', e); return false; }
+          }
+          const ok = await unlockAudio();
+          if (!ok) {
+            const handler = async () => { await unlockAudio(); document.removeEventListener('click', handler, true); };
+            document.addEventListener('click', handler, true);
+          }
+          console.log('[client] daily joined', wantVideo ? 'video' : 'audio');
+          // Видео контейнеры (показываем, если видеозвонок)
+          function setVideoVisible(visible){
+            const ov = document.getElementById('outgoingVideos');
+            const iv = document.getElementById('incomingVideos');
+            if (ov) ov.style.display = visible ? 'block' : 'none';
+            if (iv) iv.style.display = visible ? 'block' : 'none';
+          }
+          setVideoVisible(!!wantVideo);
+          const oa = document.getElementById('outgoingAudioUI');
+          const ia = document.getElementById('incomingAudioUI');
+          if (oa) oa.style.display = 'block';
+          if (ia) ia.style.display = 'block';
+          // Привязка треков к <video>
+          function bindTrackToVideo(videoEl, track, muted){
+            if (!videoEl) return;
+            if (track) {
+              const ms = new MediaStream();
+              ms.addTrack(track);
+              try { videoEl.srcObject = ms; } catch(e) {}
+              try { videoEl.muted = !!muted; } catch(e) {}
+              try { videoEl.playsInline = true; videoEl.setAttribute('playsinline',''); } catch(e) {}
+              try { videoEl.play().catch(()=>{}); } catch(e) {}
+            }
+          }
+          function updateVideoElements(){
+            try {
+              const parts = window._audioCallObject.participants();
+              const local = Object.values(parts||{}).find(p => p.local);
+              const remote = Object.values(parts||{}).find(p => !p.local);
+              const localTrack = (local && (local.tracks && local.tracks.video && local.tracks.video.track)) || local?.videoTrack || null;
+              const remoteTrack = (remote && (remote.tracks && remote.tracks.video && remote.tracks.video.track)) || remote?.videoTrack || null;
+              bindTrackToVideo(document.getElementById('outLocalVideo'), localTrack, true);
+              bindTrackToVideo(document.getElementById('inLocalVideo'), localTrack, true);
+              bindTrackToVideo(document.getElementById('outRemoteVideo'), remoteTrack, false);
+              bindTrackToVideo(document.getElementById('inRemoteVideo'), remoteTrack, false);
+            } catch(e) {}
+          }
+          if (wantVideo) {
+            updateVideoElements();
+            window._audioCallObject.on('participant-joined', updateVideoElements);
+            window._audioCallObject.on('participant-updated', updateVideoElements);
+            window._audioCallObject.on('participant-left', updateVideoElements);
+          }
+          // Участники
+          function renderParticipants(){
+            try {
+              const participants = window._audioCallObject.participants();
+              const list = Object.values(participants || {}).map(p => p.info?.user_name || (p.local ? 'Вы' : 'Гость')).filter(Boolean);
+              const txt = 'Участники: ' + list.join(', ');
+              const oP = document.getElementById('outgoingParticipants');
+              const iP = document.getElementById('incomingParticipants');
+              if (oP) { oP.textContent = txt; oP.classList.remove('hidden'); }
+              if (iP) { iP.textContent = txt; iP.classList.remove('hidden'); }
+            } catch(e) {}
+          }
+          renderParticipants();
+          window._audioCallObject.on('participant-joined', renderParticipants);
+          window._audioCallObject.on('participant-left', renderParticipants);
+          window._audioCallObject.on('participant-updated', renderParticipants);
+          // уровни аудио убраны
+          // Диагностика аудио: разрешения, девайсы, треки
+          async function audioDiagnostics(){
+            try {
+              const perms = navigator.permissions && navigator.permissions.query ? await navigator.permissions.query({ name: 'microphone' }) : null;
+              const devices = await navigator.mediaDevices.enumerateDevices();
+              const parts = window._audioCallObject.participants();
+              const me = Object.values(parts||{}).find(p => p.local);
+              const other = Object.values(parts||{}).find(p => !p.local);
+              const outA = document.getElementById('outRemoteAudio');
+              const inA = document.getElementById('inRemoteAudio');
+              const sinkSupported = !!(HTMLMediaElement.prototype && HTMLMediaElement.prototype.setSinkId);
+              const diag = {
+                permissionState: perms && perms.state || 'unknown',
+                devices: devices.map(d => ({ kind: d.kind, label: d.label, deviceId: d.deviceId, groupId: d.groupId })),
+                localHasAudio: !!(me && (me.tracks && me.tracks.audio && me.tracks.audio.state === 'playable')), 
+                remoteHasAudio: !!(other && (other.tracks && other.tracks.audio && other.tracks.audio.state === 'playable')),
+                localAudioEnabled: !!(me && me.audio),
+                remoteAudioEnabled: !!(other && other.audio),
+                output: {
+                  sinkApiSupported: sinkSupported,
+                  outElementVolume: outA ? outA.volume : null,
+                  inElementVolume: inA ? inA.volume : null,
+                  // sinkId is readable in Chromium; Safari does not expose
+                  outSinkId: (outA && 'sinkId' in outA) ? outA.sinkId : null,
+                  inSinkId: (inA && 'sinkId' in inA) ? inA.sinkId : null,
+                }
+              };
+              console.log('[audio] diagnostics', diag);
+              const oDbg = document.getElementById('outAudioDebug');
+              const iDbg = document.getElementById('inAudioDebug');
+              if (oDbg) { oDbg.textContent = JSON.stringify(diag, null, 2); oDbg.classList.remove('hidden'); }
+              if (iDbg) { iDbg.textContent = JSON.stringify(diag, null, 2); iDbg.classList.remove('hidden'); }
+            } catch(e) { console.warn('audioDiagnostics failed', e); }
+          }
+          // диагностика убрана
+          // Привязка remote audio к <audio>
+          function updateAudioElements(){
+            try {
+              const parts = window._audioCallObject.participants();
+              const remote = Object.values(parts||{}).find(p => !p.local);
+              const remoteTrack = (remote && (remote.tracks && remote.tracks.audio && remote.tracks.audio.track)) || remote?.audioTrack || null;
+              const outA = document.getElementById('outRemoteAudio');
+              const inA = document.getElementById('inRemoteAudio');
+              if (remoteTrack) {
+                const ms = new MediaStream();
+                ms.addTrack(remoteTrack);
+                // Отдаём звук только в видимую модалку
+                const outgoingVisible = document.getElementById('outgoingCallModal')?.classList.contains('flex');
+                const incomingVisible = document.getElementById('incomingCallModal')?.classList.contains('flex');
+                if (outA) { outA.srcObject = null; }
+                if (inA) { inA.srcObject = null; }
+                const tuneOutput = async (el) => {
+                  if (!el) return;
+                  try {
+                    // На поддерживаемых браузерах выведем на коммуникационное устройство
+                    if (typeof el.setSinkId === 'function') {
+                      const devices = await navigator.mediaDevices.enumerateDevices();
+                      const outs = devices.filter(d => d.kind === 'audiooutput');
+                      const pref = outs.find(d => /communications|headset|earpiece/i.test(d.label));
+                      if (pref) { await el.setSinkId(pref.deviceId); }
+                    }
+                  } catch(_) {}
+                  try { el.volume = (window._callType === 'audio') ? 0.7 : 1.0; } catch(_) {}
+                };
+                if (outgoingVisible && outA) { try { outA.srcObject = ms; outA.muted = false; outA.play().catch(()=>{}); tuneOutput(outA); } catch(e){} }
+                else if (incomingVisible && inA) { try { inA.srcObject = ms; inA.muted = false; inA.play().catch(()=>{}); tuneOutput(inA); } catch(e){} }
+              }
+            } catch(e) {}
+          }
+          updateAudioElements();
+          window._audioCallObject.on('participant-joined', updateAudioElements);
+          window._audioCallObject.on('participant-updated', updateAudioElements);
+          window._audioCallObject.on('participant-left', () => {
+            updateAudioElements();
+            // если удалённый участник ушёл — закрыть обе модалки и очистить состояние
+            try {
+              const parts = window._audioCallObject.participants();
+              const hasRemote = Object.values(parts||{}).some(p => !p.local);
+              if (!hasRemote) {
+                window.hideIncomingCall && window.hideIncomingCall();
+                window.hideOutgoingCall && window.hideOutgoingCall();
+                if (window._audioCallObject){ window._audioCallObject.leave(); window._audioCallObject.destroy(); window._audioCallObject=null; }
+                clearInterval(window._callTick);
+                window.currentCallId = null;
+              }
+            } catch(e){}
+          });
+
+          // Кнопки разблокировки аудио (для iOS/Safari)
+          // тихая попытка включить аудио без UI
+          try { await window._audioCallObject.startAudio(); } catch(e) {}
+          // уровни не отображаем
+          // Переведём исходящую кнопку в “Завершить”
+          const btn = document.getElementById('outgoingCancelBtn');
+          if (btn) { btn.textContent = 'Завершить'; btn.classList.remove('bg-red-500'); btn.classList.add('bg-gray-500'); }
+          // Назначим завершение звонка на кнопку
+          if (btn) {
+            btn.onclick = function(){ endCallLocal(); };
+          }
+          // Преобразуем входящую модалку в активный звонок
+          const iS = document.getElementById('incomingStatus');
+          if (iS) iS.textContent = 'Соединение установлено';
+          const iT = document.getElementById('incomingTimer');
+          if (iT) iT.classList.remove('hidden');
+          const acc = document.getElementById('incomingAcceptBtn');
+          const dec = document.getElementById('incomingDeclineBtn');
+          const cls = document.getElementById('incomingCloseBtn');
+          if (acc) {
+            acc.disabled = false; acc.textContent = 'Завершить';
+            acc.classList.remove('bg-green-500','hover:bg-green-600');
+            acc.classList.add('bg-gray-500','hover:bg-gray-600','text-white','col-span-2','w-full');
+            acc.onclick = function(){ endCallLocal(); };
+          }
+          if (dec) { dec.classList.add('hidden'); }
+          if (cls) { cls.classList.add('hidden'); }
+        }
+      } catch (e) {
+        console.error('[client] daily join error', e);
+      }
+      try {
+        // Показать таймер и статус
+        const oT = document.getElementById('outgoingTimer');
+        const iT = document.getElementById('incomingTimer');
+        const iS = document.getElementById('incomingStatus');
+        if (oT) oT.classList.remove('hidden');
+        if (iT) iT.classList.remove('hidden');
+        if (iS) iS.textContent = 'Соединение установлено';
+        let sec = 0; clearInterval(window._callTick);
+        window._callTick = setInterval(() => {
+          sec++; const mm = String(Math.floor(sec/60)).padStart(2,'0'); const ss = String(sec%60).padStart(2,'0');
+          if (oT && !oT.classList.contains('hidden')) oT.textContent = mm+':'+ss;
+          if (iT && !iT.classList.contains('hidden')) iT.textContent = mm+':'+ss;
+        }, 1000);
+      } catch(e){}
+    });
+    socket.on('call:declined', ({ callId }) => {
+      console.log('[client] call:declined', callId);
+      window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Отклонено');
+      setTimeout(() => window.hideOutgoingCall && window.hideOutgoingCall(), 1000);
+      if (window.currentCallId === callId) window.currentCallId = null;
+    });
+    socket.on('call:canceled', ({ callId }) => {
+      console.log('[client] call:canceled', callId);
+      window.hideIncomingCall && window.hideIncomingCall();
+      if (window.currentCallId === callId) window.currentCallId = null;
+      if (window._audioCallObject) { try { window._audioCallObject.leave(); window._audioCallObject.destroy(); } catch(e){} window._audioCallObject=null; }
+      try { clearInterval(window._callTick); } catch(e){}
+    });
+    socket.on('call:ended', ({ callId }) => {
+      console.log('[client] call:ended', callId);
+      window.hideIncomingCall && window.hideIncomingCall();
+      window.hideOutgoingCall && window.hideOutgoingCall();
+      if (window.currentCallId === callId) window.currentCallId = null;
+      if (window._audioCallObject) { try { window._audioCallObject.leave(); window._audioCallObject.destroy(); } catch(e){} window._audioCallObject=null; }
+      try { clearInterval(window._callTick); } catch(e){}
+    });
+    socket.on('call:timeout', ({ callId }) => {
+      console.log('[client] call:timeout', callId);
+      window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Нет ответа');
+      // Закрываем обе модалки на всякий случай
+      setTimeout(() => {
+        window.hideOutgoingCall && window.hideOutgoingCall();
+        window.hideIncomingCall && window.hideIncomingCall();
+      }, 200);
+      if (window.currentCallId === callId) window.currentCallId = null;
+      if (window._audioCallObject) { try { window._audioCallObject.leave(); window._audioCallObject.destroy(); } catch(e){} window._audioCallObject=null; }
+      try { clearInterval(window._callTick); } catch(e){}
+    });
+
+    // Инициализация: подхватить присутствующие на странице id
+    const ids = Array.from(document.querySelectorAll('[data-presence-user]'))
+      .map(el => el.getAttribute('data-presence-user'))
+      .filter(Boolean);
+    if (ids.length) {
+      fetch('/api/presence?ids=' + encodeURIComponent(ids.join(',')))
+        .then(r => r.json())
+        .then(data => {
+          (data.users || []).forEach(u => setPresence(String(u._id), !!u.isOnline, u.lastSeen));
+        })
+        .catch(() => {});
+    }
+  } catch (e) {
+    console.error('presence client error', e);
+  }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPresenceAndCalls);
+  } else {
+    initPresenceAndCalls();
+  }
+})();
+
+// Глобальные помощники модалок звонков
+document.addEventListener('DOMContentLoaded', function(){
+  const outgoing = document.getElementById('outgoingCallModal');
+  const outName = document.getElementById('outgoingName');
+  const outType = document.getElementById('outgoingType');
+  const outStatus = document.getElementById('outgoingStatus');
+  const outAvatar = document.getElementById('outgoingAvatar');
+  const outClose = document.getElementById('outgoingCloseBtn');
+  const outCancel = document.getElementById('outgoingCancelBtn');
+
+  const incoming = document.getElementById('incomingCallModal');
+  const inName = document.getElementById('incomingName');
+  const inType = document.getElementById('incomingType');
+  const inAvatar = document.getElementById('incomingAvatar');
+  const inClose = document.getElementById('incomingCloseBtn');
+  const inDecline = document.getElementById('incomingDeclineBtn');
+  const inAccept = document.getElementById('incomingAcceptBtn');
+
+  function renderAvatar(el, url, name){
+    if (!el) return;
+    el.innerHTML = '';
+    if (url) {
+      el.innerHTML = '<img src="'+url+'" class="w-full h-full object-cover" />';
+    } else if (name) {
+      const initial = (name || '?').charAt(0).toUpperCase();
+      el.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-400 text-sm">'+initial+'</div>';
+    } else {
+      el.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-300">?</div>';
+    }
+  }
+
+  window.showOutgoingCall = function(opts){
+    if (!outgoing) return;
+    const displayName = opts && opts.displayName || 'Пользователь';
+    const avatarUrl = opts && opts.avatarUrl || '';
+    const callType = opts && opts.callType || 'video';
+    outName.textContent = displayName;
+    outType.textContent = callType === 'audio' ? 'Исходящий аудиозвонок' : 'Исходящий видеозвонок';
+    outStatus.textContent = 'Соединение...';
+    renderAvatar(outAvatar, avatarUrl, displayName);
+    outgoing.classList.remove('hidden');
+    outgoing.classList.add('flex');
+    // сброс таймера
+    const t = document.getElementById('outgoingTimer');
+    if (t) { t.textContent = '00:00'; t.classList.add('hidden'); }
+    // В состоянии дозвона кнопка = Отменить
+    const btn = document.getElementById('outgoingCancelBtn');
+    if (btn) { btn.textContent = 'Отменить'; btn.classList.remove('bg-gray-500'); btn.classList.add('bg-red-500'); }
+  };
+  window.updateOutgoingCallStatus = function(text){ if (outStatus) outStatus.textContent = text || ''; };
+  window.hideOutgoingCall = function(){
+    if (outgoing){
+      outgoing.classList.add('hidden');
+      outgoing.classList.remove('flex');
+    }
+    // При скрытии исходящей модалки — стоп её <audio>
+    try { const a = document.getElementById('outRemoteAudio'); if (a) a.srcObject = null; } catch(e){}
+  };
+
+  function hideIncoming(){
+    if (incoming){
+      incoming.classList.add('hidden');
+      incoming.classList.remove('flex');
+      inAccept.onclick=null; inDecline.onclick=null; inClose.onclick=null;
+    }
+    // При скрытии входящей модалки — стоп её <audio>
+    try { const a = document.getElementById('inRemoteAudio'); if (a) a.srcObject = null; } catch(e){}
+  }
+  window.showIncomingCall = function(opts){
+    if (!incoming) return;
+    const displayName = opts && opts.displayName || 'Пользователь';
+    const avatarUrl = opts && opts.avatarUrl || '';
+    const callType = opts && opts.callType || 'video';
+    const onAccept = opts && opts.onAccept;
+    const onDecline = opts && opts.onDecline;
+    inName.textContent = displayName;
+    inType.textContent = callType === 'audio' ? 'Входящий аудиозвонок' : 'Входящий видеозвонок';
+    renderAvatar(inAvatar, avatarUrl, displayName);
+    // Reset UI state to initial (new call)
+    try {
+      window.pendingDaily = null;
+      const st = document.getElementById('incomingStatus');
+      const it = document.getElementById('incomingTimer');
+      const ip = document.getElementById('incomingParticipants');
+      const acc = document.getElementById('incomingAcceptBtn');
+      const dec = document.getElementById('incomingDeclineBtn');
+      const cls = document.getElementById('incomingCloseBtn');
+      if (st) st.textContent = 'Звонит...';
+      if (it) { it.textContent = '00:00'; it.classList.add('hidden'); }
+      if (ip) { ip.textContent = ''; ip.classList.add('hidden'); }
+      if (acc) {
+        acc.disabled = false; acc.textContent = 'Принять';
+        acc.classList.remove('bg-gray-500','hover:bg-gray-600','text-white','col-span-2','w-full');
+        acc.classList.add('bg-green-500','hover:bg-green-600');
+      }
+      if (dec) { dec.disabled = false; dec.classList.remove('hidden'); }
+      if (cls) { cls.disabled = false; cls.classList.remove('hidden'); }
+    } catch(e) {}
+    incoming.classList.remove('hidden');
+    incoming.classList.add('flex');
+    inAccept.onclick = function(){
+      try {
+        // UI: сообщим пользователю, что идёт подключение
+        const st = document.getElementById('incomingStatus');
+        if (st) st.textContent = 'Подключаемся...';
+        const it = document.getElementById('incomingTimer');
+        if (it) it.classList.add('hidden');
+        inAccept.disabled = true; inDecline.disabled = true; inClose.disabled = true;
+        onAccept && onAccept();
+      } catch(e) {}
+      // не закрываем, ждём call:accepted
+    };
+    inDecline.onclick = function(){ try{ onDecline && onDecline(); }catch(e){} hideIncoming(); };
+    inClose.onclick = function(){ try{ onDecline && onDecline(); }catch(e){} hideIncoming(); };
+  };
+  // Экспортируем хелпер для внешних событий (cancel/timeout)
+  window.hideIncomingCall = hideIncoming;
+
+  function endCallLocal(){
+    try { if (window.callSocket && window.currentCallId) window.callSocket.emit('call:end', { callId: window.currentCallId }); } catch(e){}
+    window.hideIncomingCall && window.hideIncomingCall();
+    window.hideOutgoingCall && window.hideOutgoingCall();
+    try { if (window._audioCallObject){ window._audioCallObject.leave(); window._audioCallObject.destroy(); window._audioCallObject=null; } } catch(e){}
+    try { clearInterval(window._callTick); } catch(e){}
+    window.currentCallId = null;
+  }
+  window.endCallLocal = endCallLocal;
+
+  if (outClose) outClose.addEventListener('click', function(){
+    try { if (window.callSocket && window.currentCallId) window.callSocket.emit('call:cancel', { callId: window.currentCallId }); } catch(e) {}
+    window.hideOutgoingCall();
+    window.currentCallId = null;
+  });
+  if (outCancel) outCancel.addEventListener('click', function(){
+    try { if (window.callSocket && window.currentCallId) window.callSocket.emit('call:cancel', { callId: window.currentCallId }); } catch(e) {}
+    window.hideOutgoingCall();
+    window.currentCallId = null;
+  });
+});
+
+// ... existing code ...
+</script>
