@@ -3,6 +3,24 @@ require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env' });
 
 
 const fs = require('fs');
+const { isPublishAuthEnabled, getSecret } = require('./utils/rtmpAuth');
+
+// Право публиковать проверяется подписью, а не знанием ключа: ключ трансляции
+// уходит каждому зрителю в исходнике страницы — по нему собирается URL
+// воспроизведения `/live/<streamKey>.flv`, без него плеер поток не найдёт.
+// Значит, сам по себе ключ ничего не защищает. Формат подписи — utils/rtmpAuth.js.
+//
+// play намеренно оставлен открытым: эфир смотрят без входа, а закрывать раздачу
+// надо не здесь, а подписанными ссылками на уровне CDN.
+const publishAuth = isPublishAuthEnabled();
+
+if (!publishAuth && (process.env.START_SERVER === 'prod' || process.env.NODE_ENV === 'production')) {
+  console.warn(
+    '[mediaServer] RTMP_PUBLISH_SECRET не задан: приём RTMP открыт — вещать ' +
+    'в чужой эфир сможет любой, кто открывал страницу трансляции. ' +
+    'Сгенерировать: openssl rand -hex 32'
+  );
+}
 
 const config = {
   rtmp: {
@@ -11,6 +29,11 @@ const config = {
     gop_cache: true,
     ping: 10,
     ping_timeout: 30
+  },
+  auth: {
+    publish: publishAuth,
+    play: false,
+    secret: getSecret()
   },
   http: {
     port: 8000,
@@ -85,9 +108,41 @@ async function markObsStreamEnded(streamKey) {
   }
 }
 
-// Обработчики событий
+// Обработчики событий.
+//
+// Порядок в node-media-server такой: prePublish -> проверка подписи -> postPublish.
+// Поэтому пометка «эфир идёт» перенесена в postPublish: раньше она стояла в
+// prePublish и срабатывала даже на подключении, которое затем отклонялось, —
+// эфир показывался активным без единого кадра.
 nms.on('prePublish', (id, streamPath, args) => {
     console.log(`[INFO] Stream is starting: ${streamPath} with ID: ${id}`);
+    const streamKey = streamPath.split('/')[2];
+
+    // Второй рубеж, работающий и без секрета: ключа, которого нет ни в одном
+    // эфире, быть не должно — иначе на диск и в память сервера пишет кто угодно.
+    rejectUnknownStreamKey(id, streamKey);
+});
+
+// Отклоняем публикацию, если такого ключа нет в базе. Проверка асинхронная:
+// сессия успевает открыться и закрывается следом — этого достаточно, чтобы
+// поток не начал раздаваться.
+async function rejectUnknownStreamKey(id, streamKey) {
+    try {
+        const Stream = require('./models/Stream');
+        const known = await Stream.exists({ streamKey });
+        if (known) return;
+
+        console.warn(`[mediaServer] публикация отклонена: ключ ${streamKey} не найден`);
+        const session = nms.getSession(id);
+        if (session && typeof session.reject === 'function') session.reject();
+    } catch (e) {
+        // База недоступна — не роняем приём: подпись остаётся основной защитой
+        console.error('[mediaServer] проверка ключа не удалась:', e?.message || e);
+    }
+}
+
+// Сюда попадаем только после успешной проверки подписи.
+nms.on('postPublish', (id, streamPath, args) => {
     const streamKey = streamPath.split('/')[2];
     activeStreams.set(streamKey, {
         id,

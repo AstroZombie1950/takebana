@@ -1,19 +1,39 @@
 const express = require('express');
 const router = express.Router();
+const { asyncify } = require('../middleware/asyncRouter');
+asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 
 const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
 const multer = require('multer');
 const path = require('path');
 
+// Фото заведений кладём туда же, где аватары, галерея и обложки, —
+// в public/uploads. Раньше путь был 'uploads/' относительно рабочего каталога
+// процесса: папка оказывалась вне public (то есть не раздавалась статикой
+// напрямую), не попадала в .gitignore и уезжала, если сервер запускали не из
+// server/. В базе не было ни одного заведения с фото, переносить нечего.
+const fs = require('fs');
+
+const ESTABLISHMENT_UPLOAD_DIR = path.join(__dirname, '..', 'public', 'uploads', 'establishments');
+
 const storage = multer.diskStorage({
   destination: function(req, file, cb) {
-    cb(null, 'uploads/')
+    try {
+      if (!fs.existsSync(ESTABLISHMENT_UPLOAD_DIR)) {
+        fs.mkdirSync(ESTABLISHMENT_UPLOAD_DIR, { recursive: true });
+      }
+      cb(null, ESTABLISHMENT_UPLOAD_DIR);
+    } catch (e) {
+      cb(e);
+    }
   },
   filename: function(req, file, cb) {
     cb(null, Date.now() + path.extname(file.originalname)) // сохраняем оригинальное расширение файла
   }
 })
+
+const { requireAuth, requireOwner, wrap } = require('../middleware/auth');
 
 const upload = multer({ storage: storage });
 
@@ -22,7 +42,7 @@ const upload = multer({ storage: storage });
 
 // Видимо создание заведения хз пока 
 
-router.post('/register-establishment', async (req, res) => {
+router.post('/register-establishment', requireAuth, wrap(async (req, res) => {
     const { name, country, city, address, email, phone, weekdayHours, weekendHours, lat, lng } = req.body;
 
     if (!name || !country || !city || !address || !email || !phone || !weekdayHours || !weekendHours) {
@@ -52,10 +72,10 @@ router.post('/register-establishment', async (req, res) => {
     } catch (err) {
         res.status(500).json({ message: 'Server error: ' + err.message });
     }
-});
+}));
 
 
-router.get('/establishmentsLocation', async (req, res) => {
+router.get('/establishmentsLocation', wrap(async (req, res) => {
     const { bl_lat, bl_lng, tr_lat, tr_lng } = req.query;
 
     // Преобразуйте координаты в числа
@@ -69,11 +89,11 @@ router.get('/establishmentsLocation', async (req, res) => {
     });
 
     res.json(establishments);
-});
+}));
 
 
 
-router.get('/getEstablishments/:id', async (req, res) => {
+router.get('/getEstablishments/:id', wrap(async (req, res) => {
     const id = req.params.id;
 
     // Найдите заведение с заданным идентификатором
@@ -84,14 +104,15 @@ router.get('/getEstablishments/:id', async (req, res) => {
     } else {
         res.status(404).send('Establishment not found');
     }
-});
+}));
 
 
-router.get('/searchEstablishments/:name', async (req, res) => {
+router.get('/searchEstablishments/:name', wrap(async (req, res) => {
     const name = req.params.name;
 
-    // Создайте регулярное выражение, которое ищет заведения, имена которых содержат введенный текст
-    var regex = new RegExp(name, 'i');
+    // Спецсимволы экранируются: строка вроде `(a+)+$` собирала регулярное
+    // выражение с катастрофическим откатом и вешала процесс на одном запросе.
+    var regex = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
     // Найдите все заведения, имена которых соответствуют регулярному выражению
     const establishments = await Establishments.find({ name: regex });
@@ -101,12 +122,12 @@ router.get('/searchEstablishments/:name', async (req, res) => {
     } else {
         res.status(404).send('No establishments found');
     }
-});
+}));
 
 
 
 
-router.get('/user-establishments', async (req, res) => {
+router.get('/user-establishments', requireAuth, wrap(async (req, res) => {
     const userId = req.session.userId;
 
     // Используйте ваш контроллер для получения заведений пользователя
@@ -117,9 +138,9 @@ router.get('/user-establishments', async (req, res) => {
     } else {
         res.status(404).send('No establishments found');
     }
-});
+}));
 
-router.put('/updateEstablishment/:id', upload.array('newPhotos'), async (req, res) => {
+router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments), upload.array('newPhotos'), wrap(async (req, res) => {
     
     if (req.files.length > 6) {
         req.files = req.files.slice(0, 6);
@@ -146,7 +167,10 @@ router.put('/updateEstablishment/:id', upload.array('newPhotos'), async (req, re
             lat: parseFloat(lat),
             lng: parseFloat(lng)
         } : undefined,
-        photos: JSON.parse(uploadedPhotos).concat(req.files.map(file => file.path)) // Здесь вы можете добавить логику для сохранения пути к файлу или URL
+        // Абсолютный URL от корня сайта. file.path раньше давал относительный
+        // 'uploads/имя.jpg', и на вложенных страницах вида /userPage/:id браузер
+        // искал его по /userPage/uploads/... — картинка не находилась.
+        photos: JSON.parse(uploadedPhotos).concat(req.files.map(file => `/uploads/establishments/${file.filename}`))
     };
 
     try {
@@ -156,13 +180,17 @@ router.put('/updateEstablishment/:id', upload.array('newPhotos'), async (req, re
         console.error(err); // Логируем ошибку
         res.status(500).json({ message: 'An error occurred while updating the establishment.' }); // Change this line
     }
-});
+}));
 
 
-router.post('/updateEstablishmentsOnlineStatus', function(req, res) {
-    const { userId, online, peerId } = req.body; // добавьте peerId здесь
+// Владелец берётся из сессии, а не из тела запроса. Раньше userId приходил
+// от клиента: вошедший подставлял чужой идентификатор и разом переписывал
+// online и peerId у всех заведений другого пользователя. Воспроизводилось.
+router.post('/updateEstablishmentsOnlineStatus', requireAuth, function(req, res) {
+    const { online, peerId } = req.body;
+    const userId = req.session.userId;
 
-    Establishments.updateMany({ owner: userId }, { online: online, peerId: peerId }) // обновите peerId здесь
+    Establishments.updateMany({ owner: userId }, { online: online, peerId: peerId })
         .then(result => {
             res.send(result);
         })
@@ -171,14 +199,21 @@ router.post('/updateEstablishmentsOnlineStatus', function(req, res) {
         });
 });
 
-router.post('/updateEstablishmentOnlineStatus', function(req, res) {
-    const { userId, establishmentId, online, peerId } = req.body; // добавьте peerId здесь
+// Здесь проверка владельца была бутафорской: establishment.owner сверялся
+// с userId из того же тела запроса, поэтому достаточно было прислать
+// идентификатор настоящего владельца. Сверяем с сессией.
+router.post('/updateEstablishmentOnlineStatus', requireAuth, function(req, res) {
+    const { establishmentId, online, peerId } = req.body;
+    const userId = req.session.userId;
 
     // Найдите заведение по идентификатору
     Establishments.findById(establishmentId)
         .then(establishment => {
+            if (!establishment) {
+                throw new Error('Заведение не найдено');
+            }
             // Проверьте, принадлежит ли заведение пользователю
-            if (establishment.owner.toString() === userId) {
+            if (establishment.owner && establishment.owner.toString() === userId) {
                 // Обновите статус онлайн и peerId заведения
                 establishment.online = online;
                 establishment.peerId = peerId; // обновите peerId здесь
@@ -197,7 +232,7 @@ router.post('/updateEstablishmentOnlineStatus', function(req, res) {
 
 
 
-router.post('/rateEstablishment', async (req, res) => {
+router.post('/rateEstablishment', requireAuth, wrap(async (req, res) => {
     const { establishmentId, rating } = req.body;
 
     // Получите идентификатор пользователя из сессии
@@ -229,7 +264,7 @@ router.post('/rateEstablishment', async (req, res) => {
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
-});
+}));
 
 router.get('/getUserRating/:userId/:establishmentId', async (req, res) => {
     const { userId, establishmentId } = req.params;

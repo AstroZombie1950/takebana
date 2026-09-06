@@ -21,13 +21,18 @@ certs/
 
 # Пользовательский контент (переезжает в объектное хранилище)
 server/public/uploads/
+# прежний путь загрузок заведений: до 4 сентября multer писал сюда, мимо public
+server/uploads/
 
 # Медиа-конвейер
 server/media/
 server/live/
+# папка, которую app.js создаёт при старте: сегменты веб-стрима и плейлисты
+server/streams/
 server/**/*.m3u8
 # сегменты MPEG-TS (не путать с TypeScript — потому и с путём)
 server/**/hls/*.ts
+server/**/segment*.ts
 
 # Логи и рантайм
 logs/

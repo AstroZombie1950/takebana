@@ -843,6 +843,8 @@
             }
         }
     </style>
+    <!-- escapeHtml для мест, где разметка собирается в браузере (чат, админка) -->
+    <script src="/escape-html.js"></script>
 </head>
 
 <body class="bg-gray-50"
@@ -1137,7 +1139,7 @@
         <div class="chat-overlay xl:hidden" id="chatOverlay"></div>
 
         <!-- Подключаем необходимые библиотеки -->
-        <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
         <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
         <% if (stream.streamType==='obs-stream' ) { %>
             <!-- flv.js для воспроизведения HTTP-FLV -->
@@ -2336,8 +2338,8 @@
                                 <div class="flex items-start space-x-3">
                                     <div class="flex-1">
                                         <p class="text-sm">
-                                            <span class="${nameColorClass} font-semibold">${message.username}:</span>
-                                            <span class="text-gray-900 ml-2">${message.message}</span>
+                                            <span class="${nameColorClass} font-semibold">${escapeHtml(message.username)}:</span>
+                                            <span class="text-gray-900 ml-2">${escapeHtml(message.message)}</span>
                                         </p>
                                         <p class="text-xs text-gray-500 mt-1">${new Date(message.createdAt).toLocaleTimeString()}</p>
                                     </div>

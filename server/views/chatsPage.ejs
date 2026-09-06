@@ -35,6 +35,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <title lng="214">Чаты - Takebana</title>
+    <!-- escapeHtml для мест, где разметка собирается в браузере (чат, админка) -->
+    <script src="/escape-html.js"></script>
 </head>
 <body class="font-inter bg-gray-50 overflow-hidden">
     <%- include('partials/header') %>
@@ -795,11 +797,11 @@
                         <div class="messeg__friends">
                             ${
                                 currentRecipientAvatar.startsWith('http')
-                                    ? `<img src="${currentRecipientAvatar}" alt="${currentRecipientName}" class="w-8 h-8 rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-brand-300 transition-all duration-200" onclick="goToUserProfile()">`
-                                    : `<div style="background: ${currentRecipientAvatar};" class="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-xs cursor-pointer hover:ring-2 hover:ring-brand-300 transition-all duration-200" onclick="goToUserProfile()">${currentRecipientName.charAt(0).toUpperCase()}</div>`
+                                    ? `<img src="${escapeHtml(currentRecipientAvatar)}" alt="${escapeHtml(currentRecipientName)}" class="w-8 h-8 rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-brand-300 transition-all duration-200" onclick="goToUserProfile()">`
+                                    : `<div style="background: ${escapeHtml(currentRecipientAvatar)};" class="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-xs cursor-pointer hover:ring-2 hover:ring-brand-300 transition-all duration-200" onclick="goToUserProfile()">${currentRecipientName.charAt(0).toUpperCase()}</div>`
                             }
                             <div>
-                                <p class="content__messeg-fiends">${message.content}</p>
+                                <p class="content__messeg-fiends">${escapeHtml(message.content)}</p>
                                 <p class="time__messeg">${messageTime}</p>
                             </div>
                         </div>`;
@@ -809,7 +811,7 @@
                     messageWrapper.className = 'messeg__you-wrapper';
                     messageWrapper.innerHTML = `
                         <div class="you__messeg">
-                            <p class="you__messeg-content">${message.content}</p>
+                            <p class="you__messeg-content">${escapeHtml(message.content)}</p>
                         </div>
                         <p class="time__messeg">${messageTime}</p>`;
                 }
@@ -1046,9 +1048,9 @@
             const chatAvatar = document.querySelector('.chat-avatar-large');
             if (chatAvatar) {
                 if (recipientAvatar.startsWith('http')) {
-                    chatAvatar.innerHTML = `<img src="${recipientAvatar}" alt="${recipientName}" class="w-full h-full rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-brand-300 transition-all duration-200" onclick="goToUserProfile()">`;
+                    chatAvatar.innerHTML = `<img src="${escapeHtml(recipientAvatar)}" alt="${escapeHtml(recipientName)}" class="w-full h-full rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-brand-300 transition-all duration-200" onclick="goToUserProfile()">`;
                 } else {
-                    chatAvatar.innerHTML = `<div style="background: ${recipientAvatar};" class="w-full h-full rounded-full flex items-center justify-center text-white font-semibold text-xs cursor-pointer hover:ring-2 hover:ring-brand-300 transition-all duration-200" onclick="goToUserProfile()">${recipientName.charAt(0).toUpperCase()}</div>`;
+                    chatAvatar.innerHTML = `<div style="background: ${escapeHtml(recipientAvatar)};" class="w-full h-full rounded-full flex items-center justify-center text-white font-semibold text-xs cursor-pointer hover:ring-2 hover:ring-brand-300 transition-all duration-200" onclick="goToUserProfile()">${recipientName.charAt(0).toUpperCase()}</div>`;
                 }
             }
 

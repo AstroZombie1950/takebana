@@ -1,6 +1,10 @@
 // routes/userRoutes.js
 const express = require('express');
 const router = express.Router();
+const { asyncify } = require('../middleware/asyncRouter');
+const { authLimiter, registerLimiter } = require('../middleware/rateLimit');
+asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
+
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
 var session = require('express-session');
@@ -9,9 +13,18 @@ var MongoDBStore = require('connect-mongodb-session')(session);
 
 
 
+// provider отличает вход по паролю (пустая строка) от входа через Google.
+// Раньше значение приходило из тела запроса, и аноним мог зарегистрировать
+// запись с provider: 'google' на чужой адрес. Когда владелец адреса впервые
+// входил через Google, app.js находил именно её и сажал человека в аккаунт,
+// пароль от которого знает посторонний. Здесь и в регистрации провайдер
+// зафиксирован: эти два маршрута обслуживают только вход по паролю.
+const PASSWORD_PROVIDER = '';
+
 // Маршрут входа
-router.post('/login', async (req, res) => {
-  const { email, password, provider = '' } = req.body;
+router.post('/login', authLimiter, async (req, res) => {
+  const { email, password } = req.body;
+  const provider = PASSWORD_PROVIDER;
   if (!email || !password) {
     return res.status(400).json({ message: 'Email and password are required' });
   }
@@ -55,8 +68,9 @@ router.post('/login', async (req, res) => {
 });
 
 // Маршрут регистрации
-router.post('/register', async (req, res) => {
-  const { email, password, provider = '' } = req.body;
+router.post('/register', registerLimiter, async (req, res) => {
+  const { email, password } = req.body;
+  const provider = PASSWORD_PROVIDER; // см. комментарий выше
   const login = req.body.login || '';
   if (!email || !password) {
     return res.status(400).json({ message: 'Email and password are required' });
@@ -128,11 +142,15 @@ router.post('/update-profile', async (req, res) => {
 });
 
 
-router.post('/update-password', async (req, res) => {
+router.post('/update-password', authLimiter, async (req, res) => {
   const { oldPassword, newPassword } = req.body;
   const userId = req.session.userId;
   if (!oldPassword || !newPassword || !userId) {
     return res.status(400).json({ message: 'Old password, new password and user ID are required' });
+  }
+  // Столько же требует регистрация — иначе через смену пароля обходится минимум
+  if (newPassword.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters long' });
   }
   try {
     const user = await User.findById(userId);

@@ -548,6 +548,8 @@
         }
         
     </style>
+    <!-- escapeHtml для мест, где разметка собирается в браузере (чат, админка) -->
+    <script src="/escape-html.js"></script>
 </head>
 <body class="bg-gray-50"
       data-obs-only="<%= (typeof obsOnly !== 'undefined' && obsOnly) ? '1' : '0' %>"
@@ -822,8 +824,14 @@
                                             </div>
                                             <p lng="150">4. В поле Ключ потока вставьте свой ключ (не показывайте его никому):</p>
                                             <div class="bg-gray-100 p-3 rounded-lg border">
-                                                <code class="text-brand-600 font-mono"><%= streamKey %></code>
+                                                <code class="text-brand-600 font-mono break-all"><%= typeof obsStreamKey !== 'undefined' && obsStreamKey ? obsStreamKey : streamKey %></code>
                                             </div>
+                                            <% if (typeof obsKeyExpiresAt !== 'undefined' && obsKeyExpiresAt) { %>
+                                                <p class="text-xs text-gray-500">
+                                                    Ключ действует до <%= obsKeyExpiresAt.toLocaleDateString('ru-RU') %>.
+                                                    После этой даты откройте страницу заново — здесь будет новый.
+                                                </p>
+                                            <% } %>
                                             <p lng="151">5. Нажмите Применить и начинайте трансляцию в программе</p>
                                         </div>
                                     </div>
@@ -905,7 +913,7 @@
     </div>
 
         <!-- Подключаем необходимые библиотеки -->
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
     <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
     <% if (typeof obsOnly !== 'undefined' && obsOnly) { %>
         <!-- flv.js для предпросмотра OBS на странице стримера -->
@@ -1857,8 +1865,8 @@ async function fetchNewMessages() {
                         <div class="flex items-start space-x-3">
                             <div class="flex-1">
                                 <p class="text-sm">
-                                    <span class="${nameColorClass} font-semibold">${message.username}:</span>
-                                    <span class="text-gray-900 ml-2">${message.message}</span>
+                                    <span class="${nameColorClass} font-semibold">${escapeHtml(message.username)}:</span>
+                                    <span class="text-gray-900 ml-2">${escapeHtml(message.message)}</span>
                                 </p>
                                 <p class="text-xs text-gray-500 mt-1">${new Date(message.createdAt).toLocaleTimeString()}</p>
                             </div>

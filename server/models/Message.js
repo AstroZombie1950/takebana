@@ -33,4 +33,7 @@ const messageSchema = new Schema({
 const Message = mongoose.model('Message', messageSchema);
 
 // Экспорт модели
+// Лента переписки: выборка по диалогу с сортировкой по времени
+messageSchema.index({ conversationId: 1, sentAt: -1 });
+
 module.exports = Message;

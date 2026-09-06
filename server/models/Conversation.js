@@ -27,4 +27,8 @@ const conversationSchema = new Schema({
 const Conversation = mongoose.model('Conversation', conversationSchema);
 
 // Экспорт модели
+// Диалог ищется в обе стороны через $or, поэтому нужны оба порядка
+conversationSchema.index({ userOne: 1, userTwo: 1 });
+conversationSchema.index({ userTwo: 1, userOne: 1 });
+
 module.exports = Conversation;

@@ -70,4 +70,15 @@ const StreamSchema = new mongoose.Schema({
   }
 });
 
+// Активный эфир пользователя — самый частый запрос страницы трансляции
+StreamSchema.index({ userId: 1, isActive: 1 });
+// Поиск эфира по ключу вещания (RTMP/OBS)
+StreamSchema.index({ streamKey: 1 });
+// Списки на витрине: фильтр по категории всегда идёт вместе с isActive
+StreamSchema.index({ isActive: 1, streamType: 1, streamProvider: 1 });
+// Уборка мёртвых эфиров перебирает по паре isActive + updatedAt
+StreamSchema.index({ isActive: 1, updatedAt: 1 });
+// Сопоставление комнаты Daily.co с эфиром
+StreamSchema.index({ dailyRoomName: 1 });
+
 module.exports = mongoose.model('Stream', StreamSchema);

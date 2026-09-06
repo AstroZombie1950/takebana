@@ -9,6 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Urbanist:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
   
     <link rel="stylesheet" href="css/admin.css">
+    <!-- escapeHtml для мест, где разметка собирается в браузере (чат, админка) -->
+    <script src="/escape-html.js"></script>
 </head>
 <body>
 
@@ -108,18 +110,21 @@
                 let fieldsDiv = document.querySelector('.fields');
                 fieldsDiv.innerHTML = ''; // Очистка предыдущих элементов
 
+                // escapeHtml обязателен: значения полей вводит владелец заведения,
+                // а таблица собирается строкой и уходит в innerHTML. Кавычка
+                // в названии закрывала атрибут value и давала скрипт в панели.
                 data.forEach(establishment => {
                     let status = establishment.status ? 'checked' : '';
                     fieldsDiv.innerHTML += `
                         <div class="estate item" data-id="${establishment._id}">
-                            <div class="inp"><input type="text" class="name" placeholder="name" value="${establishment.name || ''}"></div>
-                            <div class="inp"><input type="text" class="country" placeholder="country" value="${establishment.country || ''}"></div>
-                            <div class="inp"><input type="text" class="city" placeholder="city" value="${establishment.city || ''}"></div>
-                            <div class="inp"><input type="text" class="address" placeholder="address" value="${establishment.address || ''}"></div>
-                            <div class="inp"><input type="text" class="email" placeholder="email" value="${establishment.email || ''}"></div>
-                            <div class="inp"><input type="text" class="phone" placeholder="phone" value="${establishment.phone || ''}"></div>
-                            <div class="inp"><input type="text" class="lat" placeholder="lat" value="${establishment.location && establishment.location.lat || ''}"></div>
-                            <div class="inp"><input type="text" class="lng" placeholder="lng" value="${establishment.location && establishment.location.lng || ''}"></div>
+                            <div class="inp"><input type="text" class="name" placeholder="name" value="${escapeHtml(establishment.name || '')}"></div>
+                            <div class="inp"><input type="text" class="country" placeholder="country" value="${escapeHtml(establishment.country || '')}"></div>
+                            <div class="inp"><input type="text" class="city" placeholder="city" value="${escapeHtml(establishment.city || '')}"></div>
+                            <div class="inp"><input type="text" class="address" placeholder="address" value="${escapeHtml(establishment.address || '')}"></div>
+                            <div class="inp"><input type="text" class="email" placeholder="email" value="${escapeHtml(establishment.email || '')}"></div>
+                            <div class="inp"><input type="text" class="phone" placeholder="phone" value="${escapeHtml(establishment.phone || '')}"></div>
+                            <div class="inp"><input type="text" class="lat" placeholder="lat" value="${escapeHtml(establishment.location && establishment.location.lat || '')}"></div>
+                            <div class="inp"><input type="text" class="lng" placeholder="lng" value="${escapeHtml(establishment.location && establishment.location.lng || '')}"></div>
                             <button class="btn save">Сохранить</button>
                             <button class="btn delete">Удалить</button>
                             <label>Активно: <input type="checkbox" class="status" ${status}></label>
@@ -158,14 +163,14 @@ document.querySelector('#searchInput').addEventListener('input', function() {
                     let status = establishment.status ? 'checked' : '';
                     fieldsDiv.innerHTML += `
                         <div class="estate item" data-id="${establishment._id}">
-                            <div class="inp"><input type="text" class="name" placeholder="name" value="${establishment.name || ''}"></div>
-                            <div class="inp"><input type="text" class="country" placeholder="country" value="${establishment.country || ''}"></div>
-                            <div class="inp"><input type="text" class="city" placeholder="city" value="${establishment.city || ''}"></div>
-                            <div class="inp"><input type="text" class="address" placeholder="address" value="${establishment.address || ''}"></div>
-                            <div class="inp"><input type="text" class="email" placeholder="email" value="${establishment.email || ''}"></div>
-                            <div class="inp"><input type="text" class="phone" placeholder="phone" value="${establishment.phone || ''}"></div>
-                            <div class="inp"><input type="text" class="lat" placeholder="lat" value="${establishment.location && establishment.location.lat || ''}"></div>
-                            <div class="inp"><input type="text" class="lng" placeholder="lng" value="${establishment.location && establishment.location.lng || ''}"></div>
+                            <div class="inp"><input type="text" class="name" placeholder="name" value="${escapeHtml(establishment.name || '')}"></div>
+                            <div class="inp"><input type="text" class="country" placeholder="country" value="${escapeHtml(establishment.country || '')}"></div>
+                            <div class="inp"><input type="text" class="city" placeholder="city" value="${escapeHtml(establishment.city || '')}"></div>
+                            <div class="inp"><input type="text" class="address" placeholder="address" value="${escapeHtml(establishment.address || '')}"></div>
+                            <div class="inp"><input type="text" class="email" placeholder="email" value="${escapeHtml(establishment.email || '')}"></div>
+                            <div class="inp"><input type="text" class="phone" placeholder="phone" value="${escapeHtml(establishment.phone || '')}"></div>
+                            <div class="inp"><input type="text" class="lat" placeholder="lat" value="${escapeHtml(establishment.location && establishment.location.lat || '')}"></div>
+                            <div class="inp"><input type="text" class="lng" placeholder="lng" value="${escapeHtml(establishment.location && establishment.location.lng || '')}"></div>
                             <button class="btn save">Сохранить</button>
                             <button class="btn delete">Удалить</button>
                             <label>Активно: <input type="checkbox" class="status" ${status}></label>
@@ -224,14 +229,14 @@ function loadEstablishments(page) {
             let status = establishment.status ? 'checked' : '';
             fieldsDiv.innerHTML += `
                 <div class="estate item" data-id="${establishment._id}">
-                    <div class="inp"><input type="text" class="name" placeholder="name" value="${establishment.name || ''}"></div>
-                    <div class="inp"><input type="text" class="country" placeholder="country" value="${establishment.country || ''}"></div>
-                    <div class="inp"><input type="text" class="city" placeholder="city" value="${establishment.city || ''}"></div>
-                    <div class="inp"><input type="text" class="address" placeholder="address" value="${establishment.address || ''}"></div>
-                    <div class="inp"><input type="text" class="email" placeholder="email" value="${establishment.email || ''}"></div>
-                    <div class="inp"><input type="text" class="phone" placeholder="phone" value="${establishment.phone || ''}"></div>
-                    <div class="inp"><input type="text" class="lat" placeholder="lat" value="${establishment.location && establishment.location.lat || ''}"></div>
-                    <div class="inp"><input type="text" class="lng" placeholder="lng" value="${establishment.location && establishment.location.lng || ''}"></div>
+                    <div class="inp"><input type="text" class="name" placeholder="name" value="${escapeHtml(establishment.name || '')}"></div>
+                    <div class="inp"><input type="text" class="country" placeholder="country" value="${escapeHtml(establishment.country || '')}"></div>
+                    <div class="inp"><input type="text" class="city" placeholder="city" value="${escapeHtml(establishment.city || '')}"></div>
+                    <div class="inp"><input type="text" class="address" placeholder="address" value="${escapeHtml(establishment.address || '')}"></div>
+                    <div class="inp"><input type="text" class="email" placeholder="email" value="${escapeHtml(establishment.email || '')}"></div>
+                    <div class="inp"><input type="text" class="phone" placeholder="phone" value="${escapeHtml(establishment.phone || '')}"></div>
+                    <div class="inp"><input type="text" class="lat" placeholder="lat" value="${escapeHtml(establishment.location && establishment.location.lat || '')}"></div>
+                    <div class="inp"><input type="text" class="lng" placeholder="lng" value="${escapeHtml(establishment.location && establishment.location.lng || '')}"></div>
                     <button class="btn save">Сохранить</button>
                     <button class="btn delete">Удалить</button>
                     <label>Активно: <input type="checkbox" class="status" ${status}></label>

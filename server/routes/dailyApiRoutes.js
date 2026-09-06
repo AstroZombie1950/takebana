@@ -1,5 +1,9 @@
 const express = require('express');
 const router = express.Router();
+const { asyncify } = require('../middleware/asyncRouter');
+asyncify(router);
+const { requireAuth, requireOwner } = require('../middleware/auth'); // ошибки async-обработчиков уходят в next(), а не вешают запрос
+
 const axios = require('axios');
 const jwt = require('jsonwebtoken'); // Добавляем для создания JWT токенов
 
@@ -18,8 +22,11 @@ const dailyHeaders = {
 
 const Stream = require('../models/Stream');
 
-// Создание комнаты
-router.post('/create-room', async (req, res) => {
+// Создание комнаты.
+// requireOwner берёт streamId из тела (см. middleware/auth.js) и пускает только
+// владельца эфира: комнаты Daily платные, а раньше любой вошедший мог создать
+// комнату под чужой streamId и заодно перезаписать в нём dailyRoom.
+router.post('/create-room', requireAuth, requireOwner(Stream, { param: 'streamId', field: 'userId' }), async (req, res) => {
     try {
         console.log('🏠 Создание новой комнаты Daily.co...');
         
@@ -154,9 +161,9 @@ router.post('/create-room', async (req, res) => {
 });
 
 // Получение токена для участника (self-signed JWT)
-router.post('/get-token', async (req, res) => {
+router.post('/get-token', requireAuth, async (req, res) => {
     try {
-        const { roomName, role = 'viewer' } = req.body;
+        const { roomName } = req.body;
         
         if (!roomName) {
             return res.status(400).json({
@@ -164,7 +171,20 @@ router.post('/get-token', async (req, res) => {
                 message: 'Room name is required'
             });
         }
-        
+
+        // Роль раньше приходила из тела запроса: любой вошедший просил
+        // role: 'streamer' и получал токен владельца комнаты (o: true).
+        // При owner_only_broadcast это право вещать в чужом эфире.
+        // Теперь роль выводится из базы: владелец комнаты — владелец стрима.
+        // create-room пишет имя в оба поля; dailyRoomName проиндексировано
+        const stream = await Stream.findOne({
+            $or: [{ dailyRoomName: roomName }, { 'dailyRoom.name': roomName }]
+        }).select('userId').lean();
+        const isOwner = Boolean(
+            stream && stream.userId && stream.userId.toString() === String(req.session.userId)
+        );
+        const role = isOwner ? 'streamer' : 'viewer';
+
         console.log('🎫 Создание self-signed JWT токена для комнаты:', roomName, 'роль:', role);
         
         // Получаем domain_id (нужен для self-signed токенов)
@@ -226,7 +246,7 @@ router.post('/get-token', async (req, res) => {
 });
 
 // Удаление комнаты и очистка данных стрима
-router.delete('/delete-room/:streamId', async (req, res) => {
+router.delete('/delete-room/:streamId', requireAuth, requireOwner(Stream, { param: 'streamId', field: 'userId' }), async (req, res) => {
     try {
         const { streamId } = req.params;
         
@@ -275,7 +295,7 @@ router.delete('/delete-room/:streamId', async (req, res) => {
 });
 
 // Получение информации о комнате
-router.get('/room-info/:roomName', async (req, res) => {
+router.get('/room-info/:roomName', requireAuth, async (req, res) => {
     try {
         const { roomName } = req.params;
         

@@ -37,5 +37,8 @@ npm run dev               # nodemon, перезапуск при правке ф
 
 ## Состояние
 
+**Где мы остановились — [docs/STATUS.md](docs/STATUS.md).**
+
 Что работает, что нет и в каком порядке чиним — [docs/AUDIT.md](docs/AUDIT.md).
 План работ и границы ответственности — [docs/ROADMAP.md](docs/ROADMAP.md).
+Чек-лист переезда — [docs/MIGRATION.md](docs/MIGRATION.md).

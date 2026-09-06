@@ -15,4 +15,8 @@ const SubscriptionSchema = new mongoose.Schema({
     }
   });
 
+// Подписчики и подписки; повторная подписка не должна создавать дубль
+SubscriptionSchema.index({ subscribedToId: 1 });
+SubscriptionSchema.index({ subscriberId: 1, subscribedToId: 1 }, { unique: true });
+
 module.exports = mongoose.model('Subscription', SubscriptionSchema);

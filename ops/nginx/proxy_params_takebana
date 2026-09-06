@@ -1,0 +1,16 @@
+# Общие заголовки прокси. Класть в /etc/nginx/proxy_params_takebana.
+#
+# X-Forwarded-Proto — КРИТИЧЕН, не убирать.
+# В режиме START_SERVER=prod приложение выставляет сессионную cookie с флагом
+# Secure. express-session не отдаёт такую cookie, если не видит HTTPS, а видит
+# он его только через этот заголовок (вместе с `trust proxy` в app.js).
+# Без строки ниже вход молча перестаёт работать у всех: логин отвечает 200,
+# но Set-Cookie не приходит, и следующий запрос снова анонимный.
+proxy_set_header X-Forwarded-Proto $scheme;
+
+proxy_set_header Host              $host;
+proxy_set_header X-Real-IP         $remote_addr;
+proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Host  $host;
+
+proxy_redirect off;

@@ -3,18 +3,61 @@ const express = require('express');
 const fs = require('fs');
 const https = require('https');
 const app = express();
-const path = require('path');
-const { Transform, Writable } = require('stream');
+const { asyncify } = require('./middleware/asyncRouter');
+asyncify(app); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 
-let rtpPort = 5004; // Порт для RTP потока
+const helmet = require('helmet');
+
+// Заголовки безопасности. Content-Security-Policy намеренно выключен:
+// в шаблонах сотни инлайновых <script> и <style> плюс десяток внешних CDN,
+// строгая политика сейчас просто сломает страницы. Включать её осмысленно
+// после смены вёрстки — тогда же перечислить источники.
+app.use(helmet({
+    contentSecurityPolicy: false,
+    // плеер и картинки забираются со стороннего домена, изоляция их ломает
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+
+// За nginx настоящий адрес клиента приходит в X-Forwarded-For.
+// Без этого счётчик попыток входа считал бы все запросы за один адрес.
+if (process.env.START_SERVER === 'prod') {
+    app.set('trust proxy', 1);
+
+    // Диагностика молчаливой поломки входа.
+    //
+    // В этом режиме сессионная cookie выставляется с флагом Secure, а
+    // express-session не отдаёт такую cookie, пока не увидит HTTPS. Видит он
+    // его только через X-Forwarded-Proto от nginx. Если заголовок забыли —
+    // /login отвечает 200, Set-Cookie не приходит, и войти не может никто,
+    // причём в логах не появляется ни одной ошибки.
+    //
+    // Готовый конфиг с этим заголовком: ops/nginx/proxy_params_takebana.
+    let proxyHeaderWarned = false;
+    app.use((req, res, next) => {
+        if (!proxyHeaderWarned && !req.secure) {
+            proxyHeaderWarned = true;
+            console.error(
+                '[proxy] Запрос пришёл без признака HTTPS: X-Forwarded-Proto = ' +
+                (req.headers['x-forwarded-proto'] || 'не задан') + '. ' +
+                'В режиме prod это значит, что сессионная cookie с флагом Secure ' +
+                'не будет выдана и вход не заработает ни у кого. ' +
+                'Добавьте в nginx: proxy_set_header X-Forwarded-Proto $scheme;'
+            );
+        }
+        next();
+    });
+}
+
+const path = require('path');
+
 // Allow selecting env file without editing code:
 // - PowerShell:  $env:DOTENV_CONFIG_PATH="env/.env.prod"; npm start
 // - CMD:         set DOTENV_CONFIG_PATH=env\.env.prod && npm start
 // Fallback: root .env
 require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env' });
 
-// Импортируем утилиты для управления плейлистами
-const { startPlaylistUpdates, stopPlaylistUpdates } = require('./utils/playlistUtils');
+const { resolveWithin, isPlainFileName } = require('./utils/safePath');
 
 // FFmpeg/FFprobe functionality removed
 const Stream = require('./models/Stream');
@@ -86,8 +129,6 @@ var store = new MongoDBStore({
     uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/webcabar',
     collection: 'mySessions'
 });
-
-
 
 
 // Прокси для HLS файлов от Node Media Server (порт 8000) через Express (порт 3000)
@@ -173,61 +214,80 @@ app.use('/live', (req, res, next) => {
   }
 });
 
-// Роут для страницы плеера
-app.get('/stream', (req, res) => {
-    res.render('stream');
-});
-
-
 
 // Catch errors
 store.on('error', function(error) {
     console.log(error);
 });
 
+// В prod пустой SESSION_SECRET — это подделываемые сессии, поэтому падаем сразу,
+// а не запускаемся с общеизвестным значением по умолчанию.
+if (!process.env.SESSION_SECRET) {
+  if (process.env.START_SERVER === 'prod' || process.env.NODE_ENV === 'production') {
+    console.error('SESSION_SECRET не задан. Сгенерировать: openssl rand -hex 32');
+    process.exit(1);
+  }
+  console.warn('SESSION_SECRET не задан — используется значение для разработки.');
+}
+
 const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || 'dev-only-change-me',
+  name: 'connect.sid',
   cookie: {
-      maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+      httpOnly: true,          // cookie не читается из JavaScript
+      sameSite: 'lax',         // базовая защита от CSRF на сторонних сайтах
+      // За nginx TLS терминируется там, поэтому secure включаем в режиме prod
+      secure: process.env.START_SERVER === 'prod'
     },
     store: store,
     resave: true,
-    saveUninitialized: true
+    // false: иначе строка в базе заводилась на каждого анонимного посетителя
+    // и коллекция сессий росла от роботов. Вход всё равно пишет в сессию сам.
+    saveUninitialized: false
 });
 app.use(sessionMiddleware);
 
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.CALLBACKURL,
-    scope: ['profile', 'email']
-  },
-  async function(accessToken, refreshToken, profile, done) {
-    console.log('=== Google Strategy Callback ===');
-    console.log('Profile:', profile.id);
-    console.log('Email:', profile.emails[0].value);
-    console.log('Provider:', profile.provider);
+const googleOAuthConfigured = Boolean(
+  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.CALLBACKURL
+);
+
+if (googleOAuthConfigured) {
+  passport.use(new GoogleStrategy({
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: process.env.CALLBACKURL,
+      scope: ['profile', 'email']
+    },
+    async function(accessToken, refreshToken, profile, done) {
+      console.log('=== Google Strategy Callback ===');
+      console.log('Profile:', profile.id);
+      console.log('Email:', profile.emails[0].value);
+      console.log('Provider:', profile.provider);
     
-    // здесь вы можете сохранить информацию профиля в базе данных
-    // console.log(profile)
-    const { id, emails, provider } = profile;
-    const email = emails[0].value;
+      // здесь вы можете сохранить информацию профиля в базе данных
+      // console.log(profile)
+      const { id, emails, provider } = profile;
+      const email = emails[0].value;
 
-    let user = await User.findOne({ email: email, provider: provider });
+      let user = await User.findOne({ email: email, provider: provider });
 
-    if (!user) {
-        user = new User({
-            email: email,
-            password: id, // используем id как пароль
-            provider: provider,
-            login: '' // оставляем логин пустым
-        });
-        await user.save();
+      if (!user) {
+          user = new User({
+              email: email,
+              password: id, // используем id как пароль
+              provider: provider,
+              login: '' // оставляем логин пустым
+          });
+          await user.save();
+      }
+
+      return done(null, profile);
     }
-
-    return done(null, profile);
-  }
-));
+  ));
+} else {
+  console.warn('Google OAuth не настроен: нет GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / CALLBACKURL. Вход через Google отключён.');
+}
 
 passport.serializeUser(function(user, done) {
   done(null, user.id);
@@ -240,7 +300,14 @@ passport.deserializeUser(function(id, done) {
 });
 
 
-app.get('/auth/google', (req, res, next) => {
+const requireGoogleOAuth = (req, res, next) => {
+    if (!googleOAuthConfigured) {
+        return res.status(503).send('Вход через Google не настроен на этом сервере.');
+    }
+    next();
+};
+
+app.get('/auth/google', requireGoogleOAuth, (req, res, next) => {
     console.log('=== Google OAuth Initiated ===');
     console.log('Client ID:', process.env.GOOGLE_CLIENT_ID);
     console.log('Callback URL:', process.env.CALLBACKURL);
@@ -248,15 +315,8 @@ app.get('/auth/google', (req, res, next) => {
     next();
 }, passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-// Тестовый роут для проверки
-app.get('/test-callback', (req, res) => {
-    console.log('=== Test Callback Route ===');
-    console.log('Request URL:', req.url);
-    console.log('Query params:', req.query);
-    res.json({ message: 'Test callback route works!', query: req.query });
-});
-
 app.get('/auth/google/callback',
+  requireGoogleOAuth,
   (req, res, next) => {
     console.log('=== Google OAuth Callback Started ===');
     console.log('Request URL:', req.url);
@@ -306,7 +366,10 @@ app.use(require('./routes/streamingRouter'));
 app.use('/api', require('./routes/dailyApiRoutes'));
 app.set('view engine', 'ejs');
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static('uploads'));
+// /uploads/... раздаётся строкой выше из public/uploads. Отдельный монтаж
+// express.static('uploads') убран: путь считался от рабочего каталога процесса,
+// а не от папки проекта, и такой папки в проекте нет — фото заведений теперь
+// тоже лежат в public/uploads/establishments.
 
 // Установка пути к папке с шаблонами
 app.set('views', path.join(__dirname, '/views'));
@@ -468,33 +531,10 @@ app.get('/logout', (req, res) => {
     if (err) {
       return res.redirect('/');
     }
-    res.clearCookie('sid');
+    res.clearCookie('connect.sid'); // имя по умолчанию у express-session, было 'sid'
     res.redirect('/');
   });
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ==== РЕКОРДЕР СТРИМИНГ ЧАНКАМИ =======================
-// ======================================================
-// ======================================================
-// ======================================================
-
 
 
 // Папка для хранения потоков
@@ -502,9 +542,6 @@ const STREAMS_DIR = path.join(__dirname, 'streams');
 if (!fs.existsSync(STREAMS_DIR)) {
   fs.mkdirSync(STREAMS_DIR);
 }
-
-// Тестовый ключ стримера
-const DEFAULT_STREAM_KEY = 'test_stream_key';
 
 // CORS middleware
 app.use((req, res, next) => {
@@ -563,163 +600,9 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 
-
-// Функция для обновления M3U8 плейлиста
-function updateM3U8Playlist(streamPath, newSegmentNumber) {
-  return new Promise((resolve, reject) => {
-    try {
-      const playlistPath = path.join(streamPath, 'playlist.m3u8');
-      const segmentDuration = 5; // Длительность сегмента в секундах
-      const maxSegments = 6; // Увеличиваем количество сегментов в плейлисте
-      
-      // Собираем список существующих сегментов
-      let existingSegments = [];
-      for (let i = Math.max(1, newSegmentNumber - maxSegments + 1); i <= newSegmentNumber; i++) {
-        const segmentName = `segment${i.toString().padStart(6, '0')}.ts`;
-        const segmentPath = path.join(streamPath, segmentName);
-        
-        if (fs.existsSync(segmentPath)) {
-          existingSegments.push({
-            number: i,
-            name: segmentName
-          });
-        }
-      }
-      
-      console.log(`📋 Найдено ${existingSegments.length} существующих сегментов для плейлиста`);
-      
-      // Если нет сегментов, создаем пустой плейлист
-      if (existingSegments.length === 0) {
-        console.log('⚠️ Нет доступных сегментов для плейлиста');
-        return resolve(playlistPath);
-      }
-      
-      const firstSegmentNumber = existingSegments[0].number;
-      
-      let playlist = '';
-      
-      // Заголовок плейлиста для ЖИВОГО стрима
-      playlist += '#EXTM3U\n';
-      playlist += '#EXT-X-VERSION:3\n';
-      playlist += `#EXT-X-TARGETDURATION:${segmentDuration + 1}\n`;
-      playlist += `#EXT-X-MEDIA-SEQUENCE:${firstSegmentNumber}\n`; // Используем номер первого существующего сегмента
-      // Убираем EXT-X-PLAYLIST-TYPE:LIVE так как это может вызывать проблемы
-      playlist += '\n';
-      
-      // Добавляем все существующие сегменты
-      for (const segment of existingSegments) {
-        playlist += `#EXTINF:${segmentDuration}.0,\n`;
-        playlist += `${segment.name}\n`;
-      }
-      
-      // НЕ добавляем #EXT-X-ENDLIST для живого стрима!
-      
-      // Записываем плейлист
-      fs.writeFileSync(playlistPath, playlist);
-      console.log(`📋 Плейлист обновлен: ${existingSegments.length} сегментов, sequence: ${firstSegmentNumber}-${newSegmentNumber}`);
-      
-      // Очищаем старые сегменты
-      cleanupOldSegments(streamPath, newSegmentNumber, maxSegments + 3);
-      
-      resolve(playlistPath);
-    } catch (error) {
-      console.error('❌ Ошибка обновления плейлиста:', error);
-      reject(error);
-    }
-  });
-}
-
-// Функция для очистки старых сегментов
-function cleanupOldSegments(streamPath, currentSegment, keepCount) {
-  try {
-    const oldestSegmentToKeep = Math.max(0, currentSegment - keepCount + 1);
-    
-    // Читаем все файлы в директории
-    const files = fs.readdirSync(streamPath);
-    
-    for (const file of files) {
-      // Проверяем что это TS сегмент
-      if (file.startsWith('segment') && file.endsWith('.ts')) {
-        // Извлекаем номер сегмента
-        const match = file.match(/segment(\d+)\.ts/);
-        if (match) {
-          const segmentNumber = parseInt(match[1]);
-          
-          // Удаляем если сегмент слишком старый
-          if (segmentNumber < oldestSegmentToKeep) {
-            const filePath = path.join(streamPath, file);
-            fs.unlinkSync(filePath);
-            console.log(`🗑️ Удален старый сегмент: ${file}`);
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('❌ Ошибка очистки старых сегментов:', error);
-  }
-}
-
-// Функции для управления плейлистами теперь в utils/playlistUtils.js
-
-// В конце файла будем экспортировать функции
-
-
-
-
-
-// Удаление старых сегментов
-function deleteOldSegments(directory, maxSegments) {
-  const files = fs.readdirSync(directory)
-    .filter(file => file.endsWith('.mp4'))
-    .map(file => ({
-      file,
-      time: fs.statSync(path.join(directory, file)).mtime.getTime()
-    }))
-    .sort((a, b) => a.time - b.time);
-
-  while (files.length > maxSegments) {
-    const oldest = files.shift();
-    const filePath = path.join(directory, oldest.file);
-    fs.unlink(filePath, (err) => {
-      if (err) {
-        console.error(`Ошибка удаления файла ${filePath}:`, err);
-      } else {
-        console.log(`Удалён старый сегмент: ${filePath}`);
-      }
-    });
-  }
-}
-
-// Удаление старых TS сегментов (для HLS)
-function deleteOldTSSegments(directory, maxSegments) {
-  if (!fs.existsSync(directory)) return;
-
-  try {
-    const files = fs.readdirSync(directory)
-      .filter(file => file.endsWith('.ts'))
-      .map(file => ({
-        file,
-        time: fs.statSync(path.join(directory, file)).mtime.getTime()
-      }))
-      .sort((a, b) => a.time - b.time);
-
-    while (files.length > maxSegments) {
-      const oldest = files.shift();
-      const filePath = path.join(directory, oldest.file);
-      fs.unlink(filePath, (err) => {
-        if (err) {
-          console.error(`❌ Ошибка удаления TS файла ${filePath}:`, err);
-        } else {
-          console.log(`🗑️ Удален старый TS сегмент: ${filePath}`);
-        }
-      });
-    }
-  } catch (err) {
-    console.error('❌ Ошибка очистки старых TS сегментов:', err);
-  }
-}
-
-
+// Здесь лежали updateM3U8Playlist, cleanupOldSegments, deleteOldSegments и
+// deleteOldTSSegments — 152 строки, которые никто не вызывал: нарезку и
+// плейлисты делает node-media-server, а живые функции — в utils/playlistUtils.js.
 
 // Роут для получения списка сегментов (старый формат с query параметром)
 app.get('/segments', (req, res) => {
@@ -760,6 +643,11 @@ app.get('/segments', (req, res) => {
 // Роут для получения списка сегментов (новый формат с параметром в URL)
 app.get('/segments/:streamKey', (req, res) => {
   const streamKey = req.params.streamKey;
+  // Express раскодирует %2F в параметре, поэтому сюда приходило `../..`
+  // и листался произвольный каталог. Ключ — всегда одно имя папки.
+  if (!isPlainFileName(streamKey)) {
+    return res.status(400).json({ error: 'Некорректный streamKey' });
+  }
   const streamPath = path.join(STREAMS_DIR, streamKey);
 
   if (!fs.existsSync(streamPath)) {
@@ -786,11 +674,19 @@ app.get('/segments/:streamKey', (req, res) => {
 // Роут для получения конкретного сегмента
 app.get('/segment/:streamKey/:filename', (req, res) => {
   const { streamKey, filename } = req.params;
+
+  // Прежняя проверка сравнивала filePath с streamPath, а streamPath сам
+  // собирался из streamKey — достаточно было `..%2Fpublic`, и отдавался файл
+  // вне папки трансляций. Воспроизводилось. Оба сегмента пути — простые имена.
+  if (!isPlainFileName(streamKey) || !isPlainFileName(filename)) {
+    return res.status(400).json({ error: 'Некорректный путь' });
+  }
+
   const streamPath = path.join(STREAMS_DIR, streamKey);
-  const filePath = path.join(streamPath, filename);
+  const filePath = resolveWithin(streamPath, filename);
 
   // Проверяем что файл существует и находится в правильной папке
-  if (!fs.existsSync(filePath) || !filePath.startsWith(streamPath)) {
+  if (!filePath || !fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'Segment not found' });
   }
 
@@ -823,6 +719,9 @@ app.get('/segment/:streamKey/:filename', (req, res) => {
 // Роут для получения HLS плейлиста (.m3u8)
 app.get('/hls/:streamKey/playlist.m3u8', (req, res) => {
   const { streamKey } = req.params;
+  if (!isPlainFileName(streamKey)) {
+    return res.status(400).json({ error: 'Некорректный streamKey' });
+  }
   const streamPath = path.join(STREAMS_DIR, streamKey);
   const playlistPath = path.join(streamPath, 'playlist.m3u8');
 
@@ -855,11 +754,17 @@ app.get('/hls/:streamKey/playlist.m3u8', (req, res) => {
 // Роут для получения HLS сегментов (.ts)
 app.get('/hls/:streamKey/:filename', (req, res) => {
   const { streamKey, filename } = req.params;
+
+  // Тот же обход пути, что и в /segment/:streamKey/:filename
+  if (!isPlainFileName(streamKey) || !isPlainFileName(filename)) {
+    return res.status(400).json({ error: 'Некорректный путь' });
+  }
+
   const streamPath = path.join(STREAMS_DIR, streamKey);
-  const filePath = path.join(streamPath, filename);
+  const filePath = resolveWithin(streamPath, filename);
 
   // Проверяем что файл существует и находится в правильной папке
-  if (!fs.existsSync(filePath) || !filePath.startsWith(streamPath)) {
+  if (!filePath || !fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'Segment not found' });
   }
 
@@ -969,59 +874,10 @@ app.post('/clear-segments', async (req, res) => {
 });
 
 
-
-
-// ==== РЕКОРДЕР СТРИМИНГ ЧАНКАМИ =======================
-// ======================================================
-// ======================================================
-// ======================================================
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ==== ВЕБ РТЦ СТРИМИНГ ===============================
-// ======================================================
-// ======================================================
-// ======================================================
-
-
-// // ====== ПАПКА ДЛЯ ВИДЕОСТРИМА (HLS) ======
-// const OUTPUT_DIR = path.join(__dirname, 'streams', 'test');
-// if (!fs.existsSync(OUTPUT_DIR)) {
-//     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-// }
-
-// // ====== TURN + STUN СЕРВЕРЫ ======
 // // Замените на свои рабочие TURN-серверы!
-// const ICE_SERVERS = [
-//   { urls: 'stun:stun.l.google.com:19302' },
-//   {
 //     urls: 'turn:turn.example.com:3478',
 //     username: 'testuser',
 //     credential: 'testpass'
-//   }
-// ];
-
-// let peerConnection = null; // Глобальная ссылка на PC (упрощённо)
-
-// // ====== ФУНКЦИЯ СТАРТА FFmpeg ДЛЯ HLS ======
-// function startHLSStream() {
-//   const playlistPath = path.join(OUTPUT_DIR, 'playlist.m3u8');
-//   const segmentPath = path.join(OUTPUT_DIR, 'segment_%03d.ts');
-
-//   console.log('Starting HLS stream with output to:', OUTPUT_DIR);
-
-//   const ffmpeg = spawn('ffmpeg', [
 //     // Сырой видео-поток
 //     '-f', 'rawvideo',
 //     '-pix_fmt', 'yuv420p',
@@ -1049,206 +905,17 @@ app.post('/clear-segments', async (req, res) => {
 //     '-hls_segment_type', 'mpegts',
 //     '-hls_segment_filename', segmentPath,
 //     playlistPath
-//   ]);
-
-//   ffmpeg.stderr.on('data', (data) => {
-//     console.log(`FFmpeg Log: ${data.toString()}`);
-//   });
-
-//   ffmpeg.stdin.on('error', (error) => {
-//     console.error('FFmpeg stdin error:', error);
-//   });
-
-//   ffmpeg.on('error', (error) => {
-//     console.error('FFmpeg process error:', error);
-//   });
-
-//   ffmpeg.on('close', (code) => {
-//     console.log(`FFmpeg process closed with code ${code}`);
-//   });
-
-//   return ffmpeg;
-// }
-
-// // ====== ЭНДПОИНТ /webrtc/offer ======
-// app.post('/webrtc/offer', async (req, res) => {
-//   try {
-//     const { sdp } = req.body;
-//     console.log('Received SDP offer:', sdp.type, sdp.sdp.slice(0, 100), '...');
 
 //     // Закрываем старое соединение, если было
-//     if (peerConnection) {
-//       peerConnection.close();
-//     }
 
 //     // Создаём новое WebRTC соединение
 //     peerConnection = new wrtc.RTCPeerConnection({
 //       iceServers: ICE_SERVERS
-//     });
-
-//     // ====== ЛОГИРОВАНИЕ ICE / CONNECTION STATE ======
-//     peerConnection.onicegatheringstatechange = () => {
-//       console.log('ICE gathering state:', peerConnection.iceGatheringState);
-//     };
-
-//     peerConnection.onicecandidate = (event) => {
-//       if (event.candidate) {
-//         console.log('New ICE candidate:', {
 //           candidate: event.candidate.candidate,
 //           sdpMid: event.candidate.sdpMid,
 //           sdpMLineIndex: event.candidate.sdpMLineIndex
-//         });
-//       } else {
-//         console.log('All ICE candidates have been sent (onicecandidate=null).');
-//       }
-//     };
-
-//     // peerConnection.onicecandidateerror = (e) => {
-//     //   console.error('ICE candidate error:', e);
-//     // };
-
-//     peerConnection.onconnectionstatechange = () => {
-//       console.log(`WebRTC connection state: ${peerConnection.connectionState}`);
-//       if (peerConnection.connectionState === 'connected') {
-//         console.log('WebRTC соединение установлено успешно');
-//       } else if (peerConnection.connectionState === 'failed') {
-//         console.error('WebRTC соединение не удалось установить');
-//       }
-//     };
-
-//     // ====== ОБРАБОТКА ВИДЕОТРЕКА ======
-//     peerConnection.ontrack = (event) => {
-//       if (event.track.kind === 'video') {
-//         console.log('Получен track видео.');
-//         const videoSink = new wrtc.nonstandard.RTCVideoSink(event.track);
-//         const ffmpeg = startHLSStream();
-
-//         let lastFrameTime = 0;
-//         let queueBusy = false;
-//         let frameQueue = [];
-
-//         videoSink.onframe = ({ frame }) => {
-//           try {
-//             if (!frame || !frame.data) return;
-//             const now = Date.now();
-
-//             const frameBuf = Buffer.from(frame.data);
-
-//             if (lastFrameTime === 0) {
-//               lastFrameTime = now;
-//             }
-//             frameQueue.push({ time: now, data: frameBuf });
-//             if (!queueBusy) {
-//               processNextFrame();
-//             }
-//           } catch (err) {
-//             console.error('Frame processing error:', err);
-//           }
-//         };
-
-//         function processNextFrame() {
-//           if (frameQueue.length === 0) {
-//             queueBusy = false;
-//             return;
-//           }
-//           queueBusy = true;
-
-//           const { time, data } = frameQueue.shift();
-//           const delta = time - lastFrameTime;
-//           lastFrameTime = time;
-//           const waitMs = delta > 0 ? delta : 0;
-
-//           setTimeout(() => {
-//             if (ffmpeg.stdin.writable) {
-//               ffmpeg.stdin.write(data);
-//             }
-//             processNextFrame();
-//           }, waitMs);
-//         }
-
-//         event.track.onended = () => {
-//           console.log('Video track ended');
-//           videoSink.stop();
-//           ffmpeg.stdin.end();
-//         };
-//       }
-//     };
-
-//     // ====== УСТАНАВЛИВАЕМ ОТ ДАЛЬНЕЙШЕГО КЛИЕНТА ======
-//     console.log('Setting remote description...');
-//     await peerConnection.setRemoteDescription(new wrtc.RTCSessionDescription(sdp));
-//     console.log('Remote description set OK.');
-
-//     console.log('Creating answer...');
-//     const answer = await peerConnection.createAnswer();
-//     console.log('Answer created.');
-
-//     console.log('Setting local description...');
-//     await peerConnection.setLocalDescription(answer);
-//     console.log('Local description set OK.');
 
 //     // Отправляем answer обратно клиенту
-//     return res.json({ answer: peerConnection.localDescription });
-//   } catch (error) {
-//     console.error('Error processing offer:', error);
-//     return res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // ====== ЭНДПОИНТ /webrtc/ice (добавление ICE-кандидата) ======
-// app.post('/webrtc/ice', async (req, res) => {
-//   try {
-//     const { candidate } = req.body;
-//     console.log('Received ICE candidate from client:', candidate && candidate.candidate);
-
-//     if (peerConnection && candidate) {
-//       await peerConnection.addIceCandidate(new wrtc.RTCIceCandidate(candidate));
-//       console.log('ICE candidate added successfully');
-//     }
-//     res.sendStatus(200);
-//   } catch (error) {
-//     console.error('Error processing ICE candidate:', error);
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // ====== ВЫДАЧА HLS ФАЙЛОВ ======
-// app.get('/streams/test/playlist.m3u8', (req, res) => {
-//   res.sendFile(path.join(OUTPUT_DIR, 'playlist.m3u8'));
-// });
-
-// app.get('/streams/test/segment_:id.ts', (req, res) => {
-//   res.sendFile(path.join(OUTPUT_DIR, `segment_${req.params.id}.ts`));
-// });
-
-// // ====== СТАТИКА ДЛЯ HLS ======
-// app.use('/streams', express.static(OUTPUT_DIR));
-
-
-
-
-
-// ==== ВЕБ РТЦ СТРИМИНГ ===============================
-// ======================================================
-// ======================================================
-// ======================================================
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 // API эндпоинт для проверки статуса стрима который через обс
@@ -1273,10 +940,6 @@ app.get('/api/check-stream/:streamKey', (req, res) => {
       });
   }
 });
-
-
-
-
 
 
 async function startServer() {
@@ -1560,713 +1223,3 @@ async function startServer() {
 }
 
 startServer();
-
-// Функции для управления плейлистами экспортируются из utils/playlistUtils.js
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ==== КАКИЕ ТО ПРОШЛЫЕ НАРАБОТКИ ЛИБО 
-// РАЗБИРАТЬСЯ ЛИБО УДАЛИТЬ И ЗАБЫТЬ =======================
-// ======================================================
-// ======================================================
-// ======================================================
-
-
-
-// const ffmpeg = require('fluent-ffmpeg');
-// const bodyParser = require('body-parser');
-// const NodeMediaServer = require('node-media-server');
-
-
-// app.use(bodyParser.raw({ type: '*/*', limit: '500mb' }));
-
-// // Убедитесь, что NodeMediaServer настроен на запись или трансляцию потоков после приема RTMP потока
-// const nmsConfig = {
-//   rtmp: {
-//     port: 1935,   
-//     chunk_size: 60000,
-//     gop_cache: true,
-//     ping: 60,
-//     ping_timeout: 30
-//   },
-//   // другие конфигурации по необходимости
-// };
-
-// const nms = new NodeMediaServer(nmsConfig);
-// nms.run();
-
-
-// app.post('/upload-segment', async (req, res) => {
-//   try {
-//     if (!Buffer.isBuffer(req.body)) {
-//       return res.status(400).send('Expected request body to be binary data');
-//     }
-
-//     if (req.body.length === 0) {
-//       return res.status(400).send('No data found in the request body');
-//     }
-
-//     const tempFilePath = path.join(__dirname, 'tmp', `segment_${Date.now()}.webm`);
-//     fs.mkdirSync(path.dirname(tempFilePath), { recursive: true });
-//     fs.writeFileSync(tempFilePath, req.body);
-//     console.log('Chunk saved at:', tempFilePath);
-
-//     const process = ffmpeg(tempFilePath)
-//       .on('start', (command) => {
-//         console.log('FFmpeg started with command: ' + command);
-//       })
-//       .on('error', (err, stdout, stderr) => {
-//         console.log('Cannot process video: ', err.message);
-//         res.status(500).send('An error occurred while processing the media file');
-//       })
-//       .on('end', () => {
-//         console.log('Processing finished successfully');
-//         // удаление временного файла после завершения конвертации
-//         fs.unlinkSync(tempFilePath);
-//         res.sendStatus(200);
-//       })
-//       .outputOptions('-c:v', 'libx264')
-//       .outputOptions('-c:a', 'aac')
-//       .outputOptions('-f', 'flv')
-//       .output(`rtmp://localhost:1935/live/myStream`);
-
-//   } catch (err) {
-//     console.error('Error in upload-segment endpoint:', err);
-//     res.status(500).send('Server error during segment upload and conversion');
-//   }
-// });
-
-// // Запуск HTTP сервера
-// const httpServer = require('http').createServer(app);
-// const PORT = process.env.PORT || 3000;
-// httpServer.listen(PORT, () => {
-//   console.log(`HTTP Server running on port ${PORT}`);
-// });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// const multer = require('multer');
-// const NodeMediaServer = require('node-media-server');
-// const upload = multer();
-
-// // Хранилище активных стримов
-// const activeStreams = new Map();
-
-
-// const nmsConfig = {
-//   logType: 3,
-//   rtmp: {
-//     port: 1935,
-//     chunk_size: 4096,
-//     gop_cache: true,
-//     ping: 30,
-//     ping_timeout: 60
-//   },
-//   http: {
-//     port: 8000,
-//     allow_origin: '*',
-//     mediaroot: './media'
-//   },
-//   trans: {
-//     ffmpeg: process.env.FFMPEG_WAY,
-//     tasks: [
-//       {
-//         app: 'live',
-//         hls: true,
-//         hlsFlags: '[hls_time=2:hls_list_size=3:hls_flags=delete_segments+discont_start+omit_endlist]',
-//         dash: true,
-//         dashFlags: '[f=dash:window_size=3:extra_window_size=5]'
-//       }
-//     ]
-//   }
-// };
-// // Конфигурация Node-Media-Server
-
-
-// // Класс для управления стримом
-// class StreamManager {
-//   constructor(streamKey) {
-//     this.streamKey = streamKey;
-//     this.ffmpegProcess = null;
-//     this.isActive = false;
-//     this.lastActivity = Date.now();
-//     this.startFFmpeg();
-//   }
-
-//   startFFmpeg() {
-//     const ffmpegArgs = [
-//       '-fflags', '+genpts',
-//       '-i', '-',
-//       '-c:v', 'libx264',
-//       '-preset', 'ultrafast',
-//       '-tune', 'zerolatency',
-//       '-profile:v', 'baseline',
-//       '-level', '3.0',
-//       '-b:v', '1500k',
-//       '-maxrate', '1500k',
-//       '-bufsize', '3000k',
-//       '-pix_fmt', 'yuv420p',
-//       '-g', '30',
-//       '-keyint_min', '30',
-//       '-r', '30',
-//       '-c:a', 'aac',
-//       '-b:a', '128k',
-//       '-ar', '44100',
-//       '-ac', '2',
-//       '-af', 'aresample=async=1',
-//       '-threads', '4',
-//       '-f', 'flv',
-//       `rtmp://localhost:1935/live/${this.streamKey}`
-//     ];
-
-//     this.ffmpegProcess = spawn('ffmpeg', ffmpegArgs);
-
-//     this.ffmpegProcess.stderr.on('data', (data) => {
-//       console.log(`FFmpeg ${this.streamKey}: ${data}`);
-//     });
-
-//     this.ffmpegProcess.on('error', (err) => {
-//       console.error(`FFmpeg process error: ${err}`);
-//       this.restart();
-//     });
-
-//     this.ffmpegProcess.on('exit', (code) => {
-//       if (code !== 0 && this.isActive) {
-//         console.log(`FFmpeg exited with code ${code}, restarting...`);
-//         this.restart();
-//       }
-//     });
-
-//     this.isActive = true;
-//   }
-
-//   restart() {
-//     if (this.ffmpegProcess) {
-//       this.ffmpegProcess.kill();
-//     }
-//     setTimeout(() => this.startFFmpeg(), 1000);
-//   }
-
-//   writeChunk(chunk) {
-//     if (this.isActive && this.ffmpegProcess) {
-//       this.lastActivity = Date.now();
-//       try {
-//         this.ffmpegProcess.stdin.write(chunk);
-//       } catch (error) {
-//         console.error('Error writing chunk:', error);
-//         this.restart();
-//       }
-//     }
-//   }
-
-//   stop() {
-//     this.isActive = false;
-//     if (this.ffmpegProcess) {
-//       this.ffmpegProcess.stdin.end();
-//       this.ffmpegProcess.kill();
-//     }
-//   }
-// }
-
-// // Запуск Node-Media-Server
-// const nms = new NodeMediaServer(nmsConfig);
-// nms.run();
-
-// // Middleware для CORS
-// app.use((req, res, next) => {
-//   res.header('Access-Control-Allow-Origin', '*');
-//   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-//   next();
-// });
-
-// // Обработка входящих сегментов
-// app.post('/upload-segment', upload.single('segment'), async (req, res) => {
-//   const { streamKey } = req.body;
-  
-//   if (!streamKey || !req.file) {
-//     return res.status(400).send('Missing streamKey or segment');
-//   }
-
-//   try {
-//     let streamManager = activeStreams.get(streamKey);
-//     if (!streamManager) {
-//       streamManager = new StreamManager(streamKey);
-//       activeStreams.set(streamKey, streamManager);
-//     }
-
-//     streamManager.writeChunk(req.file.buffer);
-//     res.status(200).send('Segment processed');
-//   } catch (error) {
-//     console.error('Error processing segment:', error);
-//     res.status(500).send('Internal server error');
-//   }
-// });
-
-// // Очистка неактивных стримов
-// setInterval(() => {
-//   const now = Date.now();
-//   activeStreams.forEach((stream, key) => {
-//     if (now - stream.lastActivity > 30000) { // 30 секунд неактивности
-//       console.log(`Stopping inactive stream: ${key}`);
-//       stream.stop();
-//       activeStreams.delete(key);
-//     }
-//   });
-// }, 10000);
-
-// // Запуск сервера
-// const PORT = process.env.PORT || 3000;
-// app.listen(PORT, () => {
-//   console.log(`HTTP Server running on port ${PORT}`);
-//   console.log(`RTMP Server running on port 1935`);
-//   console.log(`HLS Server running on port 8000`);
-// });
-
-// // Очистка при выключении
-// process.on('SIGINT', () => {
-//   activeStreams.forEach(stream => stream.stop());
-//   process.exit();
-// });
-
-
-
-
-
-
-
-
-
-
-
-
-// // Простая очередь в памяти
-// class SimpleQueue {
-//   constructor() {
-//     this.queue = [];
-//     this.processing = false;
-//   }
-
-//   async add(task) {
-//     this.queue.push(task);
-//     if (!this.processing) {
-//       this.processQueue();
-//     }
-//   }
-
-//   async processQueue() {
-//     if (this.queue.length === 0) {
-//       this.processing = false;
-//       return;
-//     }
-
-//     this.processing = true;
-//     const task = this.queue.shift();
-
-//     try {
-//       await processSegment(task);
-//     } catch (err) {
-//       console.error('Error processing segment:', err);
-//     }
-
-//     // Продолжаем обработку очереди
-//     this.processQueue();
-//   }
-// }
-
-
-
-// const multer = require('multer');
-// const fs = require('fs-extra');
-
-// const segmentQueue = new SimpleQueue();
-
-// // Настройка multer
-// const upload = multer();
-
-// // Настройка путей
-// const STREAMS_DIR = path.join(__dirname, 'streams');
-// fs.ensureDirSync(STREAMS_DIR);
-
-// // Хранение активных стримов
-// const activeStreams = {};
-
-// // Обработка загрузки сегмента
-// app.post('/upload-segment', upload.single('segment'), async (req, res) => {
-//   // Отправляем ответ клиенту сразу
-//   res.status(200).send('Segment received');
-
-//   const { streamKey } = req.body;
-//   if (!streamKey || !req.file) return;
-
-//   try {
-//     await segmentQueue.add({
-//       streamKey,
-//       segmentBuffer: req.file.buffer,
-//       timestamp: Date.now()
-//     });
-//   } catch (err) {
-//     console.error('Error queuing segment:', err);
-//   }
-// });
-
-// // Функция обработки сегмента
-// async function processSegment(task) {
-//   const { streamKey, segmentBuffer, timestamp } = task;
-//   const streamPath = path.join(STREAMS_DIR, streamKey);
-  
-//   await fs.ensureDir(streamPath);
-
-//   if (!activeStreams[streamKey]) {
-//     activeStreams[streamKey] = {
-//       segments: [],
-//       mediaSequence: 0
-//     };
-//   }
-
-//   const streamData = activeStreams[streamKey];
-  
-//   const webmFilename = `segment-${timestamp}.webm`;
-//   const tsFilename = `segment-${timestamp}.ts`;
-//   const webmPath = path.join(streamPath, webmFilename);
-//   const tsPath = path.join(streamPath, tsFilename);
-
-//   try {
-//     // Сохраняем WebM
-//     await fs.writeFile(webmPath, segmentBuffer);
-    
-//     // Конвертируем в TS
-//     await convertToTS(webmPath, tsPath);
-    
-//     // Добавляем сегмент в список
-//     streamData.segments.push(tsFilename);
-
-//     // Управление количеством сегментов
-
-//     if (streamData.segments.length > MAX_SEGMENTS) {
-//       const oldSegment = streamData.segments.shift();
-//       const oldPath = path.join(streamPath, oldSegment);
-//       await fs.remove(oldPath);
-//       streamData.mediaSequence++;
-//     }
-
-//     // Обновляем плейлист
-//     await writeM3U8(streamPath, streamData);
-    
-//     // Удаляем временный WebM файл
-//     await fs.remove(webmPath);
-
-//   } catch (err) {
-//     console.error('Error processing segment:', err);
-//     throw err;
-//   }
-// }
-
-// const SEGMENT_DURATION = 2; // Уменьшаем длительность сегмента до 2 секунд
-// const MAX_SEGMENTS = 6; // Держим больше сегментов в плейлисте
-
-// function convertToTS(inputPath, outputPath) {
-//   return new Promise((resolve, reject) => {
-//     const ff = spawn('ffmpeg', [
-//       '-y',
-//       '-fflags', '+genpts',
-//       '-i', inputPath,
-//       '-c:v', 'libx264',
-//       '-preset', 'veryfast',
-//       '-profile:v', 'main',
-//       '-level', '3.1',
-//       '-b:v', '3000k',        // Увеличиваем битрейт видео
-//       '-maxrate', '3000k',
-//       '-bufsize', '6000k',
-//       '-sc_threshold', '0',   // Отключаем определение смены сцен
-//       '-g', '48',            // GOP size = 48 (2 секунды при 24 fps)
-//       '-keyint_min', '48',   // Минимальный интервал ключевых кадров
-//       '-r', '24',            // Фиксированный FPS
-//       '-c:a', 'aac',
-//       '-b:a', '128k',        // Битрейт аудио
-//       '-ar', '44100',        // Частота дискретизации аудио
-//       '-af', 'aresample=async=1000', // Помогает с синхронизацией аудио
-//       '-segment_time', '2',   // Длительность сегмента
-//       '-f', 'mpegts',
-//       outputPath
-//     ]);
-
-//     const timeout = setTimeout(() => {
-//       ff.kill();
-//       reject(new Error('FFmpeg conversion timeout'));
-//     }, 10000);
-
-//     ff.stderr.on('data', (data) => {
-//       console.log(`FFmpeg: ${data}`);
-//     });
-
-//     ff.on('close', (code) => {
-//       clearTimeout(timeout);
-//       if (code === 0) {
-//         resolve();
-//       } else {
-//         reject(new Error(`FFmpeg failed with code ${code}`));
-//       }
-//     });
-//   });
-// }
-
-// // Обновляем функцию создания M3U8 плейлиста
-// async function writeM3U8(streamPath, streamData) {
-//   const playlistPath = path.join(streamPath, 'playlist.m3u8');
-//   const m3u8Content = [
-//     '#EXTM3U',
-//     '#EXT-X-VERSION:3',
-//     '#EXT-X-ALLOW-CACHE:NO',
-//     `#EXT-X-TARGETDURATION:${SEGMENT_DURATION}`,
-//     `#EXT-X-MEDIA-SEQUENCE:${streamData.mediaSequence}`,
-//     '#EXT-X-INDEPENDENT-SEGMENTS',
-//     ...streamData.segments.map(segment => {
-//       return [
-//         `#EXTINF:${SEGMENT_DURATION}.0,`,
-//         segment
-//       ].join('\n');
-//     })
-//   ].join('\n');
-
-//   await fs.writeFile(playlistPath, m3u8Content);
-// }
-
-// // Настройка статических файлов
-// app.use('/streams', express.static(STREAMS_DIR, {
-//   setHeaders: (res, filePath) => {
-//     if (filePath.endsWith('.m3u8') || filePath.endsWith('.ts')) {
-//       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-//       res.setHeader('Pragma', 'no-cache');
-//       res.setHeader('Expires', '0');
-//       res.setHeader('Access-Control-Allow-Origin', '*');
-//     }
-//   }
-// }));
-
-
-
-
-
-
-
-
-
-
-// // Запуск сервера
-// app.listen(3000, () => {
-//     console.log('Сервер запущен на порту 3000');
-// });
-// async function startServer() {
-//   const { encode, decode } = await import('@alttiri/base85');
-
-//   // Ваш код сервера и socket.io
-//   var server = require('http').createServer(app);
-//   // var server = https.createServer(options, app);
-
-//   // Настройка socket.io
-//   const io = new Server(server, {
-//     cors: {
-//       origin: '*',
-//       methods: ['GET', 'POST']
-//     },
-//     transports: ['websocket']
-//   });
-
-//   function startFFmpeg(streamKey) {
-//     console.log('Запуск FFmpeg с параметрами для streamKey:', streamKey);
-//     console.log([
-//       '-re',
-//       '-i', 'pipe:0',
-//       '-c:v', 'libx264',
-//       '-preset', 'ultrafast',
-//       '-tune', 'zerolatency',
-//       '-g', '30',
-//       '-crf', '35',
-//       '-vf', 'scale=640:360',
-//       '-b:v', '500k',
-//       '-c:a', 'aac',
-//       '-b:a', '64k',
-//       '-ar', '44100',
-//       '-f', 'flv',
-//       '-bufsize', '128k',
-//       '-progress', 'pipe:2', // Добавляем параметр для вывода прогресса
-//       // `rtmp://localhost:1935/live/${streamKey}` // Динамически вставляем ключ потока
-//       `${process.env.RTMP}${streamKey}`
-//     ].join(' '));
-
-//     const ffmpegProcess = spawn(process.env.FFMPEG_WAY, [
-//       '-re',
-//       '-i', 'pipe:0',
-//       '-c:v', 'libx264',
-//       '-preset', 'ultrafast',
-//       '-tune', 'zerolatency',
-//       '-g', '30',
-//       '-crf', '35',
-//       '-vf', 'scale=640:360',
-//       '-b:v', '500k',
-//       '-c:a', 'aac',
-//       '-b:a', '64k',
-//       '-ar', '44100',
-//       '-f', 'flv',
-//       '-bufsize', '128k',
-//       '-progress', 'pipe:2', // Добавляем параметр для прогресса
-//       // `rtmp://localhost:1935/live/${streamKey}` // Динамический streamKey
-//       `${process.env.RTMP}${streamKey}`
-//     ]);
-
-//     // Логирование в реальном времени `stderr`
-//     ffmpegProcess.stderr.on('data', (data) => {
-//       const progressOutput = data.toString();
-      
-//       // Разбор строки прогресса для получения подробной информации
-//       progressOutput.split('\n').forEach(line => {
-//         if (line.startsWith('frame=')) {
-//           console.log(`FFmpeg Progress: ${line.trim()}`);
-//         } else if (line.startsWith('fps=')) {
-//           console.log(`FFmpeg FPS: ${line.trim()}`);
-//         } else if (line.startsWith('bitrate=')) {
-//           console.log(`FFmpeg Bitrate: ${line.trim()}`);
-//         } else if (line.startsWith('speed=')) {
-//           console.log(`FFmpeg Speed: ${line.trim()}`);
-//         }
-//       });
-//     });
-
-//     // Логирование в реальном времени `stdout`
-//     ffmpegProcess.stdout.on('data', (data) => {
-//       console.log(`FFmpeg stdout: ${data.toString()}`);
-//     });
-
-//     // Обработка завершения процесса
-//     ffmpegProcess.on('close', (code) => {
-//       console.log(`FFmpeg завершил работу с кодом: ${code}`);
-//       if (code !== 0) {
-//         console.error('FFmpeg завершился с ошибкой');
-//       }
-//     });
-
-//     // Обработка ошибок процесса
-//     ffmpegProcess.on('error', (err) => {
-//       console.error('Ошибка в процессе FFmpeg:', err);
-//     });
-
-//     // Обработка ошибок потока `stdin`
-//     ffmpegProcess.stdin.on('error', (err) => {
-//       console.error('Ошибка stdin FFmpeg:', err);
-//     });
-
-//     return ffmpegProcess;
-//   }
-
-//   let viewers = {};
-
-//   io.on('connection', (socket) => {
-//     console.log('Клиент подключился:', socket.id);
-
-//     let ffmpeg;
-//     let currentStreamKey = null; 
-
-//     socket.on('start-stream', async ({ streamKey }) => {
-//       currentStreamKey = streamKey; 
-//       console.log('Получен streamKey:', streamKey);
-
-
-//       ffmpeg = startFFmpeg(streamKey);
-//     });
-
-
-
-//     socket.on('join-stream', (streamKey) => {
-
-//       currentStreamKey = streamKey;
-  
-//       if (!viewers[streamKey]) {
-//         viewers[streamKey] = 0;
-//       }
-//       viewers[streamKey]++;
-  
-
-//       io.emit('update-viewers', { streamKey, count: viewers[streamKey] });
-//     });
-
-
-
-//     // Счетчик для чанков данных
-//     let chunkCounter = 0;
-
-//     // Обработка входящего потока данных от клиента
-//     socket.on('stream-data', (data) => {
-//       if (!ffmpeg) {
-//         console.error('FFmpeg процесс не запущен, возможно, не передан streamKey.');
-//         return;
-//       }
-
-
-//       chunkCounter++;
-
-//       // Декодируем строку Base85 в Buffer
-//       const bufferData = decode(data);
-
-//       // Передаем данные в ffmpeg
-//       try {
-//         ffmpeg.stdin.write(bufferData);
-//       } catch (err) {
-//         console.error('Ошибка записи в stdin FFmpeg:', err);
-//       }
-//     });
-
-//     socket.on('disconnect', () => {
-//       console.log('Клиент отключился:', socket.id);
-
-//     if (currentStreamKey && viewers[currentStreamKey]) {
-//       viewers[currentStreamKey] = Math.max(0, viewers[currentStreamKey] - 1);
-//       io.emit('update-viewers', { streamKey: currentStreamKey, count: viewers[currentStreamKey] });
-//     }
-
-//       // Завершить процесс FFmpeg при отключении клиента
-//       if (ffmpeg) {
-//         console.log('Завершаем процесс FFmpeg');
-//         ffmpeg.stdin.end();
-//         ffmpeg.kill('SIGINT');
-//       }
-//     });
-//   });
-
-//   // Теперь прослушивайте ваш IP и порт.
-//   server.listen(3000, "0.0.0.0");
-// }
-
-// startServer();
-
-

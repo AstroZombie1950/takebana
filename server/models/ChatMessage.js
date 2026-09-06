@@ -26,4 +26,7 @@ const ChatMessageSchema = new mongoose.Schema({
   }
 });
 
+// Чат эфира и дозагрузка новых сообщений после известного времени
+ChatMessageSchema.index({ streamId: 1, createdAt: 1 });
+
 module.exports = mongoose.model('ChatMessage', ChatMessageSchema);

@@ -32,4 +32,10 @@ const UserSchema = new mongoose.Schema({
   }
 });
 
+// Вход и регистрация ищут ровно по этой паре (routes/userRoutes.js, app.js).
+// Уникальность заодно не даёт завести два аккаунта с одним email у одного провайдера:
+// email+provider, а не только email, — потому что у одной почты может быть
+// и вход по паролю (provider: ''), и вход через Google (provider: 'google').
+UserSchema.index({ email: 1, provider: 1 }, { unique: true });
+
 module.exports = mongoose.model('User', UserSchema);

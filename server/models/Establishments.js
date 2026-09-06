@@ -26,4 +26,9 @@ const EstablishmentsSchema = new mongoose.Schema({
     peerId: String
 });
 
+// Заведения владельца — личный кабинет
+EstablishmentsSchema.index({ owner: 1 });
+// Выборка точек в границах карты идёт с фильтром по статусу
+EstablishmentsSchema.index({ status: 1, 'location.lat': 1, 'location.lng': 1 });
+
 module.exports = mongoose.model('Establishments', EstablishmentsSchema);

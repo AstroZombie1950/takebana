@@ -1,22 +1,14 @@
 const express = require('express');
 const router = express.Router();
+const { asyncify } = require('../middleware/asyncRouter');
+asyncify(router);
+const { authLimiter } = require('../middleware/rateLimit'); // ошибки async-обработчиков уходят в next(), а не вешают запрос
+
 const Establishments = require('../models/Establishments');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
-const Admin = require('../models/Admin');
-const multer = require('multer');
-const path = require('path');
-
-const storage = multer.diskStorage({
-  destination: function(req, file, cb) {
-    cb(null, 'uploads/')
-  },
-  filename: function(req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname)) // сохраняем оригинальное расширение файла
-  }
-})
-
-const upload = multer({ storage: storage });
+// multer здесь был объявлен, но ни один маршрут админки файлы не принимает —
+// убран вместе с path, который нужен был только ему.
 async function isAdmin(req, res, next) {
     if (req.session && req.session.userId) {
         const user = await User.findById(req.session.userId);
@@ -32,35 +24,39 @@ async function isAdmin(req, res, next) {
 
 
 
-router.post('/admin/updatePassword', isAdmin, async (req, res) => {
+router.post('/admin/updatePassword', isAdmin, authLimiter, async (req, res) => {
     const { oldPassword, newPassword } = req.body;
 
-    // Попытка найти настройку с именем 'password'
-    let setting = await Admin.findOne({ name: 'password' });
+    if (!oldPassword || !newPassword) {
+        return res.status(400).json({ message: 'Нужны текущий и новый пароль' });
+    }
+    // Столько же требует форма админки (views/admin.ejs)
+    if (newPassword.length < 8) {
+        return res.status(400).json({ message: 'Новый пароль должен содержать не менее 8 символов' });
+    }
 
-    if (setting) {
-        // Проверяем, совпадает ли старый пароль с текущим паролем в базе данных
-        const match = await bcrypt.compare(oldPassword, setting.value);
+    try {
+        // Пароль администратора хранится в его собственной записи User — там же,
+        // где его сверяет вход (routes/userRoutes.js). Прежняя версия писала хеш
+        // в коллекцию adminsettings, которую при входе не читает никто, поэтому
+        // смена пароля отвечала «успешно», а войти можно было только по старому.
+        const user = await User.findById(req.session.userId);
+        if (!user) {
+            return res.status(404).json({ message: 'Пользователь не найден' });
+        }
+
+        const match = await bcrypt.compare(oldPassword, user.password);
         if (!match) {
             return res.status(401).json({ message: 'Неверный текущий пароль' });
         }
 
-        // Если настройка найдена и старый пароль совпадает, обновляем ее значение
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        setting.value = hashedPassword;
-    } else {
-        // Если настройка не найдена, создаем новую
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        setting = new Admin({
-            name: 'password',
-            value: hashedPassword
-        });
-    }
+        user.password = await bcrypt.hash(newPassword, 10);
+        await user.save();
 
-    // Сохраняем настройку в базе данных
-    setting.save()
-        .then(() => res.json({ message: 'Пароль успешно обновлен' }))
-        .catch(err => res.status(500).json({ message: err.message }));
+        res.json({ message: 'Пароль успешно обновлен' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 });
 
 
@@ -78,7 +74,8 @@ router.post('/admin/establishments', isAdmin, async (req, res) => {
         query.status = false;
     }
     if (search) {
-        query.name = new RegExp(search, 'i'); // ищем заведения, название которых содержит поисковый запрос
+        // спецсимволы экранируем — см. /searchEstablishments в establishmentsRouter
+        query.name = new RegExp(String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     }
 
     try {

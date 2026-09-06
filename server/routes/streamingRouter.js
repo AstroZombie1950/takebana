@@ -14,7 +14,12 @@ require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env' });
 const Message = require('../models/Message');
 const { stopPlaylistUpdates } = require('../utils/playlistUtils'); // Импортируем функцию остановки плейлиста
 const router = express.Router();
-
+const { asyncify } = require('../middleware/asyncRouter');
+asyncify(router);
+const { requireAuth, requireOwner } = require('../middleware/auth'); // ошибки async-обработчиков уходят в next(), а не вешают запрос
+const { resolveWithin, isPlainFileName } = require('../utils/safePath');
+const { buildObsStreamKey, getSignExpiry } = require('../utils/rtmpAuth');
+const { authLimiter } = require('../middleware/rateLimit');
 
 // Настройка хранилища для Multer
 const storage = multer.diskStorage({
@@ -93,8 +98,10 @@ const uploadGallery = multer({
   fileFilter: fileFilter
 });
 
-// Загрузка аватарки профиля
-router.post('/profile/avatar', uploadAvatar.single('avatar'), async (req, res) => {
+// Загрузка аватарки профиля.
+// requireAuth стоит ПЕРЕД multer намеренно: иначе файл успевал лечь на диск
+// до проверки сессии — аноним получал 401, но место на диске уже занял.
+router.post('/profile/avatar', requireAuth, uploadAvatar.single('avatar'), async (req, res) => {
   try {
     console.log('Запрос на загрузку аватара:', {
       hasSession: !!req.session,
@@ -149,8 +156,9 @@ router.post('/profile/avatar', uploadAvatar.single('avatar'), async (req, res) =
   }
 });
 
-// Загрузка фотографий в галерею (до 100 суммарно)
-router.post('/profile/gallery', uploadGallery.array('photos', 100), async (req, res) => {
+// Загрузка фотографий в галерею (до 100 суммарно).
+// requireAuth перед multer — см. комментарий у /profile/avatar.
+router.post('/profile/gallery', requireAuth, uploadGallery.array('photos', 100), async (req, res) => {
   try {
     if (!req.session || !req.session.userId) {
       return res.status(401).json({ success: false, message: 'Необходима авторизация' });
@@ -179,7 +187,7 @@ router.post('/profile/gallery', uploadGallery.array('photos', 100), async (req, 
 });
 
 // Удаление фото из галереи
-router.delete('/profile/gallery/:name', async (req, res) => {
+router.delete('/profile/gallery/:name', requireAuth, async (req, res) => {
   try {
     if (!req.session || !req.session.userId) {
       return res.status(401).json({ success: false, message: 'Необходима авторизация' });
@@ -187,7 +195,15 @@ router.delete('/profile/gallery/:name', async (req, res) => {
     const user = await User.findById(req.session.userId);
     if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
 
-    const fileName = req.params.name; // только имя файла
+    const fileName = req.params.name; // ожидается имя файла, без папок
+
+    // Express раскодирует %2F в параметре маршрута, поэтому сюда приходило
+    // `../../app.js`, и unlinkSync сносил любой файл, до которого дотягивался
+    // процесс. Воспроизводилось обычным пользователем.
+    if (!isPlainFileName(fileName)) {
+      return res.status(400).json({ success: false, message: 'Некорректное имя файла' });
+    }
+
     const urlPrefix = `/uploads/gallery/${req.session.userId}/`;
     const fullUrl = urlPrefix + fileName;
 
@@ -195,9 +211,10 @@ router.delete('/profile/gallery/:name', async (req, res) => {
     user.gallery = (user.gallery || []).filter(u => u !== fullUrl);
     await user.save();
 
-    // Удаляем из файловой системы
-    const filePath = path.join('public', 'uploads', 'gallery', String(req.session.userId), fileName);
-    if (fs.existsSync(filePath)) {
+    // Удаляем из файловой системы — строго из папки галереи этого пользователя
+    const galleryDir = path.join(__dirname, '..', 'public', 'uploads', 'gallery', String(req.session.userId));
+    const filePath = resolveWithin(galleryDir, fileName);
+    if (filePath && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
 
@@ -218,10 +235,6 @@ router.get('/set-next', (req, res) => {
   // Перенаправляем на страницу входа или регистрации
   res.redirect('/login'); // Или '/register' в зависимости от вашей логики
 });
-
-
-
-
 
 
 // Функция для генерации случайного градиента из массива градиентов
@@ -379,10 +392,6 @@ async function getActiveStreamsCount() {
   return await Stream.countDocuments({ isActive: true });
 }
 
-router.get('/video', (req, res) => {
-  res.render('video');
-})
-
 router.get('/api/notifications', async (req, res) => {
   const userId = req.session.userId;
 
@@ -403,9 +412,6 @@ router.get('/api/notifications', async (req, res) => {
     res.status(500).json({ message: 'Ошибка сервера' });
   }
 });
-
-
-
 
 
 router.put('/api/notifications/markAsRead', async (req, res) => {
@@ -452,12 +458,6 @@ router.post('/removeChatNotifications', async (req, res) => {
     res.status(500).json({ message: 'Ошибка сервера' });
   }
 });
-
-
-
-
-
-
 
 
 // Оптимизированный единый роут для всех категорий стриминга
@@ -553,20 +553,9 @@ router.get('/streaming/:category?', commonDataMiddleware, async (req, res) => {
 });
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-router.post('/streaming/update-profile', async (req, res) => {
+// authLimiter: здесь тоже меняется пароль (action === 'updatePassword'), а значит
+// маршрут годится для перебора ровно как /update-password и /admin/updatePassword.
+router.post('/streaming/update-profile', requireAuth, authLimiter, async (req, res) => {
   const userId = req.session.userId;
 
   if (!userId) {
@@ -627,8 +616,6 @@ router.post('/streaming/update-profile', async (req, res) => {
 });
 
 
-
-
 // Маршрут для подписки на пользователя
 router.post('/subscribe', async (req, res) => {
   const { userId } = req.body; // Получаем ID пользователя для подписки
@@ -658,8 +645,6 @@ router.post('/subscribe', async (req, res) => {
 });
 
 
-
-
 // Маршрут для отписки от пользователя
 router.delete('/unsubscribe', async (req, res) => {
   const { userId } = req.body; // ID стримера, от которого отписываемся
@@ -683,7 +668,6 @@ router.delete('/unsubscribe', async (req, res) => {
     res.status(500).json({ message: 'Ошибка сервера при попытке отписаться' });
   }
 });
-
 
 
 // Маршрут для страницы профиля пользователя /userPage/:id
@@ -751,8 +735,6 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
 // Добавьте другие маршруты, связанные с функционалом стриминга
 
 
-
-
 // Функция для преобразования времени в "назад"
 function timeAgo(date) {
   const seconds = Math.floor((new Date() - date) / 1000);
@@ -779,10 +761,6 @@ function timeAgo(date) {
   }
   return Math.floor(seconds) + ' seconds ago';
 }
-
-router.get('/video', (req, res) => {
-  res.render('video'); // ejs будет искать stream.ejs в папке views
-});
 
 router.get('/chatsPage', commonDataMiddleware, async (req, res) => {
   if (!req.session.userId) { // Проверка авторизации
@@ -857,10 +835,6 @@ router.get('/chatsPage', commonDataMiddleware, async (req, res) => {
     res.status(500).send('Ошибка сервера');
   }
 });
-
-
-
-
 
 
 router.post('/start-conversation', async (req, res) => {
@@ -968,8 +942,6 @@ router.get('/getNewMessages', async (req, res) => {
 });
 
 
-
-
 router.post('/sendMessage', async (req, res) => {
   const { recipientId, content } = req.body;
   const senderId = req.session.userId;
@@ -1002,7 +974,6 @@ router.post('/sendMessage', async (req, res) => {
     await conversation.save();
 
     
-
     // Проверяем наличие существующего непрочитанного уведомления
     const existingNotification = await Notification.findOne({
       recipient: recipientId,
@@ -1056,7 +1027,7 @@ router.get('/stream-status/:streamId', async (req, res) => {
 
 
 // Маршрут для получения активности стримера
-router.post('/stream/active/:streamId', async (req, res) => {
+router.post('/stream/active/:streamId', requireAuth, requireOwner(Stream, { param: 'streamId', field: 'userId' }), async (req, res) => {
   const { streamId } = req.params;
 
   try {
@@ -1068,7 +1039,6 @@ router.post('/stream/active/:streamId', async (req, res) => {
       res.sendStatus(500);
   }
 });
-
 
 
 // ===== Auto cleanup abandoned streams =====
@@ -1109,9 +1079,6 @@ const cleanupAbandonedStreams = async () => {
 setInterval(cleanupAbandonedStreams, STREAM_CLEANUP_INTERVAL_MS);
 
 
-
-
-
 router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
   if (!req.session.userId) { // Проверка авторизации
     return res.redirect('/');
@@ -1124,7 +1091,6 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
     const stream = await Stream.findById(streamId).populate('userId');
 
     
-
     if (!stream) {
       // Рендерим кастомный шаблон для отсутствующего стрима
       return res.status(404).render('streamNotFound');
@@ -1243,6 +1209,9 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
         isStreamer,
         isSubscribed, // Статус подписки
         streamKey, // Передаем streamKey ВСЕМ (и стримеру, и зрителям) для счетчика
+        // Ключ вместе с подписью — то, что вставляют в OBS. Видит только владелец.
+        obsStreamKey: buildObsStreamKey(streamKey),
+        obsKeyExpiresAt: getSignExpiry(),
         streamUrl, // Передаем URL HLS потока для зрителей
         chatMessages, // Передаем сообщения в шаблон
         start_server_env,
@@ -1321,6 +1290,8 @@ router.get('/stream-obs/:streamId', commonDataMiddleware, async (req, res) => {
       isStreamer: true,
       isSubscribed: false,
       streamKey,
+      obsStreamKey: buildObsStreamKey(streamKey),
+      obsKeyExpiresAt: getSignExpiry(),
       streamUrl: null,
       chatMessages: [],
       start_server_env,
@@ -1383,7 +1354,6 @@ router.post('/start-stream', async (req, res) => {
     }
 
 
-
   // Создание новой трансляции и запись streamKey
   const newStream = new Stream({
     userId,
@@ -1396,9 +1366,6 @@ router.post('/start-stream', async (req, res) => {
   });
 
   await newStream.save();
-
-
-
 
 
     console.log(user.streamKey)
@@ -1420,10 +1387,8 @@ router.post('/start-stream', async (req, res) => {
 });
 
 
-
-
 // Роут для активации стрима (isActive: true)
-router.post('/set-active', async (req, res) => {
+router.post('/set-active', requireAuth, async (req, res) => {
   const { streamKey } = req.body;
 
   if (!streamKey) {
@@ -1431,9 +1396,12 @@ router.post('/set-active', async (req, res) => {
   }
 
   try {
-    // Находим стрим по streamKey и обновляем isActive на true, устанавливаем время начала
+    // Находим стрим по streamKey и обновляем isActive на true, устанавливаем время начала.
+    // userId в фильтре обязателен: streamKey знают и зрители (по нему идёт
+    // подписка на комнату сокета), поэтому без него любой вошедший мог
+    // включать и гасить чужой эфир. Чужой стрим просто не найдётся — 404.
     const stream = await Stream.findOneAndUpdate(
-      { streamKey },
+      { streamKey, userId: req.session.userId },
       { 
         isActive: true,
         startedAt: new Date() // Устанавливаем время начала стрима
@@ -1471,7 +1439,7 @@ router.post('/set-active', async (req, res) => {
 });
 
 // // Роут для деактивации стрима (isActive: false)
-router.post('/set-inactive', async (req, res) => {
+router.post('/set-inactive', requireAuth, async (req, res) => {
   const { streamKey } = req.body;
 
   if (!streamKey) {
@@ -1479,9 +1447,10 @@ router.post('/set-inactive', async (req, res) => {
   }
 
   try {
-    // Находим стрим по streamKey и обновляем isActive на false, сбрасываем время начала
+    // Находим стрим по streamKey и обновляем isActive на false, сбрасываем время начала.
+    // userId в фильтре — чтобы гасить можно было только свой эфир (см. /set-active).
     const stream = await Stream.findOneAndUpdate(
-      { streamKey },
+      { streamKey, userId: req.session.userId },
       { 
         isActive: false,
         startedAt: null // Сбрасываем время начала при деактивации
@@ -1525,14 +1494,14 @@ router.post('/set-inactive', async (req, res) => {
 });
 
 
-
 // Новые эндпоинты специально для OBS
-router.post('/obs-stream-start', async (req, res) => {
+router.post('/obs-stream-start', requireAuth, async (req, res) => {
   try {
       const { streamKey } = req.body;
       
+      // userId в фильтре — иначе чужой streamKey переключал чужой эфир (см. /set-active)
       const updatedStream = await Stream.findOneAndUpdate(
-          { streamKey: streamKey },
+          { streamKey: streamKey, userId: req.session.userId },
           { 
               streamType: 'obs-stream',
               streamProvider: 'obs',
@@ -1569,12 +1538,13 @@ router.post('/obs-stream-start', async (req, res) => {
   }
 });
 
-router.post('/obs-stream-end', async (req, res) => {
+router.post('/obs-stream-end', requireAuth, async (req, res) => {
   try {
       const { streamKey } = req.body;
       
+      // userId в фильтре — иначе чужой streamKey переключал чужой эфир (см. /set-active)
       const updatedStream = await Stream.findOneAndUpdate(
-          { streamKey: streamKey },
+          { streamKey: streamKey, userId: req.session.userId },
           { 
               streamType: 'daily-stream',
               streamProvider: 'web-stream',
@@ -1619,10 +1589,9 @@ router.post('/obs-stream-end', async (req, res) => {
 });
 
 
-
-
-// Маршрут для загрузки заглавной картинки (thumbnail)
-router.post('/upload-thumbnail', upload.single('thumbnail'), async (req, res) => {
+// Маршрут для загрузки заглавной картинки (thumbnail).
+// requireAuth перед multer — см. комментарий у /profile/avatar.
+router.post('/upload-thumbnail', requireAuth, upload.single('thumbnail'), async (req, res) => {
   const { streamId, oldThumbnailPath } = req.body;
   const userId = req.session.userId;
 
@@ -1644,8 +1613,14 @@ router.post('/upload-thumbnail', upload.single('thumbnail'), async (req, res) =>
 
       if (req.file) {
           // Удаляем старое изображение, если оно существует
-          if (oldThumbnailPath) {
-              const fullOldPath = path.join(__dirname, '..', 'public', oldThumbnailPath);
+          // oldThumbnailPath приходит из тела запроса. Без проверки границ
+          // сюда подставлялось `../что-угодно` и удалялся произвольный файл.
+          // Старую обложку ищем только внутри папки обложек и только по имени.
+          const thumbsDir = path.join(__dirname, '..', 'public', 'uploads', 'thumbnails');
+          const oldName = oldThumbnailPath ? path.basename(String(oldThumbnailPath)) : null;
+          const fullOldPath = isPlainFileName(oldName) ? resolveWithin(thumbsDir, oldName) : null;
+
+          if (fullOldPath) {
               fs.unlink(fullOldPath, (err) => {
                   if (err) {
                       console.error('Ошибка при удалении старого изображения:', err);
@@ -1668,7 +1643,6 @@ router.post('/upload-thumbnail', upload.single('thumbnail'), async (req, res) =>
       res.status(500).json({ message: 'Ошибка сервера.' });
   }
 });
-
 
 
 // Маршрут для постановки стрима на паузу
@@ -1705,47 +1679,8 @@ router.post('/api/pause-stream', async (req, res) => {
 });
 
 // // Маршрут для возобновления стрима
-// router.post('/resume-stream', async (req, res) => {
-//   const { streamId } = req.body;
-//   const userId = req.session.userId;
-
-//   console.log(`Запрос на возобновление стрима: streamId=${streamId}, userId=${userId}`);
-
-//   if (!streamId || !userId) {
-//       console.log('Недостаточно данных для возобновления стрима');
-//       return res.status(400).json({ message: 'Недостаточно данных.' });
-//   }
-
-//   try {
-//       if (!mongoose.Types.ObjectId.isValid(streamId)) {
-//           console.log('Некорректный streamId');
-//           return res.status(400).json({ message: 'Некорректный streamId.' });
-//       }
-
-//       const stream = await Stream.findOne({ _id: streamId, userId: userId, isActive: false });
-
-//       if (!stream) {
-//           console.log('Стрим не найден или уже активен');
-//           return res.status(404).json({ message: 'Стрим не найден или уже активен.' });
-//       }
 
 //       // Проверяем, есть ли уже другой активный стрим
-//       const existingStream = await Stream.findOne({ userId: userId, isActive: true });
-//       if (existingStream) {
-//           return res.status(400).json({ message: 'У вас уже есть активный стрим.' });
-//       }
-
-//       stream.isActive = true;
-//       await stream.save();
-
-//       console.log('Стрим успешно возобновлен:', stream);
-
-//       res.json({ message: 'Стрим успешно возобновлен.' });
-//   } catch (error) {
-//       console.error('Ошибка при возобновлении стрима:', error);
-//       res.status(500).json({ message: 'Ошибка сервера.' });
-//   }
-// });
 
 // Маршрут для завершения стрима
 router.post('/terminate-stream', async (req, res) => {
@@ -1783,21 +1718,27 @@ router.post('/terminate-stream', async (req, res) => {
 });
 
 
-
-
 // Эндпоинт для отправки сообщений
-router.post('/chat/message', async (req, res) => {
+router.post('/chat/message', requireAuth, async (req, res) => {
   try {
-      const { streamId, userId, username, message } = req.body;
+      const { streamId, message } = req.body;
 
-      if (!streamId || !userId || !message || !username) {
+      if (!streamId || !message) {
           return res.status(400).json({ message: 'Неправильные данные' });
       }
+
+      // Автор берётся из сессии, а не из тела запроса: раньше userId и username
+      // приходили от клиента, и любой вошедший писал в чат эфира от чужого имени.
+      const author = await User.findById(req.session.userId).select('login email');
+      if (!author) {
+          return res.status(401).json({ message: 'Необходима авторизация' });
+      }
+      const username = author.login || (author.email ? author.email.split('@')[0] : 'Пользователь');
 
       // Создаём новое сообщение
       const chatMessage = new ChatMessage({
           streamId,
-          userId,
+          userId: author._id,
           username,
           message
       });
@@ -1816,9 +1757,6 @@ router.post('/chat/message', async (req, res) => {
 router.get('/api/chat/messages/new', async (req, res) => {
   const { streamId, lastMessageTime } = req.query;
 
-  // console.log("📡 API запрос новых сообщений");
-  // console.log("📡 Полученный streamId:", streamId);
-  // console.log("📡 Полученное время последнего сообщения:", lastMessageTime);
 
   try {
     const query = { streamId };
@@ -1833,10 +1771,6 @@ router.get('/api/chat/messages/new', async (req, res) => {
       .sort({ createdAt: 1 }) // Сортируем по времени
       .populate('userId');
 
-    // console.log("📨 Найденные новые сообщения:", newMessages.length, "штук");
-    // if (newMessages.length > 0) {
-    //   console.log("📨 Первое сообщение:", newMessages[0]);
-    // }
 
     res.json(newMessages);
   } catch (error) {
@@ -1846,17 +1780,8 @@ router.get('/api/chat/messages/new', async (req, res) => {
 });
 
 
-
-
-
-
-
-
-
-
-
 // Маршрут для поиска пользователей
-router.get('/search-users', async (req, res) => {
+router.get('/search-users', requireAuth, async (req, res) => {
   const query = req.query.q;
 
   // Если нет запроса, возвращаем пустой массив
@@ -1912,10 +1837,6 @@ router.get('/user_agreement', (req, res) => {
 router.get('/personal_data_processing', (req, res) => {
   res.render('terms/personal_data_processing');
 });
-
-
-
-
 
 
 module.exports = router;
