@@ -17,16 +17,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
+  <script src="/toast.js"></script>
 </head>
 <body>
 
 
 
-  <div class="message_alert">
-    <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
-    <span>Ошибка ошибочка</span>
-  </div>
-  
    <header>
 
     <div class="logo">
@@ -73,8 +69,10 @@
       }
     }
 
-    localStorage.setItem('lang', 'en');
-
+    // Здесь стояла безусловная строка localStorage.setItem('lang', 'en'), сразу
+    // после блока, который восстанавливает сохранённый язык. Она затирала выбор
+    // пользователя при каждом заходе на главную: переключатель успевал
+    // подсветиться как RU, а текст затем показывался английский. Убрана.
 
     eng_switch.addEventListener('click', function() {
       if (!eng_switch.classList.contains('active')) {

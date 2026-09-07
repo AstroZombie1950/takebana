@@ -3,6 +3,7 @@ const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router);
 const { requireAuth, requireOwner } = require('../middleware/auth'); // ошибки async-обработчиков уходят в next(), а не вешают запрос
+const { validate } = require('../middleware/validate');
 
 const axios = require('axios');
 const jwt = require('jsonwebtoken'); // Добавляем для создания JWT токенов
@@ -12,6 +13,11 @@ const DAILY_API_KEY = process.env.DAILY_API_KEY;
 // Важно: домен Daily (subdomain) должен совпадать с доменом вашего аккаунта в Daily.
 // Для безопасной миграции бренда НЕ хардкодим takebana.
 const DAILY_DOMAIN = process.env.DAILY_DOMAIN || 'webcatravel';
+// Потолок задаёт тариф Daily, а не мы: на текущем плане запрос комнаты больше
+// чем на 20 участников отбивается с 'cannot be set to that value with your
+// current plan', и комната не создаётся вовсе. Держим значение в окружении,
+// чтобы смена тарифа была правкой .env, а не кода.
+const DAILY_MAX_PARTICIPANTS = Number(process.env.DAILY_MAX_PARTICIPANTS) || 20;
 
 // Базовые настройки для запросов к Daily.co API
 const DAILY_API_BASE = 'https://api.daily.co/v1';
@@ -26,18 +32,15 @@ const Stream = require('../models/Stream');
 // requireOwner берёт streamId из тела (см. middleware/auth.js) и пускает только
 // владельца эфира: комнаты Daily платные, а раньше любой вошедший мог создать
 // комнату под чужой streamId и заодно перезаписать в нём dailyRoom.
-router.post('/create-room', requireAuth, requireOwner(Stream, { param: 'streamId', field: 'userId' }), async (req, res) => {
+// validate стоит до requireOwner: тот ищет эфир по streamId из тела, и без
+// проверки типа туда уходил объект из JSON — то есть оператор Mongo в findOne.
+router.post('/create-room', requireAuth, validate({
+    streamId: { type: 'objectId', required: true, label: 'Эфир' },
+}), requireOwner(Stream, { param: 'streamId', field: 'userId' }), async (req, res) => {
     try {
         console.log('🏠 Создание новой комнаты Daily.co...');
         
         const { streamId } = req.body; // ID существующего стрима
-        
-        if (!streamId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Stream ID is required'
-            });
-        }
         
         // Проверяем существование стрима
         const stream = await Stream.findById(streamId);
@@ -83,7 +86,7 @@ router.post('/create-room', requireAuth, requireOwner(Stream, { param: 'streamId
             name: roomName,
             privacy: 'public',
             properties: {
-                max_participants: 50,
+                max_participants: DAILY_MAX_PARTICIPANTS,
                 enable_chat: false,
                 enable_knocking: false,
                 enable_screenshare: false,
@@ -161,16 +164,13 @@ router.post('/create-room', requireAuth, requireOwner(Stream, { param: 'streamId
 });
 
 // Получение токена для участника (self-signed JWT)
-router.post('/get-token', requireAuth, async (req, res) => {
+// Имя комнаты создаётся здесь же как `stream_<id>_<время>` — набор символов
+// ограничен теми же, что и в ключах: имя уходит в путь запроса к Daily.
+router.post('/get-token', requireAuth, validate({
+    roomName: { type: 'key', required: true, label: 'Комната' },
+}), async (req, res) => {
     try {
         const { roomName } = req.body;
-        
-        if (!roomName) {
-            return res.status(400).json({
-                success: false,
-                message: 'Room name is required'
-            });
-        }
 
         // Роль раньше приходила из тела запроса: любой вошедший просил
         // role: 'streamer' и получал токен владельца комнаты (o: true).

@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="css/admin.css">
     <!-- escapeHtml для мест, где разметка собирается в браузере (чат, админка) -->
     <script src="/escape-html.js"></script>
+  <script src="/toast.js"></script>
 </head>
 <body>
 
@@ -135,7 +136,7 @@
             })
             .catch((error) => {
                 console.error('Error:', error);
-                alert('Ошибка: ' + error.message); // Выводим сообщение об ошибке
+                toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
             });
 // });
 
@@ -181,7 +182,7 @@ document.querySelector('#searchInput').addEventListener('input', function() {
             })
             .catch((error) => {
                 console.error('Error:', error);
-                alert('Ошибка: ' + error.message); // Выводим сообщение об ошибке
+                toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
             });
 
 });
@@ -248,7 +249,7 @@ function loadEstablishments(page) {
     })
     .catch((error) => {
         console.error('Error:', error);
-        alert('Ошибка: ' + error.message); // Выводим сообщение об ошибке
+        toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
     });
 }
 
@@ -295,11 +296,11 @@ document.querySelector('.fields').addEventListener('click', function(event) {
         .then(data => {
             console.log(data);
             this.classList.remove('active');
-            alert('Заведение успешно обновлено!'); // Выводим сообщение об успешном обновлении
+            toast('Заведение успешно обновлено!', 'ok'); // Выводим сообщение об успешном обновлении
         })
         .catch((error) => {
             console.error('Error:', error);
-            alert('Ошибка: ' + error.message); // Выводим сообщение об ошибке
+            toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
         });
     }
 
@@ -319,11 +320,11 @@ document.querySelector('.fields').addEventListener('click', function(event) {
             console.log(data);
             // Удалите элемент из DOM
             target.parentElement.remove();
-            alert('Заведение успешно удалено!'); // Выводим сообщение об успешном удалении
+            toast('Заведение успешно удалено!', 'ok'); // Выводим сообщение об успешном удалении
         })
         .catch(error => {
             console.error('Ошибка:', error);
-            alert('Ошибка: ' + error.message); // Выводим сообщение об ошибке
+            toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
         });
     }
 });
@@ -352,11 +353,11 @@ document.querySelector('.fields').addEventListener('change', function(event) {
         })
         .then(data => {
             console.log(data);
-            alert('Статус заведения успешно обновлен!'); // Выводим сообщение об успешном обновлении
+            toast('Статус заведения успешно обновлен!', 'ok'); // Выводим сообщение об успешном обновлении
         })
         .catch(error => {
             console.error('Ошибка:', error);
-            alert('Ошибка: ' + error.message); // Выводим сообщение об ошибке
+            toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
         });
     }
 });
@@ -404,15 +405,15 @@ document.querySelector('.fields').addEventListener('input', function(event) {
 
         // Валидация паролей
         if (!oldPassword || !newPassword || !confirmPassword) {
-            alert('Все поля должны быть заполнены');
+            toast('Все поля должны быть заполнены');
             return;
         }
         if (newPassword !== confirmPassword) {
-            alert('Новый пароль и подтверждение пароля не совпадают');
+            toast('Новый пароль и подтверждение пароля не совпадают', 'error');
             return;
         }
         if (newPassword.length < 8) {
-            alert('Новый пароль должен содержать не менее 8 символов');
+            toast('Новый пароль должен содержать не менее 8 символов');
             return;
         }
 
@@ -433,16 +434,16 @@ document.querySelector('.fields').addEventListener('input', function(event) {
             return response.json();
         })
         .then(data => {
-            alert(data.message); // Выводим сообщение от сервера
+            toast(data.message); // Выводим сообщение от сервера
         })
         .catch(error => {
             console.error('Error:', error);
             if (error.message.includes('400')) {
-                alert('Ошибка: Старый пароль не совпадает');
+                toast('Ошибка: Старый пароль не совпадает', 'error');
             } else if (error.message.includes('401')) {
-                alert('Ошибка: Неверный текущий пароль');
+                toast('Ошибка: Неверный текущий пароль', 'error');
             } else {
-                alert('Ошибка: ' + error.message); // Выводим сообщение об ошибке
+                toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
             }
         });
     });

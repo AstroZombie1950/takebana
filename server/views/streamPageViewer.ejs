@@ -1055,7 +1055,10 @@
                                                         </div>
                                                         <span class="online__pepole-count text-slate-700 font-semibold text-xs sm:text-sm">
                                                             <span class="viewers-number"><%= stream.viewers %></span>
-                                                            <span class="viewers-text hidden xs:inline ml-1">зрителей</span>
+                                                            <% const _v = Number(stream.viewers) || 0, _d10 = _v % 10, _d100 = _v % 100;
+   const _vw = (_d10 === 1 && _d100 !== 11) ? 'зритель'
+             : (_d10 >= 2 && _d10 <= 4 && (_d100 < 12 || _d100 > 14)) ? 'зрителя' : 'зрителей'; %>
+<span class="viewers-text hidden xs:inline ml-1"><%= _vw %></span>
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1100,7 +1103,7 @@
                                             <div class="flex gap-2 sm:gap-3">
                                                 <textarea
                                                     class="input__messeng flex-1 px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg sm:rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm sm:text-base"
-                                                    rows="1" placeholder="Введите сообщение..."
+                                                    rows="1" lng="218" placeholder="Сообщение..."
                                                     maxlength="140"></textarea>
                                                 <button
                                                     class="starting__buttone px-4 sm:px-6 py-2.5 sm:py-3.5 bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white rounded-xl sm:rounded-2xl font-semibold transition-all duration-300 transform hover:scale-105 active:scale-95 flex-shrink-0 text-sm sm:text-base shadow-lg hover:shadow-xl border border-brand-400/30">
@@ -1142,8 +1145,9 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
         <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
         <% if (stream.streamType==='obs-stream' ) { %>
-            <!-- flv.js для воспроизведения HTTP-FLV -->
-            <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+            <!-- hls.js — для браузеров без нативного HLS. Safari, включая iPhone,
+                 играет плейлист сам и эту библиотеку не загружает и не использует. -->
+            <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
         <% } %>
             
             
@@ -1182,23 +1186,19 @@
 
                     // Инициализация Socket.IO
                     console.log('[Viewer] Initializing socket with serverEnv:', serverEnv);
-                    if (serverEnv == 'prod') {
-                        socket = io('https://takebana.com', {
-                            transports: ['websocket'],
-                            reconnection: true,
-                            reconnectionDelay: 1000,
-                            reconnectionAttempts: 5
-                        });
-                    }
-                    if (serverEnv == 'local') {
-                        socket = io('https://localhost:3000', {
-                            transports: ['websocket'],
-                            reconnection: true,
-                            reconnectionDelay: 1000,
-                            reconnectionAttempts: 5,
-                            rejectUnauthorized: false // Для self-signed SSL
-                        });
-                    }
+                    // Адрес берём из самой страницы, а не из зашитых строк.
+                    // Раньше здесь было две ветки: 'prod' → https://takebana.com и 'local' →
+                    // https://localhost:3000. Ветки для 'http' (наш режим локальной разработки)
+                    // не было вообще — socket оставался undefined, и первый же socket.on(...)
+                    // ронял весь скрипт страницы: ни чата, ни счётчика зрителей, ни реакции на
+                    // смену типа эфира. Плюс зашитый боевой домен ломал бы проверку сервера
+                    // по IP до переключения DNS.
+                    socket = io(window.location.origin, {
+                        transports: ['websocket'],
+                        reconnection: true,
+                        reconnectionDelay: 1000,
+                        reconnectionAttempts: 5
+                    });
                     
                     // Регистрируем обработчики ДО подключения
                     console.log('[Viewer] Registering event handlers before connection...');
@@ -1236,6 +1236,9 @@
                         console.log('[Viewer] Emitting join-stream-room, socket.connected:', socket.connected, 'socket.id:', socket.id);
                         socket.emit('join-stream-room', streamKey, (response) => {
                             console.log('[Viewer] join-stream-room callback response:', response);
+                            // Добираем пропущенное только после входа в комнату: иначе
+                            // сообщение между запросом и входом потерялось бы.
+                            if (typeof fetchNewMessages === 'function') fetchNewMessages();
                         });
                         console.log('[Viewer] Sent join-stream-room event with key:', streamKey);
                     };
@@ -1296,7 +1299,10 @@
                         // При переподключении снова присоединяемся к комнате
                         if (streamKey && streamKey !== 'undefined' && streamKey !== 'null' && streamKey !== '') {
                             setTimeout(() => {
-                                socket.emit('join-stream-room', streamKey);
+                                socket.emit('join-stream-room', streamKey, () => {
+                                    // После обрыва добираем всё, что пришло, пока связи не было.
+                                    if (typeof fetchNewMessages === 'function') fetchNewMessages();
+                                });
                                 console.log('[Viewer] Re-sent join-stream-room after reconnect');
                             }, 100);
                         }
@@ -1305,6 +1311,21 @@
                     // Регистрируем обработчик ДО подключения, чтобы не пропустить события
                     console.log('[Viewer] Registering viewers-count-updated handler...');
                     
+                    // Склонение слова «зритель». В шаблоне стояло жёсткое «зрителей»,
+                    // поэтому при одном зрителе выходило «1 зрителей».
+                    function viewersWord(n) {
+                        n = Math.abs(Number(n) || 0);
+                        const d10 = n % 10, d100 = n % 100;
+                        if (d10 === 1 && d100 !== 11) return 'зритель';
+                        if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return 'зрителя';
+                        return 'зрителей';
+                    }
+                    function setViewersCount(n) {
+                        const num = document.querySelector('.viewers-number');
+                        const word = document.querySelector('.viewers-text');
+                        if (num) num.textContent = n;
+                        if (word) word.textContent = viewersWord(n);
+                    }
                     // Обновление счетчика зрителей
                     socket.on('viewers-count-updated', (data) => {
                         console.log('[Viewer] ===== VIEWERS COUNT UPDATED EVENT RECEIVED =====');
@@ -1322,7 +1343,7 @@
                             if (viewersNumber) {
                                 // Обновляем число зрителей
                                 const oldText = viewersNumber.textContent;
-                                viewersNumber.textContent = data.count;
+                                setViewersCount(data.count);
                                 console.log('[Viewer] Updated viewers-number from', oldText, 'to', data.count);
                             } else if (countElement) {
                                 // Fallback: обновляем весь элемент
@@ -1416,79 +1437,98 @@
                     });
 
                     <% if (stream.streamType === 'obs-stream') { %>
-                    // Инициализация плеера для OBS (HTTP-FLV)
+                    // Плеер OBS-эфира: HLS.
+                    //
+                    // Раньше здесь был HTTP-FLV через flv.js. На iPhone он не играл и
+                    // играть не мог: flv.js собирает поток через Media Source Extensions,
+                    // а в Safari на iOS их нет. HLS Safari проигрывает нативно, остальным
+                    // браузерам его собирает hls.js — тоже через MSE, но там они есть.
                     document.addEventListener('DOMContentLoaded', function () {
                         const video = document.getElementById('video');
                         if (!video) {
-                            console.log('[OBS/FLV] Video element not found, skipping flv.js init');
+                            console.log('[OBS/HLS] Video element not found');
                             return;
                         }
 
-                        // Мьютим для автоплея в браузерах
+                        const hlsUrl = `/live/${streamKey}/index.m3u8`;
+
+                        // Оба атрибута обязательны на iOS: без muted браузер не даст
+                        // автозапуск, без playsinline видео уходит в полноэкранный плеер.
                         video.muted = true;
+                        video.playsInline = true;
+                        video.setAttribute('playsinline', '');
 
-                        const flvUrl = `/live/${streamKey}.flv`;
-                        console.log('[OBS/FLV] Trying to play:', flvUrl);
+                        let player = null;
 
-                        if (window.flvjs && flvjs.isSupported()) {
-                            let flvPlayer = flvjs.createPlayer({
-                                type: 'flv',
-                                url: flvUrl,
-                                isLive: true,
-                            }, {
-                                enableStashBuffer: false,
-                                stashInitialSize: 128,
-                            });
-
-                            flvPlayer.attachMediaElement(video);
-                            flvPlayer.load();
-
-                            // Попытка autoplay
-                            flvPlayer.play().catch((e) => {
-                                console.warn('[OBS/FLV] Autoplay blocked:', e);
-                            });
-
-                            flvPlayer.on(flvjs.Events.ERROR, (type, detail, info) => {
-                                console.error('[OBS/FLV] Player error:', { type, detail, info });
-                            });
-
-                            // Ретрай: при переключении типа стрима иногда FLV еще не готов.
-                            // Пытаемся переподключить плеер раз в 2 секунды, максимум 30 секунд.
-                            let retryLeft = 15;
-                            const retry = async () => {
-                                if (retryLeft <= 0) return;
-                                retryLeft--;
+                        // Плейлист появляется не сразу: ffmpeg дописывает index.m3u8 только
+                        // после первых сегментов — через несколько секунд после старта эфира.
+                        async function waitForPlaylist(attempts) {
+                            for (let i = 0; i < attempts; i++) {
                                 try {
-                                    // Проверяем доступность потока
-                                    const r = await fetch(flvUrl, { method: 'HEAD', cache: 'no-store' });
-                                    if (!r.ok) return;
-                                    console.log('[OBS/FLV] stream is reachable, reloading player');
-                                    try {
-                                        flvPlayer.pause();
-                                        flvPlayer.unload();
-                                        flvPlayer.detachMediaElement();
-                                        flvPlayer.destroy();
-                                    } catch (_) {}
-                                    flvPlayer = flvjs.createPlayer({ type: 'flv', url: flvUrl, isLive: true }, { enableStashBuffer: false, stashInitialSize: 128 });
-                                    flvPlayer.attachMediaElement(video);
-                                    flvPlayer.load();
-                                    flvPlayer.play().catch(() => {});
-                                } catch (_) {}
-                            };
-                            const retryTimer = setInterval(retry, 2000);
-                            setTimeout(() => clearInterval(retryTimer), 30000);
-
-                            window.addEventListener('beforeunload', () => {
-                                try {
-                                    flvPlayer.pause();
-                                    flvPlayer.unload();
-                                    flvPlayer.detachMediaElement();
-                                    flvPlayer.destroy();
-                                } catch (_) {}
-                            });
-                        } else {
-                            console.error('[OBS/FLV] flv.js is not supported in this browser');
+                                    const r = await fetch(hlsUrl, { method: 'HEAD', cache: 'no-store' });
+                                    if (r.ok) return true;
+                                } catch (_) { /* эфир ещё не поднялся */ }
+                                await new Promise((next) => setTimeout(next, 2000));
+                            }
+                            return false;
                         }
+
+                        function playNative() {
+                            console.log('[OBS/HLS] нативный HLS:', hlsUrl);
+                            video.src = hlsUrl;
+                            video.play().catch((e) => console.warn('[OBS/HLS] автозапуск заблокирован:', e));
+                        }
+
+                        function playWithHlsJs() {
+                            console.log('[OBS/HLS] hls.js:', hlsUrl);
+                            player = new Hls({
+                                lowLatencyMode: true,
+                                liveSyncDurationCount: 3,  // держимся у живого края, а не у начала окна
+                                backBufferLength: 30,      // не копим прошлое: эфир, а не запись
+                            });
+                            player.loadSource(hlsUrl);
+                            player.attachMedia(video);
+                            player.on(Hls.Events.MANIFEST_PARSED, () => {
+                                video.play().catch((e) => console.warn('[OBS/HLS] автозапуск заблокирован:', e));
+                            });
+                            player.on(Hls.Events.ERROR, (_evt, data) => {
+                                if (!data.fatal) return;
+                                // Сеть и медиа чинятся на месте; всё остальное — только пересозданием.
+                                if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                                    console.warn('[OBS/HLS] сетевая ошибка, переподключаемся');
+                                    player.startLoad();
+                                } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                                    console.warn('[OBS/HLS] ошибка медиа, восстанавливаем');
+                                    player.recoverMediaError();
+                                } else {
+                                    console.error('[OBS/HLS] фатальная ошибка:', data);
+                                    player.destroy();
+                                    player = null;
+                                }
+                            });
+                        }
+
+                        (async () => {
+                            if (!await waitForPlaylist(30)) {
+                                console.error('[OBS/HLS] плейлист не появился за минуту:', hlsUrl);
+                                return;
+                            }
+                            // Порядок важен: Safari умеет и то и другое, но нативный
+                            // плеер на iOS экономнее и не требует MSE.
+                            if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                                playNative();
+                            } else if (window.Hls && Hls.isSupported()) {
+                                playWithHlsJs();
+                            } else {
+                                console.error('[OBS/HLS] браузер не умеет HLS ни нативно, ни через hls.js');
+                            }
+                        })();
+
+                        window.addEventListener('beforeunload', () => {
+                            if (player) {
+                                try { player.destroy(); } catch (_) {}
+                            }
+                        });
                     });
                     <% } %>
 
@@ -2174,13 +2214,13 @@
                         });
 
                         if (response.ok) {
-                            alert('Вы успешно подписались на стримера!');
+                            toast('Вы успешно подписались на стримера!', 'ok');
 
                             // Обновляем интерфейс
                             updateSubscriptionStatus('unsubscribe');
                         } else {
                             const errorData = await response.json();
-                            alert(`Ошибка: ${errorData.message}`);
+                            toast(`Ошибка: ${errorData.message}`, 'error');
                         }
                     }
 
@@ -2198,13 +2238,13 @@
                         });
 
                         if (response.ok) {
-                            alert('Вы успешно отписались от стримера!');
+                            toast('Вы успешно отписались от стримера!', 'ok');
 
                             // Обновляем интерфейс
                             updateSubscriptionStatus('subscribe');
                         } else {
                             const errorData = await response.json();
-                            alert(`Ошибка: ${errorData.message}`);
+                            toast(`Ошибка: ${errorData.message}`, 'error');
                         }
                     }
 
@@ -2277,7 +2317,7 @@
 
                         // Проверка длины сообщения
                         if (messageContent.length > 140) {
-                            alert('Ошибка: Сообщение не должно превышать 140 символов');
+                            toast('Ошибка: Сообщение не должно превышать 140 символов', 'error');
                             return;
                         }
 
@@ -2300,75 +2340,73 @@
                                 messageInput.value = ''; // Очищаем поле ввода
                             } else {
                                 console.error('Ошибка отправки сообщения');
-                                alert('Ошибка при отправке сообщения');
+                                toast('Ошибка при отправке сообщения', 'error');
                             }
                         } catch (error) {
                             console.error('Ошибка при отправке сообщения:', error);
-                            alert('Произошла ошибка при отправке сообщения');
+                            toast('Произошла ошибка при отправке сообщения', 'error');
                         }
                     }
 
-                    // ========== ЗАГРУЗКА НОВЫХ СООБЩЕНИЙ В ЧАТ (ДЛЯ ВСЕХ) ==========
-                    // Функция для подгрузки новых сообщений
-                    async function fetchNewMessages() {
-                        const streamId = '<%= stream._id %>'; // Получаем ID стрима
+                    // ========== ЧАТ ЭФИРА ==========
+// Сообщения приходят сокетом в комнату эфира. Раньше здесь стоял
+// setInterval(fetchNewMessages, 2000): каждый зритель дёргал сервер 30 раз
+// в минуту, почти всегда впустую, и всё равно видел сообщение с задержкой
+// до двух секунд. Опрос остался ровно для двух случаев — первая загрузка
+// и добор пропущенного после обрыва связи.
+
+// Отрисовка одного сообщения. Общая для сокета и для добора опросом.
+function appendChatMessage(message) {
+                        const messageBox = document.querySelector('.messeg-box');
+                        if (!messageBox) return;
+
+                        // Сообщение могло прийти и сокетом, и добором — второй раз не рисуем.
+                        if (message._id && messageBox.querySelector(`[data-message-id="${message._id}"]`)) return;
+
+                        const messageElement = document.createElement('div');
+                        messageElement.classList.add('chat-message', 'p-3', 'rounded-xl', 'bg-gray-50');
+                        if (message._id) messageElement.dataset.messageId = message._id;
+                        messageElement.dataset.timestamp = message.createdAt;
+
+                        const isCurrentUser = message.userId === '<%= currentUser._id %>';
+                        const nameColorClass = isCurrentUser ? 'text-green-600' : 'text-blue-600';
+
+                        messageElement.innerHTML = `
+                            <div class="flex items-start space-x-3">
+                                <div class="flex-1">
+                                    <p class="text-sm">
+                                        <span class="${nameColorClass} font-semibold">${escapeHtml(message.username)}:</span>
+                                        <span class="text-gray-900 ml-2">${escapeHtml(message.message)}</span>
+                                    </p>
+                                    <p class="text-xs text-gray-500 mt-1">${new Date(message.createdAt).toLocaleTimeString()}</p>
+                                </div>
+                            </div>
+                        `;
+
+                        messageBox.appendChild(messageElement);
+                        messageBox.scrollTo({ top: messageBox.scrollHeight, behavior: 'smooth' });
+
+                        if (message.createdAt) lastMessageTime = message.createdAt;
+}
+
+// Добор пропущенного: при открытии страницы и после восстановления связи.
+async function fetchNewMessages() {
+                        const streamId = '<%= stream._id %>';
 
                         try {
-                            // Запрашиваем сообщения, которые были созданы после последнего сообщения
                             const url = `/api/chat/messages/new?streamId=${streamId}&lastMessageTime=${lastMessageTime || ''}`;
-
                             const response = await fetch(url);
-
-                            if (response.ok) {
-                                const newMessages = await response.json();
-
-                                if (newMessages.length > 0) {
-                                    const messageBox = document.querySelector('.messeg-box');
-
-                                    // Добавляем каждое новое сообщение в конец чата
-                                    newMessages.forEach(message => {
-                                        const messageElement = document.createElement('div');
-                                        messageElement.classList.add('chat-message', 'p-3', 'rounded-xl', 'bg-gray-50');
-
-                                        // Определяем цвет имени пользователя
-                                        const isCurrentUser = message.userId === '<%= currentUser._id %>';
-                                        const nameColorClass = isCurrentUser ? 'text-green-600' : 'text-blue-600';
-
-                                        messageElement.innerHTML = `
-                                <div class="flex items-start space-x-3">
-                                    <div class="flex-1">
-                                        <p class="text-sm">
-                                            <span class="${nameColorClass} font-semibold">${escapeHtml(message.username)}:</span>
-                                            <span class="text-gray-900 ml-2">${escapeHtml(message.message)}</span>
-                                        </p>
-                                        <p class="text-xs text-gray-500 mt-1">${new Date(message.createdAt).toLocaleTimeString()}</p>
-                                    </div>
-                                </div>
-                            `;
-
-                                        messageBox.appendChild(messageElement);
-
-                                        // Плавная прокрутка вниз к новому сообщению
-                                        messageBox.scrollTo({
-                                            top: messageBox.scrollHeight,
-                                            behavior: 'smooth'
-                                        });
-                                    });
-
-                                    // Обновляем время последнего сообщения только если новые сообщения действительно пришли
-                                    lastMessageTime = newMessages[newMessages.length - 1].createdAt;
-                                }
-                            } else {
-                                console.error('❌ Ошибка при получении новых сообщений, статус:', response.status);
-                                const errorText = await response.text();
-                                console.error('❌ Текст ошибки:', errorText);
+                            if (!response.ok) {
+                                console.error('Ошибка при получении новых сообщений, статус:', response.status);
+                                return;
                             }
+                            (await response.json()).forEach(appendChatMessage);
                         } catch (error) {
-                            console.error('❌ Ошибка при запросе новых сообщений:', error);
+                            console.error('Ошибка при запросе новых сообщений:', error);
                         }
-                    }
+}
 
-                    // ========== ИНИЦИАЛИЗАЦИЯ ЧАТА ДЛЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (В КОНЦЕ) ==========
+// ========== ИНИЦИАЛИЗАЦИЯ ЧАТА ДЛЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (В КОНЦЕ) ==========
                     // Инициализация — ставим время последнего сообщения после загрузки страницы
                     document.addEventListener('DOMContentLoaded', function () {
                         const messages = document.querySelectorAll('.chat-message');
@@ -2390,15 +2428,15 @@
                             }, 500); // Небольшая задержка для загрузки контента
                         }
 
-                        // Проверяем что функция fetchNewMessages доступна
-                        if (typeof fetchNewMessages === 'function') {
-                            // Запускаем периодическую загрузку новых сообщений каждые 2 секунды
-                            const chatInterval = setInterval(fetchNewMessages, 2000);
-
-                            // Первая загрузка сразу
-                            setTimeout(fetchNewMessages, 1000);
+                        // Новые сообщения приходят сокетом в комнату эфира. Этот вызов —
+                        // страховка на случай, если сокет не поднялся: основной добор идёт
+                        // в подтверждении входа в комнату, там же и после обрыва связи.
+                        // Повторы отсекаются по data-message-id.
+                        fetchNewMessages();
+                        if (typeof socket !== 'undefined' && socket) {
+                            socket.on('chat:message', appendChatMessage);
                         } else {
-                            console.error("❌ Функция fetchNewMessages не найдена!");
+                            console.error('Сокет недоступен — новые сообщения чата приходить не будут');
                         }
                     });
 

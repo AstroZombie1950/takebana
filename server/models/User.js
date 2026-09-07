@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
-const { v4: uuidv4 } = require('uuid'); // Генератор уникальных ключей
+// crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
+// Пакет uuid убран: использовался только ради v4, а его advisory
+// (буфер в v3/v5/v6) тянулся в аудит на пустом месте.
+const { randomUUID: uuidv4 } = require('crypto'); // Генератор уникальных ключей
 
 const UserSchema = new mongoose.Schema({
   login: String,

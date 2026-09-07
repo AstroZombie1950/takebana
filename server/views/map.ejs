@@ -40,15 +40,9 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/css/lightbox.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
+  <script src="/toast.js"></script>
 </head>
   <body>
-
-    <div class="message_alert">
-      <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
-      <span>Ошибка ошибочка</span>
-    </div>
-    
-
 
     <div class="left_menu">
       <div class="close">
@@ -150,7 +144,9 @@ const redirectModal = document.querySelector('.redirect');
 	<div class="streamingFrame">
 		<img src="/img/close.svg" alt="">
 		<video id="myVideo" controls>
-			<source src="yourStreamSource" type="video/mp4">
+			<%# источник подставляет JS ниже (querySelector('.streamingFrame video')). %>
+			<%# Раньше здесь стоял <source src="yourStreamSource"> из исходного шаблона — %>
+			<%# браузер запрашивал этот путь на каждом открытии /main и получал 404. %>
 			Ваш браузер не поддерживает HTML5 видео.
 		</video>
 	</div>
@@ -455,7 +451,7 @@ const redirectModal = document.querySelector('.redirect');
         </div>
       
         <div class="photo">
-          <img src="" alt="">
+          <img alt=""><%# без src: пустой атрибут заставлял браузер грузить саму страницу %>
           <div class="count">22</div>
         </div>
       </div>
@@ -1506,7 +1502,7 @@ function loadData() {
 
                 // Обрабатываем окончание стрима
                 remoteStream.onended = function() {
-                    alert('Стрим закончился');
+                    toast('Стрим закончился');
                 };
 
             });

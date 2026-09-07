@@ -34,6 +34,18 @@ const storage = multer.diskStorage({
 })
 
 const { requireAuth, requireOwner, wrap } = require('../middleware/auth');
+const { validate } = require('../middleware/validate');
+
+// Часы работы и координаты повторяются в двух маршрутах — держим схемы рядом.
+// `json: true` нужен из-за multipart: там всё приходит строками.
+const HOURS = { type: 'object', json: true, schema: {
+    open: { type: 'string', max: 5 },
+    close: { type: 'string', max: 5 },
+} };
+const LOCATION = { type: 'object', json: true, label: 'Координаты', schema: {
+    lat: { type: 'number', min: -90, max: 90 },
+    lng: { type: 'number', min: -180, max: 180 },
+} };
 
 const upload = multer({ storage: storage });
 
@@ -42,12 +54,19 @@ const upload = multer({ storage: storage });
 
 // Видимо создание заведения хз пока 
 
-router.post('/register-establishment', requireAuth, wrap(async (req, res) => {
+router.post('/register-establishment', requireAuth, validate({
+    name: { type: 'string', required: true, max: 200, label: 'Название' },
+    country: { type: 'string', required: true, max: 100, label: 'Страна' },
+    city: { type: 'string', required: true, max: 100, label: 'Город' },
+    address: { type: 'string', required: true, max: 300, label: 'Адрес' },
+    email: { type: 'email', required: true, label: 'Почта' },
+    phone: { type: 'string', required: true, max: 32, label: 'Телефон' },
+    weekdayHours: { ...HOURS, required: true, label: 'Часы по будням' },
+    weekendHours: { ...HOURS, required: true, label: 'Часы по выходным' },
+    lat: { type: 'number', min: -90, max: 90, label: 'Широта' },
+    lng: { type: 'number', min: -180, max: 180, label: 'Долгота' },
+}), wrap(async (req, res) => {
     const { name, country, city, address, email, phone, weekdayHours, weekendHours, lat, lng } = req.body;
-
-    if (!name || !country || !city || !address || !email || !phone || !weekdayHours || !weekendHours) {
-        return res.status(400).json({ message: 'Please fill in all fields' });
-    }
 
     const establishment = new Establishments({
         name,
@@ -140,17 +159,34 @@ router.get('/user-establishments', requireAuth, wrap(async (req, res) => {
     }
 }));
 
-router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments), upload.array('newPhotos'), wrap(async (req, res) => {
+// validate стоит после multer: до разбора multipart тела ещё нет.
+router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments), upload.array('newPhotos'), validate({
+    name: { type: 'string', max: 200, label: 'Название' },
+    country: { type: 'string', max: 100, label: 'Страна' },
+    city: { type: 'string', max: 100, label: 'Город' },
+    address: { type: 'string', max: 300, label: 'Адрес' },
+    email: { type: 'email', label: 'Почта' },
+    phone: { type: 'string', max: 32, label: 'Телефон' },
+    weekdayHours: { ...HOURS, label: 'Часы по будням' },
+    weekendHours: { ...HOURS, label: 'Часы по выходным' },
+    location: LOCATION,
+    // Список уже загруженных фотографий, который присылает форма. Столько же,
+    // сколько принимает загрузка новых, — иначе лимит в 6 обходится этим полем.
+    uploadedPhotos: { type: 'array', json: true, max: 6, default: [],
+        of: { type: 'string', max: 300 }, label: 'Фотографии' },
+}), wrap(async (req, res) => {
     
     if (req.files.length > 6) {
         req.files = req.files.slice(0, 6);
     }
 
     const { name, country, city, address, email, phone, weekdayHours, weekendHours, location, uploadedPhotos } = req.body;
-    const { lat, lng } = location || {}; // Извлекаем lat и lng из объекта location
+    const { lat, lng } = location || {};
 
-    if (!name && !country && !city && !address && !email && !phone && !weekdayHours && !weekendHours && !lat && !lng) {
-        return res.status(400).json({ message: 'Please specify at least one field to update' }); // Change this line
+    // Пустое тело после разбора и означает «обновлять нечего». Три JSON.parse
+    // отсюда убраны: их делает схема, и кривая строка теперь даёт 400, а не 500.
+    if (!Object.keys(req.body).length) {
+        return res.status(400).json({ message: 'Please specify at least one field to update' });
     }
 
     const establishment = {
@@ -161,16 +197,13 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
         email,
         phone,
         status: false, 
-        weekdayHours: JSON.parse(weekdayHours),
-        weekendHours: JSON.parse(weekendHours),
-        location: location && lat && lng ? {
-            lat: parseFloat(lat),
-            lng: parseFloat(lng)
-        } : undefined,
+        weekdayHours,
+        weekendHours,
+        location: lat !== undefined && lng !== undefined ? { lat, lng } : undefined,
         // Абсолютный URL от корня сайта. file.path раньше давал относительный
         // 'uploads/имя.jpg', и на вложенных страницах вида /userPage/:id браузер
         // искал его по /userPage/uploads/... — картинка не находилась.
-        photos: JSON.parse(uploadedPhotos).concat(req.files.map(file => `/uploads/establishments/${file.filename}`))
+        photos: uploadedPhotos.concat(req.files.map(file => `/uploads/establishments/${file.filename}`))
     };
 
     try {
@@ -186,7 +219,10 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
 // Владелец берётся из сессии, а не из тела запроса. Раньше userId приходил
 // от клиента: вошедший подставлял чужой идентификатор и разом переписывал
 // online и peerId у всех заведений другого пользователя. Воспроизводилось.
-router.post('/updateEstablishmentsOnlineStatus', requireAuth, function(req, res) {
+router.post('/updateEstablishmentsOnlineStatus', requireAuth, validate({
+    online: { type: 'bool', required: true, label: 'Статус' },
+    peerId: { type: 'string', max: 128, default: '', label: 'PeerId' },
+}), function(req, res) {
     const { online, peerId } = req.body;
     const userId = req.session.userId;
 
@@ -202,7 +238,11 @@ router.post('/updateEstablishmentsOnlineStatus', requireAuth, function(req, res)
 // Здесь проверка владельца была бутафорской: establishment.owner сверялся
 // с userId из того же тела запроса, поэтому достаточно было прислать
 // идентификатор настоящего владельца. Сверяем с сессией.
-router.post('/updateEstablishmentOnlineStatus', requireAuth, function(req, res) {
+router.post('/updateEstablishmentOnlineStatus', requireAuth, validate({
+    establishmentId: { type: 'objectId', required: true, label: 'Заведение' },
+    online: { type: 'bool', required: true, label: 'Статус' },
+    peerId: { type: 'string', max: 128, default: '', label: 'PeerId' },
+}), function(req, res) {
     const { establishmentId, online, peerId } = req.body;
     const userId = req.session.userId;
 
@@ -232,15 +272,16 @@ router.post('/updateEstablishmentOnlineStatus', requireAuth, function(req, res) 
 
 
 
-router.post('/rateEstablishment', requireAuth, wrap(async (req, res) => {
+router.post('/rateEstablishment', requireAuth, validate({
+    establishmentId: { type: 'objectId', required: true, label: 'Заведение' },
+    // Оценка пятибалльная: без верхней границы одним запросом ставилась
+    // произвольная, и средний балл заведения уезжал куда угодно.
+    rating: { type: 'int', required: true, min: 1, max: 5, label: 'Оценка' },
+}), wrap(async (req, res) => {
     const { establishmentId, rating } = req.body;
 
     // Получите идентификатор пользователя из сессии
     const userId = req.session.userId;
-
-    if (!userId || !establishmentId || !rating) {
-        return res.status(400).json({ message: 'Пожалуйста, заполните все поля' });
-    }
 
     try {
         // Проверьте, существует ли уже оценка от этого пользователя для этого заведения

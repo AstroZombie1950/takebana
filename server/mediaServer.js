@@ -1,9 +1,11 @@
 const NodeMediaServer = require('node-media-server');
-require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env' });
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env', quiet: true });
 
 
 const fs = require('fs');
+const path = require('path');
 const { isPublishAuthEnabled, getSecret } = require('./utils/rtmpAuth');
+const hls = require('./utils/hls');
 
 // Право публиковать проверяется подписью, а не знанием ключа: ключ трансляции
 // уходит каждому зрителю в исходнике страницы — по нему собирается URL
@@ -37,12 +39,15 @@ const config = {
   },
   http: {
     port: 8000,
-    mediaroot: './media',
+    // Путь абсолютный: relative './media' считался бы от cwd процесса, а pm2
+    // и `npm start` запускают приложение из разных каталогов — HLS уезжал бы
+    // мимо того места, откуда его раздаёт этот же сервер.
+    mediaroot: path.join(__dirname, 'media'),
     allow_origin: '*'
   },
   log: {
     level: 3, // 0=error, 1=warn, 2=info, 3=debug
-    file: './media/server.log' // Файл для записи логов
+    file: path.join(__dirname, 'media', 'server.log')
   }
 };
 
@@ -151,6 +156,11 @@ nms.on('postPublish', (id, streamPath, args) => {
     });
     // OBS publish detected -> mark stream active in DB and notify viewers
     markObsStreamStarted(streamKey);
+
+    // HLS: единственный формат, который играет на iPhone. HTTP-FLV там не
+    // работает в принципе — flv.js собирает поток через MSE, а Media Source
+    // Extensions в Safari на iOS недоступны.
+    hls.start(streamKey);
 });
 
 nms.on('donePublish', (id, streamPath, args) => {
@@ -158,6 +168,7 @@ nms.on('donePublish', (id, streamPath, args) => {
     const streamKey = streamPath.split('/')[2];
     activeStreams.delete(streamKey);
     markObsStreamEnded(streamKey);
+    hls.stop(streamKey);
 });
 
 nms.on('error', (err) => {
@@ -165,6 +176,22 @@ nms.on('error', (err) => {
 });
 
 nms.run();
+
+// node-media-server вешает свой process.on('uncaughtException'), который только
+// пишет в лог (node_media_server.js:62). Любой слушатель этого события отменяет
+// штатное падение процесса — и приложение остаётся живым, но неработоспособным.
+// Наблюдалось: при занятом порте 3000 процесс висел, не слушая ни одного порта.
+// Под pm2 это худшая из аварий — `pm2 status` показывает online, а autorestart
+// не срабатывает, потому что процесс не завершался.
+//
+// Свой обработчик ставим после nms.run(): вызываются оба, но наш выходит с
+// ненулевым кодом, и pm2 поднимает приложение заново. От петли перезапусков
+// защищают min_uptime и max_restarts в ops/ecosystem.config.js.
+// Отклонённые промисы сюда тоже попадают: с Node 15 режим по умолчанию — throw.
+process.on('uncaughtException', (err) => {
+    console.error('[fatal] необработанное исключение, процесс завершается:', err);
+    process.exit(1);
+});
 
 // Экспортируем необходимые объекты
 module.exports = {

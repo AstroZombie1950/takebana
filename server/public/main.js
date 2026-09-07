@@ -39,10 +39,10 @@
 //         .then(response => response.json())
 //         .then(data => {
 //           if (data.message === 'User registered successfully') {
-//             alert('User registered successfully');
+//             toast('User registered successfully');
 //             document.getElementById('modal').style.display = 'none';
 //           } else {
-//             alert(data.message);
+//             toast(data.message);
 //           }
 //         })
 //         .catch(error => console.error('Error:', error));
@@ -234,10 +234,10 @@ rev2Slide();
 //         .then(response => response.json())
 //         .then(data => {
 //           if (data.message === 'User logged in successfully') {
-//             alert('User logged in successfully');
+//             toast('User logged in successfully');
 //             document.getElementById('loginModal').style.display = 'none';
 //           } else {
-//             alert(data.message);
+//             toast(data.message);
 //           }
 //         })
 //         .catch(error => console.error('Error:', error));
@@ -259,10 +259,10 @@ if (logoutBtn) {
         })
         .then(response => {
           if (response.ok) {
-            alert('User logged out successfully');
+            toast('User logged out successfully');
             // Здесь вы можете обновить интерфейс пользователя, чтобы отразить состояние выхода из системы
           } else {
-            alert('Error logging out, please try again');
+            toast('Error logging out, please try again', 'error');
           }
         })
         .catch(error => console.error('Error:', error));
@@ -680,16 +680,7 @@ if (input) {
 
 
 
-// MESSAGE ALERT 
-function alert(message) {
-  let alert = document.querySelector('.message_alert');
-  let text = document.querySelector('.message_alert span');
-  text.innerText = message;
-  alert.classList.add('active');
-  setTimeout(() => {
-    alert.classList.remove('active');
-  }, 3000);
-};
+
 
 
 
@@ -751,11 +742,11 @@ if (settingsEstateSaveButton) {
     .then(response => response.json())
     .then(result => {
       console.log('Success:', result);
-      alert('Success: The establishment has been updated successfully.'); // Change this line
+      toast('Success: The establishment has been updated successfully.'); // Change this line
     })
     .catch(error => {
       console.error('Error:', error);
-      alert('Error: An error occurred while updating the establishment.'); // And this line
+      toast('Error: An error occurred while updating the establishment.', 'error'); // And this line
     });
   });
 
@@ -849,7 +840,7 @@ fileInput.addEventListener('change', function(event) {
 //   // Ограничение на максимум 6 файлов
 //   var maxFiles = 6;
 //   if (files.length > maxFiles) {
-//     alert("Вы можете загрузить максимум " + maxFiles + " файлов. Будут загружены только первые " + maxFiles + " файлов.");
+//     toast("Вы можете загрузить максимум " + maxFiles + " файлов. Будут загружены только первые " + maxFiles + " файлов.");
 //     files = Array.prototype.slice.call(files, 0, maxFiles);
 //   }
 
@@ -883,7 +874,7 @@ function handleFiles(files) {
   // Ограничение на максимум 6 файлов
   var maxFiles = 6;
   if (files.length > maxFiles) {
-    alert("Вы можете загрузить максимум " + maxFiles + " файлов. Будут загружены только первые " + maxFiles + " файлов.");
+    toast("Вы можете загрузить максимум " + maxFiles + " файлов. Будут загружены только первые " + maxFiles + " файлов.");
     files = Array.prototype.slice.call(files, 0, maxFiles);
   }
 

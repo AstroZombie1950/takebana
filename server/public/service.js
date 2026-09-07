@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', function() {
               window.location.href = data.redirectUrl;
             } else {
               // Показать сообщение об ошибке
-              alert(data.message);
+              toast(data.message);
             }
           })
           .catch((error) => {
@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', function() {
           const confirmPassword = document.querySelector('#confirmPassword').value;
       
           if (password !== confirmPassword) {
-            alert('Passwords do not match');
+            toast('Passwords do not match');
             return;
           }
       
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', function() {
               window.location.href = data.redirectUrl;
             } else {
               // Показать сообщение об ошибке
-              alert(data.message);
+              toast(data.message);
             }
           })
           .catch((error) => {
@@ -126,12 +126,12 @@ if (saveButton) {
         if (oldPassword || newPassword || confirmPassword) {
             // Check if all password fields are filled
             if (!oldPassword || !newPassword || !confirmPassword) {
-                alert('Please fill all the password fields or clear them');
+                toast('Please fill all the password fields or clear them');
                 return;
             }
 
             if (newPassword !== confirmPassword) {
-                alert('Passwords do not match');
+                toast('Passwords do not match');
                 return;
             }
         
@@ -145,9 +145,9 @@ if (saveButton) {
             .then(response => response.json())
             .then(data => {
                 if (data.message === 'Password updated successfully') {
-                    alert('Password successfully updated!');
+                    toast('Password successfully updated!');
                 } else {
-                    alert(data.message);
+                    toast(data.message);
                 }
             })
             .catch((error) => {
@@ -165,9 +165,9 @@ if (saveButton) {
             .then(response => response.json())
             .then(data => {
                 if (data.message === 'Profile updated successfully') {
-                    alert('Data successfully saved!');
+                    toast('Data successfully saved!');
                 } else {
-                    alert(data.message);
+                    toast(data.message);
                 }
             })
             .catch((error) => {
@@ -213,12 +213,12 @@ if (regEstate) {
       if (typeof establishment[key] === 'object') {
           for (let subKey in establishment[key]) {
               if (establishment[key][subKey] === '') {
-                  alert('Please fill in all fields');
+                  toast('Please fill in all fields');
                   return;
               }
           }
       } else if (establishment[key] === '') {
-          alert('Please fill in all fields');
+          toast('Please fill in all fields');
           return;
       }
   }
@@ -243,7 +243,7 @@ if (regEstate) {
       console.log(data);
   })
   .catch((error) => {
-      alert('Error when submitting data: ' + error.message);
+      toast('Error when submitting data: ' + error.message, 'error');
       console.error('Error:', error);
   });
   
@@ -515,7 +515,7 @@ function estateListeners() {
 			// Обнулите локальный стрим
 			localStream = null;
 		} else {
-			alert('Нет активного стрима');
+			toast('Нет активного стрима');
 		}
 
     let start;
@@ -538,7 +538,7 @@ function estateListeners() {
 		// var video = document.getElementById('video');
 		// Запрос разрешений на видео и звук
 		if (localStream) {
-			alert('У вас уже есть активный стрим, перезагрузите страницу для завершения')
+			toast('У вас уже есть активный стрим, перезагрузите страницу для завершения')
 		} else {
 			navigator.mediaDevices.getUserMedia({ video: true, audio: true })
 			.then(function(stream) {
@@ -598,9 +598,9 @@ function estateListeners() {
 			.catch(function(err) {
 				console.log('An error occurred: ' + err);
 				if (err.name === 'NotFoundError') {
-					alert('Веб-камера или микрофон не найдены. Подключите и попробуйте еще раз.');
+					toast('Веб-камера или микрофон не найдены. Подключите и попробуйте еще раз.');
 				} else {
-					alert('Произошла ошибка: ' + err.message);
+					toast('Произошла ошибка: ' + err.message, 'error');
 				}
 			});
 		}

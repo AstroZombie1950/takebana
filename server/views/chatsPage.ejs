@@ -691,7 +691,7 @@
             if (currentRecipientId) {
                 window.location.href = `/userPage/${currentRecipientId}`;
             } else {
-                alert(t('219', 'Сначала выберите диалог для перехода к профилю собеседника.', 'First select a conversation to open the user profile.'));
+                toast(t('219', 'Сначала выберите диалог для перехода к профилю собеседника.', 'First select a conversation to open the user profile.'));
             }
         }
 
@@ -864,7 +864,7 @@
             const messageContent = messageInput.value.trim();
 
             if (!recipientId || messageContent === '') {
-                alert(t('222', 'Выберите диалог и введите сообщение.', 'Select a conversation and type a message.'));
+                toast(t('222', 'Выберите диалог и введите сообщение.', 'Select a conversation and type a message.'), 'error');
                 return;
             }
 
@@ -891,11 +891,11 @@
                     // Обновляем время последнего сообщения
                     lastMessageTimestamp = newMessage.sentAt;
                 } else {
-                    alert(t('223', 'Ошибка при отправке сообщения.', 'Failed to send message.'));
+                    toast(t('223', 'Ошибка при отправке сообщения.', 'Failed to send message.'), 'error');
                 }
             } catch (error) {
                 console.error('send message error:', error);
-                alert(t('223', 'Ошибка при отправке сообщения.', 'Failed to send message.'));
+                toast(t('223', 'Ошибка при отправке сообщения.', 'Failed to send message.'), 'error');
             }
         }
 
@@ -1058,6 +1058,8 @@
             const chatHeaderPresence = document.getElementById('chatHeaderPresence');
             if (chatHeaderPresence) {
                 chatHeaderPresence.setAttribute('data-presence-user', recipientId);
+                // Диалог открыли только что — подписываемся на статус собеседника.
+                if (window.subscribePresence) window.subscribePresence([recipientId]);
                 const dot = chatHeaderPresence.querySelector('.presence-dot');
                 if (dot) dot.classList.remove('hidden');
                 // Сразу подтянем стартовый статус

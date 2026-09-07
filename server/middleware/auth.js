@@ -17,6 +17,16 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ message: 'Необходима авторизация' });
 }
 
+// То же самое, но для маршрутов /api/*: всегда JSON и всегда 401.
+//
+// requireAuth для GET-запросов, принимающих HTML, отвечает редиректом на главную —
+// это верно для страниц, но не для API: обычный fetch() без заголовков посылает
+// Accept: */*, получил бы 302 и HTML, а потом упал бы на .json(). Молча.
+function requireAuthApi(req, res, next) {
+    if (req.session && req.session.userId) return next();
+    return res.status(401).json({ error: 'unauthorized' });
+}
+
 // Пускает владельца записи, а также администратора.
 //
 //   requireOwner(Establishments)                       — id берётся из req.params.id, владелец из поля owner
@@ -72,4 +82,4 @@ function wrap(handler) {
     };
 }
 
-module.exports = { requireAuth, requireOwner, wrap };
+module.exports = { requireAuth, requireAuthApi, requireOwner, wrap };

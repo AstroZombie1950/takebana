@@ -28,7 +28,6 @@ server/uploads/
 server/media/
 server/live/
 # папка, которую app.js создаёт при старте: сегменты веб-стрима и плейлисты
-server/streams/
 server/**/*.m3u8
 # сегменты MPEG-TS (не путать с TypeScript — потому и с путём)
 server/**/hls/*.ts

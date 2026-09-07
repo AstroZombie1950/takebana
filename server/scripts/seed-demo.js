@@ -7,10 +7,13 @@
 // Все записи помечены признаком demo в поле email/title, чтобы --reset
 // не задел ничего постороннего. На проде запускать не нужно.
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
-const { v4: uuidv4 } = require('uuid');
+// crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
+// Пакет uuid убран: использовался только ради v4, а его advisory
+// (буфер в v3/v5/v6) тянулся в аудит на пустом месте.
+const { randomUUID: uuidv4 } = require('crypto');
 
 const User = require('../models/User');
 const Establishments = require('../models/Establishments');

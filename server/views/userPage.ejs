@@ -505,7 +505,7 @@
                     subscribeButton.classList.add('unsubscribe');
                 } else {
                     const result = await response.json();
-                    alert(result.message || t('212', 'Ошибка при подписке.', 'Subscribe error.'));
+                    toast(result.message || t('212', 'Ошибка при подписке.', 'Subscribe error.'), 'error');
                 }
             } catch (error) {
                 console.error('subscribe error:', error);
@@ -527,7 +527,7 @@
                     subscribeButton.classList.remove('unsubscribe');
                 } else {
                     const result = await response.json();
-                    alert(result.message || t('213', 'Ошибка при отписке.', 'Unsubscribe error.'));
+                    toast(result.message || t('213', 'Ошибка при отписке.', 'Unsubscribe error.'), 'error');
                 }
             } catch (error) {
                 console.error('unsubscribe error:', error);

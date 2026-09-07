@@ -548,11 +548,11 @@
                             this.classList.add('bg-green-500', 'hover:bg-green-600');
                             this.classList.remove('bg-brand-500', 'hover:bg-brand-600');
                         } else {
-                            alert(data.message);
+                            toast(data.message);
                         }
                     } catch (error) {
                         console.error('Ошибка:', error);
-                        alert('Произошла ошибка при подписке');
+                        toast('Произошла ошибка при подписке', 'error');
                     }
                 });
             });

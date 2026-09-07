@@ -748,7 +748,10 @@
                                                 </div>
                                                 <span class="online__pepole-count text-slate-700 font-semibold text-xs sm:text-sm">
                                                     <span class="viewers-number"><%= stream.viewers %></span>
-                                                    <span class="viewers-text hidden xs:inline ml-1">зрителей</span>
+                                                    <% const _v = Number(stream.viewers) || 0, _d10 = _v % 10, _d100 = _v % 100;
+   const _vw = (_d10 === 1 && _d100 !== 11) ? 'зритель'
+             : (_d10 >= 2 && _d10 <= 4 && (_d100 < 12 || _d100 > 14)) ? 'зрителя' : 'зрителей'; %>
+<span class="viewers-text hidden xs:inline ml-1"><%= _vw %></span>
                                                 </span>
                                             </div>
                                         </div>
@@ -876,7 +879,7 @@
                                 <div class="input__messeng-box p-3 sm:p-4 border-t border-gray-100">
                                     <div class="flex gap-2 sm:gap-3">
                                         <textarea class="input__messeng flex-1 px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg sm:rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm sm:text-base" 
-                                                  rows="1" placeholder="Введите сообщение..." maxlength="140"></textarea>
+                                                  rows="1" lng="218" placeholder="Сообщение..." maxlength="140"></textarea>
                                         <button class="starting__buttone px-4 sm:px-6 py-2.5 sm:py-3.5 bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white rounded-xl sm:rounded-2xl font-semibold transition-all duration-300 transform hover:scale-105 active:scale-95 flex-shrink-0 text-sm sm:text-base shadow-lg hover:shadow-xl border border-brand-400/30">
                                             <span class="hidden sm:inline flex items-center gap-2" lng="109">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -946,23 +949,19 @@
 
         // Инициализация Socket.IO
         console.log('[Streamer] Initializing socket with serverEnv:', serverEnv);
-        if (serverEnv == 'prod') {
-            socket = io('https://takebana.com', {
-                transports: ['websocket'],
-                reconnection: true,
-                reconnectionDelay: 1000,
-                reconnectionAttempts: 5
-            });
-        }
-        if (serverEnv == 'local') {
-            socket = io('https://localhost:3000', {
-                transports: ['websocket'],
-                reconnection: true,
-                reconnectionDelay: 1000,
-                reconnectionAttempts: 5,
-                rejectUnauthorized: false // Для self-signed SSL
-            });
-        }
+        // Адрес берём из самой страницы, а не из зашитых строк.
+        // Раньше здесь было две ветки: 'prod' → https://takebana.com и 'local' →
+        // https://localhost:3000. Ветки для 'http' (наш режим локальной разработки)
+        // не было вообще — socket оставался undefined, и первый же socket.on(...)
+        // ронял весь скрипт страницы: ни чата, ни счётчика зрителей, ни реакции на
+        // смену типа эфира. Плюс зашитый боевой домен ломал бы проверку сервера
+        // по IP до переключения DNS.
+        socket = io(window.location.origin, {
+            transports: ['websocket'],
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionAttempts: 5
+        });
         
         // Регистрируем обработчики ДО подключения
         console.log('[Streamer] Registering event handlers before connection...');
@@ -982,6 +981,9 @@
             console.log('[Streamer] Emitting join-stream-room, socket.connected:', socket.connected, 'socket.id:', socket.id);
             socket.emit('join-stream-room', streamKey, (response) => {
                 console.log('[Streamer] join-stream-room callback response:', response);
+                // Добираем пропущенное только после того, как вошли в комнату:
+                // иначе сообщение, пришедшее между запросом и входом, потерялось бы.
+                if (typeof fetchNewMessages === 'function') fetchNewMessages();
             });
             console.log('[Streamer] Sent join-stream-room event with key:', streamKey);
         };
@@ -1036,6 +1038,21 @@
             console.log('[Streamer] Received viewers count:', data);
             console.log('[Streamer] Comparing streamKey - received:', data.streamKey, 'local:', streamKey, 'match:', data.streamKey === streamKey);
             if (data.streamKey === streamKey) {
+                // Склонение слова «зритель». В шаблоне стояло жёсткое «зрителей»,
+                // поэтому при одном зрителе выходило «1 зрителей».
+                function viewersWord(n) {
+                    n = Math.abs(Number(n) || 0);
+                    const d10 = n % 10, d100 = n % 100;
+                    if (d10 === 1 && d100 !== 11) return 'зритель';
+                    if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return 'зрителя';
+                    return 'зрителей';
+                }
+                function setViewersCount(n) {
+                    const num = document.querySelector('.viewers-number');
+                    const word = document.querySelector('.viewers-text');
+                    if (num) num.textContent = n;
+                    if (word) word.textContent = viewersWord(n);
+                }
                 // Пробуем обновить через .viewers-number (вложенный span)
                 const viewersNumber = document.querySelector('.viewers-number');
                 const countElement = document.querySelector('.online__pepole-count');
@@ -1046,7 +1063,7 @@
                 if (viewersNumber) {
                     // Обновляем число зрителей
                     const oldText = viewersNumber.textContent;
-                    viewersNumber.textContent = data.count;
+                    setViewersCount(data.count);
                     console.log('[Streamer] Updated viewers-number from', oldText, 'to', data.count);
                 } else if (countElement) {
                     // Fallback: обновляем весь элемент
@@ -1411,27 +1428,30 @@
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log("🎥 Инициализация системы стриминга...");
-    // Запрашиваем разрешения на камеру/микрофон для стримера
+
+    // Камеру спрашиваем только у того, кто вещает с камеры.
+    // Раньше разрешение запрашивалось у всех подряд, включая вещателей через OBS,
+    // которым камера не нужна вообще: браузер показывал запрос доступа, а при
+    // отказе выскакивал блокирующий alert. Для трансляций с пульта это лишний шаг
+    // ровно там, где его быть не должно.
+    if ('<%= stream.streamType %>' !== 'daily-stream') {
+        console.log('Тип эфира не требует камеры — разрешение не запрашиваем');
+        return;
+    }
+
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true
-        });
-        
-        // Если пользователь дал разрешение, код доходит сюда
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         console.log('✅ Доступ к камере/микрофону получен');
-        
-        // Останавливаем поток, он нужен был только для получения разрешений
+        // Поток нужен был только ради разрешения — сразу отпускаем устройство,
+        // иначе индикатор камеры горит всё время, пока открыта страница.
         stream.getTracks().forEach(track => track.stop());
-        
     } catch (err) {
         console.error('❌ Ошибка при запросе доступа к камере/микрофону:', err);
-        
-        // Можно отследить конкретные типы ошибок 
         if (err.name === 'NotAllowedError') {
-            alert('Вы не разрешили доступ к камере/микрофону. Работа с видео невозможна.');
+            toast('Доступ к камере и микрофону не разрешён. Эфир с камеры не запустится — ' +
+                         'разрешите доступ в настройках браузера или ведите эфир через OBS.');
         } else {
-            alert(`Не удалось получить доступ к камере/микрофону: ${err.name} - ${err.message}`);
+            toast('Не удалось получить доступ к камере и микрофону: ' + err.name, 'error');
         }
     }
 });
@@ -1462,10 +1482,10 @@ if (pauseButton) {
             console.log('🔄 Деактивация стрима в базе...');
             await diactivateStream();
 
-            alert((window.langDict?.['245']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Стрим поставлен на паузу');
+            toast((window.langDict?.['245']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Стрим поставлен на паузу');
         } catch (error) {
             console.error('❌ Ошибка при постановке на паузу:', error);
-            alert((window.langDict?.['246']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Произошла ошибка при постановке на паузу');
+            toast((window.langDict?.['246']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Произошла ошибка при постановке на паузу', 'error');
         } finally {
             // Включаем кнопку обратно
             pauseButton.disabled = false;
@@ -1480,7 +1500,10 @@ if (stopButton) {
         console.log('🛑 Кнопка "Полностью завершить стрим" нажата!');
         
         // Подтверждение от пользователя
-        const confirmed = confirm((window.langDict?.['241']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Вы уверены, что хотите полностью завершить стрим? Это действие нельзя отменить.');
+        const confirmed = await confirmDialog(
+            (window.langDict?.['241']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')])
+                || 'Вы уверены, что хотите полностью завершить стрим? Это действие нельзя отменить.',
+            { okText: 'Завершить' });
         if (!confirmed) {
             console.log('⚠️ Пользователь отменил завершение стрима');
             return;
@@ -1502,14 +1525,14 @@ if (stopButton) {
             console.log('🗑️ Удаление стрима из базы...');
             await terminateStream();
 
-            alert((window.langDict?.['243']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Стрим полностью завершен');
+            toast((window.langDict?.['243']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Стрим полностью завершен');
             
             // Перенаправляем на главную страницу или страницу стримера
             window.location.href = '/streaming';
             
         } catch (error) {
             console.error('❌ Ошибка при завершении стрима:', error);
-            alert(((window.langDict?.['244']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Произошла ошибка при завершении стрима: ') + error.message);
+            toast(((window.langDict?.['244']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Произошла ошибка при завершении стрима: ') + error.message, 'error');
         } finally {
             // Включаем кнопку обратно
             stopButton.disabled = false;
@@ -1801,7 +1824,7 @@ async function sendMessage() {
 
     // Проверка длины сообщения
     if (messageContent.length > 140) {
-        alert((window.langDict?.['248']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Ошибка: Сообщение не должно превышать 140 символов');
+        toast((window.langDict?.['248']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Ошибка: Сообщение не должно превышать 140 символов', 'error');
         return;
     }
 
@@ -1825,137 +1848,70 @@ async function sendMessage() {
             messageInput.value = ''; // Очищаем поле ввода
         } else {
             console.error('Ошибка отправки сообщения');
-            alert('Ошибка при отправке сообщения');
+            toast('Ошибка при отправке сообщения', 'error');
         }
     } catch (error) {
         console.error('Ошибка при отправке сообщения:', error);
-        alert('Произошла ошибка при отправке сообщения');
+        toast('Произошла ошибка при отправке сообщения', 'error');
     }
 }
 
-// ========== ЗАГРУЗКА НОВЫХ СООБЩЕНИЙ В ЧАТ (ДЛЯ ВСЕХ) ==========
-// console.log("✅ Определение функций чата для всех пользователей...");
+// ========== ЧАТ ЭФИРА ==========
+// Сообщения приходят сокетом в комнату эфира. Раньше здесь стоял
+// setInterval(fetchNewMessages, 2000): каждый зритель дёргал сервер 30 раз
+// в минуту, почти всегда впустую, и всё равно видел сообщение с задержкой
+// до двух секунд. Опрос остался ровно для двух случаев — первая загрузка
+// и добор пропущенного после обрыва связи.
 
-// Функция для подгрузки новых сообщений
+// Отрисовка одного сообщения. Общая для сокета и для добора опросом.
+function appendChatMessage(message) {
+    const messageBox = document.querySelector('.messeg-box');
+    if (!messageBox) return;
+
+    // Сообщение могло прийти и сокетом, и добором — второй раз не рисуем.
+    if (message._id && messageBox.querySelector(`[data-message-id="${message._id}"]`)) return;
+
+    const messageElement = document.createElement('div');
+    messageElement.classList.add('chat-message', 'p-3', 'rounded-xl', 'bg-gray-50');
+    if (message._id) messageElement.dataset.messageId = message._id;
+    messageElement.dataset.timestamp = message.createdAt;
+
+    const isCurrentUser = message.userId === '<%= currentUser._id %>';
+    const nameColorClass = isCurrentUser ? 'text-green-600' : 'text-blue-600';
+
+    messageElement.innerHTML = `
+        <div class="flex items-start space-x-3">
+            <div class="flex-1">
+                <p class="text-sm">
+                    <span class="${nameColorClass} font-semibold">${escapeHtml(message.username)}:</span>
+                    <span class="text-gray-900 ml-2">${escapeHtml(message.message)}</span>
+                </p>
+                <p class="text-xs text-gray-500 mt-1">${new Date(message.createdAt).toLocaleTimeString()}</p>
+            </div>
+        </div>
+    `;
+
+    messageBox.appendChild(messageElement);
+    messageBox.scrollTo({ top: messageBox.scrollHeight, behavior: 'smooth' });
+
+    if (message.createdAt) lastMessageTime = message.createdAt;
+}
+
+// Добор пропущенного: при открытии страницы и после восстановления связи.
 async function fetchNewMessages() {
-    const streamId = '<%= stream._id %>'; // Получаем ID стрима
-    
+    const streamId = '<%= stream._id %>';
+
     try {
-        // Запрашиваем сообщения, которые были созданы после последнего сообщения
         const url = `/api/chat/messages/new?streamId=${streamId}&lastMessageTime=${lastMessageTime || ''}`;
-        
         const response = await fetch(url);
-        
-        if (response.ok) {
-            const newMessages = await response.json();
-
-            if (newMessages.length > 0) {
-                const messageBox = document.querySelector('.messeg-box');
-                
-                // Добавляем каждое новое сообщение в конец чата
-                newMessages.forEach(message => {
-                    const messageElement = document.createElement('div');
-                    messageElement.classList.add('chat-message', 'p-3', 'rounded-xl', 'bg-gray-50');
-                    
-                    // Определяем цвет имени пользователя
-                    const isCurrentUser = message.userId === '<%= currentUser._id %>';
-                    const nameColorClass = isCurrentUser ? 'text-green-600' : 'text-blue-600';
-                    
-                    messageElement.innerHTML = `
-                        <div class="flex items-start space-x-3">
-                            <div class="flex-1">
-                                <p class="text-sm">
-                                    <span class="${nameColorClass} font-semibold">${escapeHtml(message.username)}:</span>
-                                    <span class="text-gray-900 ml-2">${escapeHtml(message.message)}</span>
-                                </p>
-                                <p class="text-xs text-gray-500 mt-1">${new Date(message.createdAt).toLocaleTimeString()}</p>
-                            </div>
-                        </div>
-                    `;
-                    
-                    messageBox.appendChild(messageElement);
-                    
-                    // Плавная прокрутка вниз к новому сообщению
-                    messageBox.scrollTo({
-                        top: messageBox.scrollHeight,
-                        behavior: 'smooth'
-                    });
-                });
-
-                // Обновляем время последнего сообщения только если новые сообщения действительно пришли
-                lastMessageTime = newMessages[newMessages.length - 1].createdAt;
-            }
-        } else {
-            console.error('❌ Ошибка при получении новых сообщений, статус:', response.status);
-            const errorText = await response.text();
-            console.error('❌ Текст ошибки:', errorText);
+        if (!response.ok) {
+            console.error('Ошибка при получении новых сообщений, статус:', response.status);
+            return;
         }
+        (await response.json()).forEach(appendChatMessage);
     } catch (error) {
-        console.error('❌ Ошибка при запросе новых сообщений:', error);
+        console.error('Ошибка при запросе новых сообщений:', error);
     }
-}
-
-
-
-
-
-        // Получаем значение из EJS - isStreamer удален
-
-// OBS status polling должен работать ТОЛЬКО на OBS-странице стримера,
-// иначе на WEB-странице он будет переключать кнопки "Начать/Пауза" не по тому состоянию.
-const OBS_ONLY_PAGE = document.body?.dataset?.obsOnly === '1';
-if (OBS_ONLY_PAGE) {
-    // Проверяем статус OBS стрима
-    let isCurrentlyStreaming = false;
-
-    function checkStreamStatus() {
-        fetch(`/api/check-stream/${streamKey}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
-            .then(async data => {
-                // Если статус изменился
-                if (data.isLive !== isCurrentlyStreaming) {
-                    if (data.isLive) {
-                        console.log('🟢 OBS Stream just started!');
-                        console.log('Stream key:', data.streamKey);
-                        console.log('Start time:', new Date(data.timestamp).toLocaleString());
-
-                        await activateStreamObs();
-                    } else {
-                        console.log('🔴 OBS Stream just ended!');
-                        await diactivateStreamObs();
-                    }
-                    isCurrentlyStreaming = data.isLive;
-                } else {
-                    console.log(`${data.isLive ? '🟢' : '🔴'} Obs Stream status: ${data.isLive ? 'Active' : 'Inactive'}`);
-                }
-            })
-            .catch(error => {
-                console.error('❌ Error checking stream status:', error);
-                isCurrentlyStreaming = false;
-            });
-    }
-
-    // Запускаем проверку OBS стрима
-    checkStreamStatus();
-    let checkInterval = setInterval(checkStreamStatus, 5000);
-
-    window.addEventListener('beforeunload', () => {
-        clearInterval(checkInterval);
-    });
-
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            clearInterval(checkInterval);
-        } else {
-            checkStreamStatus();
-            checkInterval = setInterval(checkStreamStatus, 5000);
-        }
-    });
 }
 
 // ========== ИНИЦИАЛИЗАЦИЯ ЧАТА ДЛЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (В КОНЦЕ) ==========
@@ -1986,16 +1942,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 500); // Небольшая задержка для загрузки контента
     }
     
-    // Проверяем что функция fetchNewMessages доступна
-    if (typeof fetchNewMessages === 'function') {
-        // console.log("✅ Функция найдена! Запуск периодического обновления чата...");
-        // Запускаем периодическую загрузку новых сообщений каждые 2 секунды
-        const chatInterval = setInterval(fetchNewMessages, 2000);
-        
-        // Первая загрузка сразу
-        setTimeout(fetchNewMessages, 1000);
+    // Новые сообщения приходят сокетом в комнату эфира. Этот вызов — страховка
+    // на случай, если сокет не поднялся: основной добор идёт в подтверждении
+    // входа в комнату, там же и после обрыва. Повторы отсекаются по data-message-id.
+    fetchNewMessages();
+    if (typeof socket !== 'undefined' && socket) {
+        socket.on('chat:message', appendChatMessage);
     } else {
-        console.error("❌ Функция fetchNewMessages не найдена!");
+        console.error('Сокет недоступен — новые сообщения чата приходить не будут');
     }
     
     // ========== АВТОМАТИЧЕСКАЯ ДЕАКТИВАЦИЯ СТРИМА ПРИ ЗАГРУЗКЕ ==========
@@ -2472,7 +2426,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 this.log('💡 Решение: Используйте HTTPS URL (ngrok) для Safari на iOS');
             }
             
-            alert('Ошибка: ' + error.message);
+            toast('Ошибка: ' + error.message, 'error');
         }
     }
 

@@ -8,11 +8,14 @@
 // Если пользователь с таким email уже есть — он повышается до admin.
 // Пароль при этом меняется, только если он передан явно.
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
-const { v4: uuidv4 } = require('uuid');
+// crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
+// Пакет uuid убран: использовался только ради v4, а его advisory
+// (буфер в v3/v5/v6) тянулся в аудит на пустом месте.
+const { randomUUID: uuidv4 } = crypto;
 const User = require('../models/User');
 
 const SALT_ROUNDS = 10;

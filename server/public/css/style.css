@@ -4099,39 +4099,6 @@ section.register_company .main form .inp input {
 
 
 
-.message_alert {
-    z-index: 9999;
-    position: absolute;
-    left: 50%;
-    top: -20%;
-    transform: translateX(-50%);
-    width: 380px;
-    padding: 0 20px;
-    height: 70px;
-    border: 1px solid rgb(0, 0, 0);
-    border-radius: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: white;
-    transition: .3s;
-}
-
-.message_alert.active {
-    top: 3%;
-    
-}
-
-.message_alert .fa {
-    margin-right: 12px;
-    font-size: 28px;
-    color: #363636;
-}
-
-.message_alert span {
-    font-size: 16px;
-}
-
 p.finish {
     display: none;
 }

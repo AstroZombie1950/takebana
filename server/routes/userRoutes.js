@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
 const { authLimiter, registerLimiter } = require('../middleware/rateLimit');
+const { validate } = require('../middleware/validate');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 
 const bcrypt = require('bcrypt');
@@ -21,16 +22,22 @@ var MongoDBStore = require('connect-mongodb-session')(session);
 // зафиксирован: эти два маршрута обслуживают только вход по паролю.
 const PASSWORD_PROVIDER = '';
 
+// Длина пароля сверху: bcrypt всё равно учитывает первые 72 байта, а принимать
+// мегабайтную строку и считать по ней хеш — бесплатная нагрузка на процессор.
+const PASSWORD_MAX = 200;
+const PASSWORD_MIN = 6;
+
 // Маршрут входа
-router.post('/login', authLimiter, async (req, res) => {
+router.post('/login', authLimiter, validate({
+  email: { type: 'email', required: true, label: 'Почта' },
+  // На входе длину не проверяем: пароли старых учёток могут быть короче
+  // нынешнего минимума, и человек должен суметь войти и сменить его.
+  password: { type: 'string', required: true, max: PASSWORD_MAX, trim: false, label: 'Пароль' },
+}), async (req, res) => {
   const { email, password } = req.body;
   const provider = PASSWORD_PROVIDER;
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required' });
-  }
   try {
     const user = await User.findOne({ email: email, provider: provider });
-    console.log('User found:', user);
     if (!user) {
       return res.status(400).json({ message: 'Invalid email or password' });
     }
@@ -47,8 +54,6 @@ router.post('/login', authLimiter, async (req, res) => {
     let nextRoute = req.session.next || 'default';
     // req.session.next = null; // Очищаем `next` из сессии
 
-    console.log('nextRoute:', nextRoute);
-
     // Определяем URL перенаправления
     let redirectUrl = '/main'; // Значение по умолчанию
     if (nextRoute === 'service1' || nextRoute === 'default') {
@@ -56,8 +61,6 @@ router.post('/login', authLimiter, async (req, res) => {
     } else if (nextRoute === 'service2') {
       redirectUrl = '/streaming';
     }
-
-    console.log('redirectUrl:', redirectUrl);
 
     // Отправляем JSON-ответ с URL перенаправления
     res.status(200).json({ message: 'User logged in successfully', redirectUrl });
@@ -68,16 +71,13 @@ router.post('/login', authLimiter, async (req, res) => {
 });
 
 // Маршрут регистрации
-router.post('/register', registerLimiter, async (req, res) => {
-  const { email, password } = req.body;
+router.post('/register', registerLimiter, validate({
+  email: { type: 'email', required: true, label: 'Почта' },
+  password: { type: 'string', required: true, min: PASSWORD_MIN, max: PASSWORD_MAX, trim: false, label: 'Пароль' },
+  login: { type: 'string', max: 64, default: '', label: 'Логин' },
+}), async (req, res) => {
+  const { email, password, login } = req.body;
   const provider = PASSWORD_PROVIDER; // см. комментарий выше
-  const login = req.body.login || '';
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required' });
-  }
-  if (password.length < 6) {
-    return res.status(400).json({ message: 'Password must be at least 6 characters long' });
-  }
   try {
     const existingUser = await User.findOne({ email: email, provider: provider });
     if (existingUser) {
@@ -96,8 +96,6 @@ router.post('/register', registerLimiter, async (req, res) => {
     let nextRoute = req.session.next || 'default';
     // req.session.next = null; // Очищаем `next` из сессии
 
-    console.log('nextRoute:', nextRoute);
-
     // Определяем URL перенаправления
     let redirectUrl = '/main'; // Значение по умолчанию
     if (nextRoute === 'service1' || nextRoute === 'default') {
@@ -105,8 +103,6 @@ router.post('/register', registerLimiter, async (req, res) => {
     } else if (nextRoute === 'service2') {
       redirectUrl = '/streaming';
     }
-
-    console.log('redirectUrl:', redirectUrl);
 
     // Отправляем JSON-ответ с URL перенаправления
     res.status(200).json({ message: 'User registered successfully', redirectUrl });
@@ -118,11 +114,13 @@ router.post('/register', registerLimiter, async (req, res) => {
 
 
 
-router.post('/update-profile', async (req, res) => {
+router.post('/update-profile', validate({
+  login: { type: 'string', required: true, min: 1, max: 64, label: 'Логин' },
+}), async (req, res) => {
   const { login } = req.body;
   const userId = req.session.userId;
-  if (!login || !userId) {
-    return res.status(400).json({ message: 'Login and user ID are required' });
+  if (!userId) {
+    return res.status(401).json({ message: 'Пользователь не авторизован' });
   }
   try {
     // Найти пользователя по ID
@@ -142,15 +140,15 @@ router.post('/update-profile', async (req, res) => {
 });
 
 
-router.post('/update-password', authLimiter, async (req, res) => {
+// Минимум тот же, что в регистрации: иначе через смену пароля он обходится.
+router.post('/update-password', authLimiter, validate({
+  oldPassword: { type: 'string', required: true, max: PASSWORD_MAX, trim: false, label: 'Старый пароль' },
+  newPassword: { type: 'string', required: true, min: PASSWORD_MIN, max: PASSWORD_MAX, trim: false, label: 'Новый пароль' },
+}), async (req, res) => {
   const { oldPassword, newPassword } = req.body;
   const userId = req.session.userId;
-  if (!oldPassword || !newPassword || !userId) {
-    return res.status(400).json({ message: 'Old password, new password and user ID are required' });
-  }
-  // Столько же требует регистрация — иначе через смену пароля обходится минимум
-  if (newPassword.length < 6) {
-    return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+  if (!userId) {
+    return res.status(401).json({ message: 'Пользователь не авторизован' });
   }
   try {
     const user = await User.findById(userId);

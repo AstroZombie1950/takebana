@@ -1,7 +1,8 @@
 <div class="shodow"></div>
 
 <!-- Кастомная конфигурация Tailwind для единообразия -->
-<script>
+
+<script src="/toast.js"></script><script>
   if (typeof tailwind !== 'undefined') {
     tailwind.config = {
       theme: {
@@ -403,7 +404,9 @@
                 <img id="profileAvatarPreview" src="<%= currentUser.avatarStyle.url %>" class="w-full h-full object-cover" alt="avatar"/>
               <% } else { %>
                   <div id="profileAvatarEmpty" class="w-full h-full flex items-center justify-center text-gray-400 text-xs">Нет фото</div>
-                  <img id="profileAvatarPreview" src="" class="w-full h-full object-cover hidden" alt="avatar"/>
+                  <%# без src: пустой атрибут — это лишний запрос страницы самой к себе. %>
+                  <%# Реальный адрес проставляет JS после загрузки аватара. %>
+                  <img id="profileAvatarPreview" class="w-full h-full object-cover hidden" alt="avatar"/>
                 <% } %>
               </div>
             </div>
@@ -1080,11 +1083,11 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log('[terminate] click', { streamId });
 
       if (!streamId) {
-        alert('Не удалось определить активный стрим. Обновите страницу.');
+        toast('Не удалось определить активный стрим. Обновите страницу.', 'error');
         return;
       }
 
-      const ok = confirm('Завершить стрим? Он будет удалён.');
+      const ok = await confirmDialog('Завершить стрим? Он будет удалён.', { okText: 'Завершить' });
       if (!ok) return;
 
       terminateStreamButton.disabled = true;
@@ -1101,7 +1104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
           console.error('[terminate] failed', response.status, data);
-          alert(data?.message || 'Ошибка завершения стрима');
+          toast(data?.message || 'Ошибка завершения стрима', 'error');
           return;
         }
 
@@ -1111,7 +1114,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.reload();
       } catch (e) {
         console.error('[terminate] exception', e);
-        alert('Ошибка сети при завершении стрима');
+        toast('Ошибка сети при завершении стрима', 'error');
       } finally {
         terminateStreamButton.disabled = false;
         terminateStreamButton.innerHTML = prevHtml;
@@ -1203,6 +1206,8 @@ document.addEventListener('DOMContentLoaded', function() {
         addSearchResultClickHandlers(resultsContainer);
         // Инициализируем presence для новых результатов
         const ids = Array.from(resultsContainer.querySelectorAll('[data-presence-user]')).map(n => n.getAttribute('data-presence-user'));
+        // Люди из поиска появились на экране только что — подписываемся и на них.
+        if (window.subscribePresence) window.subscribePresence(ids.filter(Boolean));
         if (ids.length) {
           fetch('/api/presence?ids=' + encodeURIComponent(ids.join(',')))
             .then(r => r.json())
@@ -1392,12 +1397,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const confirmPassword = confirmPasswordInput.value.trim();
 
     if (!oldPassword || !newPassword || !confirmPassword) {
-      alert('Пожалуйста, заполните все поля для смены пароля.');
+      toast('Пожалуйста, заполните все поля для смены пароля.', 'error');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      alert('Новый пароль и подтверждение не совпадают.');
+      toast('Новый пароль и подтверждение не совпадают.', 'error');
       return;
     }
 
@@ -1416,7 +1421,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const result = await response.json();
 
       if (response.ok) {
-        alert('Пароль успешно обновлен!');
+        toast('Пароль успешно обновлен!', 'ok');
         // Очищаем поля пароля
         oldPasswordInput.value = '';
         newPasswordInput.value = '';
@@ -1425,11 +1430,11 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('securityFields').classList.add('hidden');
         window.location.reload();
       } else {
-        alert('Ошибка: ' + (result.message || 'Не удалось обновить пароль'));
+        toast('Ошибка: ' + (result.message || 'Не удалось обновить пароль'), 'error');
       }
     } catch (error) {
       console.error('Ошибка:', error);
-      alert('Ошибка при обновлении пароля');
+      toast('Ошибка при обновлении пароля', 'error');
     }
   });
 });
@@ -1446,7 +1451,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const newName = nameInput.value.trim();
     if (!newName) {
-      alert('Пожалуйста, введите имя');
+      toast('Пожалуйста, введите имя', 'error');
       return;
     }
 
@@ -1464,14 +1469,14 @@ document.addEventListener('DOMContentLoaded', function() {
       const result = await response.json();
 
       if (response.ok) {
-        alert('Имя успешно обновлено!');
+        toast('Имя успешно обновлено!', 'ok');
         window.location.reload();
       } else {
-        alert('Ошибка: ' + (result.message || 'Не удалось обновить имя'));
+        toast('Ошибка: ' + (result.message || 'Не удалось обновить имя'), 'error');
       }
     } catch (error) {
       console.error('Ошибка:', error);
-      alert('Ошибка при обновлении имени');
+      toast('Ошибка при обновлении имени', 'error');
     }
   });
 });
@@ -1495,7 +1500,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const description = streamDescriptionInput.value.trim();
 
     if (!title || !category) {
-      alert('Пожалуйста, заполните название и категорию трансляции.');
+      toast('Пожалуйста, заполните название и категорию трансляции.', 'error');
       return;
     }
 
@@ -1518,11 +1523,11 @@ document.addEventListener('DOMContentLoaded', function() {
       if (response.ok) {
         window.location.href = `/stream/${result.streamId}`;
       } else {
-        alert(`Ошибка: ${result.message}`);
+        toast(`Ошибка: ${result.message}`, 'error');
       }
     } catch (error) {
       console.error('Ошибка при запуске трансляции:', error);
-      alert('Произошла ошибка при запуске трансляции. Пожалуйста, попробуйте снова.');
+      toast('Произошла ошибка при запуске трансляции. Пожалуйста, попробуйте снова.', 'error');
     }
   });
 });
@@ -1608,7 +1613,7 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.href = '/userPage/' + myUid;
       } else {
         console.error('Current user ID not found');
-        alert('Ошибка: не удалось найти ID пользователя');
+        toast('Ошибка: не удалось найти ID пользователя', 'error');
       }
     });
   }
@@ -1875,6 +1880,21 @@ document.addEventListener('DOMContentLoaded', () => {
       setPresence(String(userId), !!isOnline, lastSeen);
     });
 
+    // Сервер шлёт presence:update только тем, кто подписался на конкретного
+    // человека, — иначе каждое подключение и отключение рассылалось бы всем
+    // открытым вкладкам сразу. Подписки живут на сокете, поэтому после обрыва
+    // связи их надо назвать заново.
+    const presenceSubscribed = new Set();
+    window.subscribePresence = function (ids) {
+      const fresh = (ids || []).map(String).filter(id => id && !presenceSubscribed.has(id));
+      if (!fresh.length) return;
+      fresh.forEach(id => presenceSubscribed.add(id));
+      socket.emit('presence:subscribe', fresh);
+    };
+    socket.on('connect', () => {
+      if (presenceSubscribed.size) socket.emit('presence:subscribe', Array.from(presenceSubscribed));
+    });
+
     // Поддержка инициализации presence у динамически добавленных элементов (поиск)
     window.addEventListener('presence:init', (e) => {
       const u = e.detail || {};
@@ -1894,7 +1914,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Ожидание ответа…');
       } catch (e) {
         console.error('[client] startAudioCall error', e);
-        alert('Не удалось начать звонок: ' + e.message);
+        toast('Не удалось начать звонок: ' + e.message, 'error');
       }
     };
 
@@ -1909,7 +1929,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Ожидание ответа…');
       } catch (e) {
         console.error('[client] startVideoCall error', e);
-        alert('Не удалось начать звонок: ' + e.message);
+        toast('Не удалось начать звонок: ' + e.message, 'error');
       }
     };
 
@@ -2205,6 +2225,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .map(el => el.getAttribute('data-presence-user'))
       .filter(Boolean);
     if (ids.length) {
+      window.subscribePresence(ids);
       fetch('/api/presence?ids=' + encodeURIComponent(ids.join(',')))
         .then(r => r.json())
         .then(data => {
