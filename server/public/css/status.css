@@ -1,0 +1,53 @@
+/* Короткие служебные страницы: сообщение в одну-две строки.
+ * Пока такая одна — «эфир завершён», — но форма общая и переиспользуемая.
+ */
+
+.tk-status {
+  padding: 120px 56px 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+}
+
+.tk-status__kicker {
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .24em;
+  text-transform: uppercase;
+  color: var(--tk-green);
+}
+
+.tk-status__title {
+  margin: 0;
+  font-size: 52px;
+  line-height: .9;
+  letter-spacing: -.035em;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tk-status__text {
+  margin: 0;
+  max-width: 46ch;
+  font-family: Oswald, sans-serif;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--tk-beige);
+}
+
+@media (max-width: 1439px) {
+  .tk-status { padding-left: 40px; padding-right: 40px; }
+}
+
+@media (max-width: 1023px) {
+  .tk-status { padding: 88px 28px 100px; }
+  .tk-status__title { font-size: 40px; }
+}
+
+@media (max-width: 767px) {
+  .tk-status { padding: 60px 20px 72px; }
+  .tk-status__title { font-size: 32px; }
+}

@@ -136,6 +136,8 @@
             background-size: 50px 50px;
         }
     </style>
+  <link rel="stylesheet" href="/css/tk.css">
+  <link rel="stylesheet" href="/css/app.css">
 </head>
 <body class="font-inter bg-gray-900 overflow-x-hidden">
     <%- include('partials/header') %>
@@ -145,7 +147,7 @@
         <%- include('partials/leftBar') %>
         
         <!-- Основной контент -->
-        <main class="min-h-screen lg:pl-72 bg-<%= category === 'business' ? 'business' : category === 'entertainment' ? 'entertainment' : 'popular' %> transition-all duration-300">
+        <main class="min-h-screen tk-app-main bg-<%= category === 'business' ? 'business' : category === 'entertainment' ? 'entertainment' : 'popular' %> transition-all duration-300">
             
             <!-- Дополнительные эффекты фона -->
             <div class="absolute inset-0 mesh-overlay"></div>

@@ -1,198 +1,81 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Takebana New Estate</title>
-  <link rel="stylesheet" href="css/style.css">
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Urbanist:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
-
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.css">
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.min.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <script src="/toast.js"></script>
+<%- include('partials/tkHead', {
+  title: 'Регистрация заведения — Takebana',
+  description: 'Заявка на подключение заведения или производства к Takebana: прямые эфиры для гостей и клиентов.'
+}) %>
+<link rel="stylesheet" href="/css/auth.css">
+<link rel="stylesheet" href="/css/company.css">
 </head>
 <body>
 
+<div class="tk-shell">
+<%- include('partials/tkHeader') %>
 
-   <header>
+<main class="tk-auth">
+  <div class="tk-auth__card tk-company">
+    <a href="/main" class="tk-auth__back" data-i18n="company.back">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5l-7 7 7 7M4 12h16"></path></svg>
+      Назад
+    </a>
 
-    <div class="logo">
-      <img src="/img/takebana.jpg" alt="logo">
-    </div>
+    <span class="tk-auth__kicker">Заявка</span>
+    <h1 class="tk-auth__h1" data-i18n="company.h1">Регистрация заведения</h1>
 
-    <div class="eng_swich mod">
-        <div class="sw">
-          <div class="circle"></div>
-          <div class="words">
-            <span class="ru active">RU</span>
-            <span class="en">EN</span>
-          </div>
-        </div>
+    <%# Показывается вместо формы после успешной отправки. %>
+    <p class="tk-company__done" id="tkCompanyDone" hidden data-i18n="company.finish">Спасибо за заявку — мы рассмотрим её в ближайшее время и свяжемся с вами по почте или телефону.</p>
+
+    <form class="tk-auth__form" id="tkCompanyForm" novalidate>
+      <div class="tk-company__pair">
+        <input class="tk-field" type="text" name="country" placeholder="Страна" data-i18n-placeholder="company.ph.country" autocomplete="country-name" required>
+        <input class="tk-field" type="text" name="city" placeholder="Город" data-i18n-placeholder="company.ph.city" autocomplete="address-level2" required>
       </div>
 
-   </header>
+      <input class="tk-field" type="text" name="name" placeholder="Название заведения" data-i18n-placeholder="company.ph.name" required>
+      <input class="tk-field" type="text" name="address" placeholder="Адрес заведения" data-i18n-placeholder="company.ph.address" autocomplete="street-address" required>
+      <input class="tk-field" type="email" name="email" placeholder="Email" data-i18n-placeholder="company.ph.email" autocomplete="email" required>
+      <input class="tk-field" type="tel" name="phone" placeholder="Телефон для связи" data-i18n-placeholder="company.ph.phone" autocomplete="tel" required>
 
+      <div class="tk-company__rule"></div>
 
-   <script src="/lang.js"></script>
-   <script>
+      <div class="tk-company__hours">
+        <span class="tk-company__label" data-i18n="company.weekdays">Время работы в будни</span>
+        <label class="tk-company__time">
+          <span data-i18n="company.from">с</span>
+          <input class="tk-field" type="text" name="weekdayOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
+        </label>
+        <label class="tk-company__time">
+          <span data-i18n="company.to">до</span>
+          <input class="tk-field" type="text" name="weekdayClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
+        </label>
+      </div>
 
-    let eng_switch = document.querySelector('.eng_swich');
-    let ru_span = eng_switch.querySelector('span.ru');
-    let en_span = eng_switch.querySelector('span.en');
-    let circle = eng_switch.querySelector('.circle');
+      <div class="tk-company__hours">
+        <span class="tk-company__label" data-i18n="company.weekend">Время работы в выходные</span>
+        <label class="tk-company__time">
+          <span data-i18n="company.from">с</span>
+          <input class="tk-field" type="text" name="weekendOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
+        </label>
+        <label class="tk-company__time">
+          <span data-i18n="company.to">до</span>
+          <input class="tk-field" type="text" name="weekendClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
+        </label>
+      </div>
 
-    if (localStorage.getItem('lang') == null) {
-      localStorage.setItem('lang', 'ru');
-    } else {
-      let lang = localStorage.getItem('lang');
-      if (lang == 'ru') {
-        eng_switch.classList.remove('active');
-        ru_span.classList.add('active');
-        en_span.classList.remove('active');
-        circle.classList.remove('active');
-        localStorage.setItem('lang', 'ru');
-      }
-      if (lang == 'en') {
-        eng_switch.classList.add('active');
-        ru_span.classList.remove('active');
-        en_span.classList.add('active');
-        circle.classList.add('active');
-        localStorage.setItem('lang', 'en');
-      }
-    }
+      <button class="tk-btn tk-btn--primary tk-btn--block tk-auth__submit" type="submit" data-i18n="company.submit">Отправить заявку</button>
+    </form>
+  </div>
+</main>
 
+<%- include('partials/tkFooter') %>
+</div>
 
-    eng_switch.addEventListener('click', function() {
-      if (!eng_switch.classList.contains('active')) {
-        eng_switch.classList.add('active');
-        ru_span.classList.remove('active');
-        en_span.classList.add('active');
-        circle.classList.add('active');
-        localStorage.setItem('lang', 'en');
-        updateLang();
-      } else {
-        eng_switch.classList.remove('active');
-        ru_span.classList.add('active');
-        en_span.classList.remove('active');
-        circle.classList.remove('active');
-        localStorage.setItem('lang', 'ru');
-        updateLang();
-      }
-    });
+<%- include('partials/tkMenu') %>
 
-
-    document.addEventListener('DOMContentLoaded', function() {
-      updateLang();
-    });
-
-    function updateLang() {
-        // Получаем текущий язык из localStorage
-        let currentLang = localStorage.getItem('lang');
-        // Находим все элементы с атрибутом lng
-        let elements = document.querySelectorAll('[lng]');
-        elements.forEach(function(element) {
-         // Получаем значение атрибута lng
-         let key = element.getAttribute('lng');
-         // Находим соответствующий перевод в объекте lang
-         let translation = lang[key];
-         if (translation) {
-             // Проверяем, является ли элемент input
-             if (element.tagName === 'INPUT') {
-                 // Обновляем плейсхолдер input
-                 element.placeholder = translation[currentLang];
-             } else {
-                 // Получаем исходный текст элемента
-                 let originalText = element.innerHTML;
-                 // Если исходный текст не является пробелом или переносом строки, продолжаем обработку
-                 if (!/^[\s\n]*$/.test(originalText)) {
-                     // Получаем новый текст
-                     let newText = translation[currentLang];
-                     // Устанавливаем новый текст элемента
-                     element.innerHTML = newText;
-                 }
-             }
-         }
-     });
-    };
-
-  </script>
-   <section class="register_company">
-    <img class="left" src="/img/company_left.png" alt="bar">
-    <img class="right" src="/img/company_right.png" alt="resto">
-
-    <div class="main">
-        <a href="/main" class="back_btn transparent_btn" lng="45">
-            <img src="/img/back_arrow.svg" alt="back arrow">
-            Назад
-        </a>
-        <h1 lng="46">Регистрация заведения</h1>
-
-        <p class="finish">Thank you for your application, we will review it shortly and you will be contacted via email or phone number.</p>
-        <form>
-            <div class="location">
-                <input class="country transparent" type="text" placeholder="Страна" lng="47">
-                <input class="city transparent" type="text" placeholder="Город" lng="48">
-            </div>
-            
-            <input class="name transparent" type="text" placeholder="Название заведения" lng="49">
-            <input class="address transparent" type="text" placeholder="Адрес заведения" lng="50">
-            <input class="email transparent" type="email" id="email" name="email" placeholder="Email">
-            <input class="phone transparent" type="text" placeholder="Телефон для связи" lng="51">
-
-            <div class="line"></div>
-
-            <div class="b">
-                <div class="text">
-                    <p lng="52">Время работы в будни</p>
-                </div>
-                <div class="inp">
-                    <span lng="63">С</span>
-                    <input class="time s transparent" type="text" placeholder="00:00">
-                </div>
-                <div class="inp">
-                    <span lng="64">До</span>
-                    <input class="time do transparent" type="text" placeholder="00:00">
-                </div>
-            </div>
-
-            <div class="v">
-                <div class="text">
-                    <p lng="53">Время работы в выходные</p>
-                </div>
-                <div class="inp">
-                    <span lng="63">С</span>
-                    <input class="time s transparent" type="text" placeholder="00:00">
-                </div>
-                <div class="inp">
-                    <span lng="64">До</span>
-                    <input class="time do transparent" type="text" placeholder="00:00">
-                </div>
-            </div>
-
-            <input class="btn" type="submit" value="Apply" >
-        </form>
-
-    </div>
-   </section>
-
-
-
-  <script src="main.js"></script>
-  <script src="service.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.inputmask/5.0.8/jquery.inputmask.min.js"></script>
-
-
-  <script>
-    $(document).ready(function(){
-      $(".time").inputmask("99:99");
-    });
-  </script>
-
-
+<script defer src="/tk-i18n.js"></script>
+<script defer src="/tk.js"></script>
+<script defer src="/toast.js"></script>
+<script defer src="/tk-company.js"></script>
 </body>
 </html>

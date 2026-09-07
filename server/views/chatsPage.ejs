@@ -37,6 +37,8 @@
     <title lng="214">Чаты - Takebana</title>
     <!-- escapeHtml для мест, где разметка собирается в браузере (чат, админка) -->
     <script src="/escape-html.js"></script>
+  <link rel="stylesheet" href="/css/tk.css">
+  <link rel="stylesheet" href="/css/app.css">
 </head>
 <body class="font-inter bg-gray-50 overflow-hidden">
     <%- include('partials/header') %>
@@ -46,7 +48,7 @@
         <%- include('partials/leftBar') %>
         
         <!-- Основной контент -->
-        <main class="lg:pl-72" style="height: calc(100vh - 80px);">
+        <main class="tk-app-main" style="height: calc(100vh - 80px);">
             <div class="h-full flex">
                 
                 <!-- Список диалогов -->

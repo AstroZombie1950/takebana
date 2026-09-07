@@ -1,0 +1,32 @@
+<%
+  // Меню под бургером. Показывается на ширинах до 1023 включительно, там же,
+  // где прячется горизонтальная навигация. Открытие и закрытие — в tk.js.
+  var navActive = typeof navActive !== 'undefined' ? navActive : '';
+  var navItems = [
+    { key: 'viewer', href: '/',      i18n: 'nav.viewer', text: 'Я зритель' },
+    { key: 'host',   href: '#',      i18n: 'nav.host',   text: 'Я ведущий' },
+    { key: 'about',  href: '/about', i18n: 'nav.about',  text: 'О нас' },
+    { key: 'blog',   href: '#',      i18n: 'nav.blog',   text: 'Блог' }
+  ];
+%>
+<div class="tk-menu" id="tkMobileMenu">
+  <div class="tk-menu__top">
+    <img src="/img/logo.webp" alt="Takebana" class="tk-menu__logo"
+         width="64" height="40" decoding="async">
+    <div class="tk-menu__gap"></div>
+    <div class="tk-menu__close" id="tkBurgerClose" role="button" tabindex="0" aria-label="Закрыть меню">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#F5F1EA" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+    </div>
+  </div>
+
+  <nav class="tk-menu__nav">
+    <% navItems.forEach(function (item) { %>
+    <a href="<%= item.href %>" class="tk-mnav<%= item.key === navActive ? ' tk-mnav--active' : '' %>" data-i18n="<%= item.i18n %>"><%= item.text %></a>
+    <% }); %>
+  </nav>
+
+  <div class="tk-menu__actions">
+    <a href="/register" class="tk-btn tk-btn--primary tk-btn--block" data-i18n="nav.signup">Регистрация</a>
+    <a href="/login" class="tk-btn tk-btn--ghost tk-btn--block" data-i18n="nav.login">Войти</a>
+  </div>
+</div>

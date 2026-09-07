@@ -1,0 +1,586 @@
+/* Каркас приложения — вариант Б, «Рабочий стол».
+ *
+ * Шапка 64px, левая панель 260px, активный раздел помечен киноварной планкой.
+ * Плотнее лендинга сознательно: главная страница приложения — сетка эфиров,
+ * и восемь карточек в экране важнее воздуха.
+ *
+ * Токены, шрифты и кнопки берутся из tk.css — здесь только расположение.
+ */
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Совместимость со старым скриптом
+ *
+ * Скрипт шапки (пока живёт в header.ejs, 1537 строк) показывает и прячет
+ * блоки, переставляя утилитарные классы Tailwind. Пока он не переписан,
+ * эти классы должны существовать без Tailwind — иначе, сняв его скрипт,
+ * мы получим намертво открытые модалки и меню.
+ *
+ * Здесь ровно те классы, которые скрипт реально переключает, и ничего сверх.
+ * По мере переписывания скрипта список сокращается до нуля.
+ */
+.hidden { display: none; }
+.flex { display: flex; }
+.invisible { visibility: hidden; }
+.visible { visibility: visible; }
+.opacity-0 { opacity: 0; }
+.opacity-50 { opacity: .5; }
+.opacity-100 { opacity: 1; }
+.scale-95 { transform: scale(.95); }
+.scale-100 { transform: scale(1); }
+.translate-x-0 { transform: translateX(0); }
+.-translate-x-full { transform: translateX(-100%); }
+.w-full { width: 100%; }
+.col-span-2 { grid-column: span 2; }
+.text-white { color: var(--tk-paper); }
+.bg-red-500 { background: var(--tk-accent); }
+.bg-green-500 { background: var(--tk-green); }
+.bg-gray-500 { background: #4A4640; }
+.hover\:bg-green-600:hover { background: #557a55; }
+.hover\:bg-gray-600:hover { background: #3A3733; }
+.border-brand-300 { border-color: var(--tk-accent); }
+
+/* Затемнение под открытыми модалками. */
+.shodow {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(10, 10, 10, .72);
+  display: none;
+}
+
+.shodow.display-block { display: block; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Шапка
+ */
+.tk-ahead {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: 64px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--tk-ink);
+  color: var(--tk-paper);
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-ahead__burger {
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.tk-ahead__burger span {
+  width: 22px;
+  height: 2px;
+  background: var(--tk-paper);
+}
+
+.tk-ahead__logo {
+  display: block;
+  flex: none;
+  height: 34px;
+  width: auto;
+}
+
+/* Поиск занимает всё свободное место: это главный элемент шапки. */
+.tk-ahead__search {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  max-width: 640px;
+}
+
+.tk-ahead__field {
+  width: 100%;
+  background: transparent;
+  border: 1px solid rgba(144, 113, 99, .7);
+  outline: none;
+  padding: 9px 14px 9px 38px;
+  font-family: Oswald, sans-serif;
+  /* 16px, иначе Safari на айфоне приближает страницу при фокусе. */
+  font-size: 16px;
+  color: var(--tk-paper);
+}
+
+.tk-ahead__field::placeholder { color: var(--tk-muted); }
+.tk-ahead__field:focus { border-color: var(--tk-accent); }
+
+.tk-ahead__loupe {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--tk-muted);
+}
+
+/* Выпадающие результаты поиска. */
+.tk-ahead__results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 380px;
+  overflow-y: auto;
+  background: var(--tk-ink);
+  border: 1px solid var(--tk-rule);
+  z-index: 50;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(144, 113, 99, .25);
+  cursor: pointer;
+}
+
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item:hover { background: rgba(227, 66, 52, .12); }
+
+.tk-ahead__right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: none;
+}
+
+.tk-ahead__icon {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--tk-beige);
+  transition: color .18s ease;
+}
+
+.tk-ahead__icon:hover { color: var(--tk-paper); }
+
+/* Метка непрочитанного. */
+.tk-ahead__dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  background: var(--tk-accent);
+}
+
+/* Язык: кнопка со списком. Разметку задаёт старый скрипт, поэтому
+ * структура кнопка + выпадашка сохранена как была. */
+.tk-ahead__lang { position: relative; }
+
+.tk-ahead__lang-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  padding: 6px 4px;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .14em;
+  color: var(--tk-beige);
+}
+
+.tk-ahead__lang-btn:hover { color: var(--tk-paper); }
+
+.tk-ahead__lang-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 150px;
+  background: var(--tk-ink);
+  border: 1px solid var(--tk-rule);
+  z-index: 50;
+}
+
+.tk-ahead__lang-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  color: var(--tk-beige);
+}
+
+.tk-ahead__lang-menu button:hover {
+  background: rgba(227, 66, 52, .12);
+  color: var(--tk-paper);
+}
+
+/* Аватар и меню профиля. */
+.tk-ahead__avatar-wrap { position: relative; }
+
+.tk-ahead__avatar {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  overflow: hidden;
+}
+
+.tk-ahead__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tk-drop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  background: var(--tk-ink);
+  border: 1px solid var(--tk-rule);
+  z-index: 50;
+}
+
+.tk-drop__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-drop__avatar {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font-size: 15px;
+  font-weight: 900;
+  overflow: hidden;
+}
+
+.tk-drop__avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-drop__name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+}
+
+.tk-drop__sub {
+  margin: 2px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+.tk-drop__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 12px 16px;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  color: var(--tk-beige);
+}
+
+.tk-drop__item:hover { background: rgba(227, 66, 52, .12); color: var(--tk-paper); }
+.tk-drop__item svg { flex: none; }
+.tk-drop__item--exit { color: var(--tk-accent); border-top: 1px solid var(--tk-rule); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Левая панель
+ */
+.tk-aside {
+  position: fixed;
+  top: 64px;
+  left: 0;
+  bottom: 0;
+  z-index: 30;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  background: var(--tk-ink);
+  /* Цвет текста задаём явно: без него заголовок призыва наследовал тёмный
+     цвет со страницы и оказывался чёрным по чёрному. */
+  color: var(--tk-paper);
+  border-right: 1px solid var(--tk-rule);
+  overflow-y: auto;
+  transition: transform .25s ease;
+}
+
+/* Контент страницы уходит вправо на ширину панели. Тот же порог, что был
+ * у прежней вёрстки: ниже 1024 панель выезжает поверх. */
+@media (min-width: 1024px) {
+  .tk-app-main { padding-left: 260px; }
+}
+
+.tk-aside__title {
+  padding: 18px 18px 10px;
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tk-aside__title span { flex: 1; }
+
+.tk-aside__count {
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--tk-green);
+}
+
+/* Раздел. Активный помечен киноварной планкой слева — это и есть приём
+ * варианта Б: метка читается боковым зрением, не требуя цвета текста. */
+.tk-aside__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 18px;
+  border-left: 3px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tk-beige);
+  transition: background-color .18s ease, color .18s ease;
+}
+
+.tk-aside__item:hover { background: rgba(227, 66, 52, .08); color: var(--tk-paper); }
+.tk-aside__item svg { flex: none; color: var(--tk-muted); }
+
+.tk-aside__item--on {
+  border-left-color: var(--tk-accent);
+  background: rgba(227, 66, 52, .1);
+  color: var(--tk-paper);
+  font-weight: 700;
+}
+
+.tk-aside__item--on svg { color: var(--tk-accent); }
+
+.tk-aside__rule {
+  height: 1px;
+  background: var(--tk-rule);
+  margin: 14px 0;
+}
+
+/* Подписка: аватар со статусом, имя, подпись. */
+.tk-aside__sub {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 18px;
+  transition: background-color .18s ease;
+}
+
+.tk-aside__sub:hover { background: rgba(227, 66, 52, .08); }
+
+.tk-aside__ava {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(144, 113, 99, .35);
+  color: var(--tk-beige);
+  font-size: 12px;
+  font-weight: 900;
+  overflow: hidden;
+}
+
+.tk-aside__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.presence-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--tk-ink);
+}
+
+.presence-online { background: var(--tk-green); }
+.presence-offline { background: rgba(144, 113, 99, .7); }
+
+.tk-aside__sub-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-aside__sub-state {
+  margin: 0;
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  color: var(--tk-muted);
+}
+
+.tk-aside__empty {
+  padding: 18px;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tk-muted);
+}
+
+.tk-aside__cta {
+  margin-top: auto;
+  border-top: 1px solid var(--tk-rule);
+  padding: 16px 18px;
+}
+
+/* Кнопка открытия панели и затемнение — только для узких экранов. */
+.tk-aside__toggle {
+  position: fixed;
+  top: 50%;
+  left: 0;
+  z-index: 35;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: var(--tk-accent);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.tk-aside__toggle span {
+  width: 12px;
+  height: 2px;
+  background: var(--tk-ink);
+}
+
+.tk-aside__overlay {
+  position: fixed;
+  inset: 64px 0 0;
+  z-index: 29;
+  background: rgba(10, 10, 10, .6);
+}
+
+@media (min-width: 1024px) {
+  .tk-aside__toggle,
+  .tk-aside__overlay { display: none; }
+}
+
+@media (max-width: 1023px) {
+  .tk-aside { transform: translateX(-100%); }
+  .tk-aside.translate-x-0 { transform: translateX(0); }
+  .tk-ahead__burger { display: flex; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Узкие экраны: поиск и меню отдельными панелями
+ */
+.tk-msearch {
+  padding: 12px 20px;
+  background: var(--tk-ink);
+  border-bottom: 1px solid var(--tk-rule);
+  position: relative;
+  z-index: 39;
+}
+
+.tk-mmenu {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--tk-ink);
+  flex-direction: column;
+}
+
+.tk-mmenu__top {
+  height: 64px;
+  flex: none;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-mmenu__nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 0;
+}
+
+@media (min-width: 640px) {
+  .tk-ahead__msearch-btn,
+  .tk-msearch { display: none; }
+}
+
+/* Скрипт панели переставляет классы сдвига только на узких экранах, но если
+ * окно растянули с открытой панелью, класс остаётся. На десктопе панель
+ * видна всегда — это важнее любого класса. */
+@media (min-width: 1024px) {
+  .tk-aside { transform: none !important; }
+}
+
+/* Скрипт Tailwind подгружается в рантайме и вставляет свой preflight в конец
+ * head — уже после tk.css. Его правило на body перебивает наш шрифт.
+ * Пока Tailwind не снят со страниц, задаём гарнитуру прямо на каркасе:
+ * так она не зависит от порядка загрузки, а содержимое страниц не трогаем —
+ * оно переедет на Golos Text вместе со своей вёрсткой.
+ */
+.tk-ahead,
+.tk-aside,
+.tk-drop,
+.tk-mmenu,
+.tk-msearch {
+  font-family: 'Golos Text', Helvetica, sans-serif;
+}

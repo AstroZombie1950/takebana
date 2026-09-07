@@ -1,0 +1,201 @@
+/* Страницы со сплошным текстом: юридические документы и «О нас».
+ *
+ * Гарнитура здесь Golos Text, а не Oswald, которым набраны абзацы на главной.
+ * Oswald — узкий шрифт для коротких маркетинговых врезок; на шести тысячах слов
+ * пользовательского соглашения он нечитаем. Golos Text и по названию, и по
+ * замыслу дизайн-системы — текстовая гарнитура.
+ *
+ * Фон бумажный: тёмная простыня текста бьёт по глазам, а data-bg="paper"
+ * заодно переключает токены ссылок и рубрик.
+ */
+
+.tk-prose {
+  background: var(--tk-paper);
+  color: var(--tk-ink);
+  padding: 80px 56px 96px;
+}
+
+/* 68 символов в строке — на длинном тексте глаз не теряет начало следующей. */
+.tk-prose__inner {
+  max-width: 68ch;
+  margin: 0 auto;
+}
+
+/* ── Шапка документа ── */
+.tk-prose__kicker {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .24em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-prose__kicker::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(10, 10, 10, .2);
+}
+
+.tk-prose__title {
+  margin: 22px 0 40px;
+  font-size: 52px;
+  line-height: .9;
+  letter-spacing: -.035em;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-wrap: pretty;
+}
+
+/* ── Сам текст ──
+ * Правила по тегам, а не по классам: содержимое приходит готовой разметкой
+ * из старых шаблонов, размечать её вручную по классам смысла нет.
+ */
+.tk-prose__body {
+  font-family: 'Golos Text', Helvetica, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.75;
+  color: var(--tk-ink-soft);
+}
+
+.tk-prose__body h2 {
+  margin: 56px 0 18px;
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--tk-ink);
+}
+
+/* Первый заголовок не отталкивается от собственного названия страницы. */
+.tk-prose__body > :first-child {
+  margin-top: 0;
+}
+
+.tk-prose__body h3 {
+  margin: 40px 0 14px;
+  font-size: 21px;
+  line-height: 1.15;
+  letter-spacing: -.015em;
+  font-weight: 900;
+  color: var(--tk-ink);
+}
+
+.tk-prose__body h4 {
+  margin: 32px 0 10px;
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-prose__body p {
+  margin: 0 0 18px;
+}
+
+.tk-prose__body ul,
+.tk-prose__body ol {
+  margin: 0 0 18px;
+  padding-left: 22px;
+}
+
+.tk-prose__body li {
+  margin-bottom: 10px;
+}
+
+/* Вложенный список: без отбивки сверху он слипается со своим пунктом. */
+.tk-prose__body li > ul,
+.tk-prose__body li > ol {
+  margin-top: 10px;
+}
+
+.tk-prose__body strong {
+  font-weight: 700;
+  color: var(--tk-ink);
+}
+
+.tk-prose__body a {
+  border-bottom: 1px solid rgba(227, 66, 52, .4);
+  transition: border-color .18s ease;
+}
+
+.tk-prose__body a:hover,
+.tk-prose__body a:focus-visible {
+  border-bottom-color: currentColor;
+}
+
+/* Длинный текст даёт длинные таблицы — пусть прокручиваются внутри себя,
+ * а не растягивают страницу вбок. */
+.tk-prose__body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 18px;
+}
+
+.tk-prose__body th,
+.tk-prose__body td {
+  border: 1px solid rgba(10, 10, 10, .18);
+  padding: 10px 14px;
+  text-align: left;
+}
+
+/* ── Адаптив ── */
+@media (max-width: 1439px) {
+  .tk-prose {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .tk-prose {
+    padding: 64px 28px 72px;
+  }
+
+  .tk-prose__title {
+    font-size: 40px;
+  }
+}
+
+@media (max-width: 767px) {
+  .tk-prose {
+    padding: 44px 20px 56px;
+  }
+
+  .tk-prose__title {
+    font-size: 32px;
+  }
+
+  .tk-prose__body h2 {
+    font-size: 23px;
+    margin-top: 44px;
+  }
+
+  .tk-prose__body h3 {
+    font-size: 19px;
+  }
+}
+
+@media (max-width: 374px) {
+  .tk-prose__title {
+    font-size: 27px;
+  }
+}
+
+/* Строчка-призыв под текстом: на «О сервисе» это «Нет аккаунта — зарегистрироваться». */
+.tk-prose__cta {
+  margin: 48px 0 0;
+  padding-top: 28px;
+  border-top: 1px solid rgba(10, 10, 10, .18);
+  font-family: Oswald, sans-serif;
+  font-size: 17px;
+  color: var(--tk-ink-soft);
+}

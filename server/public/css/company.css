@@ -1,0 +1,86 @@
+/* Регистрация заведения. Раскладка карточки и полей общая со входом
+ * (auth.css), здесь только то, чего на входе нет: пары полей и часы работы.
+ */
+
+/* Карточка шире, чем на входе: тут десять полей, а не два. */
+.tk-company {
+  max-width: 560px;
+}
+
+.tk-company__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.tk-company__rule {
+  height: 1px;
+  background: var(--tk-rule);
+  margin: 10px 0 4px;
+}
+
+/* Строка часов: подпись слева, «с» и «до» справа.
+ * auto по краям и 1fr под подписью — поля не разъезжаются между будними
+ * и выходными, даже если подписи разной длины. */
+.tk-company__hours {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.tk-company__label {
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--tk-beige);
+}
+
+.tk-company__time {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  color: var(--tk-muted);
+}
+
+/* 00:00 — ширина под пять знаков, не больше. */
+.tk-company__time .tk-field {
+  width: 92px;
+  padding: 14px 12px;
+  text-align: center;
+  letter-spacing: .06em;
+}
+
+.tk-company__done {
+  margin: 32px 0 0;
+  padding: 22px 24px;
+  border: 1px solid var(--tk-green);
+  font-family: Oswald, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--tk-paper);
+}
+
+@media (max-width: 767px) {
+  /* Страна и город в столбик: на узком экране два поля в ряд нечитаемы. */
+  .tk-company__pair {
+    grid-template-columns: 1fr;
+  }
+
+  /* Подпись над своими полями, «с» и «до» под ней в ряд. */
+  .tk-company__hours {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 14px;
+  }
+
+  .tk-company__label {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+  }
+
+  .tk-company__time .tk-field {
+    width: 100%;
+  }
+}

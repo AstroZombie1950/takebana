@@ -1,0 +1,42 @@
+<%
+  // Шапка сайта для страниц без входа. Локаль navActive: viewer | host |
+  // about | blog — подчёркивает текущий раздел. Пустая — ничего не активно.
+  var navActive = typeof navActive !== 'undefined' ? navActive : '';
+
+  // «Я ведущий» и «Блог» заданы по ТЗ главной, но страниц под них ещё нет.
+  // Адрес не выдумываем: заглушки гасит tk-landing.js, чтобы не прыгало наверх.
+  var navItems = [
+    { key: 'viewer', href: '/',      i18n: 'nav.viewer', text: 'Я зритель' },
+    { key: 'host',   href: '#',      i18n: 'nav.host',   text: 'Я ведущий' },
+    { key: 'about',  href: '/about', i18n: 'nav.about',  text: 'О нас' },
+    { key: 'blog',   href: '#',      i18n: 'nav.blog',   text: 'Блог' }
+  ];
+%>
+<%# Логотип намеренно не ссылка: на главной по ТЗ он не кликается. %>
+<header class="tk-header">
+  <img src="/img/logo.webp" alt="Takebana" class="tk-header__logo"
+       width="83" height="52" decoding="async" fetchpriority="high">
+
+  <nav class="tk-header__nav">
+    <% navItems.forEach(function (item) { %>
+    <a href="<%= item.href %>" class="tk-nav" data-i18n="<%= item.i18n %>"<%- item.key === navActive ? ' aria-current="page"' : '' %>><%= item.text %></a>
+    <% }); %>
+  </nav>
+
+  <div class="tk-header__gap"></div>
+
+  <div class="tk-header__actions">
+    <a href="/login" class="tk-login tk-hide-sm" data-i18n="nav.login">Войти</a>
+    <a href="/register" class="tk-btn tk-btn--primary tk-btn--sm tk-hide-sm" data-i18n="nav.signup">Регистрация</a>
+
+    <div class="tk-lang">
+      <button type="button" class="tk-lang__btn" data-lang="ru">RU</button>
+      <button type="button" class="tk-lang__btn" data-lang="en">EN</button>
+    </div>
+
+    <div class="tk-header__burger" id="tkBurgerOpen" role="button" tabindex="0" aria-label="Меню" aria-controls="tkMobileMenu">
+      <span></span>
+      <span></span>
+    </div>
+  </div>
+</header>

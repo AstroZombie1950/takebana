@@ -131,6 +131,14 @@ app.get('/favicon.ico', (req, res) => {
        .sendFile(path.join(__dirname, 'public', 'favicon.svg'));
 });
 
+// Шрифты стоят отдельным монтажом до общей статики только ради кэша: файл под
+// своим именем не меняется никогда, поэтому год и immutable — браузер не пойдёт
+// даже за 304. На проде их отдаёт nginx, здесь это для локальной разработки.
+app.use('/fonts', express.static(path.join(__dirname, 'public', 'fonts'), {
+    maxAge: '1y',
+    immutable: true,
+}));
+
 app.use(express.static(path.join(__dirname, 'public')));
 // /uploads/... раздаётся строкой выше из public/uploads. Отдельный монтаж
 // express.static('uploads') убран: путь считался от рабочего каталога процесса,

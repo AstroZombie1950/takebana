@@ -1,0 +1,241 @@
+/* Вход и регистрация.
+ *
+ * Обе страницы — одна раскладка с разным набором полей, поэтому файл общий.
+ * Поле ввода повторяет единственное поле из ТЗ главной (форма подписки):
+ * прозрачный фон, рамка в цвет разделителей, Oswald 16px. Ничего нового
+ * не придумано, размеры перенесены.
+ */
+
+.tk-auth {
+  padding: 96px 56px 104px;
+  display: flex;
+  justify-content: center;
+}
+
+/* 420 — ширина, на которой строка формы читается одним движением глаза
+ * и поле не растягивается на весь экран телевизора. */
+.tk-auth__card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Шапка карточки ── */
+.tk-auth__back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  transition: color .18s ease;
+}
+
+.tk-auth__back:hover,
+.tk-auth__back:focus-visible {
+  color: var(--tk-accent);
+}
+
+.tk-auth__back svg {
+  flex: none;
+}
+
+.tk-auth__kicker {
+  margin-top: 40px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .24em;
+  text-transform: uppercase;
+  color: var(--tk-green);
+}
+
+/* Линейка, добирающая строку до правого края, — приём с главной. */
+.tk-auth__kicker::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--tk-rule);
+}
+
+.tk-auth__h1 {
+  margin: 18px 0 0;
+  font-size: 44px;
+  line-height: .9;
+  letter-spacing: -.035em;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-wrap: pretty;
+}
+
+/* ── Вход через Google ── */
+.tk-auth__google {
+  margin-top: 32px;
+  gap: 12px;
+}
+
+.tk-auth__google img {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+/* Разделитель «или»: линейки по бокам от слова. */
+.tk-auth__or {
+  margin: 24px 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-auth__or::before,
+.tk-auth__or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--tk-rule);
+}
+
+/* ── Форма ── */
+.tk-auth__form {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Когда перед формой стоит кнопка Google с разделителем, свой отступ форме
+ * уже не нужен. */
+.tk-auth__or + .tk-auth__form {
+  margin-top: 0;
+}
+
+.tk-field {
+  width: 100%;
+  background: transparent;
+  outline: none;
+  border: 1px solid rgba(144, 113, 99, .7);
+  padding: 18px 20px;
+  font-family: Oswald, sans-serif;
+  /* 16px — не только размер из ТЗ: на меньшем Safari на айфоне сам
+   * приближает страницу при фокусе, и вёрстка уезжает. */
+  font-size: 16px;
+  color: var(--tk-paper);
+  letter-spacing: .01em;
+}
+
+.tk-field::placeholder {
+  color: var(--tk-muted);
+}
+
+.tk-field:focus {
+  border-color: var(--tk-accent);
+}
+
+/* Поле пароля: кнопка показа лежит поверх правого края. */
+.tk-field-wrap {
+  position: relative;
+  display: flex;
+}
+
+.tk-field-wrap .tk-field {
+  padding-right: 56px;
+}
+
+.tk-field-eye {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 52px;
+  height: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--tk-muted);
+  transition: color .18s ease;
+}
+
+.tk-field-eye:hover,
+.tk-field-eye:focus-visible {
+  color: var(--tk-paper);
+}
+
+.tk-auth__submit {
+  margin-top: 6px;
+}
+
+/* ── Подписи под формой ── */
+.tk-auth__row {
+  margin-top: 18px;
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  color: var(--tk-beige);
+}
+
+.tk-auth__note {
+  margin-top: 28px;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--tk-label);
+}
+
+.tk-auth__forgot {
+  align-self: flex-end;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  color: var(--tk-muted);
+  transition: color .18s ease;
+}
+
+.tk-auth__forgot:hover,
+.tk-auth__forgot:focus-visible {
+  color: var(--tk-accent);
+}
+
+/* ── Адаптив ── */
+@media (max-width: 1439px) {
+  .tk-auth {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .tk-auth {
+    padding: 72px 28px 80px;
+  }
+}
+
+@media (max-width: 767px) {
+  .tk-auth {
+    padding: 48px 20px 64px;
+  }
+
+  .tk-auth__h1 {
+    font-size: 34px;
+  }
+}
+
+@media (max-width: 374px) {
+  .tk-auth__h1 {
+    font-size: 28px;
+  }
+}

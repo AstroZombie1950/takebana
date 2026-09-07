@@ -1,175 +1,62 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Takebana SignIn</title>
-  <link rel="stylesheet" href="css/style.css">
-
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.css">
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.min.js"></script>
-
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Urbanist:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <script src="/toast.js"></script>
+<%- include('partials/tkHead', { title: 'Вход — Takebana' }) %>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/css/auth.css">
 </head>
 <body>
 
+<div class="tk-shell">
+<%- include('partials/tkHeader') %>
 
-   <header>
+<main class="tk-auth">
+  <div class="tk-auth__card">
+    <a href="/" class="tk-auth__back" data-i18n="auth.back">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5l-7 7 7 7M4 12h16"></path></svg>
+      На главную
+    </a>
 
-    <div class="logo">
-      <img src="/img/takebana.jpg" alt="logo">
-    </div>
+    <span class="tk-auth__kicker" data-i18n="auth.kicker">Личный кабинет</span>
+    <h1 class="tk-auth__h1" data-i18n="auth.login.h1">Вход в аккаунт</h1>
 
-    <div class="eng_swich mod">
-        <div class="sw">
-          <div class="circle"></div>
-          <div class="words">
-            <span class="ru active">RU</span>
-            <span class="en">EN</span>
-          </div>
-        </div>
+    <% if (googleOAuthConfigured) { %>
+    <%# Кнопки без ключей нет: без ключей маршрут /auth/google отвечает 503,
+        и нерабочая кнопка хуже отсутствующей. %>
+    <a href="/auth/google" class="tk-btn tk-btn--ghost tk-btn--block tk-auth__google">
+      <img src="/img/google.svg" alt="" aria-hidden="true" width="20" height="20">
+      <span data-i18n="auth.google">Продолжить с Google</span>
+    </a>
+    <span class="tk-auth__or" data-i18n="auth.or">или</span>
+    <% } %>
+
+    <form class="tk-auth__form" id="tkLoginForm" novalidate>
+      <input class="tk-field" type="email" id="email" name="email" placeholder="Email" data-i18n-placeholder="auth.ph.email" autocomplete="email" required>
+
+      <div class="tk-field-wrap">
+        <input class="tk-field" type="password" id="password" name="password" placeholder="Пароль" data-i18n-placeholder="auth.ph.password" autocomplete="current-password" required>
+        <button type="button" class="tk-field-eye" data-eye aria-label="Показать пароль">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </button>
       </div>
 
-   </header>
+      <a href="/" class="tk-auth__forgot" data-i18n="auth.forgot">Забыли пароль?</a>
 
-   <script src="/lang.js"></script>
-   <script>
+      <button class="tk-btn tk-btn--primary tk-btn--block tk-auth__submit" type="submit" data-i18n="auth.submit.login">Войти</button>
+    </form>
 
-    let eng_switch = document.querySelector('.eng_swich');
-    let ru_span = eng_switch.querySelector('span.ru');
-    let en_span = eng_switch.querySelector('span.en');
-    let circle = eng_switch.querySelector('.circle');
+    <p class="tk-auth__row" data-i18n="auth.noAccount">Нет аккаунта <a href="/register">Зарегистрироваться</a></p>
+  </div>
+</main>
 
-    if (localStorage.getItem('lang') == null) {
-      localStorage.setItem('lang', 'ru');
-    } else {
-      let lang = localStorage.getItem('lang');
-      if (lang == 'ru') {
-        eng_switch.classList.remove('active');
-        ru_span.classList.add('active');
-        en_span.classList.remove('active');
-        circle.classList.remove('active');
-        localStorage.setItem('lang', 'ru');
-      }
-      if (lang == 'en') {
-        eng_switch.classList.add('active');
-        ru_span.classList.remove('active');
-        en_span.classList.add('active');
-        circle.classList.add('active');
-        localStorage.setItem('lang', 'en');
-      }
-    }
+<%- include('partials/tkFooter') %>
+</div>
 
+<%- include('partials/tkMenu') %>
 
-    eng_switch.addEventListener('click', function() {
-      if (!eng_switch.classList.contains('active')) {
-        eng_switch.classList.add('active');
-        ru_span.classList.remove('active');
-        en_span.classList.add('active');
-        circle.classList.add('active');
-        localStorage.setItem('lang', 'en');
-        updateLang();
-      } else {
-        eng_switch.classList.remove('active');
-        ru_span.classList.add('active');
-        en_span.classList.remove('active');
-        circle.classList.remove('active');
-        localStorage.setItem('lang', 'ru');
-        updateLang();
-      }
-    });
-
-
-    document.addEventListener('DOMContentLoaded', function() {
-      updateLang();
-    });
-
-    function updateLang() {
-        // Получаем текущий язык из localStorage
-        let currentLang = localStorage.getItem('lang');
-        // Находим все элементы с атрибутом lng
-        let elements = document.querySelectorAll('[lng]');
-        elements.forEach(function(element) {
-         // Получаем значение атрибута lng
-         let key = element.getAttribute('lng');
-         // Находим соответствующий перевод в объекте lang
-         let translation = lang[key];
-         if (translation) {
-             // Проверяем, является ли элемент input
-             if (element.tagName === 'INPUT') {
-                 // Обновляем плейсхолдер input
-                 element.placeholder = translation[currentLang];
-             } else {
-                 // Получаем исходный текст элемента
-                 let originalText = element.innerHTML;
-                 // Если исходный текст не является пробелом или переносом строки, продолжаем обработку
-                 if (!/^[\s\n]*$/.test(originalText)) {
-                     // Получаем новый текст
-                     let newText = translation[currentLang];
-                     // Устанавливаем новый текст элемента
-                     element.innerHTML = newText;
-                 }
-             }
-         }
-     });
-    };
-
-  </script>
-
-   <section class="login">
-    <img class="left" src="/img/login_left.png" alt="bar">
-    <img class="right" src="/img/login_right.png" alt="resto">
-
-    <div class="main">
-        <a href="/" class="back_btn transparent_btn" lng="22">
-            <img src="/img/back_arrow.svg" alt="back arrow">
-            На главную
-        </a>
-        <h1 lng="23">Вход в аккаунт</h1>
-        <% if (googleOAuthConfigured) { %>
-        <button class="transparent_btn google">
-            <img src="/img/google.svg" alt="back arrow">
-            Continue with Google
-        </button>
-        <span class="or" lng="28">или</span>
-        <% } %>
-        <form>
-            <input class="transparent" type="email" id="email" name="email" placeholder="Email">
-            <div class="input_wrap">
-                <input class="transparent" type="password" id="password" name="password" placeholder="Password">
-                <img src="/img/hide.svg" alt="hide icon">
-            </div>
-            <span class="forgot"><a href="/" lng="24">Забыли пароль?</a></span>
-            <input class="btn" type="submit" value="Enter">
-        </form>
-        
-        <p class="signin" lng="25">Нет аккаунта <a href="/register" lng="26">Зарегистрироваться</a></p>
-    </div>
-   </section>
-
-
-
-  <script src="main.js"></script>
-  <script src="service.js"></script>
-
-  <script>
-        let hide = document.querySelectorAll('.input_wrap img');
-    hide.forEach((el) => {
-        el.addEventListener('click', function() {
-            let input = this.previousElementSibling; // Находим input перед картинкой
-            if (input.type === 'password') {
-                input.type = 'text';
-            } else if (input.type === 'text') {
-                input.type = 'password';
-            }
-        });
-    });
-  </script>
+<script defer src="/tk-i18n.js"></script>
+<script defer src="/tk.js"></script>
+<script defer src="/toast.js"></script>
+<script defer src="/tk-auth.js"></script>
 </body>
 </html>

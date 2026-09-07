@@ -44,8 +44,14 @@ async function check(p, name, url) {
     path: location.pathname,
     title: document.title,
     text: document.body.innerText.trim().length,
-    // src="" заставляет браузер повторно грузить саму страницу; без src — просто пустая картинка
-    broken: [...document.images].filter(i => i.hasAttribute('src') && (!i.complete || i.naturalWidth === 0))
+    // src="" заставляет браузер повторно грузить саму страницу; без src — просто пустая картинка.
+    //
+    // Битая — это «загрузка кончилась, а пикселей нет»: complete && !naturalWidth.
+    // Раньше здесь стояло ещё и !complete, но у loading="lazy" ниже сгиба
+    // загрузка на момент проверки и не начиналась — логотип в подвале лендинга
+    // попадал в битые каждый раз. Картинку, которая грузится и не догрузится,
+    // ловят соседние сборщики: r.failed и r.http.
+    broken: [...document.images].filter(i => i.hasAttribute('src') && i.complete && i.naturalWidth === 0)
                                 .map(i => i.getAttribute('src'))
   })`));
 

@@ -1,90 +1,10 @@
-// LOGIN 
+// Обработчики страниц: профиль, карта, регистрация заведения.
+//
+// Вход и регистрация переехали в tk-auth.js, регистрация заведения —
+// в tk-company.js, вместе с новой вёрсткой этих страниц: здесь они цеплялись
+// за селекторы section.login / section.register / section.register_company,
+// которых больше нет ни на одной странице.
 
-document.addEventListener('DOMContentLoaded', function() {
-  const form = document.querySelector('section.login .main form');
-  if (form) {
-      form.addEventListener('submit', function(event) {
-          console.log('PE')
-          event.preventDefault();
-      
-          const email = document.querySelector('#email').value;
-          const password = document.querySelector('#password').value;
-          const provider = '';
-      
-          fetch('/login', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'same-origin', // Добавлено для отправки куки
-            body: JSON.stringify({ email, password, provider }),
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.message === 'User logged in successfully') {
-              // Пользователь успешно вошел в систему
-              // Перенаправляем пользователя на указанный маршрут
-              window.location.href = data.redirectUrl;
-            } else {
-              // Показать сообщение об ошибке
-              toast(data.message);
-            }
-          })
-          .catch((error) => {
-            console.error('Error:', error);
-          });
-        });
-  }
-});
-
-// END LOGIN 
-
-
-// REGISTER 
-
-document.addEventListener('DOMContentLoaded', function() {
-  const form = document.querySelector('section.register .main form');
-  if (form) {
-      form.addEventListener('submit', function(event) {
-          event.preventDefault();
-      
-          const email = document.querySelector('#email').value;
-          const password = document.querySelector('#password').value;
-          const provider = '';
-          const confirmPassword = document.querySelector('#confirmPassword').value;
-      
-          if (password !== confirmPassword) {
-            toast('Passwords do not match');
-            return;
-          }
-      
-          fetch('/register', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'same-origin', // Добавлено для отправки куки
-            body: JSON.stringify({ email, password, provider }),
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.message === 'User registered successfully') {
-              // Пользователь успешно зарегистрирован
-              // Перенаправляем пользователя на страницу логина
-              window.location.href = data.redirectUrl;
-            } else {
-              // Показать сообщение об ошибке
-              toast(data.message);
-            }
-          })
-          .catch((error) => {
-            console.error('Error:', error);
-          });
-        });
-      }
-});
-
-// END REGISTER 
 
 
 
@@ -179,82 +99,6 @@ if (saveButton) {
   
 
 // END CHANGE PASSWORD 
-
-
-
-
-
-
-
-// REGISTER ESTABLISHMENT 
-let regEstate = document.querySelector('section.register_company .main form');
-if (regEstate) {
-  regEstate.addEventListener('submit', function(event) {
-    event.preventDefault();
-
-    let establishment = {
-        country: document.querySelector('section.register_company .main form .country').value,
-        city: document.querySelector('section.register_company .main form .city').value,
-        name: document.querySelector('section.register_company .main form .name').value,
-        address: document.querySelector('section.register_company .main form .address').value,
-        email: document.querySelector('section.register_company .main form .email').value,
-        phone: document.querySelector('section.register_company .main form .phone').value,
-        weekdayHours: {
-            open: document.querySelector('section.register_company .main form .b .time.s').value,
-            close: document.querySelector('section.register_company .main form .b .time.do').value
-        },
-        weekendHours: {
-            open: document.querySelector('section.register_company .main form .v .time.s').value,
-            close: document.querySelector('section.register_company .main form .v .time.do').value
-        }
-    };
-
-    for (let key in establishment) {
-      if (typeof establishment[key] === 'object') {
-          for (let subKey in establishment[key]) {
-              if (establishment[key][subKey] === '') {
-                  toast('Please fill in all fields');
-                  return;
-              }
-          }
-      } else if (establishment[key] === '') {
-          toast('Please fill in all fields');
-          return;
-      }
-  }
-
-    fetch('/register-establishment', {
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(establishment)
-  }).then(response => {
-      if (!response.ok) {
-          return response.json().then(err => { throw new Error(err.message); });
-      }
-      return response.json();
-  })
-  .then(data => {
-      // Скрываем форму
-      regEstate.style.display = 'none';
-      // Показываем сообщение об успешной отправке заявки
-      document.querySelector('section.register_company .main .finish').classList.add('active');
-      console.log(data);
-  })
-  .catch((error) => {
-      toast('Error when submitting data: ' + error.message, 'error');
-      console.error('Error:', error);
-  });
-  
-    
-});
-
-}
-
-
-// END REGISTER ESTABLISHMENT 
-
 
 
 

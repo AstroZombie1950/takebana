@@ -1,0 +1,613 @@
+/* Дизайн-система Takebana.
+ *
+ * Единственный источник правды по шрифтам, цветам и элементам управления.
+ * Всё отсюда взято с главной страницы, свёрстанной по ТЗ, — значения не
+ * подбирались заново, а перенесены как есть.
+ *
+ * Что сюда НЕ попадает: раскладка отдельной страницы. Сетки, отступы секций
+ * и медиазапросы под конкретный макет живут рядом со своей страницей, иначе
+ * этот файл вырастет в общую свалку и его перестанут кэшировать целиком.
+ *
+ * Подключается на каждой странице сайта, поэтому меняется редко и кэшируется
+ * надолго.
+ */
+
+/* ── Шрифты ──────────────────────────────────────────────────
+ * Самохостинг, woff2. Два разреза:
+ *
+ * По алфавиту — кириллица и латиница отдельными файлами через unicode-range:
+ * браузер тянет только тот, чьи буквы реально встретились на странице.
+ *
+ * По начертанию — никак: обе гарнитуры вариативные, ось wght покрывает все
+ * нужные веса одним файлом. В ТЗ они приехали десятью файлами по начертаниям,
+ * но это были четыре файла, размноженные под разными именами: браузер качал
+ * один и тот же Golos трижды, по 35 КБ, потому что адреса разные.
+ */
+@font-face {
+  font-family: 'Golos Text';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url(/fonts/golos-text-cyrillic.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: 'Golos Text';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url(/fonts/golos-text-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Oswald';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(/fonts/oswald-cyrillic.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: 'Oswald';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(/fonts/oswald-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ── Токены ──────────────────────────────────────────────────
+ * Тема тёплая светлая. Тёмный #0A0A0A — это текст и тёмные секции, а не фон
+ * по умолчанию.
+ *
+ * Секция на бумажном фоне помечается атрибутом data-bg="paper": внутри неё
+ * часть токенов меняет значение, потому что тот же приглушённый бежевый,
+ * который читается на чёрном, на бумаге исчезает.
+ */
+:root {
+  --tk-ink: #0A0A0A;          /* основной тёмный: текст и тёмные секции */
+  --tk-paper: #F5F1EA;        /* бумажный фон светлых секций */
+  --tk-accent: #E34234;       /* киноварь: акцент и главное действие */
+  --tk-beige: #C9C2B7;        /* приглушённый бежевый по тёмному */
+  --tk-green: #679267;        /* второстепенный акцент */
+  --tk-ink-soft: #3A3733;     /* тёмно-серый текст */
+  --tk-rule: rgba(144, 113, 99, .5);  /* разделители */
+  --tk-label: #9A7C6C;        /* надписи-рубрики */
+  --tk-muted: #8A827C;        /* второстепенный текст */
+  --tk-link-hover: #F5F1EA;
+}
+
+[data-bg="paper"] {
+  --tk-label: #7D6255;
+  --tk-link-hover: #0A0A0A;   /* кремовый на бумаге не виден */
+}
+
+/* ── База ──────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Golos Text', Helvetica, sans-serif;
+}
+
+a {
+  color: var(--tk-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--tk-link-hover);
+}
+
+/* ── Элементы управления ────────────────────────────────────── */
+
+a:focus-visible, button:focus-visible, input:focus-visible {
+  outline:2px solid #E34234;
+  outline-offset:3px;
+}
+
+.tk-nav {
+  position:relative;
+  color:#C9C2B7;
+  text-decoration:none;
+  padding-bottom:3px;
+  transition:color .18s ease;
+}
+
+.tk-nav::after {
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:2px;
+  background:#E34234;
+  transform:scaleX(0);
+  transform-origin:left center;
+  transition:transform .22s ease;
+}
+
+.tk-nav:hover, .tk-nav:focus-visible {
+  color:#F5F1EA;
+}
+
+.tk-nav:hover::after, .tk-nav:focus-visible::after {
+  transform:scaleX(1);
+}
+
+.tk-nav[aria-current="page"] {
+  color:#F5F1EA;
+}
+
+.tk-nav[aria-current="page"]::after {
+  transform:scaleX(1);
+}
+
+.tk-login {
+  font-size:13px;
+  font-weight:500;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:#C9C2B7;
+  text-decoration:none;
+  transition:color .18s ease;
+}
+
+.tk-login:hover, .tk-login:focus-visible {
+  color:#F5F1EA;
+}
+
+.tk-btn {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  text-decoration:none;
+  cursor:pointer;
+  font-family:'Golos Text',Helvetica,sans-serif;
+  font-size:15px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  padding:20px 30px;
+  border:1px solid transparent;
+  transition:background-color .18s ease,color .18s ease,border-color .18s ease,transform .12s ease;
+}
+
+.tk-btn:active {
+  transform:translateY(1px);
+}
+
+.tk-btn--primary {
+  background:#E34234;
+  border-color:#E34234;
+  color:#0A0A0A;
+}
+
+.tk-btn--primary:hover, .tk-btn--primary:focus-visible {
+  background:#F5F1EA;
+  border-color:#F5F1EA;
+  color:#0A0A0A;
+}
+
+.tk-btn--ghost {
+  background:transparent;
+  border-color:#F5F1EA;
+  color:#F5F1EA;
+  font-weight:500;
+  padding:19px 28px;
+}
+
+.tk-btn--ghost:hover, .tk-btn--ghost:focus-visible {
+  background:#F5F1EA;
+  color:#0A0A0A;
+}
+
+.tk-btn--sm {
+  font-size:13px;
+  letter-spacing:.1em;
+  padding:12px 20px;
+}
+
+.tk-btn--dark {
+  background:#0A0A0A;
+  border-color:#0A0A0A;
+  color:#F5F1EA;
+  font-size:17px;
+  padding:24px 36px;
+}
+
+.tk-btn--dark:hover, .tk-btn--dark:focus-visible {
+  background:#F5F1EA;
+  border-color:#F5F1EA;
+  color:#0A0A0A;
+}
+
+.tk-btn--dark:focus-visible {
+  outline-color:#0A0A0A;
+}
+
+.tk-btn--block {
+  width:100%;
+}
+
+.tk-mnav {
+  font-size:26px;
+  font-weight:900;
+  letter-spacing:-.03em;
+  text-transform:uppercase;
+  padding:8px 0;
+  color:#F5F1EA;
+  text-decoration:none;
+  transition:color .18s ease;
+}
+
+.tk-mnav:hover, .tk-mnav:focus-visible {
+  color:#E34234;
+}
+
+.tk-mnav--active {
+  color:#E34234;
+}
+
+.tk-flink {
+  color:#C9C2B7;
+  text-decoration:none;
+  transition:color .18s ease;
+}
+
+.tk-flink:hover, .tk-flink:focus-visible {
+  color:#E34234;
+}
+
+.tk-social {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:44px;
+  height:44px;
+  border:1px solid rgba(144,113,99,.7);
+  transition:border-color .18s ease,background-color .18s ease;
+}
+
+.tk-social svg {
+  transition:stroke .18s ease;
+}
+
+.tk-social:hover, .tk-social:focus-visible {
+  border-color:#E34234;
+  background:#E34234;
+}
+
+.tk-social:hover svg, .tk-social:focus-visible svg {
+  stroke:#0A0A0A;
+}
+
+.tk-pin {
+  cursor:pointer;
+  transition:transform .18s ease;
+}
+
+.tk-pin:hover {
+  transform:translateY(-2px);
+}
+
+@media (prefers-reduced-motion:reduce) {
+  *{animation-duration:.01ms!important;
+  animation-iteration-count:1!important;
+  transition-duration:.01ms!important};
+}
+
+@keyframes tkPulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* ── Каркас страницы ────────────────────────────────────────
+ * Шапка, подвал и мобильное меню одинаковы на всех страницах, поэтому лежат
+ * здесь, а не рядом со страницей. Значения перенесены из вёрстки главной
+ * один в один.
+ */
+
+/* Полоса контента. Шире 1440 страница не растягивается — за её краями видно
+ * фон body. */
+.tk-shell {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  background: var(--tk-ink);
+  color: var(--tk-paper);
+}
+
+/* ── Шапка ── */
+.tk-header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  height: 88px;
+  padding: 0 56px;
+  display: flex;
+  align-items: center;
+  gap: 48px;
+  background: var(--tk-ink);
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-header__logo {
+  display: block;
+  flex: none;
+  height: 52px;
+  width: auto;
+}
+
+.tk-header__nav {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+/* Раздвигает левую группу и правую по краям шапки. */
+.tk-header__gap {
+  flex: 1;
+}
+
+.tk-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.tk-header__burger {
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  margin-left: 12px;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+}
+
+.tk-header__burger span {
+  width: 26px;
+  height: 2px;
+  background: var(--tk-paper);
+}
+
+/* ── Переключатель языка ── */
+.tk-lang {
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .12em;
+}
+
+.tk-lang__btn {
+  padding: 7px 10px;
+  background: transparent;
+  border: 1px solid rgba(144, 113, 99, .7);
+  color: var(--tk-beige);
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+/* Активный язык. Раньше это состояние проставлял скрипт шестью строками
+ * инлайновых стилей — теперь он только переставляет класс. */
+.tk-lang__btn--on {
+  background: var(--tk-paper);
+  border-color: transparent;
+  color: var(--tk-ink);
+}
+
+/* ── Подвал ── */
+.tk-footer {
+  padding: 64px 56px 56px;
+  display: grid;
+  grid-template-columns: 1fr 200px 200px 260px;
+  gap: 40px;
+  align-items: start;
+}
+
+.tk-footer__col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  color: var(--tk-beige);
+}
+
+.tk-footer__brand {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tk-footer__logo {
+  display: block;
+  align-self: flex-start;
+  height: 48px;
+  width: auto;
+}
+
+.tk-footer__tagline {
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tk-label);
+  max-width: 300px;
+}
+
+.tk-footer__title {
+  font-family: 'Golos Text', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-footer__socials {
+  display: flex;
+  gap: 10px;
+}
+
+/* ── Нижняя полоса ── */
+.tk-copy {
+  padding: 22px 56px 26px;
+  border-top: 1px solid var(--tk-rule);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-muted);
+}
+
+.tk-copy__gap {
+  flex: 1;
+}
+
+/* ── Мобильное меню ── */
+.tk-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--tk-ink);
+  color: var(--tk-paper);
+  display: none;
+  flex-direction: column;
+  font-family: 'Golos Text', Helvetica, sans-serif;
+}
+
+.tk-menu[data-open] {
+  display: flex;
+}
+
+.tk-menu__top {
+  height: 64px;
+  flex: none;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-menu__logo {
+  display: block;
+  flex: none;
+  height: 40px;
+  width: auto;
+}
+
+.tk-menu__gap {
+  flex: 1;
+}
+
+.tk-menu__close {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tk-menu__nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.tk-menu__actions {
+  flex: none;
+  padding: 0 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Адаптив каркаса ────────────────────────────────────────
+ * Пороги те же, что на главной: 1439 / 1023 / 767.
+ */
+@media (max-width: 1439px) {
+  .tk-footer,
+  .tk-copy {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .tk-header {
+    padding-left: 28px;
+    padding-right: 28px;
+    gap: 20px;
+  }
+
+  /* Пункты уезжают в бургер. */
+  .tk-header__nav {
+    display: none;
+  }
+
+  .tk-header__burger {
+    display: flex;
+  }
+
+  .tk-footer {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tk-footer,
+  .tk-copy {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+}
+
+@media (max-width: 767px) {
+  .tk-header {
+    height: 64px;
+    padding-left: 20px;
+    padding-right: 20px;
+    gap: 12px;
+  }
+
+  .tk-header__logo {
+    height: 40px;
+  }
+
+  /* «Войти» и «Регистрация» на узком экране остаются только в бургере:
+   * рядом с логотипом и переключателем языка им уже не хватает места. */
+  .tk-hide-sm {
+    display: none;
+  }
+
+  .tk-footer {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .tk-footer,
+  .tk-copy {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}

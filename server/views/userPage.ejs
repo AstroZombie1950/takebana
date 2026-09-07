@@ -168,6 +168,8 @@
         .presence-online .presence-dot { background-color: #22c55e; }
         .presence-offline .presence-dot { background-color: #9ca3af; }
     </style>
+  <link rel="stylesheet" href="/css/tk.css">
+  <link rel="stylesheet" href="/css/app.css">
 </head>
 <body class="font-inter bg-white">
     <%- include('partials/header') %>
@@ -177,7 +179,7 @@
         <%- include('partials/leftBar') %>
         
         <!-- Основной контент -->
-        <main class="min-h-screen lg:pl-72">
+        <main class="min-h-screen tk-app-main">
             <div class="max-w-4xl mx-auto px-3 py-6 lg:px-6 lg:py-12">
                 
                 <!-- Профиль -->

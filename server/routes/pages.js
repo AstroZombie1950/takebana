@@ -8,6 +8,13 @@ asyncify(router); // ошибки async-обработчиков уходят в
 const User = require('../models/User');
 const Establishments = require('../models/Establishments');
 
+// Куда вести человека после входа. Значение в сессию кладёт /set-next,
+// читают его /, /login, /register и userRoutes. Блок был скопирован в трёх
+// местах этого файла слово в слово.
+function nextUrl(req) {
+  return req.session.next === 'service2' ? '/streaming' : '/main';
+}
+
 function checkLoggedIn(req, res, next) {
   if (!req.session.login) {
     res.redirect('/login');
@@ -16,8 +23,6 @@ function checkLoggedIn(req, res, next) {
   }
 }
 
-// Куда вернуть человека после входа. Значение кладётся в сессию, читают его
-// маршруты / , /login и /register ниже.
 router.get('/set-next', (req, res) => {
   const next = req.query.next || 'default'; // Получаем желаемый маршрут из параметров запроса
   req.session.next = next; // Сохраняем его в сессии
@@ -26,26 +31,14 @@ router.get('/set-next', (req, res) => {
   res.redirect('/login'); // Или '/register' в зависимости от вашей логики
 });
 
-
-// Функция для генерации случайного градиента из массива градиентов
-
-
-// Определение маршрута
 router.get('/', (req, res) => {
-  let userLoggedIn = !!req.session.login;
-  if (userLoggedIn) {
-      let nextRoute = req.session.next || 'default';
-      let redirectUrl = '/main'; // Значение по умолчанию
-      if (nextRoute === 'service1' || nextRoute === 'default') {
-          redirectUrl = '/main';
-      } else if (nextRoute === 'service2') {
-          redirectUrl = '/streaming';
-      }
-      res.redirect(redirectUrl);
-  } 
-  else {
-      res.render('index', { title: 'Главная страница', userLoggedIn: userLoggedIn });
-  }
+  // Вошедшему главная не нужна — он идёт в кабинет.
+  if (req.session.login) return res.redirect(nextUrl(req));
+
+  res.render('home', {
+    title: 'Takebana — платформа прямых эфиров для бизнеса',
+    description: 'Takebana — платформа, где производители, заведения, блогеры и эксперты выходят в прямой эфир: продают, показывают производство и отвечают на вопросы без посредников.',
+  });
 });
 
 router.get('/about', async (req, res) => {
@@ -67,31 +60,17 @@ router.get('/panel', async (req, res) => {
 
 router.get('/login', (req, res) => {
   if (req.session && req.session.login) {
-    let nextRoute = req.session.next || 'default';
-      let redirectUrl = '/main'; // Значение по умолчанию
-      if (nextRoute === 'service1' || nextRoute === 'default') {
-          redirectUrl = '/main';
-      } else if (nextRoute === 'service2') {
-          redirectUrl = '/streaming';
-      }
-      res.redirect(redirectUrl);
+    res.redirect(nextUrl(req));
   } else {
-    res.render('login', { title: 'Главная страница', userLoggedIn: !!req.session.login });
+    res.render('login');
   }
 });
 
 router.get('/register', (req, res) => {
   if (req.session && req.session.login) {
-    let nextRoute = req.session.next || 'default';
-      let redirectUrl = '/main'; // Значение по умолчанию
-      if (nextRoute === 'service1' || nextRoute === 'default') {
-          redirectUrl = '/main';
-      } else if (nextRoute === 'service2') {
-          redirectUrl = '/streaming';
-      }
-      res.redirect(redirectUrl);
+    res.redirect(nextUrl(req));
   } else {
-    res.render('register', { title: 'Главная страница', userLoggedIn: !!req.session.login });
+    res.render('register');
   }
 });
 

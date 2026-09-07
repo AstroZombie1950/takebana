@@ -1,0 +1,19 @@
+<%
+  // Общее начало <head>. Локали: title (обязательна), description (нет).
+  var pageDescription = typeof description !== 'undefined' ? description : '';
+%>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><%= title %></title>
+<% if (pageDescription) { %>
+<meta name="description" content="<%= pageDescription %>">
+<% } %>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+<%# Кириллические файлы обеих гарнитур: их видно в первом экране любой
+    страницы. Без preload браузер находит их только после разбора tk.css,
+    и заголовок успевает моргнуть системным шрифтом. %>
+<link rel="preload" as="font" type="font/woff2" href="/fonts/golos-text-cyrillic.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="/fonts/oswald-cyrillic.woff2" crossorigin>
+
+<link rel="stylesheet" href="/css/tk.css">
