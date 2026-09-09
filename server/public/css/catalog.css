@@ -1,0 +1,463 @@
+/* Каталог эфиров — /streaming и его категории.
+ *
+ * Раскладка одной страницы: сетки, отступы и медиазапросы под этот макет.
+ * Общее (токены, шрифты, кнопки, поля) — tk.css, каркас кабинета — app.css.
+ *
+ * Прежняя версия страницы стояла на Tailwind с фотофоном во весь экран,
+ * стеклянными панелями и градиентным текстом. Здесь тот же состав блоков
+ * в дизайн-системе: тёмный фон, киноварь, линейки, острые углы.
+ */
+
+.tk-cat {
+  max-width: 1440px;
+  padding: 40px;
+}
+
+/* ── Шапка страницы ──────────────────────────────────────────────────────
+ * Слева заголовок и метрики, справа рекомендации. Раскладка та же, что была
+ * до переверстки: рекомендации — содержимое страницы, а не каркаса.
+ */
+.tk-cat__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 48px;
+  align-items: start;
+  padding-bottom: 48px;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-cat__h1 {
+  margin: 0;
+  font-size: 68px;
+  line-height: .9;
+  letter-spacing: -.035em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+  text-wrap: balance;
+}
+
+.tk-cat__lede {
+  margin: 22px 0 0;
+  max-width: 620px;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--tk-beige);
+  text-wrap: pretty;
+}
+
+/* ── Метрики ── */
+.tk-cat__stats {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tk-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--tk-rule);
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--tk-muted);
+}
+
+.tk-stat__num {
+  font-size: 15px;
+  letter-spacing: .04em;
+  color: var(--tk-paper);
+}
+
+.tk-stat svg { color: var(--tk-green); }
+
+/* ── Рекомендации ── */
+.tk-rec__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.tk-rec__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(144, 113, 99, .25);
+  transition: color .18s ease;
+}
+
+.tk-rec__item:first-child { border-top: 1px solid rgba(144, 113, 99, .25); }
+.tk-rec__item:hover .tk-rec__name { color: var(--tk-accent); }
+
+.tk-rec__ava {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .35);
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-rec__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Точка присутствия сидит на аватаре, как в левой панели. */
+.tk-rec__ava .presence-dot {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--tk-ink);
+}
+
+.tk-rec__body { flex: 1; min-width: 0; }
+
+.tk-rec__name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color .18s ease;
+}
+
+.tk-rec__state {
+  margin: 2px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+.tk-rec__more {
+  width: 100%;
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: none;
+  border: 1px solid var(--tk-rule);
+  padding: 11px 0;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  transition: border-color .18s ease, color .18s ease;
+}
+
+.tk-rec__more:hover,
+.tk-rec__more:focus-visible {
+  border-color: var(--tk-accent);
+  color: var(--tk-paper);
+}
+
+/* ── Секции ── */
+.tk-cat__sec { padding-top: 48px; }
+
+.tk-cat__h2 {
+  margin: 0 0 6px;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -.02em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+.tk-cat__note {
+  margin: 0 0 26px;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  color: var(--tk-muted);
+}
+
+/* ── Категории контента ── */
+.tk-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.tk-group {
+  padding: 22px;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-group__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.tk-group__head svg { flex: none; color: var(--tk-accent); }
+
+.tk-group__name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+.tk-group__note {
+  margin: 2px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+}
+
+.tk-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tk-tag {
+  background: none;
+  border: 1px solid var(--tk-rule);
+  padding: 7px 12px;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .08em;
+  color: var(--tk-beige);
+  transition: border-color .18s ease, color .18s ease, background-color .18s ease;
+}
+
+.tk-tag:hover { border-color: var(--tk-beige); color: var(--tk-paper); }
+
+.tk-tag[aria-pressed="true"] {
+  border-color: var(--tk-accent);
+  background: rgba(227, 66, 52, .12);
+  color: var(--tk-paper);
+}
+
+/* ── Сетка эфиров ────────────────────────────────────────────────────────
+ * auto-fill, а не фиксированные брейкпоинты: колонок столько, сколько
+ * помещается, и сетка одинаково ведёт себя рядом с панелью и без неё.
+ */
+.tk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.tk-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--tk-rule);
+  background: var(--tk-ink);
+  transition: border-color .18s ease;
+  animation: tk-card-in .4s ease-out both;
+}
+
+.tk-card:hover,
+.tk-card:focus-visible { border-color: var(--tk-accent); }
+
+@keyframes tk-card-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-card { animation: none; }
+}
+
+.tk-card__shot {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #141414;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(144, 113, 99, .5);
+}
+
+.tk-card__shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .5s ease;
+}
+
+.tk-card:hover .tk-card__shot img { transform: scale(1.04); }
+
+/* Метки поверх превью. */
+.tk-card__live,
+.tk-card__eyes {
+  position: absolute;
+  top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.tk-card__live {
+  left: 10px;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+}
+
+.tk-card__live::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tk-ink);
+  animation: tk-live 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-card__live::before { animation: none; }
+}
+
+.tk-card__eyes {
+  right: 10px;
+  background: rgba(10, 10, 10, .78);
+  color: var(--tk-paper);
+}
+
+.tk-card__eyes svg { color: var(--tk-beige); }
+
+/* ── Тело карточки ── */
+.tk-card__body {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border-top: 1px solid var(--tk-rule);
+}
+
+.tk-card__ava {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .35);
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-card__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-card__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tk-card__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--tk-paper);
+  /* Две строки максимум: иначе карточки в ряду разъезжаются по высоте. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.tk-card__who {
+  margin: 4px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-card__cat {
+  align-self: flex-start;
+  margin-top: 12px;
+  padding: 4px 9px;
+  border: 1px solid var(--tk-rule);
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+/* ── Пусто ── */
+.tk-empty {
+  padding: 64px 24px;
+  text-align: center;
+  border: 1px dashed var(--tk-rule);
+}
+
+.tk-empty svg { color: rgba(144, 113, 99, .5); }
+
+.tk-empty__h {
+  margin: 18px 0 8px;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+.tk-empty__p {
+  margin: 0 auto 22px;
+  max-width: 420px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--tk-beige);
+}
+
+/* ── Узкие экраны ─────────────────────────────────────────────────────── */
+@media (max-width: 1279px) {
+  .tk-cat__hero {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+
+  .tk-cat__h1 { font-size: 54px; }
+}
+
+@media (max-width: 767px) {
+  .tk-cat { padding: 28px 20px 40px; }
+  .tk-cat__h1 { font-size: 38px; }
+  .tk-cat__lede { font-size: 15px; }
+  .tk-cat__h2 { font-size: 24px; }
+  .tk-cat__sec { padding-top: 36px; }
+  .tk-cat__hero { padding-bottom: 36px; }
+  .tk-groups { grid-template-columns: 1fr; }
+  .tk-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 374px) {
+  .tk-cat__h1 { font-size: 30px; }
+}

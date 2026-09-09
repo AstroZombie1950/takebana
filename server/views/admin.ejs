@@ -1,453 +1,59 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Takebana</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Urbanist:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
-  
-    <link rel="stylesheet" href="css/admin.css">
-    <!-- escapeHtml для мест, где разметка собирается в браузере (чат, админка) -->
-    <script src="/escape-html.js"></script>
-  <script src="/toast.js"></script>
+<%- include('partials/tkHead', { title: title }) %>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/css/admin.css">
+<%# escapeHtml обязателен: таблица собирается строкой и уходит в innerHTML,
+    а значения полей вводит владелец заведения. %>
+<script src="/escape-html.js"></script>
+<script src="/toast.js"></script>
 </head>
 <body>
 
-    <div class="repass_modal">
-        <input type="text" id="oldPassword" placeholder="old password">
-        <input type="text" id="newPassword" placeholder="new password">
-        <input type="text" id="confirmPassword" placeholder="retype new password">
-        <button id="updatePasswordButton">Update password</button>
+<div class="tk-panel-page">
+
+  <div class="tk-adm__top">
+    <div>
+      <p class="tk-kicker">Takebana</p>
+      <h1 class="tk-adm__h1">Панель администрирования</h1>
     </div>
 
+    <div class="tk-adm__tools">
+      <select id="statusFilter" class="tk-field tk-select">
+        <option value="all">Все заведения</option>
+        <option value="active">Только активные</option>
+        <option value="inactive">Только неактивные</option>
+      </select>
 
-    <div class="instruments">
-        <div>
-            <p>Administrator</p>
-        </div>
+      <input type="search" id="searchInput" class="tk-field tk-field--search" placeholder="Поиск по названию" autocomplete="off">
 
-        <div class="estate_wrap"> 
-            <select id="statusFilter">
-                <option value="all">Все</option>
-                <option value="active">Активные</option>
-                <option value="inactive">Неактивные</option>
-              </select>
-              <input type="text" id="searchInput" placeholder="Поиск по названию">
-        </div>
+      <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" id="openRepass">Сменить пароль</button>
+    </div>
+  </div>
+
+  <div class="tk-adm__grid" id="fields"></div>
+</div>
+
+<!-- Смена пароля администратора -->
+<div class="tk-adm__modal hidden" id="repassModal">
+  <div class="tk-adm__modal-card">
+    <div class="tk-adm__modal-head">
+      <h2>Смена пароля</h2>
+      <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" id="closeRepass" aria-label="Закрыть">Закрыть</button>
     </div>
 
-    <section class="main">
+    <form class="tk-adm__form" id="repassForm">
+      <%# type="password", а не text: прежде все три пароля показывались
+          на экране открытым текстом. %>
+      <input type="password" id="oldPassword" class="tk-field" placeholder="Текущий пароль" autocomplete="current-password">
+      <input type="password" id="newPassword" class="tk-field" placeholder="Новый пароль" autocomplete="new-password">
+      <input type="password" id="confirmPassword" class="tk-field" placeholder="Повторите новый пароль" autocomplete="new-password">
+      <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm tk-btn--block" id="updatePasswordButton">Сохранить пароль</button>
+    </form>
+  </div>
+</div>
 
-
-        <!-- <h1>Administrator panel</h1> -->
-        <div class="category">
-
-            <div class="item establishments">
-                <p>Establishments</p>
-            </div>
-
-            <div class="item repass">
-                <p>Change admin pass</p>
-            </div>
-
-        </div>
-        <div class="fields">
-
-            <!-- <div class="estate item">
-                <div class="inp">
-                    <input type="text" class="name" placeholder="Название">
-                </div>
-                <div class="inp">
-                    <input type="text" class="country" placeholder="Страна">
-                </div>
-                <div class="inp">
-                    <input type="text" class="city" placeholder="Город">
-                </div>
-                <div class="inp">
-                    <input type="text" class="address" placeholder="Адрес">
-                </div>
-                <div class="inp">
-                    <input type="text" class="email" placeholder="email">
-                </div>
-                <div class="inp">
-                    <input type="text" class="phone" placeholder="phone">
-                </div>
-                <div class="inp">
-                    <input type="text" class="lat" placeholder="широта">
-                </div>
-                <div class="inp">
-                    <input type="text" class="lng" placeholder="долгота">
-                </div>
-
-                <button class="btn">Сохранить</button>
-            </div> -->
-
-        </div>
-    </section>
-
-    <script>
-
-        //  ПОЛУЧЕНИЕ ЗАВЕДЕНИЙ И ВЫВОД
-        let page = 1; // начинаем с первой страницы
-        const perPage = 9; // количество элементов на странице
-
-        // document.querySelector('.item.establishments').addEventListener('click', function() {
-            fetch(`/admin/establishments?page=${page}&perPage=${perPage}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            }).then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log(data);
-
-                let fieldsDiv = document.querySelector('.fields');
-                fieldsDiv.innerHTML = ''; // Очистка предыдущих элементов
-
-                // escapeHtml обязателен: значения полей вводит владелец заведения,
-                // а таблица собирается строкой и уходит в innerHTML. Кавычка
-                // в названии закрывала атрибут value и давала скрипт в панели.
-                data.forEach(establishment => {
-                    let status = establishment.status ? 'checked' : '';
-                    fieldsDiv.innerHTML += `
-                        <div class="estate item" data-id="${establishment._id}">
-                            <div class="inp"><input type="text" class="name" placeholder="name" value="${escapeHtml(establishment.name || '')}"></div>
-                            <div class="inp"><input type="text" class="country" placeholder="country" value="${escapeHtml(establishment.country || '')}"></div>
-                            <div class="inp"><input type="text" class="city" placeholder="city" value="${escapeHtml(establishment.city || '')}"></div>
-                            <div class="inp"><input type="text" class="address" placeholder="address" value="${escapeHtml(establishment.address || '')}"></div>
-                            <div class="inp"><input type="text" class="email" placeholder="email" value="${escapeHtml(establishment.email || '')}"></div>
-                            <div class="inp"><input type="text" class="phone" placeholder="phone" value="${escapeHtml(establishment.phone || '')}"></div>
-                            <div class="inp"><input type="text" class="lat" placeholder="lat" value="${escapeHtml(establishment.location && establishment.location.lat || '')}"></div>
-                            <div class="inp"><input type="text" class="lng" placeholder="lng" value="${escapeHtml(establishment.location && establishment.location.lng || '')}"></div>
-                            <button class="btn save">Сохранить</button>
-                            <button class="btn delete">Удалить</button>
-                            <label>Активно: <input type="checkbox" class="status" ${status}></label>
-                        </div>
-                    `;
-                });
-                // listenEstates();
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-                toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
-            });
-// });
-
-
-document.querySelector('#searchInput').addEventListener('input', function() {
-    const searchQuery = this.value;
-    fetch(`/admin/establishments?search=${searchQuery}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-    }).then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log(data);
-
-                let fieldsDiv = document.querySelector('.fields');
-                fieldsDiv.innerHTML = ''; // Очистка предыдущих элементов
-
-                data.forEach(establishment => {
-                    let status = establishment.status ? 'checked' : '';
-                    fieldsDiv.innerHTML += `
-                        <div class="estate item" data-id="${establishment._id}">
-                            <div class="inp"><input type="text" class="name" placeholder="name" value="${escapeHtml(establishment.name || '')}"></div>
-                            <div class="inp"><input type="text" class="country" placeholder="country" value="${escapeHtml(establishment.country || '')}"></div>
-                            <div class="inp"><input type="text" class="city" placeholder="city" value="${escapeHtml(establishment.city || '')}"></div>
-                            <div class="inp"><input type="text" class="address" placeholder="address" value="${escapeHtml(establishment.address || '')}"></div>
-                            <div class="inp"><input type="text" class="email" placeholder="email" value="${escapeHtml(establishment.email || '')}"></div>
-                            <div class="inp"><input type="text" class="phone" placeholder="phone" value="${escapeHtml(establishment.phone || '')}"></div>
-                            <div class="inp"><input type="text" class="lat" placeholder="lat" value="${escapeHtml(establishment.location && establishment.location.lat || '')}"></div>
-                            <div class="inp"><input type="text" class="lng" placeholder="lng" value="${escapeHtml(establishment.location && establishment.location.lng || '')}"></div>
-                            <button class="btn save">Сохранить</button>
-                            <button class="btn delete">Удалить</button>
-                            <label>Активно: <input type="checkbox" class="status" ${status}></label>
-                        </div>
-                    `;
-                });
-                // listenEstates();
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-                toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
-            });
-
-});
-
-
-
-
-
-window.addEventListener('scroll', function() {
-    if (window.innerHeight + window.scrollY >= document.body.offsetHeight) {
-        // пользователь прокрутил страницу до конца, загружаем следующую порцию данных
-        page++;
-        loadEstablishments(page);
-    }
-});
-
-document.querySelector('#statusFilter').addEventListener('change', function() {
-    // при изменении фильтра сбрасываем страницу и загружаем заведения заново
-    page = 1;
-    loadEstablishments(page);
-});
-
-
-function loadEstablishments(page) {
-    const statusFilter = document.querySelector('#statusFilter').value;
-    fetch(`/admin/establishments?page=${page}&perPage=${perPage}&status=${statusFilter}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-    }).then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        console.log(data);
-
-        let fieldsDiv = document.querySelector('.fields');
-        if (page === 1) {
-            fieldsDiv.innerHTML = ''; // если это первая страница, очищаем предыдущие элементы
-        }
-        data.forEach(establishment => {
-            let status = establishment.status ? 'checked' : '';
-            fieldsDiv.innerHTML += `
-                <div class="estate item" data-id="${establishment._id}">
-                    <div class="inp"><input type="text" class="name" placeholder="name" value="${escapeHtml(establishment.name || '')}"></div>
-                    <div class="inp"><input type="text" class="country" placeholder="country" value="${escapeHtml(establishment.country || '')}"></div>
-                    <div class="inp"><input type="text" class="city" placeholder="city" value="${escapeHtml(establishment.city || '')}"></div>
-                    <div class="inp"><input type="text" class="address" placeholder="address" value="${escapeHtml(establishment.address || '')}"></div>
-                    <div class="inp"><input type="text" class="email" placeholder="email" value="${escapeHtml(establishment.email || '')}"></div>
-                    <div class="inp"><input type="text" class="phone" placeholder="phone" value="${escapeHtml(establishment.phone || '')}"></div>
-                    <div class="inp"><input type="text" class="lat" placeholder="lat" value="${escapeHtml(establishment.location && establishment.location.lat || '')}"></div>
-                    <div class="inp"><input type="text" class="lng" placeholder="lng" value="${escapeHtml(establishment.location && establishment.location.lng || '')}"></div>
-                    <button class="btn save">Сохранить</button>
-                    <button class="btn delete">Удалить</button>
-                    <label>Активно: <input type="checkbox" class="status" ${status}></label>
-                </div>
-            `;
-        });
-        // listenEstates();
-        // ... ваш код для добавления элементов ...
-    })
-    .catch((error) => {
-        console.error('Error:', error);
-        toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
-    });
-}
-
-// загружаем первую порцию данных при загрузке страницы
-loadEstablishments(page);
-
-
-
-
-document.querySelector('.fields').addEventListener('click', function(event) {
-    let target = event.target;
-
-    // Обработка клика по кнопке сохранения
-    if (target.classList.contains('save') && target.classList.contains('active')) {
-        let itemDiv = target.closest('.item');
-        console.log(itemDiv)
-        let establishmentId = itemDiv.dataset.id; // Получаем идентификатор заведения
-        let establishment = {
-            name: itemDiv.querySelector('.name').value,
-            country: itemDiv.querySelector('.country').value,
-            city: itemDiv.querySelector('.city').value,
-            address: itemDiv.querySelector('.address').value,
-            email: itemDiv.querySelector('.email').value,
-            phone: itemDiv.querySelector('.phone').value,
-            location: {
-                lat: parseFloat(itemDiv.querySelector('.lat').value),
-                lng: parseFloat(itemDiv.querySelector('.lng').value)
-            }
-        };
-        console.log(establishment)
-
-        fetch(`/admin/updEstablishment/${establishmentId}`, { // Используем идентификатор заведения в URL
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(establishment)
-        }).then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log(data);
-            this.classList.remove('active');
-            toast('Заведение успешно обновлено!', 'ok'); // Выводим сообщение об успешном обновлении
-        })
-        .catch((error) => {
-            console.error('Error:', error);
-            toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
-        });
-    }
-
-    // Обработка клика по кнопке удаления
-    if (target.classList.contains('delete')) {
-        let itemId = target.parentElement.dataset.id;
-        fetch(`/admin/deleteEstablishment/${itemId}`, {
-            method: 'DELETE',
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log(data);
-            // Удалите элемент из DOM
-            target.parentElement.remove();
-            toast('Заведение успешно удалено!', 'ok'); // Выводим сообщение об успешном удалении
-        })
-        .catch(error => {
-            console.error('Ошибка:', error);
-            toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
-        });
-    }
-});
-
-
-document.querySelector('.fields').addEventListener('change', function(event) {
-    let target = event.target;
-
-    // Обработка изменения статуса
-    if (target.classList.contains('status')) {
-        let itemId = target.parentElement.parentElement.dataset.id;
-        fetch(`/admin/updateEstablishmentStatus/${itemId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                status: target.checked
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log(data);
-            toast('Статус заведения успешно обновлен!', 'ok'); // Выводим сообщение об успешном обновлении
-        })
-        .catch(error => {
-            console.error('Ошибка:', error);
-            toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
-        });
-    }
-});
-
-document.querySelector('.fields').addEventListener('input', function(event) {
-    let target = event.target;
-
-    // Обработка ввода в поле
-    if (target.tagName === 'INPUT') {
-        target.closest('.item').querySelector('.btn').classList.add('active');
-    }
-});
-
-
-
-    // repassword admin 
-
-    // button open modal
-    let btnRepass = document.querySelector('section.main .category .item.repass');
-    btnRepass.addEventListener('click', function(e) {
-        e.stopPropagation();
-        repassModal.classList.add('active');
-    });
-
-    // modal
-    let repassModal = document.querySelector('.repass_modal');
-
-    document.addEventListener('click', function() {
-        repassModal.classList.remove('active');
-    });
-
-    repassModal.addEventListener('click', function(e) {
-        e.stopPropagation();
-    })
-
-
-    document.querySelector('#updatePasswordButton').addEventListener('click', function() {
-        const oldPasswordInput = document.querySelector('#oldPassword');
-        const newPasswordInput = document.querySelector('#newPassword');
-        const confirmPasswordInput = document.querySelector('#confirmPassword');
-
-        const oldPassword = oldPasswordInput.value;
-        const newPassword = newPasswordInput.value;
-        const confirmPassword = confirmPasswordInput.value;
-
-        // Валидация паролей
-        if (!oldPassword || !newPassword || !confirmPassword) {
-            toast('Все поля должны быть заполнены');
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            toast('Новый пароль и подтверждение пароля не совпадают', 'error');
-            return;
-        }
-        if (newPassword.length < 8) {
-            toast('Новый пароль должен содержать не менее 8 символов');
-            return;
-        }
-
-        // Отправка запроса на сервер
-        fetch('/admin/updatePassword', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                oldPassword: oldPassword,
-                newPassword: newPassword
-            })
-        }).then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            toast(data.message); // Выводим сообщение от сервера
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            if (error.message.includes('400')) {
-                toast('Ошибка: Старый пароль не совпадает', 'error');
-            } else if (error.message.includes('401')) {
-                toast('Ошибка: Неверный текущий пароль', 'error');
-            } else {
-                toast('Ошибка: ' + error.message, 'error'); // Выводим сообщение об ошибке
-            }
-        });
-    });
-
-    </script>
+<script src="/admin.js"></script>
 </body>
 </html>

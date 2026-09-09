@@ -1,587 +1,208 @@
+<%
+  // Подписи категорий для метки на карточке. Роут отдаёт код ('business'),
+  // а не текст, и раньше он так и выводился в карточке как есть.
+  var catLabels = {
+    business:      { lng: '85', name: 'Бизнес' },
+    entertainment: { lng: '84', name: 'Развлечения' }
+  };
+%>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            50: '#f0f1fe',
-                            100: '#e3e5fd',
-                            200: '#cccefa',
-                            300: '#a7aaf5',
-                            400: '#7c7aef',
-                            500: '#666bcf',
-                            600: '#5148b5',
-                            700: '#453a93',
-                            800: '#3a3178',
-                            900: '#332b62'
-                        }
-                    },
-                    animation: {
-                        'fade-up': 'fadeUp 0.8s ease-out',
-                        'slide-down': 'slideDown 0.6s ease-out',
-                        'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
-                        'float-slow': 'floatSlow 8s ease-in-out infinite',
-                    },
-                    backgroundImage: {
-                        'mesh-gradient': 'linear-gradient(135deg, rgba(102, 107, 207, 0.1), rgba(168, 85, 247, 0.1), rgba(59, 130, 246, 0.1))',
-                        'dot-pattern': 'radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px)',
-                    }
-                }
-            }
-        }
-    </script>
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    
-    <title><%= title %> - Takebana</title>
-    
-    <style>
-        /* Кастомные стили для фоновых изображений */
-        .bg-popular {
-            background-image: linear-gradient(135deg, rgba(0,0,0,0.7), rgba(102, 107, 207, 0.3), rgba(0,0,0,0.8)), url('/img/streaming/background-imagse-1.png');
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-        }
-        .bg-business {
-            background-image: linear-gradient(135deg, rgba(0,0,0,0.7), rgba(59, 130, 246, 0.3), rgba(0,0,0,0.8)), url('/img/streaming/image\ \(2\).png');
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-        }
-        .bg-entertainment {
-            background-image: linear-gradient(135deg, rgba(0,0,0,0.7), rgba(168, 85, 247, 0.3), rgba(0,0,0,0.8)), url('/img/streaming/image\ \(3\).png');
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-        }
-        
-        /* Анимации */
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes pulseGlow {
-            0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
-            50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.8), 0 0 40px rgba(239, 68, 68, 0.3); }
-        }
-        
-        @keyframes floatSlow {
-            0%, 100% { transform: translateY(0px) rotate(0deg); }
-            33% { transform: translateY(-10px) rotate(1deg); }
-            66% { transform: translateY(5px) rotate(-1deg); }
-        }
-        
-        /* Кастомный скроллбар */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: linear-gradient(135deg, rgba(102, 107, 207, 0.7), rgba(102, 107, 207, 1));
-            border-radius: 4px;
-        }
-        
-
-        
-        /* Улучшенные тени */
-        .shadow-premium {
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 15px 12px rgba(0, 0, 0, 0.2);
-        }
-        
-        .shadow-card {
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2), 0 3px 8px rgba(0, 0, 0, 0.15);
-        }
-        
-        /* Mesh gradient overlay */
-        .mesh-overlay {
-            background: 
-                radial-gradient(circle at 20% 20%, rgba(102, 107, 207, 0.15) 0%, transparent 50%),
-                radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.15) 0%, transparent 50%),
-                radial-gradient(circle at 40% 70%, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
-        }
-        
-        /* Premium glassmorphism */
-        .glass-premium {
-            background: rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(16px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        /* Grid pattern overlay */
-        .grid-overlay {
-            background-image: 
-                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-            background-size: 50px 50px;
-        }
-    </style>
-  <link rel="stylesheet" href="/css/tk.css">
-  <link rel="stylesheet" href="/css/app.css">
+<%- include('partials/tkHead', { title: title + ' — Takebana' }) %>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/catalog.css">
 </head>
-<body class="font-inter bg-gray-900 overflow-x-hidden">
-    <%- include('partials/header') %>
+<body class="tk-app">
 
-    <!-- Основной контейнер без верхнего отступа -->
-    <div class="min-h-screen">
-        <%- include('partials/leftBar') %>
-        
-        <!-- Основной контент -->
-        <main class="min-h-screen tk-app-main bg-<%= category === 'business' ? 'business' : category === 'entertainment' ? 'entertainment' : 'popular' %> transition-all duration-300">
-            
-            <!-- Дополнительные эффекты фона -->
-            <div class="absolute inset-0 mesh-overlay"></div>
-            <div class="absolute inset-0 grid-overlay"></div>
-            
-            <!-- Контейнер контента -->
-            <div class="relative z-10 min-h-screen flex flex-col">
-                
-                <!-- Hero секция -->
-                <section class="flex-1 flex items-center justify-center px-2 py-4 lg:px-6 lg:py-10">
-                    <div class="container mx-auto">
-                        
-                        <!-- Верхняя панель с метриками -->
-                        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between animate-slide-down">
-                            <!-- Метрики -->
-                            <div class="flex items-center gap-1 mb-4 lg:gap-4 lg:mb-0 lg:mt-8">
-                                <div class="flex items-center gap-1 bg-black/20 backdrop-blur-sm border border-white/10 rounded-full px-2 py-1 lg:gap-2.5 lg:px-4 lg:py-2">
-                                    <div class="w-1.5 h-1.5 lg:w-2 lg:h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                                    <span class="text-white font-medium text-xs lg:text-sm"><%= totalStreamsCount %></span>
-                                    <span class="text-white/70 text-xs uppercase tracking-wider" lng="164">Стримеров</span>
-                                </div>
-                                <div class="flex items-center gap-1 bg-black/20 backdrop-blur-sm border border-white/10 rounded-full px-2 py-1 lg:gap-2.5 lg:px-4 lg:py-2">
-                                    <svg class="w-2 h-2 lg:w-3 lg:h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
-                                    </svg>
-                                    <span class="text-white/70 text-xs uppercase tracking-wider" lng="89">Онлайн</span>
-                                </div>
-                            </div>
-                            
-                            <!-- Рекомендации -->
-                            <div class="lg:max-w-sm">
-                                <!-- Заголовок -->
-                                <div class="mb-3 lg:mb-6">
-                                    <h3 class="text-white/90 font-medium text-xs lg:text-sm uppercase tracking-widest mb-1" lng="165">Рекомендации</h3>
-                                    <div class="w-6 lg:w-8 h-0.5 bg-gradient-to-r from-brand-400 to-purple-400 rounded-full"></div>
-                                </div>
-                                
-                                <!-- Список пользователей -->
-                                <div class="space-y-1.5 lg:space-y-3">
-                                    <% users.slice(0, 3).forEach((user, index) => { %>
-                                    <a href="/userPage/<%= user._id %>" class="group flex items-center gap-2 lg:gap-4 py-2 px-2 lg:py-3 lg:px-4 rounded-lg lg:rounded-xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.08] hover:border-white/[0.15] transition-all duration-500 backdrop-blur-sm">
-                                        <!-- Аватар -->
-                                        <div class="flex-shrink-0">
-                                            <% if (user.avatarStyle.url) { %>
-                                                <img class="w-8 h-8 lg:w-11 lg:h-11 rounded-full object-cover" src="<%= user.avatarStyle.url %>" alt="<%= user.displayName %>">
-                                            <% } else { %>
-                                                <div class="w-8 h-8 lg:w-11 lg:h-11 rounded-full flex items-center justify-center text-white font-medium text-xs lg:text-sm" data-bg="<%= user.avatarStyle.gradient %>">
-                                                    <%= user.avatarStyle.initial %>
-                                                </div>
-                                            <% } %>
-                                        </div>
-                                        
-                                        <!-- Информация -->
-                                        <div class="flex-1 min-w-0">
-                                            <div class="flex items-center justify-between">
-                                                <p class="text-white font-medium text-sm lg:text-base truncate group-hover:text-brand-300 transition-colors duration-300">
-                                                    <%= user.displayName %>
-                                                </p>
-                                                <div class="flex items-center gap-1 lg:gap-1.5 ml-2 lg:ml-3 flex-shrink-0">
-                                                    <% if (user.status === 'online' || user.isStreaming || user.hasActiveStream) { %>
-                                                    <div class="w-1 h-1 lg:w-1.5 lg:h-1.5 bg-red-400 rounded-full"></div>
-                                                    <span class="text-white/50 text-xs font-medium">LIVE</span>
-                                                    <% } %>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </a>
-                                    <% }); %>
-                                </div>
-                                
-                                <!-- Кнопка "Показать ещё" -->
-                                <div class="mt-3 lg:mt-5 pt-2 lg:pt-4 border-t border-white/[0.08]">
-                                    <button class="w-full py-2 lg:py-2.5 text-white/60 hover:text-white/90 text-xs lg:text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 group">
-                                        <span lng="166">Показать ещё</span>
-                                        <svg class="w-3 h-3 lg:w-4 lg:h-4 group-hover:translate-y-0.5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Главный заголовок -->
-                        <div class="text-center mb-10 lg:mb-20 animate-fade-up">
-                            <div class="inline-block mb-3 lg:mb-6">
-                                <span class="bg-brand-500/20 border border-brand-400/30 text-brand-300 px-2 py-1 lg:px-4 lg:py-2 rounded-full text-xs lg:text-sm font-semibold uppercase tracking-wider">
-                                    Live Streaming Platform
-                                </span>
-                            </div>
-                            <h1 class="text-3xl sm:text-4xl lg:text-6xl xl:text-8xl font-black text-white leading-none mb-3 lg:mb-6">
-                                <span lng="167">ПРЯМЫЕ</span><br>
-                                <span class="bg-gradient-to-r from-brand-400 via-purple-400 to-blue-400 bg-clip-text text-transparent">
-                                    <span lng="168">ТРАНСЛЯЦИИ</span>
-                                </span>
-                            </h1>
-                            <div class="flex items-center justify-center gap-2 lg:gap-4 mb-4 lg:mb-8">
-                                <div class="h-px bg-gradient-to-r from-transparent via-white/30 to-transparent flex-1 max-w-10 lg:max-w-20"></div>
-                                <h2 class="text-lg sm:text-xl lg:text-3xl xl:text-5xl font-bold text-white/90 uppercase tracking-wider" lng="<%= categoryConfig.lng %>">
-                                    <%= categoryConfig.title %>
-                                </h2>
-                                <div class="h-px bg-gradient-to-r from-transparent via-white/30 to-transparent flex-1 max-w-10 lg:max-w-20"></div>
-                            </div>
-                            <p class="text-white/70 text-sm lg:text-lg max-w-2xl mx-auto leading-relaxed px-2" lng="169">
-                                Откройте для себя захватывающий мир прямых трансляций. 
-                                Смотрите, общайтесь и делитесь яркими моментами вместе с тысячами зрителей.
-                            </p>
-                        </div>
-                        
-                    </div>
-                </section>
-                
-                <!-- Секция контента -->
-                <section class="bg-black/30 backdrop-blur border-t border-white/10">
-                    <div class="container mx-auto px-2 py-8 lg:px-6 lg:py-16">
-                        
-                        <!-- Категории -->
-                        <% if (category === 'popular' || category === 'entertainment' || category === 'business') { %>
-                        <div class="mb-8 lg:mb-16">
-                            <div class="mb-4 lg:mb-8">
-                                <h3 class="text-white/90 font-medium text-xs lg:text-sm uppercase tracking-widest mb-2" lng="170">Категории контента</h3>
-                                <div class="w-12 lg:w-16 h-0.5 bg-gradient-to-r from-brand-400 to-purple-400 rounded-full"></div>
-                            </div>
-                            
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-6">
-                                <!-- Развлечения -->
-                                <% if (category === 'popular' || category === 'entertainment') { %>
-                                <div class="group">
-                                    <div class="p-3 lg:p-6">
-                                        <div class="flex items-center gap-2 lg:gap-4 mb-3 lg:mb-6">
-                                            <div class="w-8 h-8 lg:w-12 lg:h-12 rounded-lg lg:rounded-xl flex items-center justify-center">
-                                                <svg class="w-5 h-5 lg:w-8 lg:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/>
-                                                </svg>
-                                            </div>
-                                            <div>
-                                                <h4 class="text-sm lg:text-lg font-semibold text-white mb-1" lng="84">Развлечения</h4>
-                                                <p class="text-white/50 text-xs lg:text-sm" lng="157">Игры, музыка, творчество</p>
-                                            </div>
-                                        </div>
-                                        <div class="flex flex-wrap gap-1 lg:gap-2">
-                                            <button class="filter-btn bg-white/[0.08] border border-white/[0.12] text-white/70 hover:bg-white/[0.15] hover:text-white hover:border-white/[0.25] transition-all duration-300 px-2 py-1 lg:px-3 lg:py-1.5 rounded-lg text-xs font-medium" data-filter="podcasts" lng="92">Подкасты</button>
-                                            <button class="filter-btn bg-white/[0.08] border border-white/[0.12] text-white/70 hover:bg-white/[0.15] hover:text-white hover:border-white/[0.25] transition-all duration-300 px-2 py-1 lg:px-3 lg:py-1.5 rounded-lg text-xs font-medium" data-filter="tourism" lng="93">Туризм</button>
-                                            <button class="filter-btn bg-white/[0.08] border border-white/[0.12] text-white/70 hover:bg-white/[0.15] hover:text-white hover:border-white/[0.25] transition-all duration-300 px-2 py-1 lg:px-3 lg:py-1.5 rounded-lg text-xs font-medium" data-filter="creative" lng="94">Креатив</button>
-                                            <button class="filter-btn bg-white/[0.08] border border-white/[0.12] text-white/70 hover:bg-white/[0.15] hover:text-white hover:border-white/[0.25] transition-all duration-300 px-2 py-1 lg:px-3 lg:py-1.5 rounded-lg text-xs font-medium" data-filter="music" lng="95">Музыка</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <% } %>
+<%- include('partials/header') %>
 
-                                <!-- Бизнес -->
-                                <% if (category === 'popular' || category === 'business') { %>
-                                <div class="group">
-                                    <div class="p-3 lg:p-6">
-                                        <div class="flex items-center gap-2 lg:gap-4 mb-3 lg:mb-6">
-                                            <div class="w-8 h-8 lg:w-12 lg:h-12 rounded-lg lg:rounded-xl flex items-center justify-center">
-                                                <svg class="w-5 h-5 lg:w-8 lg:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 0 0 .75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 0 0-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0 1 12 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 0 1-.673-.38m0 0A2.18 2.18 0 0 1 3 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 0 1 3.413-.387m7.5 0V5.25A2.25 2.25 0 0 0 13.5 3h-3a2.25 2.25 0 0 0-2.25 2.25v.894m7.5 0a48.667 48.667 0 0 0-7.5 0M12 12.75h.008v.008H12v-.008z"/>
-                                                </svg>
-                                            </div>
-                                            <div>
-                                                <h4 class="text-sm lg:text-lg font-semibold text-white mb-1" lng="85">Бизнес</h4>
-                                                <p class="text-white/50 text-xs lg:text-sm" lng="158">Презентации, обучение</p>
-                                            </div>
-                                        </div>
-                                        <div class="flex flex-wrap gap-1 lg:gap-2">
-                                            <button class="filter-btn bg-white/[0.08] border border-white/[0.12] text-white/70 hover:bg-white/[0.15] hover:text-white hover:border-white/[0.25] transition-all duration-300 px-2 py-1 lg:px-3 lg:py-1.5 rounded-lg text-xs font-medium" data-filter="real_estate" lng="96">Недвижимость</button>
-                                            <button class="filter-btn bg-white/[0.08] border border-white/[0.12] text-white/70 hover:bg-white/[0.15] hover:text-white hover:border-white/[0.25] transition-all duration-300 px-2 py-1 lg:px-3 lg:py-1.5 rounded-lg text-xs font-medium" data-filter="services" lng="97">Услуги</button>
-                                            <button class="filter-btn bg-white/[0.08] border border-white/[0.12] text-white/70 hover:bg-white/[0.15] hover:text-white hover:border-white/[0.25] transition-all duration-300 px-2 py-1 lg:px-3 lg:py-1.5 rounded-lg text-xs font-medium" data-filter="education" lng="98">Образование</button>
-                                            <button class="filter-btn bg-white/[0.08] border border-white/[0.12] text-white/70 hover:bg-white/[0.15] hover:text-white hover:border-white/[0.25] transition-all duration-300 px-2 py-1 lg:px-3 lg:py-1.5 rounded-lg text-xs font-medium" data-filter="auto" lng="99">Авто</button>
-                                            <button class="filter-btn bg-white/[0.08] border border-white/[0.12] text-white/70 hover:bg-white/[0.15] hover:text-white hover:border-white/[0.25] transition-all duration-300 px-2 py-1 lg:px-3 lg:py-1.5 rounded-lg text-xs font-medium" data-filter="horeca">HoReCa</button>
-                                            <button class="filter-btn bg-white/[0.08] border border-white/[0.12] text-white/70 hover:bg-white/[0.15] hover:text-white hover:border-white/[0.25] transition-all duration-300 px-2 py-1 lg:px-3 lg:py-1.5 rounded-lg text-xs font-medium" data-filter="manufacturing" lng="100">Производство</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <% } %>
-                            </div>
-                        </div>
-                        <% } %>
+<div>
+  <%- include('partials/leftBar') %>
 
-                        <!-- Активные трансляции -->
-                        <div>
-                            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 lg:mb-12">
-                                <div class="mb-4 lg:mb-0">
-                                    <h2 class="text-xl lg:text-4xl font-bold text-white mb-2 flex items-center gap-2 lg:gap-4" lng="102">
-                                        <div class="w-8 h-8 lg:w-12 lg:h-12 rounded-lg lg:rounded-xl bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center animate-pulse-glow">
-                                            <svg class="w-4 h-4 lg:w-6 lg:h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
-                                            </svg>
-                                        </div>
-                                        <span lng="102">Популярные трансляции</span>
-                                    </h2>
-                                    <p class="text-white/60 text-sm lg:text-base" lng="172">Откройте для себя лучший контент прямо сейчас</p>
-                                </div>
-                                
-                                <div class="flex items-center gap-2 lg:gap-4">
-                                    <button class="glass-premium rounded-lg lg:rounded-xl px-3 py-2 lg:px-6 lg:py-3 text-white hover:bg-white/15 transition-all duration-300 flex items-center gap-1 lg:gap-2 shadow-card">
-                                        <svg class="w-3 h-3 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                                        </svg>
-                                        <span class="text-xs lg:text-sm" lng="173">Фильтры</span>
-                                    </button>
-                                    <button class="glass-premium rounded-lg lg:rounded-xl px-3 py-2 lg:px-6 lg:py-3 text-white hover:bg-white/15 transition-all duration-300 flex items-center gap-1 lg:gap-2 shadow-card">
-                                        <svg class="w-3 h-3 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
-                                        </svg>
-                                        <span class="text-xs lg:text-sm" lng="174">Сортировка</span>
-                                    </button>
-                                </div>
-                            </div>
+  <main class="tk-app-main">
+    <div class="tk-cat">
 
-                            <!-- Сетка стримов -->
-                            <% if (streams.length > 0) { %>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 lg:gap-8">
-                                    <% streams.forEach((stream, index) => { %>
-                                    <div class="stream-card group animate-fade-up" data-anim-delay="<%= index * 100 %>ms">
-                                        <a href="/stream/<%= stream.streamId %>" class="block">
-                                            <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg lg:rounded-2xl overflow-hidden hover:bg-white/10 hover:border-white/20 hover:scale-105 transition-all duration-500 shadow-card hover:shadow-premium">
-                                                <!-- Превью -->
-                                                <div class="relative aspect-video overflow-hidden">
-                                                    <% if (stream.thumbnail && stream.thumbnail !== 'default-thumbnail.png') { %>
-                                                        <img src="<%= stream.thumbnail %>" alt="Stream thumbnail" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700">
-                                                    <% } else { %>
-                                                        <div class="w-full h-full bg-gradient-to-br from-gray-800 via-gray-700 to-gray-900 flex items-center justify-center">
-                                                            <svg class="w-16 h-16 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                                                            </svg>
-                                                        </div>
-                                                    <% } %>
-                                                    
-                                                    <!-- Оверлеи -->
-                                                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent">
-                                                        <div class="absolute top-2 left-2 lg:top-4 lg:left-4">
-                                                            <% if (stream.isActive) { %>
-                                                            <div class="bg-red-500 px-2 py-0.5 lg:px-3 lg:py-1 rounded-full flex items-center gap-1 lg:gap-2 animate-pulse-glow">
-                                                                <div class="w-1.5 h-1.5 lg:w-2 lg:h-2 bg-white rounded-full animate-pulse"></div>
-                                                                <span class="text-white text-xs font-bold">LIVE</span>
-                                                            </div>
-                                                            <% } %>
-                                                        </div>
-                                                        <div class="absolute top-2 right-2 lg:top-4 lg:right-4">
-                                                            <div class="bg-black/60 backdrop-blur-sm px-2 py-0.5 lg:px-3 lg:py-1 rounded-full flex items-center gap-1">
-                                                                <svg class="w-2.5 h-2.5 lg:w-3 lg:h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                                                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                                                </svg>
-                                                                <span class="text-white text-xs font-medium"><%= stream.viewers %></span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Информация -->
-                                                <div class="p-3 lg:p-6">
-                                                    <div class="flex items-start gap-2 lg:gap-4">
-                                                        <div class="flex-shrink-0">
-                                                            <% if (stream.user.avatarStyle.url) { %>
-                                                                <img class="w-12 h-12 rounded-xl object-cover ring-2 ring-brand-400/40" src="<%= stream.user.avatarStyle.url %>" alt="avatar">
-                                                            <% } else { %>
-                                                                <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-semibold ring-2 ring-brand-400/40" data-bg="<%= stream.user.avatarStyle.gradient %>">
-                                                                    <%= stream.user.avatarStyle.initial %>
-                                                                </div>
-                                                            <% } %>
-                                                        </div>
-                                                        
-                                                        <div class="flex-1 min-w-0">
-                                                            <h3 class="text-white font-bold text-base mb-2 line-clamp-2 group-hover:text-brand-300 transition-colors">
-                                                                <%= stream.title %>
-                                                            </h3>
-                                                            <p class="text-white/70 text-sm font-medium mb-3">
-                                                                <%= stream.user.displayName %>
-                                                            </p>
-                                                            <div class="flex items-center justify-between">
-                                                                <span class="bg-brand-500/20 border border-brand-400/30 text-brand-300 px-3 py-1 rounded-lg text-xs font-medium">
-                                                                    <%= stream.category %>
-                                                                </span>
-                                                                <div class="flex items-center gap-1 text-white/50 text-xs">
-                                                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                                                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
-                                                                        <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
-                                                                    </svg>
-                                                                    <%= stream.viewers %>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </a>
-                                    </div>
-                                    <% }); %>
-                                </div>
-                            <% } else { %>
-                                <!-- Нет стримов -->
-                                <div class="text-center py-8 lg:py-20">
-                                    <div class="max-w-md mx-auto px-4">
-                                        <div class="w-16 h-16 lg:w-24 lg:h-24 bg-gradient-to-br from-gray-700 to-gray-800 rounded-2xl lg:rounded-3xl flex items-center justify-center mx-auto mb-4 lg:mb-8">
-                                            <svg class="w-8 h-8 lg:w-12 lg:h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                                            </svg>
-                                        </div>
-                                        <h3 class="text-lg lg:text-2xl font-bold text-white mb-2 lg:mb-4" lng="175">Нет активных стримов</h3>
-                                        <p class="text-white/60 text-sm lg:text-lg mb-4 lg:mb-8 leading-relaxed" lng="176">В данный момент нет активных трансляций в этой категории. Станьте первым!</p>
-                                        <button id="start-stream-btn" class="bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold px-4 py-2 lg:px-8 lg:py-4 rounded-lg lg:rounded-xl transition-all duration-300 hover:scale-105 shadow-premium text-sm lg:text-base">
-                                            <span lng="177">Стать первым</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            <% } %>
-                        </div>
-                    </div>
-                </section>
+      <!-- Шапка страницы -->
+      <div class="tk-cat__hero">
+        <div>
+          <p class="tk-kicker">Live Streaming Platform</p>
+
+          <%# Ключ словаря содержит заголовок целиком, вместе с категорией
+              и переносом. Раньше он висел на подзаголовке, и после applyLang
+              строка «ПРЯМЫЕ ТРАНСЛЯЦИИ» печаталась на экране дважды. %>
+          <h1 class="tk-cat__h1" lng="<%= categoryConfig.lng %>">
+            Прямые трансляции:<br><%= categoryConfig.title %>
+          </h1>
+
+          <p class="tk-cat__lede" lng="169">
+            Откройте для себя захватывающий мир прямых трансляций.
+            Смотрите, общайтесь и делитесь яркими моментами вместе с тысячами зрителей.
+          </p>
+
+          <div class="tk-cat__stats">
+            <span class="tk-stat">
+              <span class="tk-stat__num"><%= totalStreamsCount %></span>
+              <span lng="164">Стримеров</span>
+            </span>
+            <span class="tk-stat">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M8.1 16.4a5.5 5.5 0 0 1 7.8 0"></path><path d="M4.9 12.9a10 10 0 0 1 14.2 0"></path><path d="M1.4 9.4a15 15 0 0 1 21.2 0"></path><path d="M12 20h.01"></path></svg>
+              <span lng="89">Онлайн</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Рекомендации -->
+        <section>
+          <p class="tk-kicker" lng="165">Рекомендации</p>
+
+          <%# Роут отдаёт четверых, в макете показаны трое. Остальные лежат
+              скрытыми, их раскрывает «Показать ещё»: раньше эта кнопка
+              не делала ничего. %>
+          <div class="tk-rec__list">
+            <% users.forEach(function (user, i) { %>
+            <a href="/userPage/<%= user._id %>" class="tk-rec__item<%= i > 2 ? ' hidden' : '' %>" data-presence-user="<%= user._id %>">
+              <div class="tk-rec__ava"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
+                <% if (user.avatarStyle.url) { %>
+                  <img src="<%= user.avatarStyle.url %>" alt="" loading="lazy">
+                <% } else { %>
+                  <%= user.avatarStyle.initial %>
+                <% } %>
+                <%# Поля status / isStreaming / hasActiveStream в модели нет —
+                    метка «в эфире» по ним не загоралась никогда. Присутствие
+                    берётся из isOnline и дальше живёт на сокете, как в панели. %>
+                <span class="presence-dot <%= user.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
+              </div>
+              <div class="tk-rec__body">
+                <p class="tk-rec__name"><%= user.displayName %></p>
+                <p class="tk-rec__state" data-presence-text>
+                  <% if (user.isOnline) { %><span lng="159">онлайн</span><% } else { %><span lng="160">оффлайн</span><% } %>
+                </p>
+              </div>
+            </a>
+            <% }); %>
+          </div>
+
+          <% if (users.length > 3) { %>
+          <button type="button" class="tk-rec__more" id="showMoreUsers">
+            <span lng="166">Показать ещё</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+          </button>
+          <% } %>
+        </section>
+      </div>
+
+      <!-- Категории контента -->
+      <% if (category === 'popular' || category === 'entertainment' || category === 'business') { %>
+      <section class="tk-cat__sec">
+        <p class="tk-kicker" lng="170">Категории контента</p>
+
+        <div class="tk-groups">
+          <% if (category === 'popular' || category === 'entertainment') { %>
+          <div class="tk-group">
+            <div class="tk-group__head">
+              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="square" aria-hidden="true"><path d="M9 5.2l1.1 3.7L13.8 10l-3.7 1.1L9 14.8l-1.1-3.7L4.2 10l3.7-1.1L9 5.2Z"></path><path d="M17.5 13.5l.6 2 2 .6-2 .6-.6 2-.6-2-2-.6 2-.6.6-2Z"></path></svg>
+              <div>
+                <p class="tk-group__name" lng="84">Развлечения</p>
+                <p class="tk-group__note" lng="157">Игры, музыка, творчество</p>
+              </div>
             </div>
-        </main>
+            <div class="tk-tags">
+              <button type="button" class="tk-tag" data-filter="podcasts" aria-pressed="false" lng="92">Подкасты</button>
+              <button type="button" class="tk-tag" data-filter="tourism" aria-pressed="false" lng="93">Туризм</button>
+              <button type="button" class="tk-tag" data-filter="creative" aria-pressed="false" lng="94">Креатив</button>
+              <button type="button" class="tk-tag" data-filter="music" aria-pressed="false" lng="95">Музыка</button>
+            </div>
+          </div>
+          <% } %>
+
+          <% if (category === 'popular' || category === 'business') { %>
+          <div class="tk-group">
+            <div class="tk-group__head">
+              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="square" aria-hidden="true"><rect x="3" y="7" width="18" height="13"></rect><path d="M9 7V5h6v2"></path><path d="M3 13h18"></path></svg>
+              <div>
+                <p class="tk-group__name" lng="85">Бизнес</p>
+                <p class="tk-group__note" lng="158">Презентации, обучение</p>
+              </div>
+            </div>
+            <div class="tk-tags">
+              <button type="button" class="tk-tag" data-filter="real_estate" aria-pressed="false" lng="96">Недвижимость</button>
+              <button type="button" class="tk-tag" data-filter="services" aria-pressed="false" lng="97">Услуги</button>
+              <button type="button" class="tk-tag" data-filter="education" aria-pressed="false" lng="98">Образование</button>
+              <button type="button" class="tk-tag" data-filter="auto" aria-pressed="false" lng="99">Авто</button>
+              <button type="button" class="tk-tag" data-filter="horeca" aria-pressed="false">HoReCa</button>
+              <button type="button" class="tk-tag" data-filter="manufacturing" aria-pressed="false" lng="100">Производство</button>
+            </div>
+          </div>
+          <% } %>
+        </div>
+      </section>
+      <% } %>
+
+      <!-- Активные трансляции -->
+      <section class="tk-cat__sec">
+        <h2 class="tk-cat__h2" lng="102">Популярные трансляции</h2>
+        <p class="tk-cat__note" lng="172">Откройте для себя лучший контент прямо сейчас</p>
+
+        <% if (streams.length > 0) { %>
+        <div class="tk-grid">
+          <% streams.forEach(function (stream, index) { %>
+          <a href="/stream/<%= stream.streamId %>" class="tk-card" style="animation-delay: <%= index * 70 %>ms">
+            <div class="tk-card__shot">
+              <% if (stream.thumbnail && stream.thumbnail !== 'default-thumbnail.png') { %>
+                <img src="<%= stream.thumbnail %>" alt="" loading="lazy">
+              <% } else { %>
+                <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg>
+              <% } %>
+
+              <% if (stream.isActive) { %>
+              <span class="tk-card__live">LIVE</span>
+              <% } %>
+
+              <span class="tk-card__eyes">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M1.5 12S5 5.5 12 5.5 22.5 12 22.5 12 19 18.5 12 18.5 1.5 12 1.5 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <%= stream.viewers %>
+              </span>
+            </div>
+
+            <div class="tk-card__body">
+              <div class="tk-card__ava"<% if (!stream.user.avatarStyle.url) { %> data-bg="<%= stream.user.avatarStyle.gradient %>"<% } %>>
+                <% if (stream.user.avatarStyle.url) { %>
+                  <img src="<%= stream.user.avatarStyle.url %>" alt="" loading="lazy">
+                <% } else { %>
+                  <%= stream.user.avatarStyle.initial %>
+                <% } %>
+              </div>
+
+              <div class="tk-card__text">
+                <h3 class="tk-card__title"><%= stream.title %></h3>
+                <p class="tk-card__who"><%= stream.user.displayName %></p>
+                <% var label = catLabels[stream.category]; %>
+                <% if (label) { %>
+                  <span class="tk-card__cat" lng="<%= label.lng %>"><%= label.name %></span>
+                <% } else if (stream.category) { %>
+                  <span class="tk-card__cat"><%= stream.category %></span>
+                <% } %>
+              </div>
+            </div>
+          </a>
+          <% }); %>
+        </div>
+        <% } else { %>
+        <div class="tk-empty">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg>
+          <p class="tk-empty__h" lng="175">Нет активных стримов</p>
+          <p class="tk-empty__p" lng="176">В данный момент нет активных трансляций в этой категории. Станьте первым!</p>
+          <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="start-stream-btn" lng="177">Стать первым</button>
+        </div>
+        <% } %>
+      </section>
+
     </div>
+  </main>
+</div>
 
-    <style>
-        .filter-btn {
-            cursor: pointer;
-            position: relative;
-        }
-        
-        .filter-btn.active {
-            background: rgba(102, 107, 207, 0.2) !important;
-            border-color: rgba(102, 107, 207, 0.4) !important;
-            color: rgba(102, 107, 207, 1) !important;
-        }
-        
-        .filter-btn:hover {
-            transform: translateY(-1px);
-        }
-        
-        .stream-card {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        
-        .stream-card.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    </style>
-
-    <!-- JavaScript -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Анимация появления карточек стримов
-            const streamCards = document.querySelectorAll('.stream-card');
-            const observerOptions = {
-                threshold: 0.1,
-                rootMargin: '0px 0px -50px 0px'
-            };
-            
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add('visible');
-                    }
-                });
-            }, observerOptions);
-            
-            streamCards.forEach(card => observer.observe(card));
-            
-            // Обработчики для фильтрующих кнопок
-            const filterButtons = document.querySelectorAll('.filter-btn');
-            filterButtons.forEach(button => {
-                button.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    
-                    // Переключаем активное состояние
-                    this.classList.toggle('active');
-                    
-                    // Получаем активные фильтры
-                    const activeFilters = Array.from(document.querySelectorAll('.filter-btn.active'))
-                        .map(btn => btn.getAttribute('data-filter'));
-                    
-                    console.log('Активные фильтры:', activeFilters);
-                    
-                    // Здесь можно добавить логику фильтрации стримов
-                    // filterStreams(activeFilters);
-                });
-            });
-
-            // Обработчики для подписок
-            const subscribeButtons = document.querySelectorAll('.button__subscribe');
-            subscribeButtons.forEach(button => {
-                button.addEventListener('click', async function(event) {
-                    event.preventDefault();
-                    const userId = this.getAttribute('data-user-id');
-
-                    try {
-                        const response = await fetch(`/subscribe`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ subscribedToId: userId })
-                        });
-
-                        const data = await response.json();
-                        if (response.ok) {
-                            this.textContent = 'Подписан';
-                            this.disabled = true;
-                            this.classList.add('bg-green-500', 'hover:bg-green-600');
-                            this.classList.remove('bg-brand-500', 'hover:bg-brand-600');
-                        } else {
-                            toast(data.message);
-                        }
-                    } catch (error) {
-                        console.error('Ошибка:', error);
-                        toast('Произошла ошибка при подписке', 'error');
-                    }
-                });
-            });
-
-            // Обработчик для кнопки "Стать первым" 
-            const startStreamBtn = document.getElementById('start-stream-btn');
-            const streamSettingsModal = document.getElementById('streamSettingsModal');
-            
-            if (startStreamBtn && streamSettingsModal) {
-                startStreamBtn.addEventListener('click', function() {
-                    console.log('Кнопка "Стать первым" нажата - открываем модалку стрима');
-                    streamSettingsModal.classList.remove('hidden');
-                    // Анимация появления
-                    setTimeout(() => {
-                        const content = document.getElementById('streamModalContent');
-                        if (content) {
-                            content.style.transform = 'scale(1)';
-                            content.style.opacity = '1';
-                        }
-                    }, 10);
-                });
-            }
-            
-
-        });
-    </script>
-
-    <script src="/lang.js"></script>
+<script src="/catalog.js"></script>
+<script src="/lang.js"></script>
 </body>
-</html> 
+</html>

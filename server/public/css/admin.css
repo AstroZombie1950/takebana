@@ -1,167 +1,242 @@
+/* Панель администрирования — /panel.
+ *
+ * Раскладка одной страницы. Общее (токены, шрифты, кнопки, поля) — tk.css.
+ * Каркас кабинета (app.css) здесь не нужен: у панели нет ни шапки сайта,
+ * ни левого меню, это отдельный служебный экран.
+ *
+ * Прежняя версия: белый фон, скруглённые карточки 300×375 фиксированной
+ * высоты, поля без подписей — что в каком вводить, приходилось угадывать
+ * по плейсхолдеру, который исчезал при заполнении.
+ */
+
 body {
-    margin: 0;
-    padding: 0;
-    padding: 0 20px;
+  margin: 0;
+  background: var(--tk-ink);
+  color: var(--tk-paper);
 }
 
-* {
-    box-sizing: border-box;
-    font-family: Inter;
-    /* border: 1px solid red; */
+.tk-panel-page {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 32px 40px 64px;
 }
 
-section.main {
-    margin-top: 20px;
-    display: flex;
+/* ── Шапка панели ─────────────────────────────────────────────────────── */
+.tk-adm__top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--tk-rule);
 }
 
-section.main  .category {
-
-    height: 100vh;
-    border-right: 1px solid rgb(179, 179, 179);
-    padding-right: 30px;
-    width: 370px;
+.tk-adm__h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -.02em;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
-section.main  .category .item {
-    cursor: pointer;
-    padding: 0 20px;
-    border: 1px solid rgba(179, 179, 179, 1);
-    width: 100%;
-    border-radius: 16px;
-    height: 56px;
+.tk-adm__tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-section.main .fields {
-    flex: 1;
-    /* border: 1px solid gold; */
-    padding: 0 20px;
-    display: flex;
-    flex-wrap: wrap;
-}   
-
-section.main .fields .item {
-    padding: 0 20px;
-    border: 1px solid rgba(179, 179, 179, 1);
-    width: 300px;
-    border-radius: 16px;
-    height: 375px;
-    padding: 10px;
-    margin-right: 10px;
-    margin-top: 10px;
+.tk-adm__tools .tk-field {
+  width: auto;
+  padding: 10px 14px;
+  font-size: 14px;
 }
 
-section.main .fields .item label {
-    display: inline-block;
-    margin-top: 10px;
+.tk-adm__tools .tk-field--search { min-width: 240px; }
+
+/* ── Сетка заведений ──────────────────────────────────────────────────── */
+.tk-adm__grid {
+  margin-top: 26px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+  align-items: start;
 }
 
-section.main .fields .item .inp {
-    width: 100%;
+/* Высота по содержимому, а не 375px: адрес в две строки прежде вылезал
+ * за край карточки. */
+.tk-adm__card {
+  padding: 18px;
+  border: 1px solid var(--tk-rule);
 }
 
-section.main .fields .item .inp input {
-    width: 100%;
-    border: 1px solid black;
-    height: 32px;
-    border-radius: 16px;
-    margin-bottom: 4px;
-    padding: 0 10px;
+.tk-adm__card--off { opacity: .55; }
+
+.tk-adm__card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(144, 113, 99, .25);
 }
 
-.btn.active {
-    background: rgba(102, 107, 207, 1);
+.tk-adm__card-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.btn {
-    /* width: 297px; */
-    height: 36px;
-    /* top: 964px;
-    left: 716px; */
-    padding: 0 23px;
-    border-radius: 16px;
-    background: rgb(201, 202, 218);
-    color: rgba(255, 255, 255, 1);
-    font-size: 16px;
-    font-weight: 600;
-    border: none;
-    cursor: pointer;
+.tk-adm__state {
+  flex: none;
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--tk-muted);
 }
 
+.tk-adm__state--on { color: var(--tk-green); }
 
-.instruments {
-    margin-top: 10px;
-    width: 100%;
-    height: 70px;
-    border: 1px solid black;
-    border-radius: 20px;
-    padding: 0 20px;
+/* Поля парами: широта и долгота рядом, остальное на всю ширину. */
+.tk-adm__fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
 
+.tk-adm__field { display: flex; flex-direction: column; gap: 5px; }
+.tk-adm__field--wide { grid-column: 1 / -1; }
 
-.instruments {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
+.tk-adm__label {
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--tk-label);
 }
 
-
-
-.estate_wrap #statusFilter {
-    margin-left: 30px;
+.tk-adm__field .tk-field {
+  padding: 10px 12px;
+  font-size: 14px;
 }
 
-
-.estate_wrap #searchInput {
-    margin-left: 30px;
+/* ── Действия ── */
+.tk-adm__acts {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(144, 113, 99, .25);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-
-section.main .category .item {
-    margin-bottom: 10px;
+/* Удаление необратимо, но кричать громче «Сохранить» ему незачем: рамка
+ * в обычном состоянии, киноварь — под курсором. */
+.tk-adm__acts .delete:hover,
+.tk-adm__acts .delete:focus-visible {
+  background: var(--tk-accent);
+  border-color: var(--tk-accent);
+  color: var(--tk-ink);
 }
 
-.repass_modal {
-    width: 320px;
-    height: 270px;
-    border: 1px solid black;
-    border-radius: 20px;
-    background-color: white;
-    position: absolute;
-    transform: translate(-50%, -50%);
-    top: 50%;
-    left: 50%;
-    display: flex;
-    align-items: center;
-    flex-direction: column;
-    justify-content: center;
-    padding: 30px 20px;
-    display: none;
+.tk-adm__switch {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
 }
 
-.repass_modal.active {
-    display: flex;
+.tk-adm__switch input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--tk-accent);
+  cursor: pointer;
 }
 
-.repass_modal input {
-    width: 100%;
-    border: 1px solid black;
-    height: 32px;
-    border-radius: 16px;
-    margin-bottom: 4px;
-    padding: 0 10px;
-    margin-bottom: 7px;
+/* ── Состояния списка ── */
+.tk-adm__note {
+  grid-column: 1 / -1;
+  padding: 48px 0;
+  text-align: center;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  color: var(--tk-muted);
 }
 
-.repass_modal button {
-    height: 36px;
-    padding: 0 23px;
-    border-radius: 16px;
-    background: rgba(102, 107, 207, 1);
-    color: rgba(255, 255, 255, 1);
-    font-size: 16px;
-    font-weight: 600;
-    border: none;
-    cursor: pointer;
+/* ── Смена пароля ─────────────────────────────────────────────────────── */
+.tk-adm__modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  padding: 24px 20px;
+  overflow-y: auto;
+  background: rgba(10, 10, 10, .78);
 }
 
+/* См. app.css: display только через :not(.hidden), иначе более позднее
+ * правило перебьёт .hidden и окно останется на экране. */
+.tk-adm__modal:not(.hidden) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tk-adm__modal-card {
+  width: 100%;
+  max-width: 380px;
+  padding: 24px;
+  background: var(--tk-ink);
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-adm__modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.tk-adm__modal-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  text-transform: uppercase;
+}
+
+.tk-adm__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tk-adm__form .tk-field { padding: 12px 14px; font-size: 15px; }
+
+/* Служебный класс: у панели нет app.css, где он объявлен для кабинета. */
+.hidden { display: none; }
+
+/* ── Узкие экраны ─────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  .tk-panel-page { padding: 22px 16px 48px; }
+  .tk-adm__h1 { font-size: 23px; }
+  .tk-adm__grid { grid-template-columns: 1fr; }
+  .tk-adm__tools { width: 100%; }
+  .tk-adm__tools .tk-field--search { flex: 1; min-width: 0; }
+}

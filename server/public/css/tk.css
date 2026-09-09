@@ -236,6 +236,177 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   width:100%;
 }
 
+/* Мельче .tk-btn--sm: кнопка внутри панели, рядом с полем. */
+.tk-btn--xs {
+  font-size:12px;
+  letter-spacing:.1em;
+  padding:9px 14px;
+}
+
+/* Второстепенное действие на тёмном: рамка вместо заливки. */
+.tk-btn--outline {
+  background:transparent;
+  border-color:rgba(144,113,99,.7);
+  color:#F5F1EA;
+}
+
+.tk-btn--outline:hover, .tk-btn--outline:focus-visible {
+  border-color:#F5F1EA;
+  background:rgba(245,241,234,.08);
+}
+
+/* Разрушающее действие: завершить эфир, отменить звонок. */
+.tk-btn--danger {
+  background:#E34234;
+  border-color:#E34234;
+  color:#0A0A0A;
+}
+
+.tk-btn--danger:hover, .tk-btn--danger:focus-visible {
+  background:#C4342A;
+  border-color:#C4342A;
+  color:#F5F1EA;
+}
+
+/* Согласие: принять звонок. */
+.tk-btn--ok {
+  background:#679267;
+  border-color:#679267;
+  color:#0A0A0A;
+}
+
+.tk-btn--ok:hover, .tk-btn--ok:focus-visible {
+  background:#557A55;
+  border-color:#557A55;
+  color:#F5F1EA;
+}
+
+/* Нейтральное состояние: разговор уже идёт, кнопка просто завершает. */
+.tk-btn--mute {
+  background:#4A4640;
+  border-color:#4A4640;
+  color:#F5F1EA;
+}
+
+.tk-btn--mute:hover, .tk-btn--mute:focus-visible {
+  background:#3A3733;
+  border-color:#3A3733;
+}
+
+.tk-btn:disabled {
+  opacity:.45;
+  cursor:not-allowed;
+}
+
+.tk-btn:disabled:hover {
+  background:inherit;
+}
+
+/* ── Рубрика ───────────────────────────────────────────────
+ * Зелёная строка с линейкой до правого края — приём с главной («ВЫПУСК 01»).
+ * Ею размечены разделы каталога и профиля, поэтому живёт в системе.
+ */
+.tk-kicker {
+  margin:0 0 16px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  font-family:Oswald, sans-serif;
+  font-size:12px;
+  font-weight:500;
+  letter-spacing:.24em;
+  text-transform:uppercase;
+  color:#679267;
+}
+
+.tk-kicker::after {
+  content:"";
+  flex:1;
+  height:1px;
+  background:rgba(144, 113, 99, .5);
+}
+
+/* ── Поле ввода ────────────────────────────────────────────
+ * Повторяет единственное поле из ТЗ главной (форма подписки): прозрачный
+ * фон, рамка в цвет разделителей, Oswald 16px. Лежало в auth.css, но теми же
+ * полями пользуются заявка заведения и модалки кабинета, — это элемент
+ * системы, а не страницы входа.
+ */
+.tk-field {
+  width:100%;
+  background:transparent;
+  outline:none;
+  border:1px solid rgba(144, 113, 99, .7);
+  padding:18px 20px;
+  font-family:Oswald, sans-serif;
+  /* 16px — не только размер из ТЗ: на меньшем Safari на айфоне сам
+   * приближает страницу при фокусе, и вёрстка уезжает. */
+  font-size:16px;
+  color:#F5F1EA;
+  letter-spacing:.01em;
+}
+
+.tk-field::placeholder {
+  color:#8A827C;
+}
+
+.tk-field:focus {
+  border-color:#E34234;
+}
+
+/* Выпадающий список на том же поле. Стрелка своя: у нативной не задать
+ * цвет под тёмный фон. */
+.tk-select {
+  appearance:none;
+  padding-right:44px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A827C' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 16px center;
+  background-size:16px;
+}
+
+.tk-select option { background:#0A0A0A; }
+
+.tk-field:disabled {
+  opacity:.45;
+  cursor:not-allowed;
+}
+
+.tk-field[rows] { resize:vertical; }
+
+/* Поле пароля: кнопка показа лежит поверх правого края. */
+.tk-field-wrap {
+  position:relative;
+  display:flex;
+}
+
+.tk-field-wrap .tk-field {
+  padding-right:56px;
+}
+
+.tk-field-eye {
+  position:absolute;
+  top:0;
+  right:0;
+  width:52px;
+  height:100%;
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:transparent;
+  border:none;
+  padding:0;
+  cursor:pointer;
+  color:#8A827C;
+  transition:color .18s ease;
+}
+
+.tk-field-eye:hover,
+.tk-field-eye:focus-visible {
+  color:#F5F1EA;
+}
+
 .tk-mnav {
   font-size:26px;
   font-weight:900;

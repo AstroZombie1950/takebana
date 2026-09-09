@@ -18,10 +18,7 @@
     </style>
     <script src="https://cdn.jsdelivr.net/npm/ol@v8.1.0/dist/ol.js"></script>
     <link rel="stylesheet" href="css/style.css">
-    
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.1.0/ol.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
@@ -29,7 +26,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/js/lightbox-plus-jquery.min.js"></script>
+    <%# lightbox.min.js, а не сборка lightbox-plus-jquery: та тащит внутри
+        собственную копию jQuery (98,7 КБ против 9,5), хотя jQuery подключён
+        строкой выше. %>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/js/lightbox.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.inputmask/5.0.8/jquery.inputmask.min.js"></script>
 
@@ -38,7 +38,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Urbanist:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
     
     <link href="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/css/lightbox.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <script src="/toast.js"></script>
 </head>
@@ -378,23 +377,23 @@ const redirectModal = document.querySelector('.redirect');
       </div>
 
       <div class="photo_slider">
-        <a href="/img/slider_1/1.png" data-lightbox="image-set" class="slide">
-          <img src="/img/slider_1/1.png" alt="">
+        <a href="/img/slider_1/1.webp" data-lightbox="image-set" class="slide">
+          <img src="/img/slider_1/1.webp" alt="">
         </a>
-        <a href="/img/slider_1/2.png" data-lightbox="image-set" class="slide">
-          <img src="/img/slider_1/2.png" alt="">
+        <a href="/img/slider_1/2.webp" data-lightbox="image-set" class="slide">
+          <img src="/img/slider_1/2.webp" alt="">
         </a>
-        <a href="/img/slider_1/3.png" data-lightbox="image-set" class="slide">
-          <img src="/img/slider_1/3.png" alt="">
+        <a href="/img/slider_1/3.webp" data-lightbox="image-set" class="slide">
+          <img src="/img/slider_1/3.webp" alt="">
         </a>
-        <a href="/img/slider_1/4.png" data-lightbox="image-set" class="slide">
-          <img src="/img/slider_1/4.png" alt="">
+        <a href="/img/slider_1/4.webp" data-lightbox="image-set" class="slide">
+          <img src="/img/slider_1/4.webp" alt="">
         </a>
-        <a href="/img/slider_1/5.png" data-lightbox="image-set" class="slide">
-          <img src="/img/slider_1/5.png" alt="">
+        <a href="/img/slider_1/5.webp" data-lightbox="image-set" class="slide">
+          <img src="/img/slider_1/5.webp" alt="">
         </a>
-        <a href="/img/slider_1/6.png" data-lightbox="image-set" class="slide">
-          <img src="/img/slider_1/6.png" alt="">
+        <a href="/img/slider_1/6.webp" data-lightbox="image-set" class="slide">
+          <img src="/img/slider_1/6.webp" alt="">
         </a>
       </div>
 
@@ -469,7 +468,7 @@ const redirectModal = document.querySelector('.redirect');
     <div class="map_header">
 
       <div class="search_panel">
-        <img src="/img/takebana.jpg" alt="logo">
+        <img src="/img/takebana.webp" alt="Takebana" width="123" height="87">
         <div class="search_wrap">
           <div class="search_input">
             <input type="text" placeholder="Поиск заведений" lng="31">

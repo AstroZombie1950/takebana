@@ -76,21 +76,8 @@ let startStreamButtonMain = document.getElementById('startStreamButtonMain');
 // Функция для открытия модалки настроек трансляции
 function openStreamSettingsModal() {
     const streamSettingsModal = document.getElementById('streamSettingsModal');
-    const shodow = document.querySelector('.shodow');
-    
     if (streamSettingsModal) {
         streamSettingsModal.classList.remove('hidden');
-        const modalContent = streamSettingsModal.querySelector('#streamModalContent');
-        if (modalContent) {
-            setTimeout(() => {
-                modalContent.classList.remove('scale-95', 'opacity-0');
-                modalContent.classList.add('scale-100', 'opacity-100');
-            }, 10);
-        }
-    }
-    
-    if (shodow) {
-        shodow.classList.add('display-block');
     }
 }
 

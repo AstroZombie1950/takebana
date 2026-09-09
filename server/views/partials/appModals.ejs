@@ -1,0 +1,280 @@
+<%#
+  Модальные окна каркаса приложения: настройки эфира, профиль, уведомления
+  и два окна звонка. Живут в шапке, потому что открываются с любой страницы
+  кабинета. Стили — раздел «Модальные окна» в app.css, поведение — tk-app.js.
+
+  Идентификаторы и атрибуты lng сохранены от прежней вёрстки: на них завязаны
+  скрипт и словарь. Менялась только разметка и оформление.
+%>
+
+<!-- Настройки трансляции -->
+<div class="tk-modal hidden" id="streamSettingsModal">
+  <div class="tk-modal__card" id="streamModalContent">
+    <div class="tk-modal__head">
+      <h3 class="tk-modal__title" lng="110">Настройки трансляции</h3>
+      <button type="button" class="tk-modal__close" id="closeStreamModal" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+    </div>
+
+    <div class="tk-modal__body">
+      <% if (!currentUser.hasActiveStream) { %>
+        <div class="tk-form">
+          <div class="tk-form__row">
+            <label class="tk-form__label" for="streamTitle" lng="111">Название трансляции</label>
+            <input class="tk-field" type="text" id="streamTitle" placeholder="Введите название трансляции" lng="226">
+          </div>
+
+          <div class="tk-form__row">
+            <label class="tk-form__label" for="streamCategory" lng="112">Категория</label>
+            <select id="streamCategory" class="tk-field tk-select">
+              <option value="" lng="113">Выберите категорию</option>
+              <option value="business" lng="85">Бизнес</option>
+              <option value="entertainment" lng="84">Развлечения</option>
+            </select>
+          </div>
+
+          <div class="tk-form__row">
+            <label class="tk-form__label" for="streamSubcategory" lng="114">Подкатегория</label>
+            <select id="streamSubcategory" class="tk-field tk-select" disabled>
+              <option value="" lng="115">Сначала выберите категорию</option>
+            </select>
+          </div>
+
+          <div class="tk-form__row">
+            <label class="tk-form__label" for="streamDescription" lng="116">Описание <span class="tk-form__hint">(необязательно)</span></label>
+            <textarea id="streamDescription" class="tk-field" rows="4" placeholder="Описание трансляции (необязательно)" lng="227"></textarea>
+          </div>
+        </div>
+      <% } else { %>
+        <div class="tk-modal__state">
+          <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12" rx="1"></rect></svg>
+          <p lng="117">У вас уже есть активный стрим.</p>
+          <a href="/stream/<%= currentUser.activeStreamId %>" class="tk-btn tk-btn--outline tk-btn--sm" lng="118">Перейти к стриму</a>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="tk-modal__foot">
+      <% if (!currentUser.hasActiveStream) { %>
+        <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-btn--block" id="startStreamButton">
+          <span lng="228">Перейти на страницу настроек стрима</span>
+        </button>
+      <% } else { %>
+        <button type="button" class="tk-btn tk-btn--danger tk-btn--sm tk-btn--block" id="terminateStreamButton">
+          <span lng="225">Завершить стрим</span>
+        </button>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<!-- Профиль -->
+<div class="tk-modal hidden" id="profileInfoModal">
+  <div class="tk-modal__card tk-modal__card--wide">
+    <div class="tk-modal__head">
+      <h3 class="tk-modal__title" lng="32">Профиль</h3>
+      <button type="button" class="tk-modal__close" id="closeProfileModal" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+    </div>
+
+    <div class="tk-modal__body">
+      <div class="tk-form__row">
+        <label class="tk-form__label" for="profileNameInput" lng="180">Ваше имя</label>
+        <input id="profileNameInput" class="tk-field" type="text" placeholder="Укажите ваше имя" value="<%= currentUser.displayName %>" lng="33">
+        <button id="saveNameButton" type="button" class="tk-btn tk-btn--primary tk-btn--xs" lng="181">Сохранить имя</button>
+      </div>
+
+      <!-- Фото профиля -->
+      <section class="tk-panel">
+        <p class="tk-panel__title" lng="182">Фото профиля</p>
+        <div class="tk-avatar-row">
+          <div class="tk-avatar-box">
+            <% if (currentUser.avatarStyle && currentUser.avatarStyle.url) { %>
+              <img id="profileAvatarPreview" src="<%= currentUser.avatarStyle.url %>" alt="">
+            <% } else { %>
+              <span id="profileAvatarEmpty">Нет фото</span>
+              <%# без src: пустой атрибут — это лишний запрос страницы самой к себе. %>
+              <%# Реальный адрес проставляет JS после загрузки аватара. %>
+              <img id="profileAvatarPreview" class="hidden" alt="">
+            <% } %>
+          </div>
+
+          <div class="tk-avatar-row__side">
+            <p class="tk-note">
+              <% if (currentUser.avatarStyle && currentUser.avatarStyle.url) { %>
+                <span lng="183">Вы можете заменить изображение</span>
+              <% } else { %>
+                <span lng="184">Загрузите изображение PNG/JPG до 5MB</span>
+              <% } %>
+            </p>
+            <input id="profileAvatarInput" type="file" accept="image/png,image/jpeg" class="hidden">
+            <div class="tk-panel__actions">
+              <button id="chooseAvatarBtn" type="button" class="tk-btn tk-btn--outline tk-btn--xs" lng="185">Выбрать файл</button>
+              <button id="uploadAvatarBtn" type="button" class="tk-btn tk-btn--primary tk-btn--xs" disabled lng="186">Сохранить фото профиля</button>
+            </div>
+            <p class="tk-note" id="avatarHint" lng="187">PNG/JPG, до 5MB</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Личная галерея -->
+      <section class="tk-panel">
+        <div class="tk-panel__head">
+          <p class="tk-panel__title" lng="188">Личная галерея</p>
+          <span class="tk-note" lng="189">до 100 фото, PNG/JPG до 10MB</span>
+        </div>
+
+        <div id="galleryDropzone" class="tk-dropzone">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7M3 7l3.5-3.5M3 7h18M21 7L17.5 3.5"></path></svg>
+          <p lng="190">Перетащите сюда фото или нажмите, чтобы выбрать</p>
+          <input id="galleryInput" type="file" accept="image/png,image/jpeg" multiple class="hidden">
+        </div>
+
+        <div class="tk-panel__actions">
+          <button id="chooseGalleryBtn" type="button" class="tk-btn tk-btn--outline tk-btn--xs" lng="191">Выбрать фото</button>
+          <button id="uploadGalleryBtn" type="button" class="tk-btn tk-btn--primary tk-btn--xs" disabled><span><span lng="192">Загрузить</span> (<span id="galleryCount">0</span>)</span></button>
+          <span class="tk-note tk-panel__spacer" id="galleryHint" lng="193">Файлы не выбраны</span>
+        </div>
+
+        <div id="galleryPreview" class="tk-thumbs"></div>
+
+        <div id="galleryPersisted" class="tk-thumbs">
+          <% if (currentUser.gallery && currentUser.gallery.length) { %>
+            <% currentUser.gallery.forEach(function (url) {
+                 const name = url.split('/').pop(); %>
+              <div class="tk-thumb">
+                <img src="<%= url %>" alt="" loading="lazy">
+                <button type="button" data-name="<%= name %>" class="tk-thumb__del" aria-label="Удалить">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+                </button>
+              </div>
+            <% }); %>
+          <% } %>
+        </div>
+      </section>
+
+      <!-- Безопасность -->
+      <section class="tk-panel">
+        <button type="button" class="tk-panel__toggle" id="securityToggle">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75"></path><rect x="4.5" y="10.5" width="15" height="11" rx="1"></rect></svg>
+          <span lng="34">Безопасность</span>
+        </button>
+
+        <div class="tk-form hidden" id="securityFields">
+          <input class="tk-field" type="password" placeholder="Старый пароль" id="oldPassword" lng="35" autocomplete="current-password">
+          <input class="tk-field" type="password" placeholder="Новый пароль" id="newPassword" lng="36" autocomplete="new-password">
+          <input class="tk-field" type="password" placeholder="Подтвердите пароль" id="confirmPassword" lng="37" autocomplete="new-password">
+          <button id="savePasswordButton" type="button" class="tk-btn tk-btn--primary tk-btn--xs" lng="197">Сохранить пароль</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="tk-modal__foot tk-modal__foot--split">
+      <a href="/userPage/<%= currentUser._id %>" class="tk-btn tk-btn--outline tk-btn--sm" lng="198">Открыть профиль</a>
+      <a href="/logout" class="tk-modal__exit" lng="38">Выйти из аккаунта</a>
+    </div>
+  </div>
+</div>
+
+<!-- Уведомления -->
+<div class="tk-modal hidden" id="notificationModal">
+  <div class="tk-modal__card">
+    <div class="tk-modal__head">
+      <h3 class="tk-modal__title" lng="106">Уведомления</h3>
+      <button type="button" class="tk-modal__close" id="closeNotificationModal" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+    </div>
+
+    <div class="tk-modal__body tk-modal__body--list" id="notificationsContent">
+      <p class="tk-note tk-note--center" lng="249">Загрузка уведомлений...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Исходящий звонок -->
+<div id="outgoingCallModal" class="tk-modal hidden">
+  <div class="tk-modal__card tk-modal__card--call">
+    <div class="tk-modal__head">
+      <div class="tk-call__who">
+        <div class="tk-call__ava" id="outgoingAvatar"></div>
+        <div class="tk-call__names">
+          <p class="tk-call__name" id="outgoingName">Пользователь</p>
+          <p class="tk-call__type" id="outgoingType">Исходящий звонок...</p>
+        </div>
+      </div>
+      <button type="button" class="tk-modal__close" id="outgoingCloseBtn" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+    </div>
+
+    <div class="tk-call__body">
+      <p class="tk-call__status">
+        <span class="tk-call__beacon tk-call__beacon--ok"></span>
+        <span id="outgoingStatus">Соединение...</span>
+      </p>
+      <p class="tk-call__timer"><span id="outgoingTimer" class="hidden">00:00</span></p>
+      <p class="tk-call__timer hidden" id="outgoingParticipants"></p>
+
+      <div class="tk-call__stage hidden" id="outgoingVideos">
+        <div class="pip-call-container">
+          <video id="outRemoteVideo" class="pip-remote" autoplay playsinline></video>
+          <video id="outLocalVideo" class="pip-local" autoplay playsinline muted></video>
+        </div>
+      </div>
+
+      <div class="hidden" id="outgoingAudioUI">
+        <audio id="outRemoteAudio" autoplay playsinline></audio>
+      </div>
+
+      <div class="tk-call__actions">
+        <button type="button" id="outgoingCancelBtn" class="tk-btn tk-btn--danger tk-btn--sm tk-btn--block">Отменить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Входящий звонок -->
+<div id="incomingCallModal" class="tk-modal hidden">
+  <div class="tk-modal__card tk-modal__card--call">
+    <div class="tk-modal__head">
+      <div class="tk-call__who">
+        <div class="tk-call__ava" id="incomingAvatar"></div>
+        <div class="tk-call__names">
+          <p class="tk-call__name" id="incomingName">Пользователь</p>
+          <p class="tk-call__type" id="incomingType">Входящий видеозвонок</p>
+        </div>
+      </div>
+      <button type="button" class="tk-modal__close" id="incomingCloseBtn" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+    </div>
+
+    <div class="tk-call__body">
+      <p class="tk-call__status">
+        <span class="tk-call__beacon tk-call__beacon--ring"></span>
+        <span id="incomingStatus">Звонит...</span>
+      </p>
+      <p class="tk-call__timer"><span id="incomingTimer" class="hidden">00:00</span></p>
+      <p class="tk-call__timer hidden" id="incomingParticipants"></p>
+
+      <div class="tk-call__stage hidden" id="incomingVideos">
+        <div class="pip-call-container">
+          <video id="inRemoteVideo" class="pip-remote" autoplay playsinline></video>
+          <video id="inLocalVideo" class="pip-local" autoplay playsinline muted></video>
+        </div>
+      </div>
+
+      <div class="hidden" id="incomingAudioUI">
+        <audio id="inRemoteAudio" autoplay playsinline></audio>
+      </div>
+
+      <div class="tk-call__actions tk-call__actions--pair">
+        <button type="button" id="incomingDeclineBtn" class="tk-btn tk-btn--outline tk-btn--sm">Отклонить</button>
+        <button type="button" id="incomingAcceptBtn" class="tk-btn tk-btn--ok tk-btn--sm">Принять</button>
+      </div>
+    </div>
+  </div>
+</div>

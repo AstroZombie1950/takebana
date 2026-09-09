@@ -77,6 +77,9 @@ router.get('/streaming/:category?', commonDataMiddleware, async (req, res) => {
         category: stream.category,
         subcategory: stream.subcategory,
         viewers: stream.viewers,
+        // isActive выбирался запросом, но не доезжал до шаблона — метка LIVE
+        // на карточке не загоралась никогда.
+        isActive: stream.isActive,
         thumbnail: stream.thumbnail || 'default-thumbnail.png',
         user: {
           displayName,

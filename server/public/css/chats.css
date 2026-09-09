@@ -1,0 +1,360 @@
+/* Переписка — /chatsPage.
+ *
+ * Раскладка одной страницы. Общее (токены, шрифты, кнопки, поля) — tk.css,
+ * каркас кабинета — app.css.
+ *
+ * Прежняя версия стояла на Tailwind, а поверх лежали 300 строк <style>
+ * с ручными медиазапросами: три контрольные точки, у каждой свой набор
+ * !important на размеры аватаров, шрифтов и отступов.
+ */
+
+/* Высота = экран минус шапка. Раньше здесь стояло 100vh - 80px, хотя шапка
+ * 64px: полоса в 16px уезжала под нижний край. */
+.tk-chat {
+  height: calc(100vh - 64px);
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Список диалогов ──────────────────────────────────────────────────── */
+.tk-chat__list {
+  width: 360px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--tk-rule);
+}
+
+.tk-chat__list-head {
+  flex: none;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-chat__h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: -.02em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+.tk-chat__sub {
+  margin: 6px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+}
+
+.tk-chat__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ── Диалог в списке ── */
+.tk-dialog {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(144, 113, 99, .25);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: background-color .18s ease;
+}
+
+.tk-dialog:hover { background: rgba(227, 66, 52, .08); }
+
+.tk-dialog--on {
+  background: rgba(227, 66, 52, .12);
+  box-shadow: inset 3px 0 0 var(--tk-accent);
+}
+
+.tk-dialog__ava {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  background: rgba(144, 113, 99, .35);
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-dialog__ava img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Метка непрочитанного. Класс unread-indicator оставлен: по нему скрипт
+ * гасит метку и пересчитывает точку в шапке. */
+.unread-indicator {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  background: var(--tk-accent);
+  border: 2px solid var(--tk-ink);
+}
+
+.tk-dialog__body { flex: 1; min-width: 0; }
+
+.tk-dialog__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tk-dialog__who {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.tk-dialog__name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-dialog__when {
+  flex: none;
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  color: var(--tk-muted);
+}
+
+.tk-dialog__last {
+  margin: 3px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Точка присутствия в списке и в шапке диалога: обычный кружок. */
+.tk-dialog__who .presence-dot,
+.tk-chat__peer .presence-dot {
+  position: static;
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border: none;
+  border-radius: 50%;
+}
+
+.tk-chat__empty-list {
+  padding: 40px 20px;
+  text-align: center;
+}
+
+/* ── Область переписки ────────────────────────────────────────────────── */
+.tk-chat__area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tk-chat__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+/* Кнопка «назад» видна только на узком экране — см. медиазапрос внизу. */
+.tk-chat__back { display: none; }
+
+.tk-chat__ava-big {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .35);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-chat__ava-big img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tk-chat__ava-big svg { color: var(--tk-muted); }
+
+.tk-chat__peer-wrap { min-width: 0; cursor: pointer; }
+
+.tk-chat__peer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tk-chat__peer h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-chat__peer-note {
+  margin: 2px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+/* ── Лента сообщений ── */
+.tk-chat__feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tk-msg { display: flex; flex-direction: column; max-width: 70%; }
+.tk-msg--in { align-self: flex-start; }
+.tk-msg--out { align-self: flex-end; align-items: flex-end; }
+
+.tk-msg__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.tk-msg__ava {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .35);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-msg__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-msg__text {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.tk-msg--in .tk-msg__text {
+  border: 1px solid var(--tk-rule);
+  color: var(--tk-paper);
+}
+
+.tk-msg--out .tk-msg__text {
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font-weight: 500;
+}
+
+.tk-msg__when {
+  margin: 5px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  color: var(--tk-muted);
+}
+
+.tk-msg--in .tk-msg__when { margin-left: 40px; }
+
+/* ── Поле ввода ── */
+.tk-chat__compose {
+  flex: none;
+  padding: 14px 20px;
+  border-top: 1px solid var(--tk-rule);
+}
+
+.tk-chat__compose form {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.tk-chat__compose .tk-field {
+  flex: 1;
+  padding: 12px 16px;
+}
+
+.tk-chat__send { flex: none; }
+
+/* ── Узкие экраны: одна панель за раз ─────────────────────────────────── */
+@media (max-width: 1023px) {
+  .tk-chat__list { width: 100%; border-right: none; }
+  .tk-chat__area { display: none; }
+
+  /* Переписка открыта: список уезжает, показывается диалог. */
+  .tk-chat.is-open .tk-chat__list { display: none; }
+  .tk-chat.is-open .tk-chat__area { display: flex; }
+
+  .tk-chat__back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex: none;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: var(--tk-beige);
+  }
+
+  .tk-chat__back:hover { color: var(--tk-accent); }
+
+  .tk-msg { max-width: 86%; }
+}
+
+@media (max-width: 640px) {
+  .tk-chat__list-head { padding: 14px 16px; }
+  .tk-dialog { padding: 10px 16px; }
+  .tk-chat__head { padding: 10px 16px; }
+  .tk-chat__feed { padding: 16px; gap: 12px; }
+  .tk-chat__compose { padding: 12px 16px; }
+  .tk-chat__h1 { font-size: 19px; }
+  .tk-msg { max-width: 92%; }
+}

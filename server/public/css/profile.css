@@ -1,0 +1,341 @@
+/* Страница пользователя — /userPage/:id.
+ *
+ * Раскладка одной страницы. Общее (токены, шрифты, кнопки) — tk.css,
+ * каркас кабинета и общие анимации — app.css.
+ *
+ * Прежняя версия стояла на Tailwind: белые карточки со скруглениями на сером
+ * фоне и 120 строк <style> с ручными медиазапросами под каждый элемент.
+ */
+
+.tk-prof {
+  max-width: 980px;
+  padding: 40px;
+}
+
+/* ── Шапка профиля ────────────────────────────────────────────────────── */
+.tk-prof__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-prof__ava {
+  width: 128px;
+  height: 128px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .35);
+  border: 1px solid var(--tk-rule);
+  font-size: 42px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-prof__ava img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  cursor: zoom-in;
+}
+
+.tk-prof__main { flex: 1; min-width: 0; }
+
+.tk-prof__name {
+  margin: 0;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: -.03em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+  overflow-wrap: anywhere;
+}
+
+/* Подписчики: число крупно, подпись мелко под ним. */
+.tk-prof__stats {
+  margin-top: 18px;
+  display: flex;
+  gap: 32px;
+}
+
+.tk-prof__num {
+  display: block;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+  color: var(--tk-paper);
+}
+
+.tk-prof__lbl {
+  display: block;
+  margin-top: 2px;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-prof__acts {
+  margin-top: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tk-prof__acts .tk-btn { gap: 8px; }
+.tk-prof__acts svg { flex: none; }
+
+/* ── Секции ───────────────────────────────────────────────────────────── */
+.tk-prof__grid {
+  margin-top: 32px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.tk-panel--prof {
+  padding: 20px 22px;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-prof__rows { display: flex; flex-direction: column; }
+
+.tk-prof__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 0;
+  border-bottom: 1px solid rgba(144, 113, 99, .25);
+}
+
+.tk-prof__row:last-child { border-bottom: none; }
+
+.tk-prof__key {
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+}
+
+.tk-prof__val {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  text-align: right;
+}
+
+/* Точка присутствия в строке: обычный кружок, не значок на аватаре. */
+.tk-prof__val .presence-dot {
+  position: static;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border: none;
+  border-radius: 50%;
+}
+
+/* ── Активный эфир ── */
+.tk-prof__live {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--tk-accent);
+  background: rgba(227, 66, 52, .1);
+}
+
+.tk-prof__live-mark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+.tk-prof__live-mark::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tk-accent);
+  animation: tk-live 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-prof__live-mark::before { animation: none; }
+}
+
+.tk-prof__live a {
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--tk-accent);
+  transition: color .18s ease;
+}
+
+.tk-prof__live a:hover { color: var(--tk-paper); }
+
+/* ── Пустое состояние внутри секции ── */
+.tk-prof__none {
+  padding: 26px 0;
+  text-align: center;
+  color: var(--tk-muted);
+}
+
+.tk-prof__none svg { color: rgba(144, 113, 99, .5); }
+
+.tk-prof__none p {
+  margin: 12px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+}
+
+/* ── Галерея ──────────────────────────────────────────────────────────── */
+.tk-prof__gal {
+  margin-top: 20px;
+  padding: 20px 22px;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-prof__gal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tk-shots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.tk-shot {
+  display: block;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: zoom-in;
+}
+
+.tk-shot img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  display: block;
+  border: 1px solid var(--tk-rule);
+  transition: border-color .18s ease;
+}
+
+.tk-shot:hover img,
+.tk-shot:focus-visible img { border-color: var(--tk-accent); }
+
+/* ── Лайтбокс ─────────────────────────────────────────────────────────── */
+.tk-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: rgba(10, 10, 10, .92);
+}
+
+/* См. «Служебные классы» в app.css: display только через :not(.hidden).
+ * Прежняя версия переключала классы .hidden и .flex от Tailwind — после его
+ * снятия лайтбокс открывался бы пустым окном без раскладки. */
+.tk-lightbox:not(.hidden) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tk-lightbox img {
+  max-height: 86vh;
+  max-width: 92vw;
+  display: block;
+}
+
+/* См. выше: display отдельно, иначе .hidden не спрячет стрелки, когда
+ * в галерее одно фото или открыт аватар. */
+.tk-lightbox__btn:not(.hidden) { display: flex; }
+
+.tk-lightbox__btn {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 10, .6);
+  border: 1px solid var(--tk-rule);
+  padding: 0;
+  cursor: pointer;
+  color: var(--tk-beige);
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.tk-lightbox__btn:hover,
+.tk-lightbox__btn:focus-visible {
+  color: var(--tk-paper);
+  border-color: var(--tk-accent);
+}
+
+.tk-lightbox__close { top: 20px; right: 20px; }
+.tk-lightbox__prev { left: 20px; }
+.tk-lightbox__next { right: 20px; }
+
+.tk-lightbox__count {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .1em;
+  color: var(--tk-beige);
+}
+
+/* ── Узкие экраны ─────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  .tk-prof { padding: 28px 20px 40px; }
+
+  .tk-prof__head {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 20px;
+    padding-bottom: 26px;
+  }
+
+  .tk-prof__ava { width: 92px; height: 92px; font-size: 30px; }
+  .tk-prof__name { font-size: 28px; }
+  .tk-prof__stats { justify-content: center; }
+  .tk-prof__acts { justify-content: center; }
+  .tk-prof__acts .tk-btn { flex: 1 1 140px; }
+  .tk-prof__grid { grid-template-columns: 1fr; margin-top: 26px; }
+  .tk-shots { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+  .tk-shot img { height: 110px; }
+  .tk-lightbox__btn { width: 38px; height: 38px; }
+  .tk-lightbox__close { top: 12px; right: 12px; }
+  .tk-lightbox__prev { left: 8px; }
+  .tk-lightbox__next { right: 8px; }
+}
+
+@media (max-width: 374px) {
+  .tk-prof__name { font-size: 23px; }
+  .tk-prof__acts .tk-btn { flex: 1 1 100%; }
+}

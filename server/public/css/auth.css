@@ -122,61 +122,6 @@
   margin-top: 0;
 }
 
-.tk-field {
-  width: 100%;
-  background: transparent;
-  outline: none;
-  border: 1px solid rgba(144, 113, 99, .7);
-  padding: 18px 20px;
-  font-family: Oswald, sans-serif;
-  /* 16px — не только размер из ТЗ: на меньшем Safari на айфоне сам
-   * приближает страницу при фокусе, и вёрстка уезжает. */
-  font-size: 16px;
-  color: var(--tk-paper);
-  letter-spacing: .01em;
-}
-
-.tk-field::placeholder {
-  color: var(--tk-muted);
-}
-
-.tk-field:focus {
-  border-color: var(--tk-accent);
-}
-
-/* Поле пароля: кнопка показа лежит поверх правого края. */
-.tk-field-wrap {
-  position: relative;
-  display: flex;
-}
-
-.tk-field-wrap .tk-field {
-  padding-right: 56px;
-}
-
-.tk-field-eye {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 52px;
-  height: 100%;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  color: var(--tk-muted);
-  transition: color .18s ease;
-}
-
-.tk-field-eye:hover,
-.tk-field-eye:focus-visible {
-  color: var(--tk-paper);
-}
-
 .tk-auth__submit {
   margin-top: 6px;
 }

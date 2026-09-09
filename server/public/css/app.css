@@ -8,47 +8,40 @@
  */
 
 /* ──────────────────────────────────────────────────────────────────────────
- * Совместимость со старым скриптом
+ * Служебные классы
  *
- * Скрипт шапки (пока живёт в header.ejs, 1537 строк) показывает и прячет
- * блоки, переставляя утилитарные классы Tailwind. Пока он не переписан,
- * эти классы должны существовать без Tailwind — иначе, сняв его скрипт,
- * мы получим намертво открытые модалки и меню.
+ * .hidden — наш, а не наследство Tailwind: показ и скрытие блоков во всём
+ * кабинете идёт через него.
  *
- * Здесь ровно те классы, которые скрипт реально переключает, и ничего сверх.
- * По мере переписывания скрипта список сокращается до нуля.
+ * Правило одно и важное: компонент, которому нужен display не block, задаёт
+ * его через :not(.hidden). Написать просто display:flex ниже по файлу нельзя —
+ * вес тот же, побеждает последнее правило, и блок останется на экране
+ * навсегда. !important здесь тоже не годится: содержимое страниц, ещё не
+ * перевёрстанное, в полусотне мест двигает display инлайном.
  */
 .hidden { display: none; }
-.flex { display: flex; }
+
+/* Фон и цвет текста кабинета. Раньше их держал Tailwind-класс bg-gray-900
+ * на <body> каждой страницы; страница, с которой он снят, оставалась белой.
+ *
+ * Класс, а не голый body: у страниц, ещё не перевёрстанных, светлый фон от
+ * своего Tailwind-класса, но цвет текста они задают поэлементно. Правило на
+ * body красило бы их текст в кремовый — светлым по светлому. Класс ставится
+ * странице в тот момент, когда её вёрстка переходит в дизайн-систему. */
+body.tk-app {
+  background: var(--tk-ink);
+  color: var(--tk-paper);
+}
+
+/* ── Остаток совместимости ──
+ * Скрипт левой панели ещё переставляет эти классы. Уйдут вместе с ним;
+ * содержимое страниц, которое пока на Tailwind, свои классы получает от него.
+ */
 .invisible { visibility: hidden; }
 .visible { visibility: visible; }
 .opacity-0 { opacity: 0; }
-.opacity-50 { opacity: .5; }
-.opacity-100 { opacity: 1; }
-.scale-95 { transform: scale(.95); }
-.scale-100 { transform: scale(1); }
 .translate-x-0 { transform: translateX(0); }
 .-translate-x-full { transform: translateX(-100%); }
-.w-full { width: 100%; }
-.col-span-2 { grid-column: span 2; }
-.text-white { color: var(--tk-paper); }
-.bg-red-500 { background: var(--tk-accent); }
-.bg-green-500 { background: var(--tk-green); }
-.bg-gray-500 { background: #4A4640; }
-.hover\:bg-green-600:hover { background: #557a55; }
-.hover\:bg-gray-600:hover { background: #3A3733; }
-.border-brand-300 { border-color: var(--tk-accent); }
-
-/* Затемнение под открытыми модалками. */
-.shodow {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  background: rgba(10, 10, 10, .72);
-  display: none;
-}
-
-.shodow.display-block { display: block; }
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Шапка
@@ -444,10 +437,14 @@
   width: 8px;
   height: 8px;
   border: 2px solid var(--tk-ink);
+  background: rgba(144, 113, 99, .7);
 }
 
-.presence-online { background: var(--tk-green); }
-.presence-offline { background: rgba(144, 113, 99, .7); }
+/* Цвет — только точке. Скрипт присутствия вешает эти же классы на строку
+ * целиком (на элемент с data-presence-user), и без уточнения .presence-dot
+ * зелёным заливало всю строку подписки и рекомендации. */
+.presence-dot.presence-online { background: var(--tk-green); }
+.presence-dot.presence-offline { background: rgba(144, 113, 99, .7); }
 
 .tk-aside__sub-name {
   margin: 0;
@@ -543,6 +540,10 @@
   flex-direction: column;
 }
 
+/* display задаётся отдельно, иначе перебьёт .hidden — см. «Служебные классы».
+ * До этой правки flex-direction висел вхолостую: меню было блоком. */
+.tk-mmenu:not(.hidden) { display: flex; }
+
 .tk-mmenu__top {
   height: 64px;
   flex: none;
@@ -564,6 +565,56 @@
   .tk-msearch { display: none; }
 }
 
+/* Ниже 640 шапка не вмещает всё: на 320px она переполняла страницу почти
+ * на 300px. Инлайн-поиск заменяется кнопкой (ради неё .tk-msearch и есть),
+ * а язык, переписка и запуск эфира уезжают в мобильное меню — там они
+ * подписаны словами, а не иконками. */
+@media (max-width: 639px) {
+  .tk-ahead {
+    padding: 0 12px;
+    gap: 10px;
+  }
+
+  .tk-ahead__search,
+  .tk-ahead__lang,
+  .tk-ahead__chat,
+  #startStreamButtonHeader { display: none; }
+
+  .tk-ahead__right { gap: 8px; }
+
+  /* Логотип не должен растягивать строку: место нужно кнопкам справа. */
+  .tk-ahead__logo { width: auto; height: 28px; }
+}
+
+/* Мобильное меню: разделы, язык и действие. */
+.tk-mmenu__lang {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px 0;
+}
+
+.tk-mmenu__lang button {
+  flex: 1;
+  background: none;
+  border: 1px solid var(--tk-rule);
+  padding: 10px 0;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  transition: border-color .18s ease, color .18s ease;
+}
+
+.tk-mmenu__lang button:hover,
+.tk-mmenu__lang button[aria-pressed="true"] {
+  border-color: var(--tk-accent);
+  color: var(--tk-paper);
+}
+
+.tk-mmenu__cta { padding: 20px; }
+
 /* Скрипт панели переставляет классы сдвига только на узких экранах, но если
  * окно растянули с открытой панелью, класс остаётся. На десктопе панель
  * видна всегда — это важнее любого класса. */
@@ -581,6 +632,622 @@
 .tk-aside,
 .tk-drop,
 .tk-mmenu,
-.tk-msearch {
+.tk-msearch,
+.tk-modal {
   font-family: 'Golos Text', Helvetica, sans-serif;
+}
+
+/* Пульс метки «в эфире». Общий: им помечены карточка в каталоге, строка
+ * профиля и маячок в окне звонка. */
+@keyframes tk-live {
+  50% { opacity: .25; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Модальные окна
+ *
+ * Пять окон каркаса: настройки эфира, профиль, уведомления и два окна
+ * звонка. Разметка — views/partials/appModals.ejs.
+ *
+ * Само окно и есть затемнение: отдельной подложки нет. Прежняя (.shodow)
+ * умерла вместе со старой шапкой — её включатели ссылались на .profile__box
+ * и .AVATAR, которых в разметке уже нет.
+ */
+.tk-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  padding: 24px 20px;
+  overflow-y: auto;
+  background: rgba(10, 10, 10, .78);
+  color: var(--tk-paper);
+}
+
+/* См. «Служебные классы»: display только через :not(.hidden). */
+.tk-modal:not(.hidden) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.tk-modal__card {
+  width: 100%;
+  max-width: 460px;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
+  background: var(--tk-ink);
+  border: 1px solid var(--tk-rule);
+  /* Появление держит CSS: анимация стартует сама, когда блок получает
+   * display. Прежде это делал setTimeout в скрипте. */
+  animation: tk-modal-in .18s ease-out both;
+}
+
+.tk-modal__card--wide { max-width: 620px; }
+
+@keyframes tk-modal-in {
+  from { opacity: 0; transform: scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-modal__card { animation: none; }
+}
+
+.tk-modal__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-modal__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+/* display отдельно: скрипт звонка прячет эту кнопку классом .hidden, а оно
+ * объявлено выше по файлу — при равном весе побеждает последнее правило. */
+.tk-modal__close:not(.hidden) { display: flex; }
+
+.tk-modal__close {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--tk-muted);
+  transition: color .18s ease;
+}
+
+.tk-modal__close:hover,
+.tk-modal__close:focus-visible { color: var(--tk-accent); }
+
+.tk-modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tk-modal__body--list { padding: 0 22px; }
+
+.tk-modal__foot {
+  flex: none;
+  padding: 18px 22px;
+  border-top: 1px solid var(--tk-rule);
+}
+
+.tk-modal__foot--split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.tk-modal__exit {
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  color: var(--tk-accent);
+  transition: color .18s ease;
+}
+
+.tk-modal__exit:hover { color: var(--tk-paper); }
+
+/* Состояние вместо формы: «у вас уже есть активный стрим». */
+.tk-modal__state {
+  padding: 26px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  color: var(--tk-beige);
+}
+
+.tk-modal__state svg { color: var(--tk-accent); }
+.tk-modal__state p { margin: 0; font-size: 15px; }
+
+/* ── Формы внутри окон ── */
+.tk-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tk-form__row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.tk-form__label {
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-form__hint {
+  letter-spacing: .06em;
+  text-transform: none;
+  color: var(--tk-muted);
+}
+
+/* ── Панель внутри окна: аватар, галерея, безопасность ── */
+.tk-panel {
+  padding: 16px;
+  border: 1px solid var(--tk-rule);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tk-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tk-panel__title {
+  margin: 0;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-panel__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tk-panel__spacer { margin-left: auto; }
+
+.tk-panel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  color: var(--tk-beige);
+  transition: color .18s ease;
+}
+
+.tk-panel__toggle:hover { color: var(--tk-paper); }
+.tk-panel__toggle svg { flex: none; color: var(--tk-accent); }
+
+.tk-note {
+  margin: 0;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tk-muted);
+}
+
+.tk-note--center { text-align: center; padding: 28px 0; }
+.tk-note--bad { color: var(--tk-accent); }
+
+/* ── Аватар ── */
+.tk-avatar-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.tk-avatar-row__side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tk-avatar-box {
+  width: 80px;
+  height: 80px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .25);
+  border: 1px solid var(--tk-rule);
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+.tk-avatar-box img:not(.hidden) { display: block; }
+.tk-avatar-box img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ── Галерея ── */
+.tk-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  border: 1px dashed var(--tk-rule);
+  color: var(--tk-muted);
+  transition: border-color .18s ease, color .18s ease;
+}
+
+.tk-dropzone:hover,
+.tk-dropzone.is-over {
+  border-color: var(--tk-accent);
+  color: var(--tk-beige);
+}
+
+.tk-dropzone p { margin: 0; font-family: Oswald, sans-serif; font-size: 13px; }
+
+.tk-thumbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+}
+
+.tk-thumbs:empty { display: none; }
+
+.tk-thumb { position: relative; }
+
+.tk-thumb img:not(.hidden) { display: block; }
+
+.tk-thumb img {
+  width: 100%;
+  height: 84px;
+  object-fit: cover;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-thumb__del {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 10, .72);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--tk-paper);
+  opacity: 0;
+  transition: opacity .18s ease, background-color .18s ease;
+}
+
+.tk-thumb:hover .tk-thumb__del,
+.tk-thumb__del:focus-visible { opacity: 1; }
+.tk-thumb__del:hover { background: var(--tk-accent); }
+
+/* На тач-устройстве наведения нет — кнопку видно всегда. */
+@media (hover: none) {
+  .tk-thumb__del { opacity: 1; }
+}
+
+/* ── Уведомления ── */
+.tk-notice {
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(144, 113, 99, .25);
+}
+
+.tk-notice:last-child { border-bottom: none; }
+
+.tk-notice__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.tk-notice__from {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+}
+
+.tk-notice__when {
+  flex: none;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+.tk-notice__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--tk-beige);
+  overflow-wrap: anywhere;
+}
+
+/* ── Окна звонка ── */
+.tk-modal__card--call { max-width: 720px; }
+
+/* Высоту окно берёт только когда есть что показывать: до соединения видео
+ * скрыто, и фиксированная высота давала полэкрана пустоты. */
+.tk-modal__card--call:has(.tk-call__stage:not(.hidden)) {
+  height: min(760px, calc(100vh - 48px));
+}
+
+.tk-call__who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tk-call__ava {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .25);
+  border: 1px solid var(--tk-rule);
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-call__ava img:not(.hidden) { display: block; }
+.tk-call__ava img { width: 100%; height: 100%; object-fit: cover; }
+
+.tk-call__names { min-width: 0; }
+
+.tk-call__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-call__type {
+  margin: 2px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+.tk-call__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 22px 22px;
+}
+
+.tk-call__status {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  color: var(--tk-beige);
+}
+
+.tk-call__beacon {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  animation: tk-beacon 1.6s ease-in-out infinite;
+}
+
+.tk-call__beacon--ok { background: var(--tk-green); }
+.tk-call__beacon--ring { background: var(--tk-accent); }
+
+@keyframes tk-beacon {
+  50% { opacity: .25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-call__beacon { animation: none; }
+}
+
+.tk-call__timer {
+  margin: 6px 0 0;
+  text-align: center;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+}
+
+.tk-call__stage { margin: 14px 0; }
+.tk-call__stage:not(.hidden) { flex: 1; min-height: 0; }
+
+.tk-call__actions {
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.tk-call__actions--pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Разговор начался: «Отклонить» прячется, а «Принять» становится
+ * «Завершить» на всю ширину. Скрытая кнопка остаётся в разметке, поэтому
+ * ширину задаём по состоянию контейнера, а не через :only-child. */
+.tk-call__actions:not(.tk-call__actions--pair) .tk-btn { width: 100%; }
+
+/* Картинка в картинке для окон звонка. Три размера — медиазапросы: при
+ * прошлой переверстке их обёртки потерялись, и три правила .pip-local шли
+ * подряд, то есть на телефоне применялся самый крупный. */
+.pip-call-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.pip-remote {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+  background: #000;
+}
+
+.pip-local {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 100px;
+  height: 70px;
+  border: 1px solid var(--tk-rule);
+  object-fit: cover;
+  background: #000;
+  z-index: 10;
+}
+
+@media (min-width: 640px) {
+  .pip-local { width: 140px; height: 90px; right: 12px; bottom: 12px; }
+}
+
+@media (min-width: 1024px) {
+  .pip-local { width: 180px; height: 110px; right: 16px; bottom: 16px; }
+}
+
+/* ── Результаты поиска в шапке ── */
+.tk-found__ava {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  object-fit: cover;
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-found__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tk-found__name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-found__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+.search-result-item svg { flex: none; color: var(--tk-muted); }
+.search-result-item:hover svg { color: var(--tk-accent); }
+
+.tk-found__empty { padding: 26px 16px; text-align: center; }
+
+/* Точка присутствия в выдаче поиска: размер задаётся здесь, цвет —
+ * классами presence-online / presence-offline из блока левой панели. */
+.tk-found__meta .presence-dot {
+  position: static;
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border: none;
+  border-radius: 50%;
+}
+
+/* ── Узкий экран ── */
+@media (max-width: 640px) {
+  .tk-modal { padding: 0; }
+
+  .tk-modal__card,
+  .tk-modal__card--call {
+    max-width: none;
+    height: 100vh;
+    max-height: 100vh;
+    border: none;
+  }
+
+  .tk-modal__head { padding: 14px 16px; }
+  .tk-modal__body { padding: 16px; }
+  .tk-modal__body--list { padding: 0 16px; }
+  .tk-modal__foot { padding: 14px 16px; }
+  .tk-call__body { padding: 14px 16px 16px; }
+  .tk-avatar-row { flex-direction: column; }
 }

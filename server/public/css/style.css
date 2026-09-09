@@ -53,8 +53,7 @@ header {
 header .logo img,
 footer .logo img,
 .logo-tiny,
-.search_panel img[alt="logo"],
-img[src*="takebana.png"] {
+.search_panel img[alt="logo"] {
     max-width: 123px;
     width: auto;
     height: auto;
@@ -4332,24 +4331,6 @@ p.finish.active {
     font-weight: 600;
 }
 
-.stream__bar-box,
-.stream__platform-box{
-    background-image: url("../img/card-bar.jpg");
-    background-size: 100%;
-    background-repeat: no-repeat;
-    background-position: 0px;
-    border-radius: 32px 0px 0px 32px;
-    width: 808px;
-    height: 680px;
-    display: flex;
-    justify-content: center;
-    margin-bottom: 92px;
-}
-
-.stream__platform-box{
-    background-image: url("../img/card-platform.jfif");
-    border-radius: 0px 32px 32px 0px;
-}
 
 .main__content{
     display: flex;
