@@ -30,15 +30,28 @@
             <label class="tk-form__label" for="streamCategory" lng="112">Категория</label>
             <select id="streamCategory" class="tk-field tk-select">
               <option value="" lng="113">Выберите категорию</option>
-              <option value="business" lng="85">Бизнес</option>
-              <option value="entertainment" lng="84">Развлечения</option>
+              <% Object.entries(catalog.CATEGORIES).forEach(function ([code, cat]) { %>
+              <option value="<%= code %>" lng="<%= cat.lng %>"><%= cat.name %></option>
+              <% }); %>
+            </select>
+          </div>
+
+          <%# Подкатегории берутся из config/catalog.js, как и теги каталога:
+              раньше их список был зашит в tk-app.js отдельной копией. %>
+          <div class="tk-form__row">
+            <label class="tk-form__label" for="streamSubcategory" lng="114">Подкатегория</label>
+            <select id="streamSubcategory" class="tk-field tk-select" data-subs="<%= catalog.SUBS_JSON %>" disabled>
+              <option value="" lng="115">Сначала выберите категорию</option>
             </select>
           </div>
 
           <div class="tk-form__row">
-            <label class="tk-form__label" for="streamSubcategory" lng="114">Подкатегория</label>
-            <select id="streamSubcategory" class="tk-field tk-select" disabled>
-              <option value="" lng="115">Сначала выберите категорию</option>
+            <label class="tk-form__label" for="streamCity">Город <span class="tk-form__hint">(необязательно)</span></label>
+            <select id="streamCity" class="tk-field tk-select">
+              <option value="">Не указан</option>
+              <% catalog.CITIES.forEach(function (city) { %>
+              <option value="<%= city.code %>"><%= city.name %></option>
+              <% }); %>
             </select>
           </div>
 

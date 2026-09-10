@@ -228,8 +228,10 @@
   gap: 8px;
 }
 
+/* Тег — чекбокс формы фильтров. Сам input прозрачный и растянут на весь
+ * тег: нажатие, фокус и отметка остаются нативными, без обработчиков. */
 .tk-tag {
-  background: none;
+  position: relative;
   border: 1px solid var(--tk-rule);
   padding: 7px 12px;
   cursor: pointer;
@@ -240,13 +242,62 @@
   transition: border-color .18s ease, color .18s ease, background-color .18s ease;
 }
 
+.tk-tag input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .tk-tag:hover { border-color: var(--tk-beige); color: var(--tk-paper); }
 
-.tk-tag[aria-pressed="true"] {
+.tk-tag:has(:focus-visible) {
+  outline: 2px solid var(--tk-accent);
+  outline-offset: 2px;
+}
+
+.tk-tag:has(:checked) {
   border-color: var(--tk-accent);
   background: rgba(227, 66, 52, .12);
   color: var(--tk-paper);
 }
+
+/* ── Фильтры над сеткой ── */
+.tk-cat__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  margin-bottom: 26px;
+}
+
+.tk-cat__ctl {
+  flex: 0 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Поле формы из tk.css рассчитано на окна настроек, в строке фильтров оно
+ * ниже. Кегль не трогаем: меньше 16px Safari на айфоне приближает страницу. */
+.tk-cat__ctl .tk-field { padding-block: 11px; }
+
+.tk-cat__reset {
+  padding: 12px 2px;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  transition: color .18s ease;
+}
+
+.tk-cat__reset:hover,
+.tk-cat__reset:focus-visible { color: var(--tk-accent); }
+
+.tk-cat__results { transition: opacity .2s ease; }
+.tk-cat__results[aria-busy="true"] { opacity: .45; }
 
 /* ── Сетка эфиров ────────────────────────────────────────────────────────
  * auto-fill, а не фиксированные брейкпоинты: колонок столько, сколько
@@ -399,9 +450,15 @@
   white-space: nowrap;
 }
 
-.tk-card__cat {
-  align-self: flex-start;
+/* Категория и город. */
+.tk-card__tags {
   margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tk-card__cat {
   padding: 4px 9px;
   border: 1px solid var(--tk-rule);
   font-family: Oswald, sans-serif;
@@ -456,6 +513,7 @@
   .tk-cat__hero { padding-bottom: 36px; }
   .tk-groups { grid-template-columns: 1fr; }
   .tk-grid { grid-template-columns: 1fr; }
+  .tk-cat__ctl { flex: 1 1 160px; }
 }
 
 @media (max-width: 374px) {

@@ -43,6 +43,7 @@ const PUBLIC = [
 ];
 const PRIVATE = [
   ['каталог эфиров', '/streaming'],
+  ['каталог с фильтрами', '/streaming/business?sub=horeca&city=belgrade&sort=new'],
   ['личная главная', '/main'],
   ['переписка', '/chatsPage'],
 ];

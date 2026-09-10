@@ -12,6 +12,7 @@ const User = require('../../models/User');
 const { requireAuth, requireOwner, requireNotBanned } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validate');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
+const { CATEGORIES, SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
 const { upload } = require('./uploads');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
 const { randomUUID: uuidv4 } = require('crypto');
@@ -55,8 +56,11 @@ router.post('/stream/active/:streamId', requireAuth, requireOwner(Stream, { para
 
 router.post('/start-stream', requireNotBanned, validate({
   title: { type: 'string', required: true, min: 1, max: 200, label: 'Название' },
-  category: { type: 'string', required: true, max: 100, label: 'Категория' },
-  subcategory: { type: 'string', required: true, max: 100, label: 'Подкатегория' },
+  // Коды из закрытых списков config/catalog.js. Любая другая строка давала
+  // эфир, который каталог не показывает ни на одной вкладке и ни в одном фильтре.
+  category: { type: 'string', required: true, values: Object.keys(CATEGORIES), label: 'Категория' },
+  subcategory: { type: 'string', required: true, values: Object.keys(SUB_CATEGORY), label: 'Подкатегория' },
+  city: { type: 'string', values: Object.keys(CITY_NAME), label: 'Город' },
   description: { type: 'string', max: 5000, label: 'Описание' },
   // Метку 18+ ставит сам вещатель при создании эфира. Снять её может только
   // модерация — иначе смысл гейта теряется на первом же нажатии.
@@ -67,7 +71,11 @@ router.post('/start-stream', requireNotBanned, validate({
     return res.status(401).json({ message: 'Пользователь не авторизован' });
   }
 
-  const { title, category, subcategory, description, isAdult } = req.body;
+  const { title, category, subcategory, city, description, isAdult } = req.body;
+
+  if (SUB_CATEGORY[subcategory] !== category) {
+    return res.status(400).json({ message: 'Подкатегория не относится к выбранной категории' });
+  }
 
   try {
     // Проверка на наличие активного стрима - улучшенная логика
@@ -111,6 +119,7 @@ router.post('/start-stream', requireNotBanned, validate({
     title,
     category,
     subcategory,
+    city,
     description,
     isAdult,
     isActive: false

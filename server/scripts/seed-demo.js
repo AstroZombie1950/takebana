@@ -52,9 +52,12 @@ const PLACES = [
   },
 ];
 
+// owner — индекс в USERS. Коды категорий и городов — из config/catalog.js:
+// прежние «Бары» / «Атмосфера» не попадали ни в одну вкладку каталога.
 const STREAMS = [
-  { title: 'Демо: вечер в баре', category: 'Бары', subcategory: 'Атмосфера', isActive: true },
-  { title: 'Демо: трансляция с камеры', category: 'Бары', subcategory: 'Live', isActive: false },
+  { owner: 0, title: 'Демо: вечер в баре', category: 'business', subcategory: 'horeca', city: 'belgrade', isActive: true, viewers: 14 },
+  { owner: 1, title: 'Демо: джем в клубе', category: 'entertainment', subcategory: 'music', city: 'novi-sad', isActive: true, viewers: 6 },
+  { owner: 0, title: 'Демо: трансляция с камеры', category: 'business', subcategory: 'horeca', city: 'belgrade', isActive: false },
 ];
 
 async function reset() {
@@ -100,11 +103,12 @@ async function main() {
     }
   }
 
-  for (const s of STREAMS) {
-    const exists = await Stream.findOne({ title: s.title, userId: owner._id });
+  for (const { owner: i, ...s } of STREAMS) {
+    const user = USERS[i]._doc;
+    const exists = await Stream.findOne({ title: s.title, userId: user._id });
     if (!exists) {
       await Stream.create({
-        ...s, userId: owner._id, streamKey: owner.streamKey || uuidv4(),
+        ...s, userId: user._id, streamKey: user.streamKey || uuidv4(),
         startedAt: s.isActive ? new Date() : null,
         streamType: 'web-stream', streamProvider: 'web-stream',
       });

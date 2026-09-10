@@ -108,6 +108,8 @@ app.use(sessionMiddleware);
 // Google» на страницах входа и регистрации не показывается вовсе: нерабочая
 // кнопка хуже отсутствующей.
 app.locals.googleOAuthConfigured = googleOAuthConfigured;
+// Категории и города: форма эфира живёт в шапке каждой страницы кабинета.
+app.locals.catalog = require('./config/catalog');
 app.use(googleRouter);
 
 require('./db');

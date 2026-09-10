@@ -168,6 +168,7 @@ expect "POST /obs-stream-start"           "401"     POST /obs-stream-start      
 expect "POST /chat/message"               "401"     POST /chat/message               -H 'Content-Type: application/json' -d '{}'
 expect "GET /search-users"                "401|302" GET  /search-users               -H 'X-Requested-With: XMLHttpRequest'
 expect "GET /api/presence"                "401"     GET  /api/presence?ids=000000000000000000000000
+expect "GET /streaming/:category/grid"    "401"     GET  /streaming/popular/grid
 # Маршрут открыт намеренно — эфир смотрят без входа. Проверяем не код ответа,
 # а то, что в нём нет полей пользователя: populate отдавал сюда email,
 # хеш пароля и streamKey любому желающему.

@@ -595,6 +595,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const streamCategoryInput = document.getElementById('streamCategory');
   const streamSubcategoryInput = document.getElementById('streamSubcategory');
   const streamDescriptionInput = document.getElementById('streamDescription');
+  const streamCityInput = document.getElementById('streamCity');
   const streamAdultInput = document.getElementById('streamAdult');
 
   if (!startStreamButton) return;
@@ -623,6 +624,7 @@ document.addEventListener('DOMContentLoaded', function() {
           category,
           subcategory,
           description,
+          city: streamCityInput ? streamCityInput.value : '',
           isAdult: !!(streamAdultInput && streamAdultInput.checked)
         })
       });
@@ -651,63 +653,23 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
-// Логика подкатегорий для стрима
+// Подкатегории для стрима. Список приходит из config/catalog.js атрибутом
+// data-subs: [[код, подпись], …] на каждую категорию.
 document.addEventListener('DOMContentLoaded', function() {
-  const streamCategorySelect = document.getElementById('streamCategory');
-  const streamSubcategorySelect = document.getElementById('streamSubcategory');
+  const categorySelect = document.getElementById('streamCategory');
+  const subSelect = document.getElementById('streamSubcategory');
+  if (!categorySelect || !subSelect) return;
 
-  const subcategories = {
-      business: [
-        { value: 'real_estate', text: 'Недвижимость' },
-        { value: 'services', text: 'Услуги' },
-        { value: 'education', text: 'Образование' },
-        { value: 'auto', text: 'Авто' },
-        { value: 'horeca', text: 'HoReCa' },
-        { value: 'manufacturing', text: 'Производство' },
-        { value: 'presentation', text: 'Презентация' }
-      ],
-      entertainment: [
-        { value: 'podcasts', text: 'Подкасты' },
-        { value: 'tourism', text: 'Туризм' },
-        { value: 'creative', text: 'Креатив' },
-        { value: 'music', text: 'Музыка' }
-      ]
-    };
+  const subcategories = JSON.parse(subSelect.dataset.subs || '{}');
 
-  if (streamCategorySelect && streamSubcategorySelect) {
-  streamCategorySelect.addEventListener('change', function() {
-    const selectedCategory = this.value;
-
-    // Очищаем предыдущие подкатегории
-    streamSubcategorySelect.innerHTML = '';
-
-    if (selectedCategory && subcategories[selectedCategory]) {
-      // Активируем выбор подкатегории
-      streamSubcategorySelect.disabled = false;
-
-      // Добавляем опцию по умолчанию
-      const defaultOption = document.createElement('option');
-      defaultOption.value = '';
-        defaultOption.textContent = 'Выберите подкатегорию';
-      streamSubcategorySelect.appendChild(defaultOption);
-
-      // Заполняем подкатегории
-      subcategories[selectedCategory].forEach(function(subcategory) {
-        const option = document.createElement('option');
-        option.value = subcategory.value;
-        option.textContent = subcategory.text;
-        streamSubcategorySelect.appendChild(option);
-      });
-    } else {
-      // Если нет подкатегорий
-      streamSubcategorySelect.disabled = true;
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = 'Сначала выберите категорию';
-      streamSubcategorySelect.appendChild(option);
-    }
+  categorySelect.addEventListener('change', function() {
+    const subs = subcategories[this.value];
+    subSelect.disabled = !subs;
+    subSelect.replaceChildren(
+      new Option(subs ? 'Выберите подкатегорию' : 'Сначала выберите категорию', ''),
+      ...(subs || []).map(([code, name]) => new Option(name, code))
+    );
   });
-}
 });
 
 // Обработчик кнопки "Мой канал"

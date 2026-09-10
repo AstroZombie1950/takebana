@@ -4,103 +4,128 @@ const express = require('express');
 const router = express.Router();
 const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
-const mongoose = require('mongoose');
 const User = require('../../models/User');
 const Stream = require('../../models/Stream');
 const Subscription = require('../../models/Subscription');
+const { requireAuthApi } = require('../../middleware/auth');
+const { SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
 const { commonDataMiddleware, getStreamUsers, getActiveStreamsCount, getRandomGradient } = require('./shared');
+
+// Вкладки каталога. popular — все категории разом, остальные совпадают
+// с кодами категорий в config/catalog.js.
+const PAGES = {
+  popular:       { title: 'ПОПУЛЯРНОЕ', lng: '90' },
+  business:      { title: 'БИЗНЕС', lng: '105' },
+  entertainment: { title: 'РАЗВЛЕЧЕНИЯ', lng: '104' },
+};
+
+// Прежде роут отдавал не больше четырёх эфиров — с фильтрами это значило бы
+// «первые четыре из подходящих». Постраничной подгрузки нет: одновременно
+// идущих эфиров десятки, а не тысячи.
+const PAGE_SIZE = 48;
+
+const baseUrl = (category) => (category === 'popular' ? '/streaming' : `/streaming/${category}`);
+
+// Фильтры приходят из адресной строки, то есть откуда угодно, а qs превращает
+// `?city[$ne]=x` в объект. Каждое значение сверяется со списком допустимых:
+// чужое молча отбрасывается, а не уходит в запрос оператором Mongo.
+function readFilters(category, query) {
+  const subs = [].concat(query.sub || []).filter((s) =>
+    typeof s === 'string' && SUB_CATEGORY[s] && (category === 'popular' || SUB_CATEGORY[s] === category));
+  return {
+    subs: [...new Set(subs)],
+    city: typeof query.city === 'string' && CITY_NAME[query.city] ? query.city : '',
+    sort: query.sort === 'new' ? 'new' : '',
+  };
+}
+
+async function findStreams(category, filters) {
+  const where = { isActive: true };
+  if (category !== 'popular') where.category = category;
+  if (filters.subs.length) where.subcategory = { $in: filters.subs };
+  if (filters.city) where.city = filters.city;
+
+  const streams = await Stream.find(where)
+    .sort(filters.sort === 'new' ? { startedAt: -1 } : { viewers: -1, startedAt: -1 })
+    .limit(PAGE_SIZE)
+    .populate('userId', 'login email avatar')
+    .select('title category city viewers thumbnail userId isActive')
+    .lean();
+
+  // Эфир удалённого пользователя приходит с userId: null. Прежде на нём
+  // падала вся страница каталога — 500 вместо списка.
+  return streams.filter((stream) => stream.userId).map((stream) => {
+    const user = stream.userId;
+    const displayName = user.login || (user.email ? user.email.split('@')[0] : 'Неизвестный пользователь');
+    return {
+      streamId: stream._id,
+      title: stream.title,
+      category: stream.category,
+      city: stream.city,
+      viewers: stream.viewers,
+      isActive: stream.isActive,
+      thumbnail: stream.thumbnail || null,
+      user: {
+        displayName,
+        avatarStyle: user.avatar
+          ? { url: user.avatar }
+          : { gradient: getRandomGradient(), initial: displayName.charAt(0).toUpperCase() },
+      },
+    };
+  });
+}
 
 router.get('/streaming/:category?', commonDataMiddleware, async (req, res) => {
   const _t0 = Date.now();
-  
+
   if (!req.session.userId) {
     return res.redirect('/');
   }
 
   const category = req.params.category || 'popular';
-  console.log('📂 Using category:', category);
-  
-  // Конфигурация категорий
-  const categoryConfig = {
-    popular: {
-      title: 'ПОПУЛЯРНОЕ',
-      filter: {},
-      cssClass: 'main__content',
-      lng: '90'
-    },
-    business: {
-      title: 'БИЗНЕС', 
-      filter: { category: 'business' },
-      cssClass: 'main__content-business',
-      lng: '105'
-    },
-    entertainment: {
-      title: 'РАЗВЛЕЧЕНИЯ',
-      filter: { category: 'entertainment' },
-      cssClass: 'main__content-entertainment', 
-      lng: '104'
-    }
-  };
-
-  // Проверяем валидность категории
-  if (!categoryConfig[category]) {
+  const page = PAGES[category];
+  if (!page) {
     return res.redirect('/streaming');
   }
 
-  try {
-    const streamsQuery = (category === 'popular')
-      ? Stream.find({ isActive: true })
-      : Stream.find({ ...categoryConfig[category].filter, isActive: true });
+  const filters = readFilters(category, req.query);
 
-    // Запросы параллельно (ускоряет F5)
-    const [users, totalStreamsCount, streams] = await Promise.all([
-      getStreamUsers(),
-      getActiveStreamsCount(),
-      streamsQuery
-        .populate('userId', 'login email avatar')
-        .select('title description category subcategory viewers thumbnail userId isActive')
-        .limit(4)
-        .lean()
-    ]);
+  // Запросы параллельно (ускоряет F5)
+  const [users, totalStreamsCount, streams] = await Promise.all([
+    getStreamUsers(),
+    getActiveStreamsCount(),
+    findStreams(category, filters),
+  ]);
 
-    const modifiedStreams = (streams || []).map(stream => {
-      const user = stream.userId;
-      const displayName = user.login || (user.email ? user.email.split('@')[0] : 'Неизвестный пользователь');
-      const avatarStyle = user.avatar
-        ? { url: user.avatar }
-        : { gradient: getRandomGradient(), initial: displayName.charAt(0).toUpperCase() };
+  res.render('streamingMain', {
+    title: `${page.title} Стримы`,
+    category,
+    page,
+    filters,
+    filtered: filters.subs.length > 0 || !!filters.city,
+    base: baseUrl(category),
+    users,
+    streams,
+    totalStreamsCount,
+  });
+  console.log(`[perf] GET /streaming/${category} render in ${Date.now() - _t0}ms`);
+});
 
-      return {
-        streamId: stream._id,
-        title: stream.title,
-        description: stream.description,
-        category: stream.category,
-        subcategory: stream.subcategory,
-        viewers: stream.viewers,
-        // isActive выбирался запросом, но не доезжал до шаблона — метка LIVE
-        // на карточке не загоралась никогда.
-        isActive: stream.isActive,
-        thumbnail: stream.thumbnail || 'default-thumbnail.png',
-        user: {
-          displayName,
-          avatarStyle
-        }
-      };
-    });
-
-    res.render('streamingMain', {
-      title: `${categoryConfig[category].title} Стримы`,
-      category: category,
-      categoryConfig: categoryConfig[category],
-      users: users,
-      streams: modifiedStreams,
-      totalStreamsCount
-    });
-    console.log(`[perf] GET /streaming/${category} render in ${Date.now() - _t0}ms`);
-  } catch (error) {
-    console.error(`Ошибка получения ${category} стримов или пользователей:`, error);
-    res.status(500).send('Ошибка сервера');
+// Одна сетка, без страницы: её подгружает catalog.js при смене фильтра.
+// Без commonDataMiddleware — шапка, подписки и уведомления здесь не рисуются,
+// а это пять запросов к базе на каждое нажатие тега.
+router.get('/streaming/:category/grid', requireAuthApi, async (req, res) => {
+  const category = req.params.category;
+  if (!PAGES[category]) {
+    return res.sendStatus(404);
   }
+
+  const filters = readFilters(category, req.query);
+  res.render('partials/catalogGrid', {
+    streams: await findStreams(category, filters),
+    filtered: filters.subs.length > 0 || !!filters.city,
+    base: baseUrl(category),
+  });
 });
 
 

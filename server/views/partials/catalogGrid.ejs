@@ -1,0 +1,66 @@
+<%#
+  Сетка эфиров каталога. Рисуется внутри страницы и отдельно, маршрутом
+  /streaming/:category/grid — его подгружает catalog.js при смене фильтра.
+  Нужны: streams, filtered (выбран город или подкатегория), base (адрес
+  страницы без фильтров).
+%>
+<% if (streams.length > 0) { %>
+<div class="tk-grid">
+  <% streams.forEach(function (stream, index) { %>
+  <a href="/stream/<%= stream.streamId %>" class="tk-card" style="animation-delay: <%= index * 70 %>ms">
+    <div class="tk-card__shot">
+      <% if (stream.thumbnail) { %>
+        <img src="<%= stream.thumbnail %>" alt="" loading="lazy">
+      <% } else { %>
+        <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg>
+      <% } %>
+
+      <% if (stream.isActive) { %>
+      <span class="tk-card__live">LIVE</span>
+      <% } %>
+
+      <span class="tk-card__eyes">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M1.5 12S5 5.5 12 5.5 22.5 12 22.5 12 19 18.5 12 18.5 1.5 12 1.5 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        <%= stream.viewers %>
+      </span>
+    </div>
+
+    <div class="tk-card__body">
+      <div class="tk-card__ava"<% if (!stream.user.avatarStyle.url) { %> data-bg="<%= stream.user.avatarStyle.gradient %>"<% } %>>
+        <% if (stream.user.avatarStyle.url) { %>
+          <img src="<%= stream.user.avatarStyle.url %>" alt="" loading="lazy">
+        <% } else { %>
+          <%= stream.user.avatarStyle.initial %>
+        <% } %>
+      </div>
+
+      <div class="tk-card__text">
+        <h3 class="tk-card__title"><%= stream.title %></h3>
+        <p class="tk-card__who"><%= stream.user.displayName %></p>
+        <% var cat = catalog.CATEGORIES[stream.category], city = catalog.CITY_NAME[stream.city]; %>
+        <% if (cat || city) { %>
+        <div class="tk-card__tags">
+          <% if (cat) { %><span class="tk-card__cat" lng="<%= cat.lng %>"><%= cat.name %></span><% } %>
+          <% if (city) { %><span class="tk-card__cat"><%= city %></span><% } %>
+        </div>
+        <% } %>
+      </div>
+    </div>
+  </a>
+  <% }); %>
+</div>
+<% } else if (filtered) { %>
+<div class="tk-empty">
+  <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><path d="M3 5h18l-7 8.5V19l-4 2v-7.5L3 5Z"></path></svg>
+  <p class="tk-empty__h">Под эти фильтры эфиров нет</p>
+  <p class="tk-empty__p">Сейчас никто не вещает с такими условиями. Попробуйте другой город или подкатегорию.</p>
+  <a href="<%= base %>" class="tk-btn tk-btn--outline tk-btn--sm" data-reset>Сбросить фильтры</a>
+</div>
+<% } else { %>
+<div class="tk-empty">
+  <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg>
+  <p class="tk-empty__h" lng="175">Нет активных стримов</p>
+  <p class="tk-empty__p" lng="176">В данный момент нет активных трансляций в этой категории. Станьте первым!</p>
+  <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="start-stream-btn" lng="177">Стать первым</button>
+</div>
+<% } %>

@@ -22,6 +22,12 @@ const StreamSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Код из config/catalog.js, пустая строка — город не указан. Такой эфир
+  // виден в каталоге только без фильтра по городу.
+  city: {
+    type: String,
+    default: ''
+  },
   streamKey: {
     type: String,
     required: true // Stream должен содержать streamKey
@@ -101,8 +107,11 @@ const StreamSchema = new mongoose.Schema({
 StreamSchema.index({ userId: 1, isActive: 1 });
 // Поиск эфира по ключу вещания (RTMP/OBS)
 StreamSchema.index({ streamKey: 1 });
-// Списки на витрине: фильтр по категории всегда идёт вместе с isActive
-StreamSchema.index({ isActive: 1, streamType: 1, streamProvider: 1 });
+// Каталог: только идущие эфиры, по умолчанию по числу зрителей. Категория,
+// подкатегория и город отсекаются уже внутри активных — их единицы, а не
+// тысячи. Прежний индекс isActive + streamType + streamProvider не
+// обслуживал ни одного запроса.
+StreamSchema.index({ isActive: 1, viewers: -1 });
 // Уборка мёртвых эфиров перебирает по паре isActive + updatedAt
 StreamSchema.index({ isActive: 1, updatedAt: 1 });
 // Погашенные модерацией — отдельный список в панели, строк единицы

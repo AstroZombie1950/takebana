@@ -1,10 +1,11 @@
 <%
-  // Подписи категорий для метки на карточке. Роут отдаёт код ('business'),
-  // а не текст, и раньше он так и выводился в карточке как есть.
-  var catLabels = {
-    business:      { lng: '85', name: 'Бизнес' },
-    entertainment: { lng: '84', name: 'Развлечения' }
+  // Иконки групп — оформление этой страницы, в таксономию они не входят.
+  // Категории, подкатегории и города — config/catalog.js.
+  var groupIcons = {
+    entertainment: '<path d="M9 5.2l1.1 3.7L13.8 10l-3.7 1.1L9 14.8l-1.1-3.7L4.2 10l3.7-1.1L9 5.2Z"></path><path d="M17.5 13.5l.6 2 2 .6-2 .6-.6 2-.6-2-2-.6 2-.6.6-2Z"></path>',
+    business: '<rect x="3" y="7" width="18" height="13"></rect><path d="M9 7V5h6v2"></path><path d="M3 13h18"></path>'
   };
+  var groups = category === 'popular' ? Object.keys(catalog.CATEGORIES) : [category];
 %>
 <!DOCTYPE html>
 <html lang="ru">
@@ -31,8 +32,8 @@
           <%# Ключ словаря содержит заголовок целиком, вместе с категорией
               и переносом. Раньше он висел на подзаголовке, и после applyLang
               строка «ПРЯМЫЕ ТРАНСЛЯЦИИ» печаталась на экране дважды. %>
-          <h1 class="tk-cat__h1" lng="<%= categoryConfig.lng %>">
-            Прямые трансляции:<br><%= categoryConfig.title %>
+          <h1 class="tk-cat__h1" lng="<%= page.lng %>">
+            Прямые трансляции:<br><%= page.title %>
           </h1>
 
           <p class="tk-cat__lede" lng="169">
@@ -92,111 +93,71 @@
         </section>
       </div>
 
+      <%# Фильтры — обычная GET-форма: без скрипта она уходит перезагрузкой,
+          и адрес с фильтрами можно отправить другому человеку. Со скриптом
+          catalog.js подменяет только сетку, адрес из data-grid. %>
+      <form id="catFilters" action="<%= base %>" method="get" data-grid="/streaming/<%= category %>/grid">
+
       <!-- Категории контента -->
-      <% if (category === 'popular' || category === 'entertainment' || category === 'business') { %>
       <section class="tk-cat__sec">
         <p class="tk-kicker" lng="170">Категории контента</p>
 
         <div class="tk-groups">
-          <% if (category === 'popular' || category === 'entertainment') { %>
-          <div class="tk-group">
+          <% groups.forEach(function (code) { var cat = catalog.CATEGORIES[code]; %>
+          <div class="tk-group" role="group" aria-label="<%= cat.name %>">
             <div class="tk-group__head">
-              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="square" aria-hidden="true"><path d="M9 5.2l1.1 3.7L13.8 10l-3.7 1.1L9 14.8l-1.1-3.7L4.2 10l3.7-1.1L9 5.2Z"></path><path d="M17.5 13.5l.6 2 2 .6-2 .6-.6 2-.6-2-2-.6 2-.6.6-2Z"></path></svg>
+              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="square" aria-hidden="true"><%- groupIcons[code] %></svg>
               <div>
-                <p class="tk-group__name" lng="84">Развлечения</p>
-                <p class="tk-group__note" lng="157">Игры, музыка, творчество</p>
+                <p class="tk-group__name" lng="<%= cat.lng %>"><%= cat.name %></p>
+                <p class="tk-group__note" lng="<%= cat.noteLng %>"><%= cat.note %></p>
               </div>
             </div>
             <div class="tk-tags">
-              <button type="button" class="tk-tag" data-filter="podcasts" aria-pressed="false" lng="92">Подкасты</button>
-              <button type="button" class="tk-tag" data-filter="tourism" aria-pressed="false" lng="93">Туризм</button>
-              <button type="button" class="tk-tag" data-filter="creative" aria-pressed="false" lng="94">Креатив</button>
-              <button type="button" class="tk-tag" data-filter="music" aria-pressed="false" lng="95">Музыка</button>
+              <% cat.subs.forEach(function (sub) { %>
+              <label class="tk-tag"><input type="checkbox" name="sub" value="<%= sub.code %>"<%= filters.subs.includes(sub.code) ? ' checked' : '' %>><span<% if (sub.lng) { %> lng="<%= sub.lng %>"<% } %>><%= sub.name %></span></label>
+              <% }); %>
             </div>
           </div>
-          <% } %>
-
-          <% if (category === 'popular' || category === 'business') { %>
-          <div class="tk-group">
-            <div class="tk-group__head">
-              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="square" aria-hidden="true"><rect x="3" y="7" width="18" height="13"></rect><path d="M9 7V5h6v2"></path><path d="M3 13h18"></path></svg>
-              <div>
-                <p class="tk-group__name" lng="85">Бизнес</p>
-                <p class="tk-group__note" lng="158">Презентации, обучение</p>
-              </div>
-            </div>
-            <div class="tk-tags">
-              <button type="button" class="tk-tag" data-filter="real_estate" aria-pressed="false" lng="96">Недвижимость</button>
-              <button type="button" class="tk-tag" data-filter="services" aria-pressed="false" lng="97">Услуги</button>
-              <button type="button" class="tk-tag" data-filter="education" aria-pressed="false" lng="98">Образование</button>
-              <button type="button" class="tk-tag" data-filter="auto" aria-pressed="false" lng="99">Авто</button>
-              <button type="button" class="tk-tag" data-filter="horeca" aria-pressed="false">HoReCa</button>
-              <button type="button" class="tk-tag" data-filter="manufacturing" aria-pressed="false" lng="100">Производство</button>
-            </div>
-          </div>
-          <% } %>
+          <% }); %>
         </div>
       </section>
-      <% } %>
 
       <!-- Активные трансляции -->
       <section class="tk-cat__sec">
         <h2 class="tk-cat__h2" lng="102">Популярные трансляции</h2>
         <p class="tk-cat__note" lng="172">Откройте для себя лучший контент прямо сейчас</p>
 
-        <% if (streams.length > 0) { %>
-        <div class="tk-grid">
-          <% streams.forEach(function (stream, index) { %>
-          <a href="/stream/<%= stream.streamId %>" class="tk-card" style="animation-delay: <%= index * 70 %>ms">
-            <div class="tk-card__shot">
-              <% if (stream.thumbnail && stream.thumbnail !== 'default-thumbnail.png') { %>
-                <img src="<%= stream.thumbnail %>" alt="" loading="lazy">
-              <% } else { %>
-                <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg>
-              <% } %>
+        <div class="tk-cat__bar">
+          <label class="tk-cat__ctl">
+            <span class="tk-form__label">Город</span>
+            <select name="city" class="tk-field tk-select">
+              <option value="">Все города</option>
+              <% catalog.CITIES.forEach(function (city) { %>
+              <option value="<%= city.code %>"<%= filters.city === city.code ? ' selected' : '' %>><%= city.name %></option>
+              <% }); %>
+            </select>
+          </label>
 
-              <% if (stream.isActive) { %>
-              <span class="tk-card__live">LIVE</span>
-              <% } %>
+          <label class="tk-cat__ctl">
+            <span class="tk-form__label">Сортировка</span>
+            <select name="sort" class="tk-field tk-select">
+              <option value="">По зрителям</option>
+              <option value="new"<%= filters.sort === 'new' ? ' selected' : '' %>>Сначала новые</option>
+            </select>
+          </label>
 
-              <span class="tk-card__eyes">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M1.5 12S5 5.5 12 5.5 22.5 12 22.5 12 19 18.5 12 18.5 1.5 12 1.5 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                <%= stream.viewers %>
-              </span>
-            </div>
-
-            <div class="tk-card__body">
-              <div class="tk-card__ava"<% if (!stream.user.avatarStyle.url) { %> data-bg="<%= stream.user.avatarStyle.gradient %>"<% } %>>
-                <% if (stream.user.avatarStyle.url) { %>
-                  <img src="<%= stream.user.avatarStyle.url %>" alt="" loading="lazy">
-                <% } else { %>
-                  <%= stream.user.avatarStyle.initial %>
-                <% } %>
-              </div>
-
-              <div class="tk-card__text">
-                <h3 class="tk-card__title"><%= stream.title %></h3>
-                <p class="tk-card__who"><%= stream.user.displayName %></p>
-                <% var label = catLabels[stream.category]; %>
-                <% if (label) { %>
-                  <span class="tk-card__cat" lng="<%= label.lng %>"><%= label.name %></span>
-                <% } else if (stream.category) { %>
-                  <span class="tk-card__cat"><%= stream.category %></span>
-                <% } %>
-              </div>
-            </div>
-          </a>
-          <% }); %>
+          <%# Нужна только без скрипта: со скриптом фильтр применяется сразу
+              при смене значения, и catalog.js кнопку убирает. %>
+          <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm">Показать</button>
+          <a href="<%= base %>" class="tk-cat__reset" data-reset<%= filtered ? '' : ' hidden' %>>Сбросить фильтры</a>
         </div>
-        <% } else { %>
-        <div class="tk-empty">
-          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg>
-          <p class="tk-empty__h" lng="175">Нет активных стримов</p>
-          <p class="tk-empty__p" lng="176">В данный момент нет активных трансляций в этой категории. Станьте первым!</p>
-          <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="start-stream-btn" lng="177">Стать первым</button>
+
+        <div class="tk-cat__results" id="catResults">
+          <%- include('partials/catalogGrid') %>
         </div>
-        <% } %>
       </section>
+
+      </form>
 
     </div>
   </main>
