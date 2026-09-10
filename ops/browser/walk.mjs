@@ -37,6 +37,18 @@ const PRIVATE = [
   ['переписка', '/chatsPage'],
 ];
 
+// Панель проверяется, только если SMOKE_* — учётка администратора или
+// модератора: всем остальным /panel отвечает редиректом на /main, и проверка
+// падала бы не на ошибке страницы, а на нехватке прав.
+if (process.env.SMOKE_ADMIN === '1') PRIVATE.push(['панель', '/panel']);
+
+// Страницы с идентификатором в адресе — эфир, профиль — в общий список не
+// попадают: у каждого стенда они свои. SMOKE_PAGES=/userPage/abc,/stream/def
+// добавляет их разово, не трогая постоянный набор.
+for (const path of (process.env.SMOKE_PAGES || '').split(',').map(s => s.trim()).filter(Boolean)) {
+  PRIVATE.push([path, path]);
+}
+
 async function check(p, name, url) {
   await p.goto(BASE + url);
 

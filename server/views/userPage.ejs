@@ -61,6 +61,15 @@
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
               <span lng="<%= user.isSubscribed ? '130' : '91' %>"><%= user.isSubscribed ? 'Отписаться' : 'Подписаться' %></span>
             </button>
+
+            <%# Окно жалобы лежит в общем партиале шапки, здесь только кнопка. %>
+            <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm"
+                    data-report="user"
+                    data-report-id="<%= user._id %>"
+                    data-report-name="<%= user.displayName %>">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M5 21V4h9l.6 2H20v9h-6l-.6-2H5"></path></svg>
+              <span>Пожаловаться</span>
+            </button>
           </div>
           <% } %>
         </div>
@@ -146,7 +155,9 @@
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
   </button>
   <span class="tk-lightbox__count" id="lightboxCounter">1 / 1</span>
-  <img id="lightboxImg" src="" alt="">
+  <%# Без src: пустая строка — это адрес текущей страницы, браузер честно идёт
+      за ней и получает битую картинку. Адрес подставляет profile.js при открытии. %>
+  <img id="lightboxImg" alt="">
 </div>
 
 <%# Единственное, что скрипту профиля нужно от сервера. %>

@@ -7,10 +7,10 @@ asyncify(router); // ошибки async-обработчиков уходят в
 const User = require('../../models/User');
 const ChatMessage = require('../../models/ChatMessage');
 const Stream = require('../../models/Stream');
-const { requireAuth } = require('../../middleware/auth');
+const { requireAuth, requireNotBanned } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validate');
 
-router.post('/chat/message', requireAuth, validate({
+router.post('/chat/message', requireAuth, requireNotBanned, validate({
   streamId: { type: 'objectId', required: true, label: 'Эфир' },
   message: { type: 'string', required: true, min: 1, max: 2000, label: 'Сообщение' },
 }), async (req, res) => {

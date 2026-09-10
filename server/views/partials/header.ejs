@@ -99,6 +99,15 @@
   </div>
 </header>
 
+<%# Ограниченный аккаунт должен понимать, почему у него ничего не отправляется:
+    без этой полосы он видел бы только всплывающие отказы на каждое действие. %>
+<% if (currentUser.banned) { %>
+<div class="tk-banned" role="status">
+  <b>Аккаунт ограничен модерацией.</b>
+  <span>Смотреть и читать можно, писать в чат и выходить в эфир — нет.<% if (currentUser.banReason) { %> Причина: <%= currentUser.banReason %><% } %></span>
+</div>
+<% } %>
+
 <div class="tk-msearch hidden" id="mobileSearchBar">
   <div class="tk-ahead__search" style="max-width: none;">
     <span class="tk-ahead__loupe">

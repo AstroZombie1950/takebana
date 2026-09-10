@@ -208,7 +208,12 @@ step "Socket.IO"
 # Соединение после 101 не закрывается, поэтому curl штатно выходит по таймауту.
 # Код ответа он к этому моменту уже напечатал — берём первые три цифры,
 # а ненулевой код возврата игнорируем.
-ws_raw=$("${CURL[@]}" -o /dev/null -m 5 -w '%{http_code}' \
+#
+# --http1.1 обязателен: сайт отдаёт HTTP/2, а в нём механизма Upgrade нет вовсе
+# (websocket там — Extended CONNECT из RFC 8441, curl его не умеет). Без этого
+# ключа curl уходит в h2 по ALPN и получает 400 от Socket.IO — ложный провал.
+# Браузеры ведут себя так же: websocket всегда идёт отдельным HTTP/1.1.
+ws_raw=$("${CURL[@]}" -o /dev/null -m 5 -w '%{http_code}' --http1.1 \
   -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
   -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
   "${BASE}/socket.io/?EIO=4&transport=websocket" 2>/dev/null)

@@ -595,6 +595,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const streamCategoryInput = document.getElementById('streamCategory');
   const streamSubcategoryInput = document.getElementById('streamSubcategory');
   const streamDescriptionInput = document.getElementById('streamDescription');
+  const streamAdultInput = document.getElementById('streamAdult');
 
   if (!startStreamButton) return;
 
@@ -621,7 +622,8 @@ document.addEventListener('DOMContentLoaded', function() {
           title,
           category,
           subcategory,
-          description
+          description,
+          isAdult: !!(streamAdultInput && streamAdultInput.checked)
         })
       });
 

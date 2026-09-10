@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const Stream = require('../../models/Stream');
 const User = require('../../models/User');
-const { requireAuth, requireOwner } = require('../../middleware/auth');
+const { requireAuth, requireOwner, requireNotBanned } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validate');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
 const { upload } = require('./uploads');
@@ -53,18 +53,21 @@ router.post('/stream/active/:streamId', requireAuth, requireOwner(Stream, { para
 // - Active streams: if no activity ping updates `updatedAt` for N minutes -> delete
 // - Inactive streams: if `updatedAt` older than M days -> delete
 
-router.post('/start-stream', validate({
+router.post('/start-stream', requireNotBanned, validate({
   title: { type: 'string', required: true, min: 1, max: 200, label: 'Название' },
   category: { type: 'string', required: true, max: 100, label: 'Категория' },
   subcategory: { type: 'string', required: true, max: 100, label: 'Подкатегория' },
   description: { type: 'string', max: 5000, label: 'Описание' },
+  // Метку 18+ ставит сам вещатель при создании эфира. Снять её может только
+  // модерация — иначе смысл гейта теряется на первом же нажатии.
+  isAdult: { type: 'bool', required: false, default: false, label: 'Контент 18+' },
 }), async (req, res) => {
   const userId = req.session.userId;
   if (!userId) {
     return res.status(401).json({ message: 'Пользователь не авторизован' });
   }
 
-  const { title, category, subcategory, description } = req.body;
+  const { title, category, subcategory, description, isAdult } = req.body;
 
   try {
     // Проверка на наличие активного стрима - улучшенная логика
@@ -109,6 +112,7 @@ router.post('/start-stream', validate({
     category,
     subcategory,
     description,
+    isAdult,
     isActive: false
   });
 
@@ -128,7 +132,7 @@ router.post('/start-stream', validate({
 
 
 // Роут для активации стрима (isActive: true)
-router.post('/set-active', requireAuth, validate({
+router.post('/set-active', requireAuth, requireNotBanned, validate({
   streamKey: { type: 'key', required: true, label: 'Ключ трансляции' },
 }), async (req, res) => {
   const { streamKey } = req.body;
@@ -232,7 +236,7 @@ router.post('/set-inactive', requireAuth, validate({
 
 
 // Новые эндпоинты специально для OBS
-router.post('/obs-stream-start', requireAuth, validate({
+router.post('/obs-stream-start', requireAuth, requireNotBanned, validate({
   streamKey: { type: 'key', required: true, label: 'Ключ трансляции' },
 }), async (req, res) => {
   try {

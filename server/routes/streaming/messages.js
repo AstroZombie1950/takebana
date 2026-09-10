@@ -6,6 +6,7 @@ const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const mongoose = require('mongoose');
 const User = require('../../models/User');
+const { requireNotBanned } = require('../../middleware/auth');
 const Conversation = require('../../models/Conversation');
 const Message = require('../../models/Message');
 const Notification = require('../../models/Notification');
@@ -113,7 +114,7 @@ router.get('/chatsPage', commonDataMiddleware, async (req, res) => {
 });
 
 
-router.post('/start-conversation', validate({
+router.post('/start-conversation', requireNotBanned, validate({
   recipientId: { type: 'objectId', required: true, label: 'Собеседник' },
 }), async (req, res) => {
   const currentUserId = req.session.userId; // Получаем ID текущего пользователя из сессии
@@ -222,7 +223,7 @@ router.get('/getNewMessages', async (req, res) => {
 
 // Единственный маршрут, где не было ни одной проверки: recipientId уходил прямо
 // в условие $or поиска диалога, а длина сообщения ничем не ограничивалась.
-router.post('/sendMessage', validate({
+router.post('/sendMessage', requireNotBanned, validate({
   recipientId: { type: 'objectId', required: true, label: 'Собеседник' },
   content: { type: 'string', required: true, min: 1, max: 5000, label: 'Сообщение' },
 }), async (req, res) => {

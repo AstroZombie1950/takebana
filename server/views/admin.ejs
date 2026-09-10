@@ -20,22 +20,56 @@
     </div>
 
     <div class="tk-adm__tools">
-      <select id="statusFilter" class="tk-field tk-select">
+      <%# Фильтры заведений живут только на своей вкладке: на жалобах у них
+          нет смысла, а скрывать их скриптом — значит держать в разметке то,
+          чего половина посетителей панели никогда не увидит. %>
+      <% if (isAdmin) { %>
+      <select id="statusFilter" class="tk-field tk-select" data-view="establishments">
         <option value="all">Все заведения</option>
         <option value="active">Только активные</option>
         <option value="inactive">Только неактивные</option>
       </select>
 
-      <input type="search" id="searchInput" class="tk-field tk-field--search" placeholder="Поиск по названию" autocomplete="off">
+      <input type="search" id="searchInput" class="tk-field tk-field--search" placeholder="Поиск по названию" autocomplete="off" data-view="establishments">
+      <% } %>
 
+      <select id="reportStatus" class="tk-field tk-select" data-view="reports"<% if (isAdmin) { %> hidden<% } %>>
+        <option value="new">Новые жалобы</option>
+        <option value="resolved">Разобранные</option>
+        <option value="rejected">Отклонённые</option>
+      </select>
+
+      <input type="search" id="peopleSearch" class="tk-field tk-field--search" placeholder="Поиск по имени или почте" autocomplete="off" data-view="people" hidden>
+
+      <% if (isAdmin) { %>
       <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" id="openRepass">Сменить пароль</button>
+      <% } %>
     </div>
   </div>
 
-  <div class="tk-adm__grid" id="fields"></div>
+  <%# Заведения — только администратору: adminRouter всё равно отобьёт
+      модератора по isAdmin. Жалобы и люди доступны обоим. %>
+  <nav class="tk-adm__tabs">
+    <% if (isAdmin) { %>
+    <button type="button" class="tk-adm__tab tk-adm__tab--on" data-tab="establishments">Заведения</button>
+    <% } %>
+    <button type="button" class="tk-adm__tab<% if (!isAdmin) { %> tk-adm__tab--on<% } %>" data-tab="reports">Жалобы<span class="tk-adm__badge" id="reportsBadge" hidden></span></button>
+    <button type="button" class="tk-adm__tab" data-tab="people">Люди</button>
+  </nav>
+
+  <% if (isAdmin) { %>
+  <div class="tk-adm__grid" id="fields" data-view="establishments"></div>
+  <% } %>
+
+  <div class="tk-adm__reports" id="reports" data-view="reports"<% if (isAdmin) { %> hidden<% } %>></div>
+
+  <%# data-grant решает сервер: селектор роли рисуется только администратору,
+      прятать нарисованное на клиенте поздно. %>
+  <div class="tk-adm__reports" id="people" data-view="people" data-grant="<%= isAdmin ? '1' : '0' %>" hidden></div>
 </div>
 
 <!-- Смена пароля администратора -->
+<% if (isAdmin) { %>
 <div class="tk-adm__modal hidden" id="repassModal">
   <div class="tk-adm__modal-card">
     <div class="tk-adm__modal-head">
@@ -54,6 +88,11 @@
   </div>
 </div>
 
-<script src="/admin.js"></script>
+<% } %>
+
+<%# admin.js целиком про заведения. Модератору он не нужен и не грузится:
+    иначе его первый же обработчик упал бы на отсутствующем #fields. %>
+<% if (isAdmin) { %><script src="/admin.js"></script><% } %>
+<script src="/panel-moderation.js"></script>
 </body>
 </html>

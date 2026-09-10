@@ -4,6 +4,9 @@
 #
 #   bash ops/browser-check.sh https://takebana.com
 #   SMOKE_EMAIL=a@b.c SMOKE_PASSWORD=... bash ops/browser-check.sh http://127.0.0.1:3000
+#   SMOKE_ADMIN=1 ... — учётка с правами: добавляет к проверке /panel
+#   SMOKE_PAGES=/userPage/<id>,/stream/<id> — разовые страницы с идентификатором
+#   RUNNER=audit.mjs ... — вместо проверки работоспособности прогнать аудит вёрстки
 #   SHOTS=./shots bash ops/browser-check.sh http://127.0.0.1:3000
 #
 # smoke.sh смотрит на коды ответов. Но страница может отдавать честный 200 и при
@@ -65,4 +68,6 @@ curl -fsS "http://127.0.0.1:${CDP_PORT}/json/version" >/dev/null 2>&1 \
 printf '  проверяем %s\n' "$BASE"
 [[ -n "${SMOKE_EMAIL:-}" ]] || printf '  %s·%s без SMOKE_EMAIL / SMOKE_PASSWORD страницы за входом пропускаются\n' "$c_warn" "$c_off"
 
-CDP_PORT="$CDP_PORT" node "$SCRIPT_DIR/browser/walk.mjs" "$BASE"
+# Какой сценарий гонять: walk.mjs проверяет, что страницы работают,
+# audit.mjs — что они сделаны (адаптив, кликабельность, ссылки, вес).
+CDP_PORT="$CDP_PORT" node "$SCRIPT_DIR/browser/${RUNNER:-walk.mjs}" "$BASE"

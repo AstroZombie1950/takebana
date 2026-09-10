@@ -67,6 +67,33 @@ const StreamSchema = new mongoose.Schema({
     type: String,
     enum: ['web-stream', 'obs'], // 'web-stream' = Daily.co, 'obs' = OBS через RTMP
     default: 'web-stream'
+  },
+  // ── Модерация ───────────────────────────────────────────────────────────────
+  // Метка 18+ ставится вещателем при создании эфира и снимается только
+  // модерацией. Зритель перед входом подтверждает возраст (User.adultConfirmedAt).
+  isAdult: {
+    type: Boolean,
+    default: false
+  },
+  // Эфир, погашенный модерацией. isActive при этом уходит в false, но отдельный
+  // флаг нужен, чтобы вещатель не поднял его обратно тем же ключом как ни в чём
+  // не бывало, а причина осталась видимой и ему, и в разборе жалобы.
+  stoppedByModeration: {
+    type: Boolean,
+    default: false
+  },
+  stopReason: {
+    type: String,
+    default: ''
+  },
+  stoppedAt: {
+    type: Date,
+    default: null
+  },
+  stoppedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
   }
 });
 
@@ -78,6 +105,8 @@ StreamSchema.index({ streamKey: 1 });
 StreamSchema.index({ isActive: 1, streamType: 1, streamProvider: 1 });
 // Уборка мёртвых эфиров перебирает по паре isActive + updatedAt
 StreamSchema.index({ isActive: 1, updatedAt: 1 });
+// Погашенные модерацией — отдельный список в панели, строк единицы
+StreamSchema.index({ stoppedByModeration: 1 }, { partialFilterExpression: { stoppedByModeration: true } });
 // Сопоставление комнаты Daily.co с эфиром
 StreamSchema.index({ dailyRoomName: 1 });
 

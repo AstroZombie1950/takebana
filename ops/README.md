@@ -9,52 +9,84 @@
 | `provision.sh` | Настройка чистого сервера: пакеты, пользователь, ssh, ufw, Node, pm2, MongoDB, nginx, ротация логов |
 | `deploy.sh` | Деплой: код, зависимости, перезапуск pm2, проверка живости, автооткат |
 | `backup.sh` | Бэкап базы и файлов, ротация, проверка восстановления |
-| `smoke.sh` | Проверка живого сервера снаружи: 40 пунктов, каждый — из аудита |
-| `browser-check.sh` | Открывает страницы живым Chrome и ловит то, чего не видит `smoke.sh` |
+| `smoke.sh` | Проверка живого сервера снаружи: 50 пунктов, каждый — из аудита |
+| `browser-check.sh` | Открывает страницы живым Chrome и ловит то, чего не видит `smoke.sh`. С `RUNNER=audit.mjs` — аудит вёрстки в четырёх ширинах |
 | `browser/` | Драйвер DevTools Protocol и обход страниц (без зависимостей, Node 22+) |
 | `gen-secrets.sh` | Генерация `SESSION_SECRET` и `RTMP_PUBLISH_SECRET` |
 | `ecosystem.config.js` | Конфиг pm2 |
 | `nginx/` | Конфиг nginx и общие заголовки прокси |
 
-## Порядок в день переезда
+## Кто что запускает
+
+`provision.sh` заводит пользователя `takebana` без sudo: от него работает
+приложение, лишние права ему не нужны. Отсюда два окна на всю работу.
+
+| Что | Пользователь |
+|---|---|
+| `chown`, `backup.sh`, `provision.sh`, nginx, перезагрузки | **root** |
+| `.env`, `deploy.sh`, `seed:admin`, `pm2` | **takebana** |
+
+`deploy.sh` от root запускаться отказывается — приложение не должно работать
+с правами root. `sudo` в командах ниже не нужен: системное делается из
+root-сессии, где вы и так root.
+
+## Обычный деплой
+
+Из окна `takebana`:
 
 ```bash
-# 1. На сервере, от root
+cd /srv/takebana
+bash ops/deploy.sh
+```
+
+Скрипт сам подтянет код (`git reset --hard origin/main` — локальные правки на
+сервере затираются), поставит зависимости, перезапустит pm2, дождётся `/healthz`
+и откатится, если приложение не ответит.
+
+## Порядок на чистом сервере
+
+Проделано 9 сентября 2026 при переезде; полный разбор с граблями —
+в `docs/STATUS.md`, запись за этот день.
+
+```bash
+# 1. root: система и обновления
+apt update && apt upgrade -y          # на вопрос про sshd_config — keep the local version
 git clone <репозиторий> /srv/takebana
 cd /srv/takebana
 DOMAIN=takebana.com bash ops/provision.sh
 
-# 2. Проверить вход в НОВОМ окне терминала, старое не закрывать
+# 2. Проверить вход в НОВОМ окне, старое не закрывать
 ssh takebana@<IP>
 
-# 3. Окружение
-sudo chown -R takebana:takebana /srv/takebana
-sudo -u takebana -i
+# 3. root: права на каталог
+chown -R takebana:takebana /srv/takebana
+
+# 4. takebana: окружение
 cd /srv/takebana
 cp server/.env.example server/.env
 bash ops/gen-secrets.sh --write server/.env    # SESSION_SECRET и RTMP_PUBLISH_SECRET
-nano server/.env                               # START_SERVER=prod, ключи Daily и Google
+nano server/.env                               # START_SERVER=prod, NODE_ENV=production,
+                                               # PLAYER_VIDEO=https://<домен>, ключи Daily
 
-# 4. Первый деплой
+# 5. takebana: первый деплой и админ
 bash ops/deploy.sh
-
-# 5. Первый админ — без него в /panel не попасть
 cd server && npm run seed:admin -- --email you@example.com && cd ..
 
-# 6. Бэкапы
-sudo bash ops/backup.sh --install-cron
-sudo bash ops/backup.sh && sudo bash ops/backup.sh --verify
+# 6. root: бэкапы
+bash ops/backup.sh --install-cron
+bash ops/backup.sh && bash ops/backup.sh --verify
 
-# 7. Сертификат — ДО переключения DNS, проверка идёт через DNS Cloudflare
-sudo CLOUDFLARE_API_TOKEN=<токен Zone:DNS:Edit> bash ops/provision.sh --tls
+# 7. root: сертификат — ДО переключения DNS, проверка через DNS Cloudflare
+CLOUDFLARE_API_TOKEN=<токен Zone:DNS:Edit> LETSENCRYPT_EMAIL=<почта> \
+  bash ops/provision.sh --tls
 
-# 8. Проверка ДО переключения: домен принудительно резолвится в новый IP
-bash ops/smoke.sh https://takebana.com <новый-IP> --login
+# 8. С рабочей машины: проверка ДО переключения, домен резолвится в новый IP
+SMOKE_EMAIL=... SMOKE_PASSWORD=... bash ops/smoke.sh https://takebana.com <новый-IP> --login
 
-# 9. Переключить A и AAAA в Cloudflare. mail и MX не трогать.
+# 9. Переключить A и AAAA в DNS. mail, MX, smtp, pop, ftp не трогать.
 
-# 10. Проверка после переключения, теперь уже без подмены адреса
-bash ops/smoke.sh https://takebana.com --login --rtmp
+# 10. Проверка после переключения, уже без подмены адреса
+SMOKE_EMAIL=... SMOKE_PASSWORD=... bash ops/smoke.sh https://takebana.com --login
 SMOKE_EMAIL=... SMOKE_PASSWORD=... bash ops/browser-check.sh https://takebana.com
 ```
 
@@ -80,10 +112,37 @@ SMOKE_EMAIL=... SMOKE_PASSWORD=... bash ops/browser-check.sh https://takebana.co
 bash ops/browser-check.sh https://takebana.com
 SMOKE_EMAIL=a@b.c SMOKE_PASSWORD=... bash ops/browser-check.sh http://127.0.0.1:3000
 SHOTS=./shots bash ops/browser-check.sh http://127.0.0.1:3000   # ещё и скриншоты
+SMOKE_ADMIN=1 ...                                              # добавит /panel
+SMOKE_PAGES=/stream/<id>,/userPage/<id> ...                    # страницы с идентификатором
 ```
 
 Нужен установленный Chrome и Node 22+ — WebSocket в нём встроенный, поэтому
 драйвер обходится без единой зависимости. Код возврата — число найденных проблем.
+
+### Аудит вёрстки
+
+`walk.mjs` отвечает на вопрос «страница работает?». На вопрос «страница
+сделана?» отвечает `audit.mjs` — тот же Chrome, но каждая страница
+открывается в четырёх ширинах (1440, 1280, 768, 390) и проверяется на:
+
+- горизонтальную прокрутку — с именами элементов, которые вылезли за экран,
+- зоны нажатия меньше пальца (только на планшете и телефоне; ссылки внутри
+  абзацев не считаются — там строка не должна разъезжать),
+- ссылки и кнопки в никуда: пустой `href`, `href="#"`, кнопка без подписи,
+- картинки без `width`/`height` и втрое крупнее показа,
+- текст цвета фона,
+- блокирующие скрипты в `<head>` и внешние хосты,
+- битые внутренние ссылки: все `href` собираются со всех страниц и проверяются.
+
+```bash
+RUNNER=audit.mjs SHOTS=./shots SMOKE_EMAIL=a@b.c SMOKE_PASSWORD=... \
+  bash ops/browser-check.sh http://127.0.0.1:3000
+
+AUDIT_PAGES=/streaming ...   # ограничить разбор одной страницей
+```
+
+Рядом со скриншотами кладётся `audit.json` — все находки и статусы ссылок
+машинно-читаемо. Скриншоты называются по ширине: `390_streaming.png`.
 
 ## Что стоит знать заранее
 
@@ -124,6 +183,22 @@ this.isLocal = this.ip === '127.0.0.1' || this.ip === '::1' || this.ip == '::fff
 
 **Первый запуск `provision.sh` закрывает вход по паролю.** Пока не проверите
 `ssh takebana@<IP>` в отдельном окне, текущую сессию не закрывайте.
+
+**`PLAYER_VIDEO` должен быть боевым доменом.** Из него собирается адрес потока
+для зрителя (`routes/streaming/streamPages.js`). Дефолтный `http://localhost:8000`
+отправит браузер зрителя на его собственную машину, а на HTTPS-странице это ещё
+и заблокируется как mixed content. nginx проксирует `/live/`, `*.m3u8` и `*.ts`
+на медиасервер сам.
+
+**Порядок загрузки конфигурации — это поведение.** `dotenv` подключается первой
+строкой `app.js`. Когда он стоял ниже проверки `START_SERVER`, `trust proxy` не
+включался, сессионная cookie с флагом `Secure` не выдавалась и войти не мог
+никто — при том, что `/login` отвечал 200, а диагностика молчала, потому что
+сама стояла под тем же неверным условием. Ловится `smoke.sh --login` снаружи.
+
+**Версии на jammy старше, чем кажется.** nginx 1.18 не знает директиву
+`http2 on` (она с 1.25.1) — HTTP/2 включается параметром `listen`. mongod
+помечается `active` раньше, чем открывает порт. Обе грабли обойдены в скриптах.
 
 **Бэкапы лежат на том же диске.** Это защита от ошибки, а не от потери сервера.
 Отправку наружу (R2 или S3) добавляем отдельным шагом.

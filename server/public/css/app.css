@@ -812,6 +812,60 @@ body.tk-app {
   color: var(--tk-muted);
 }
 
+/* Полоса ограниченного аккаунта: под шапкой, на всю ширину, киноварью по краю.
+ * Не всплывашка — она должна висеть, пока ограничение действует. */
+.tk-banned {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--tk-rule);
+  border-left: 3px solid var(--tk-accent);
+  background: rgba(227, 66, 52, .08);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--tk-beige);
+}
+
+.tk-banned b {
+  font-family: Oswald, sans-serif;
+  font-weight: 500;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--tk-accent);
+}
+
+/* Метка 18+ и подобные переключатели: подпись рядом с квадратом, а не над ним,
+ * иначе строка читается как заголовок поля, которого нет. */
+.tk-form__toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-form__toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--tk-accent);
+  cursor: pointer;
+}
+
+.tk-form__note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--tk-muted);
+}
+
 /* ── Панель внутри окна: аватар, галерея, безопасность ── */
 .tk-panel {
   padding: 16px;
@@ -1251,3 +1305,24 @@ body.tk-app {
   .tk-call__body { padding: 14px 16px 16px; }
   .tk-avatar-row { flex-direction: column; }
 }
+
+/* Бургер, язык, логотип и язычок боковой панели: по одной из сторон они уже
+ * пальца. Увеличиваем зону нажатия, не трогая рисунок. */
+@media (max-width: 1024px) {
+  .tk-ahead__burger { width: 40px; height: 40px; }
+  .tk-ahead__lang-btn { min-height: 36px; padding: 6px 8px; }
+  .tk-ahead__logo { height: 34px; padding: 3px 0; }
+  .tk-aside__toggle { width: 34px; }
+}
+
+/* На узком экране язычок панели висел посреди левого края и наезжал на контент:
+ * на каталоге он срезал первый знак у счётчика стримеров. Уводим его вниз —
+ * там пусто, а на странице эфира ярлычок чата стоит справа и не сталкивается. */
+@media (max-width: 640px) {
+  .tk-aside__toggle {
+    top: auto;
+    bottom: 16px;
+    transform: none;
+  }
+}
+

@@ -179,6 +179,117 @@ body {
   color: var(--tk-muted);
 }
 
+/* ── Вкладки: заведения и жалобы ──────────────────────────────────────── */
+/* display: grid в правилах ниже сильнее браузерного [hidden] { display: none },
+ * поэтому скрытая вкладка продолжала показываться. Гасим явно. */
+.tk-adm__grid[hidden],
+.tk-adm__reports[hidden] { display: none; }
+
+/* У модератора вкладок нет — ему видны только жалобы, и шаблон их не рисует. */
+.tk-adm__tabs {
+  margin-top: 26px;
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-adm__tab {
+  padding: 10px 18px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--tk-muted);
+  /* Полоса снизу рисуется всегда, меняется только цвет: иначе активная
+   * вкладка сдвигала бы соседние на пиксель при переключении. */
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tk-adm__tab:hover { color: var(--tk-beige); }
+
+.tk-adm__tab--on {
+  color: var(--tk-paper);
+  border-bottom-color: var(--tk-accent);
+}
+
+.tk-adm__badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+
+/* ── Жалобы ───────────────────────────────────────────────────────────── */
+/* В одну колонку и уже сетки заведений: жалобу читают текстом, а строка
+ * в 340 пикселей для этого коротка. */
+.tk-adm__reports {
+  margin-top: 26px;
+  display: grid;
+  gap: 16px;
+  max-width: 760px;
+}
+
+.tk-adm__when {
+  flex: none;
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  letter-spacing: .1em;
+  color: var(--tk-muted);
+}
+
+.tk-adm__report-target,
+.tk-adm__report-comment,
+.tk-adm__report-from {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.tk-adm__report-target b { font-weight: 700; }
+
+.tk-adm__report-comment {
+  padding-left: 12px;
+  border-left: 2px solid var(--tk-rule);
+  color: var(--tk-beige);
+}
+
+.tk-adm__report-from {
+  margin-bottom: 0;
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+.tk-adm__gone { color: var(--tk-muted); }
+
+/* Карточка человека: роль справа в шапке карточки, как статус у заведения. */
+.tk-adm__person .tk-adm__card-head { margin-bottom: 10px; }
+
+/* Стрелке .tk-select нужно место справа: сокращаем отступы, но не тот,
+ * под которым она нарисована, иначе текст роли лезет на неё. */
+.tk-adm__person .role {
+  flex: none;
+  width: auto;
+  padding: 5px 32px 5px 10px;
+  font-size: 13px;
+  background-position: right 10px center;
+  background-size: 14px;
+}
+
+/* Поле причины тянется, кнопки прижимаются к правому краю строки. */
+.tk-adm__acts .reason {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
 /* ── Смена пароля ─────────────────────────────────────────────────────── */
 .tk-adm__modal {
   position: fixed;

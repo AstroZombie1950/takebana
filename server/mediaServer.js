@@ -128,22 +128,52 @@ nms.on('prePublish', (id, streamPath, args) => {
     rejectUnknownStreamKey(id, streamKey);
 });
 
-// Отклоняем публикацию, если такого ключа нет в базе. Проверка асинхронная:
-// сессия успевает открыться и закрывается следом — этого достаточно, чтобы
-// поток не начал раздаваться.
+// Отклоняем публикацию, если ключ неизвестен, эфир погашен модерацией или
+// вещатель ограничен. Проверка асинхронная: сессия успевает открыться
+// и закрывается следом — этого достаточно, чтобы поток не начал раздаваться.
+//
+// Без проверки бана ограничение обходилось целиком: HTTP-маршруты вещания
+// закрыты requireNotBanned, но OBS в них не ходит — он подключается прямо
+// к 1935 с ключом, который у забаненного никуда не делся.
 async function rejectUnknownStreamKey(id, streamKey) {
     try {
         const Stream = require('./models/Stream');
-        const known = await Stream.exists({ streamKey });
-        if (known) return;
+        const User = require('./models/User');
 
-        console.warn(`[mediaServer] публикация отклонена: ключ ${streamKey} не найден`);
-        const session = nms.getSession(id);
-        if (session && typeof session.reject === 'function') session.reject();
+        const stream = await Stream.findOne({ streamKey })
+            .select('userId stoppedByModeration')
+            .lean();
+
+        if (!stream) return dropSession(id, `ключ ${streamKey} не найден`);
+        if (stream.stoppedByModeration) return dropSession(id, `эфир ${streamKey} погашен модерацией`);
+
+        const owner = await User.findById(stream.userId).select('banned').lean();
+        if (owner && owner.banned) return dropSession(id, `вещатель эфира ${streamKey} ограничен`);
     } catch (e) {
         // База недоступна — не роняем приём: подпись остаётся основной защитой
         console.error('[mediaServer] проверка ключа не удалась:', e?.message || e);
     }
+}
+
+function dropSession(id, why) {
+    console.warn(`[mediaServer] публикация отклонена: ${why}`);
+    const session = nms.getSession(id);
+    if (session && typeof session.reject === 'function') session.reject();
+}
+
+// Разрыв уже идущего вещания: модератор погасил эфир или ограничил вещателя.
+// Без этого «стоп-эфир» оставался косметикой — в базе эфир помечен погашенным,
+// а OBS продолжает лить, HLS продолжает писать сегменты и зритель их получает.
+function dropPublisher(streamKey) {
+    const live = activeStreams.get(streamKey);
+    if (!live) return false;
+
+    dropSession(live.id, `вещание ${streamKey} прервано модерацией`);
+    activeStreams.delete(streamKey);
+    // donePublish на отклонённой сессии приходит не всегда, поэтому конвейер
+    // гасим сами: stop() у себя проверяет, есть ли что останавливать.
+    hls.stop(streamKey);
+    return true;
 }
 
 // Сюда попадаем только после успешной проверки подписи.
@@ -197,5 +227,6 @@ process.on('uncaughtException', (err) => {
 module.exports = {
     nms,
     activeStreams,
-    setIO
+    setIO,
+    dropPublisher
 };

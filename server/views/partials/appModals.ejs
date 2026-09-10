@@ -1,7 +1,8 @@
 <%#
-  Модальные окна каркаса приложения: настройки эфира, профиль, уведомления
-  и два окна звонка. Живут в шапке, потому что открываются с любой страницы
-  кабинета. Стили — раздел «Модальные окна» в app.css, поведение — tk-app.js.
+  Модальные окна каркаса приложения: настройки эфира, профиль, уведомления,
+  два окна звонка и жалоба. Живут в шапке, потому что открываются с любой
+  страницы кабинета. Стили — раздел «Модальные окна» в app.css,
+  поведение — tk-app.js, у жалобы своё report.js.
 
   Идентификаторы и атрибуты lng сохранены от прежней вёрстки: на них завязаны
   скрипт и словарь. Менялась только разметка и оформление.
@@ -44,6 +45,16 @@
           <div class="tk-form__row">
             <label class="tk-form__label" for="streamDescription" lng="116">Описание <span class="tk-form__hint">(необязательно)</span></label>
             <textarea id="streamDescription" class="tk-field" rows="4" placeholder="Описание трансляции (необязательно)" lng="227"></textarea>
+          </div>
+
+          <%# Без lng: словарь уходит вместе с последними двумя страницами
+              на Tailwind, новые подписи в него не добавляем. %>
+          <div class="tk-form__row">
+            <label class="tk-form__toggle">
+              <input type="checkbox" id="streamAdult">
+              <span>Контент 18+</span>
+            </label>
+            <p class="tk-form__note">Зритель подтвердит возраст перед входом. Снять метку может только модерация.</p>
           </div>
         </div>
       <% } else { %>
@@ -278,3 +289,44 @@
     </div>
   </div>
 </div>
+
+<!-- Жалоба: открывается кнопкой с data-report на любой странице кабинета -->
+<div class="tk-modal hidden" id="reportModal">
+  <div class="tk-modal__card">
+    <div class="tk-modal__head">
+      <h3 class="tk-modal__title">Пожаловаться</h3>
+      <button type="button" class="tk-modal__close" id="closeReportModal" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+    </div>
+
+    <div class="tk-modal__body">
+      <div class="tk-form">
+        <p class="tk-form__note" id="reportTarget"></p>
+
+        <div class="tk-form__row">
+          <label class="tk-form__label" for="reportReason">Причина</label>
+          <select id="reportReason" class="tk-field tk-select">
+            <option value="abuse">Оскорбления</option>
+            <option value="spam">Спам</option>
+            <option value="adult">Контент 18+ без метки</option>
+            <option value="violence">Насилие</option>
+            <option value="copyright">Права на контент</option>
+            <option value="other">Другое</option>
+          </select>
+        </div>
+
+        <div class="tk-form__row">
+          <label class="tk-form__label" for="reportComment">Что случилось <span class="tk-form__hint">(необязательно)</span></label>
+          <textarea id="reportComment" class="tk-field" rows="4" maxlength="1000" placeholder="Коротко опишите, что не так"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="tk-modal__foot">
+      <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-btn--block" id="sendReport">Отправить жалобу</button>
+    </div>
+  </div>
+</div>
+
+<script defer src="/report.js"></script>

@@ -32,6 +32,13 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
     const currentUserId = res.locals.currentUser ? res.locals.currentUser._id.toString() : null;
     const isStreamer = currentUserId && currentUserId === stream.userId._id.toString();
 
+    // Гейт 18+. Проверка стоит до всего остального: страница помеченного эфира
+    // не должна ни отдать плеер, ни записать зрителя в комнату, пока возраст
+    // не подтверждён. Вещателя не спрашиваем — метку он поставил сам.
+    if (stream.isAdult && !isStreamer && !(res.locals.currentUser && res.locals.currentUser.adultConfirmedAt)) {
+      return res.render('ageGate');
+    }
+
     const io = req.app && req.app.get ? req.app.get('io') : null;
 
     // Если это стример и он открыл WEB-страницу — фиксируем тип стрима как Daily/WebRTC

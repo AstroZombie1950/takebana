@@ -73,7 +73,7 @@ const commonDataMiddleware = async (req, res, next) => {
       // Получение данных текущего пользователя
       // (lean/select) чтобы уменьшить нагрузку при каждом F5
       const currentUser = await User.findById(currentUserId)
-        .select('login email avatar gallery streamKey isStreaming')
+        .select('login email avatar gallery streamKey isStreaming banned banReason adultConfirmedAt')
         .lean();
       if (!currentUser) throw new Error('Пользователь не найден');
 
@@ -127,27 +127,23 @@ const commonDataMiddleware = async (req, res, next) => {
         .select('_id isActive')
         .lean();
 
-      if (stream) {
-          res.locals.currentUser = {
-              _id: currentUser._id,
-              displayName: currentUserDisplayName,
-              avatarStyle: currentUserAvatarStyle,
-              hasActiveStream: true, // Есть стрим (активный или на паузе)
-              isPaused: !stream.isActive, // true, если стрим на паузе
-              activeStreamId: stream._id.toString(), // ID текущего стрима
-              gallery: Array.isArray(currentUser.gallery) ? currentUser.gallery : []
-          };
-      } else {
-          res.locals.currentUser = {
-              _id: currentUser._id,
-              displayName: currentUserDisplayName,
-              avatarStyle: currentUserAvatarStyle,
-              hasActiveStream: false, // Нет активного или паузного стрима
-              isPaused: false,
-              activeStreamId: null,
-              gallery: Array.isArray(currentUser.gallery) ? currentUser.gallery : []
-          };
-      }
+      // Общая часть собирается один раз, а от наличия стрима зависят ровно три
+      // поля. Прежде объект дублировался целиком в обеих ветках, и новое поле
+      // легко было дописать в одну из них: подтверждение возраста именно так
+      // и потерялось — в шаблон приходило только то, что перечислено здесь.
+      res.locals.currentUser = {
+          _id: currentUser._id,
+          displayName: currentUserDisplayName,
+          avatarStyle: currentUserAvatarStyle,
+          gallery: Array.isArray(currentUser.gallery) ? currentUser.gallery : [],
+          // Модерация: гейт 18+ и ограничение аккаунта
+          adultConfirmedAt: currentUser.adultConfirmedAt || null,
+          banned: !!currentUser.banned,
+          banReason: currentUser.banReason || '',
+          hasActiveStream: !!stream,               // стрим есть — активный или на паузе
+          isPaused: stream ? !stream.isActive : false,
+          activeStreamId: stream ? stream._id.toString() : null
+      };
 
       res.locals.subscriptions = subscriptions;
 

@@ -1,0 +1,57 @@
+<%#
+  Гейт 18+. Сюда попадает только вошедший зритель помеченного эфира, поэтому
+  каркас кабинетный, как на остальных страницах за входом: гостевая шапка
+  предлагала бы войти тому, кто уже вошёл.
+%>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<%- include('partials/tkHead', { title: 'Подтверждение возраста — Takebana' }) %>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/status.css">
+<script src="/toast.js"></script>
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-status">
+      <span class="tk-status__kicker">Ограничение по возрасту</span>
+      <h1 class="tk-status__title">Эфир помечен 18+</h1>
+      <p class="tk-status__text">
+        Вещатель отметил этот эфир как контент для взрослых. Чтобы открыть его,
+        подтвердите, что вам есть 18 лет. Спросим один раз — дальше эфиры
+        с этой меткой будут открываться сразу.
+      </p>
+
+      <div class="tk-status__acts">
+        <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="ageConfirm">Мне есть 18 лет</button>
+        <a href="/streaming" class="tk-btn tk-btn--outline tk-btn--sm">Вернуться в каталог</a>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Подтверждение уходит на сервер и запоминается в аккаунте, поэтому после
+  // ответа страница просто перезагружается: маршрут эфира пропустит.
+  document.getElementById('ageConfirm').addEventListener('click', async function () {
+    this.disabled = true;
+    try {
+      const res = await fetch('/api/age/confirm', { method: 'POST' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      location.reload();
+    } catch (err) {
+      this.disabled = false;
+      toast('Не удалось подтвердить возраст. Попробуйте ещё раз.', 'error');
+    }
+  });
+</script>
+<script defer src="/tk-app.js"></script>
+</body>
+</html>

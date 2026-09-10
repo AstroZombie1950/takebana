@@ -1,3 +1,15 @@
+// Переменные окружения — первой строкой, до любого чтения process.env.
+//
+// Раньше dotenv грузился на 70 строк ниже, уже после проверки START_SERVER,
+// и та всегда видела пустое значение: trust proxy не включался, а cookie
+// сессии всё равно получала флаг Secure — её выставляет config/session.js,
+// который грузится позже и значение уже видит. Итог: /login отвечает 200,
+// Set-Cookie не приходит, войти не может никто. Порядок здесь — поведение.
+//
+// Путь можно переопределить: DOTENV_CONFIG_PATH=env/.env.prod npm start
+// quiet: dotenv 17 иначе печатает рекламную строку при каждой загрузке.
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env', quiet: true });
+
 // Подключение необходимых модулей
 const express = require('express');
 const app = express();
@@ -64,14 +76,6 @@ if (process.env.START_SERVER === 'prod') {
 
 const path = require('path');
 
-// Allow selecting env file without editing code:
-// - PowerShell:  $env:DOTENV_CONFIG_PATH="env/.env.prod"; npm start
-// - CMD:         set DOTENV_CONFIG_PATH=env\.env.prod && npm start
-// Fallback: root .env
-// quiet: dotenv 17 иначе печатает рекламную строку при каждой загрузке —
-// в логах pm2 она появлялась бы на каждом старте и в каждом скрипте.
-require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env', quiet: true });
-
 
 
 const mediaServer = require('./mediaServer');
@@ -113,6 +117,7 @@ app.use(require('./routes/userRoutes'));
 app.use(require('./routes/establishmentsRouter'));
 app.use(require('./routes/adminRouter'));
 app.use(require('./routes/streaming'));
+app.use(require('./routes/moderation'));
 
 // Daily.co API роуты
 app.use('/api', require('./routes/dailyApiRoutes'));

@@ -30,6 +30,7 @@ APP_DIR="${APP_DIR:-/srv/takebana}"
 NODE_MAJOR="${NODE_MAJOR:-24}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
 SWAP_SIZE="${SWAP_SIZE:-2G}"
+MONGO_PING_TIMEOUT="${MONGO_PING_TIMEOUT:-60}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -288,8 +289,20 @@ mongodb() {
 
   # Проверка не для галочки: пакет ставится и на процессорах без AVX,
   # а падает уже при старте.
+  #
+  # Ждём, а не стучимся сразу: юнит mongod — Type=simple, systemd считает службу
+  # активной с первой секунды, а WiredTiger в это время ещё поднимает файлы и
+  # порт не слушает. Без ожидания первый запуск на чистой машине падает здесь.
   if command -v mongosh >/dev/null 2>&1; then
-    mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' >/dev/null && ok "ping проходит"
+    local deadline=$((SECONDS + MONGO_PING_TIMEOUT))
+    while (( SECONDS < deadline )); do
+      if mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' >/dev/null 2>&1; then
+        ok "ping проходит"
+        return 0
+      fi
+      sleep 2
+    done
+    die "mongod активен, но за ${MONGO_PING_TIMEOUT}с не ответил на ping: journalctl -u mongod -n 50"
   fi
 }
 
@@ -367,12 +380,45 @@ nginx_setup() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Параметры TLS, на которые ссылается шаблон nginx.
+#
+# certbot кладёт их сам, но только в режиме --nginx, а мы им не пользуемся:
+# он переписывает конфиг, а конфиг у нас свой, из ops/nginx. Раньше файл
+# скачивался из репозитория certbot — ссылка умерла, когда там переставили
+# каталоги, и провижининг падал уже после выпуска сертификата. Четыре
+# директивы дешевле держать у себя, чем зависеть от чужого дерева файлов.
+# Значения — Mozilla intermediate, те же, что кладёт certbot.
+tls_params() {
+  if [[ ! -f /etc/letsencrypt/options-ssl-nginx.conf ]]; then
+    cat > /etc/letsencrypt/options-ssl-nginx.conf <<'NGINX_TLS'
+ssl_session_cache shared:le_nginx_SSL:10m;
+ssl_session_timeout 1440m;
+ssl_session_tickets off;
+
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_prefer_server_ciphers off;
+
+ssl_ciphers "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-CHACHA20-POLY1305";
+NGINX_TLS
+    ok "options-ssl-nginx.conf записан"
+  fi
+
+  # Нужен из-за DHE-шифров в списке выше. Генерация занимает секунды и делается
+  # один раз: файл переживает перевыпуск сертификата.
+  if [[ ! -f /etc/letsencrypt/ssl-dhparams.pem ]]; then
+    openssl dhparam -out /etc/letsencrypt/ssl-dhparams.pem 2048 2>/dev/null
+    ok "ssl-dhparams.pem сгенерирован"
+  fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 tls() {
   step "TLS: сертификат Let's Encrypt"
 
   if [[ -d "/etc/letsencrypt/live/${DOMAIN}" ]]; then
     skip "сертификат уже есть, перевыпуск не нужен"
     certbot certificates 2>/dev/null | grep -E "Certificate Name|Expiry" | sed 's/^/    /'
+    tls_params
     nginx_setup
     return 0
   fi
@@ -431,13 +477,7 @@ tls() {
 
   ok "сертификат выпущен"
 
-  # Параметры TLS, на которые ссылается шаблон nginx. certbot кладёт их сам,
-  # но только в режиме --nginx, а мы им не пользуемся.
-  [[ -f /etc/letsencrypt/options-ssl-nginx.conf ]] || \
-    curl -fsS -o /etc/letsencrypt/options-ssl-nginx.conf \
-      https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot/nginx/_internal/tls_configs/options-ssl-nginx.conf
-  [[ -f /etc/letsencrypt/ssl-dhparams.pem ]] || \
-    openssl dhparam -out /etc/letsencrypt/ssl-dhparams.pem 2048
+  tls_params
 
   systemctl is-enabled --quiet certbot.timer && ok "автопродление: certbot.timer активен" \
     || warn "certbot.timer выключен — сертификат не продлится сам"

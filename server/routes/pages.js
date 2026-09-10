@@ -49,7 +49,13 @@ router.get('/panel', async (req, res) => {
   if (req.session && req.session.userId) {
       const user = await User.findById(req.session.userId);
       if (user && (user.role === 'admin' || user.role === 'moderator')) {
-          res.render('admin', { title: 'Панель администрирования'});
+          // Модератору панель открыта, но заведения ему не показываются:
+          // adminRouter всё равно отобьёт его по isAdmin, и вкладка, которая
+          // отвечает «Access denied» на каждое действие, хуже отсутствующей.
+          res.render('admin', {
+              title: 'Панель администрирования',
+              isAdmin: user.role === 'admin'
+          });
       } else {
           res.redirect('/main'); // Редирект на домашнюю страницу
       }
