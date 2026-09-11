@@ -61,7 +61,7 @@ function registerSockets(io) {
     for (const [id, c] of activeCalls) if (isParty(c, userId)) finishCall(id);
   }
 
-  io.on('connection', async (socket) => {
+  io.on('connection', (socket) => {
     console.log('[socket] connected id=', socket.id, 'userId=', socket.data.userId);
 
     // Presence connect (только для аутентифицированных)
@@ -76,9 +76,16 @@ function registerSockets(io) {
         const count = (userConnections.get(userId) || 0) + 1;
         userConnections.set(userId, count);
         if (count === 1) {
-          await User.updateOne({ _id: userId }, { $set: { isOnline: true } });
-          io.to(`presence:${userId}`).emit('presence:update', { userId, isOnline: true });
-          console.log('[presence] user online', userId);
+          // Без await: обработчики ниже обязаны встать в момент подключения.
+          // Пока ждали запись в базу, первый сокет пользователя терял всё, что
+          // клиент слал сразу после connect, — вход в комнату эфира в том числе.
+          // Страницы эфира прятали это за setTimeout(100) перед входом.
+          User.updateOne({ _id: userId }, { $set: { isOnline: true } })
+            .then(() => {
+              io.to(`presence:${userId}`).emit('presence:update', { userId, isOnline: true });
+              console.log('[presence] user online', userId);
+            })
+            .catch((e) => console.error('presence connect error:', e));
         }
       }
     } catch (e) {

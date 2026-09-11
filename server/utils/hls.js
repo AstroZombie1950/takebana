@@ -27,7 +27,12 @@ const PLAYLIST_SEGMENTS = 6;   // ~12 секунд в плейлисте: мен
 const RESTART_DELAY_MS = 2000;
 const MAX_RESTARTS = 5;        // дальше молчим: чинить надо не перезапуском
 
-// streamKey -> { proc, restarts, stopping, timer }
+// Транскод 720p30 стоит ~0,25 ядра M2 на эфир (вход 1080p или 60 fps —
+// до 0,4), на vCPU сервера — примерно вдвое больше. Три эфира оставляют
+// Node и Mongo минимум ядро из четырёх. Сверх лимита видео копируется.
+const MAX_TRANSCODES = 3;
+
+// streamKey -> { proc, restarts, stopping, timer, transcode }
 const jobs = new Map();
 
 function dirFor(streamKey) {
@@ -51,16 +56,28 @@ function clean(dir) {
     }
 }
 
-// Транскод только по звуку: видео из OBS уже H.264 и копируется как есть.
-// Звук пережимаем в AAC безусловно — HLS на iOS другой не принимает, а
+// Видео пережимаем, потому что при копировании сегмент режется только по
+// ключевому кадру OBS: при интервале «авто» это 8,3 с вместо двух — задержка
+// под полминуты. Заодно выход не зависит от настроек вещателя: не больше 720p
+// и 30 кадров (вниз, без растяжения), 2500 кбит/с — на эту цифру посчитан
+// трафик CDN. -fpsmax есть с ffmpeg 4.4, на сервере 4.4.2 из apt.
+//
+// Звук пережимаем в AAC всегда — HLS на iOS другой не принимает, а
 // перекодирование одной аудиодорожки стоит доли процента ядра.
-function ffmpegArgs(streamKey, dir) {
+const VIDEO_TRANSCODE = [
+    '-vf', "scale=-2:'min(720,ih)'", '-fpsmax', '30',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p',
+    '-b:v', '2500k', '-maxrate', '2500k', '-bufsize', '5000k',
+    '-force_key_frames', `expr:gte(t,n_forced*${SEGMENT_SECONDS})`, '-sc_threshold', '0',
+];
+
+function ffmpegArgs(streamKey, dir, transcode) {
     return [
         '-nostdin', '-hide_banner', '-loglevel', 'error',
         '-fflags', 'nobuffer',
         '-i', `rtmp://127.0.0.1:1935/live/${streamKey}`,
 
-        '-c:v', 'copy',
+        ...(transcode ? VIDEO_TRANSCODE : ['-c:v', 'copy']),
         '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
 
         '-f', 'hls',
@@ -77,7 +94,7 @@ function ffmpegArgs(streamKey, dir) {
 
 function spawnFfmpeg(streamKey, job) {
     const dir = dirFor(streamKey);
-    const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir), { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.transcode), { stdio: ['ignore', 'ignore', 'pipe'] });
     job.proc = proc;
 
     proc.stderr.on('data', (chunk) => {
@@ -128,10 +145,15 @@ function start(streamKey) {
     // Сегменты прошлого эфира: плеер иначе подхватит их как начало текущего.
     clean(dir);
 
-    const job = { proc: null, restarts: 0, stopping: false, timer: null };
+    // Останавливаемый конвейер уже не в счёте: его ffmpeg выходит до 5 с.
+    let transcoding = 0;
+    for (const j of jobs.values()) if (j.transcode && !j.stopping) transcoding++;
+    const transcode = transcoding < MAX_TRANSCODES;
+
+    const job = { proc: null, restarts: 0, stopping: false, timer: null, transcode };
     jobs.set(streamKey, job);
     spawnFfmpeg(streamKey, job);
-    console.log(`[hls ${streamKey}] транскод запущен → /live/${streamKey}/index.m3u8`);
+    console.log(`[hls ${streamKey}] ${transcode ? 'транскод' : 'копирование видео, лимит транскодов'} → /live/${streamKey}/index.m3u8`);
 }
 
 function stop(streamKey) {
@@ -152,7 +174,7 @@ function stop(streamKey) {
         jobs.delete(streamKey);
         clean(dirFor(streamKey));
     }
-    console.log(`[hls ${streamKey}] транскод остановлен`);
+    console.log(`[hls ${streamKey}] остановлен`);
 }
 
 function isRunning(streamKey) {

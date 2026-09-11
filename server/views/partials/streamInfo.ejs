@@ -1,0 +1,63 @@
+<%# Шапка эфира — общая у пульта ведущего и страницы зрителя: название, автор,
+    время в эфире, зрители. Под именем ведущему — метка, зрителю — подписка
+    и жалоба. Время и счётчик ведёт /tk-stream.js. %>
+<div class="tk-live__info stream-info">
+  <h1 class="tk-live__title stream-title"><%= stream.title %></h1>
+
+  <div class="tk-live__meta stream-meta">
+    <div class="tk-live__author author-section">
+      <a href="/userPage/<%= user._id %>" class="tk-live__avatar avatar"<% if (!user.avatarStyle.url) { %> style="background: <%= user.avatarStyle.gradient %>;"<% } %>>
+        <% if (user.avatarStyle.url) { %>
+          <img src="<%= user.avatarStyle.url %>" alt="<%= user.displayName %>">
+        <% } else { %>
+          <%= user.avatarStyle.initial %>
+        <% } %>
+      </a>
+
+      <div class="author-info">
+        <a href="/userPage/<%= user._id %>" class="tk-live__author-name author-name"><%= user.displayName %></a>
+
+        <% if (isStreamer) { %>
+          <span class="tk-live__role streamer-badge">Ведущий</span>
+        <% } else { %>
+          <div class="tk-live__author-acts subscribe-section">
+            <% if (isSubscribed) { %>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--xs js-unsubscribe" lng="130">Отписаться</button>
+            <% } else { %>
+              <button type="button" class="tk-btn tk-btn--primary tk-btn--xs js-subscribe" lng="91">Подписаться</button>
+            <% } %>
+
+            <%# Жалоба на эфир: окно живёт в общем партиале шапки. %>
+            <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs"
+                    data-report="stream"
+                    data-report-id="<%= stream._id %>"
+                    data-report-name="<%= stream.title %>">Пожаловаться</button>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="tk-live__stats stats-section">
+      <span class="tk-live__stat live-indicator">
+        <i class="stream-indicator"></i>
+        <span class="live-text">Онлайн</span>
+        <span id="streamDuration" class="duration-text">00:00:00</span>
+      </span>
+
+      <span class="tk-live__stat viewer-count">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>
+        <span class="online__pepole-count">
+          <span class="viewers-number"><%= stream.viewers %></span>
+          <% const _v = Number(stream.viewers) || 0, _d10 = _v % 10, _d100 = _v % 100;
+             const _vw = (_d10 === 1 && _d100 !== 11) ? 'зритель'
+                       : (_d10 >= 2 && _d10 <= 4 && (_d100 < 12 || _d100 > 14)) ? 'зрителя' : 'зрителей'; %>
+          <span class="viewers-text"><%= _vw %></span>
+        </span>
+      </span>
+    </div>
+  </div>
+
+  <% if (stream.description) { %>
+    <p class="tk-live__desc stream-description"><%= stream.description %></p>
+  <% } %>
+</div>

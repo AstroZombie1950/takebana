@@ -83,6 +83,11 @@ export async function newPage() {
                    .map(e => e.params.type + ': ' + e.params.message);
     },
     report() {
+      // Плеер HLS ждёт плейлист, пока эфир не начался (server/public/tk-hls.js):
+      // 404 на index.m3u8 — ожидание, а не ошибка, как и опрос, оборванный
+      // уходом со страницы.
+      const urlOf = (id) => events.find(e => e.method === 'Network.requestWillBeSent' && e.params.requestId === id)?.params.request.url || '';
+      const waiting = (url) => /\/live\/[^/]+\/index\.m3u8$/.test(url);
       const errors = events
         .filter(e => e.method === 'Runtime.consoleAPICalled' && ['error', 'warning'].includes(e.params.type))
         .map(e => e.params.type + ': ' + e.params.args.map(a => a.value ?? a.description ?? a.type).join(' '));
@@ -90,10 +95,11 @@ export async function newPage() {
         .filter(e => e.method === 'Runtime.exceptionThrown')
         .map(e => 'ИСКЛЮЧЕНИЕ: ' + (e.params.exceptionDetails.exception?.description || e.params.exceptionDetails.text));
       const failed = events
-        .filter(e => e.method === 'Network.loadingFailed')
+        .filter(e => e.method === 'Network.loadingFailed' && !waiting(urlOf(e.params.requestId)))
         .map(e => 'СЕТЬ: ' + e.params.errorText + ' ' + (e.params.type || ''));
       const http = events
-        .filter(e => e.method === 'Network.responseReceived' && e.params.response.status >= 400)
+        .filter(e => e.method === 'Network.responseReceived' && e.params.response.status >= 400
+                     && !(e.params.response.status === 404 && waiting(e.params.response.url)))
         .map(e => 'HTTP ' + e.params.response.status + ' ' + e.params.response.url.replace('http://127.0.0.1:3000', ''));
       return { errors, exceptions, failed, http };
     },

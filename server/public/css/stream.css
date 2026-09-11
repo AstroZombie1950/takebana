@@ -173,8 +173,11 @@
   max-width: calc(100% - 70px);
 }
 
+/* display — только через :not(.hidden): иначе он перебьёт .hidden из app.css,
+ * и метки «В эфире» и «на паузе» видны обе сразу. */
+.tk-live__badge:not(.hidden) { display: inline-flex; }
+
 .tk-live__badge {
-  display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 6px 11px;
@@ -234,10 +237,11 @@
   height: 100%;
 }
 
-/* Запасная дорожка лежит под основной и всплывает, только если первая молчит. */
-.tk-live__video--backup { z-index: 1; }
-
-.video-contain-mobile { object-fit: contain; }
+/* Телефон: плеер зрителя выше 16:9, веб-эфир — целиком, без обрезки краёв. */
+@media (max-width: 500px) {
+  .tk-live--viewer .tk-live__player { aspect-ratio: auto; height: 62vh; min-height: 300px; }
+  .tk-live--viewer .tk-live__daily video { object-fit: contain; }
+}
 
 .tk-live__volume {
   position: absolute;

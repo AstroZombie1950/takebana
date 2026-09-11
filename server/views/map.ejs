@@ -4,7 +4,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Takebana Map</title>
     <style>
-      #map1, #map2 {
+      #map2 {
         position: absolute;
         width: 100%;
         height: 100vh;
@@ -16,10 +16,13 @@
         position: relative;
       }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/ol@v8.1.0/dist/ol.js"></script>
+    <%# Карта — своя подложка: public/tk-map.js, MapLibre и pmtiles из /vendor. %>
+    <link rel="stylesheet" href="/vendor/maplibre-gl-6.9.0/maplibre-gl.css">
+    <link rel="stylesheet" href="/css/tk-map.css">
+    <script src="/vendor/pmtiles-4.5.0.js"></script>
+    <script src="/tk-map.js"></script>
     <link rel="stylesheet" href="css/style.css">
 
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.1.0/ol.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
 
@@ -629,8 +632,6 @@ const redirectModal = document.querySelector('.redirect');
 
 
     <div class="layers">
-      <div id="map1"></div>
-      <div class="blue_filter"></div>
       <div id="map2"></div>
     </div>
 
@@ -733,283 +734,62 @@ const redirectModal = document.querySelector('.redirect');
 
 
 
-      // Создаем слой для карты
-      var mapLayer = new ol.layer.Tile({
-        source: new ol.source.OSM()
+      // Карта — public/tk-map.js на своей подложке. Раньше здесь были две
+      // карты OpenLayers друг над другом с плитками общественного сервера
+      // OpenStreetMap, который стал отвечать «Access blocked». Вид — по месту
+      // пользователя, если он разрешит, иначе Белград.
+      window.venueMap = null;
+      TKMap.mount(document.getElementById('map2')).then(function (map) {
+        window.venueMap = map;
+        map.on('hover', function (id, at) { if (id) showMiniCard(id, at); else hideMiniCard(); });
+        map.on('click', openBigCard);
+        map.on('move', loadVenues);
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(function (p) {
+            map.flyTo(p.coords.longitude, p.coords.latitude, 11);
+          });
+        }
+      }).catch(function (e) {
+        console.error('Карта не загрузилась:', e);
       });
-
-      // Создаем источник для маркеров
-      var source = new ol.source.Vector();
-
-
-
-      // Создаем источник для кластеров, используя источник маркеров
-      var clusterSource = new ol.source.Cluster({
-        distance: 40, // Расстояние в пикселях для группировки маркеров
-        source: source
-      });
-
-      // Создаем слой для кластеров
-      var clusters = new ol.layer.Vector({
-        source: clusterSource,
-        style: function(feature) {
-  var size = feature.get('features').length;
-  var style;
-  if (size > 1) {
-    // Если это кластер, отображаем его как круг с числом
-    style = new ol.style.Style({
-      image: new ol.style.Circle({
-        radius: 16, // Увеличьте это значение, чтобы увеличить размер круга.
-        stroke: new ol.style.Stroke({
-          color: '#fff'
-        }),
-        fill: new ol.style.Fill({
-          color: '#666BCF' // Здесь вы можете указать любой цвет, который вам нравится.
-        })
-      }),
-      text: new ol.style.Text({
-        text: size.toString(),
-        offsetY: 1,
-        font: 'bold 15px Inter', // Установите размер и стиль шрифта. 'bold' делает текст жирным, '20px' устанавливает размер шрифта.
-        fill: new ol.style.Fill({
-          color: '#fff' // Цвет текста черный.
-        })
-      })
-    });
-  } else {
-    // Если это отдельный маркер, отображаем его как иконку с названием
-    var originalFeature = feature.get('features')[0];
-    style = new ol.style.Style({
-      image: new ol.style.Icon({
-        anchor: [0.5, 1],
-        src: originalFeature.get('image')
-      }),
-      text: new ol.style.Text({
-        text: originalFeature.get('name'),
-        offsetY: 10,
-        font: 'bold 14px Inter',
-        fill: new ol.style.Fill({
-          color: '#000'
-        }),
-        stroke: new ol.style.Stroke({
-          color: '#fff',
-          width: 2
-        })
-      })
-    });
-  }
-  return style;
-}
-
-      });
-
-      // Создаем первую карту
-      var map1 = new ol.Map({
-        target: 'map1',
-        layers: [mapLayer],
-        view: new ol.View({
-          center: ol.proj.fromLonLat([37.41, 8.82]),
-          zoom: 4
-        })
-      });
-
-      // Создаем вторую карту
-      var map2 = new ol.Map({
-        target: 'map2',
-        layers: [clusters], // Используем слой кластеров
-        view: new ol.View({
-          center: ol.proj.fromLonLat([37.41, 8.82]),
-          zoom: 4
-        })
-      });
-
-      // Проверяем, поддерживает ли браузер геолокацию
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(function(position) {
-          var pos = ol.proj.fromLonLat([position.coords.longitude, position.coords.latitude]);
-          map1.getView().setCenter(pos);
-          map2.getView().setCenter(pos);
-        }, function() {
-          // Если пользователь не дал разрешение на геолокацию, используем координаты Москвы
-          map1.getView().setCenter(ol.proj.fromLonLat([37.618423, 55.751244]));
-          map2.getView().setCenter(ol.proj.fromLonLat([37.618423, 55.751244]));
-        });
-      } else {
-        // Браузер не поддерживает геолокацию, используем координаты Москвы
-        map1.getView().setCenter(ol.proj.fromLonLat([37.618423, 55.751244]));
-        map2.getView().setCenter(ol.proj.fromLonLat([37.618423, 55.751244]));
-      }
-
-
 
       var modal = document.querySelector('.miniBarInfo');
 
-      var isOverMarker = false;
+      // Подсказка при наведении на заведение. hoverId отсекает ответ,
+      // пришедший, когда указатель уже ушёл с маркера.
+      var hoverId = null;
 
-      map2.on('pointermove', function(e) {
-      var pixel = map2.getEventPixel(e.originalEvent);
-      var hit = map2.hasFeatureAtPixel(pixel);
-      map2.getTargetElement().style.cursor = hit ? 'pointer' : '';
-      if (hit) {
-          var feature = map2.forEachFeatureAtPixel(pixel, function(feature) {
-              return feature;
-          });
-          if (feature.get('features').length === 1) {
-              // Если это отдельный маркер и указатель только что наведен на него
-              if (!isOverMarker) {
-                  isOverMarker = true;
-                  var establishment = feature.get('features')[0];
-                  var id = establishment.get('id');
-
-                  // Отправьте запрос на сервер
-                  fetch(`/getEstablishments/${id}`)
-                  .then(response => response.json())
-                  .then(data => {
-                      // Заполните модальное окно данными заведения
-                      document.querySelector('.miniBarInfo .info .text p').innerText = data.name;
-                      document.querySelector('.miniBarInfo .info .text span').innerText = data.address;
-
-                      let open_till
-                      if (localStorage.getItem('lang') == 'ru') {
-                        open_till = 'Открыто до'
-                      } else if (localStorage.getItem('lang') == 'en') {
-                        open_till = 'Open till'
-                      }
-                      
-
-                      document.querySelector('.miniBarInfo .time_stars .opened').innerText = `${open_till} ${data.weekdayHours.close}`;
-
-                      // Если у заведения есть фотографии, обновите src первого изображения и количество фотографий
-                      if (data.photos && data.photos.length > 0) {
-                          document.querySelector('.miniBarInfo .info .photo img').src = data.photos[0];
-                          document.querySelector('.miniBarInfo .info .photo .count').innerText = data.photos.length;
-                      } else {
-                          // Если у заведения нет фотографий, оставьте src первого изображения пустым и установите количество фотографий равным 0
-                          document.querySelector('.miniBarInfo .info .photo img').src = '';
-                          document.querySelector('.miniBarInfo .info .photo .count').innerText = 0;
-                      }
-
-                      // Получите все оценки для этого заведения
-                      fetch(`/getRatings/${id}`)
-                          .then(response => response.json())
-                          .then(ratings => {
-                              var averageRating = 0;
-
-                              // Проверьте, есть ли оценки
-                              if (ratings.length > 0) {
-                                  // Вычислите средний рейтинг
-                                  var totalRating = 0;
-                                  ratings.forEach(rating => {
-                                      totalRating += rating.rating;
-                                  });
-                                  averageRating = totalRating / ratings.length;
-                              }
-
-                              // Заполните модальное окно данными о рейтинге
-                              document.querySelector('.miniBarInfo .time_stars .rating').innerHTML = averageRating.toFixed(1) + '<img src="/img/rating_star.svg" alt="rating">';
-                              
-                              let rating
-                            if (localStorage.getItem('lang') == 'ru') {
-                              rating = 'Оценок'
-                            } else if (localStorage.getItem('lang') == 'en') {
-                              rating = 'Rating'
-                            }
-                              
-                              document.querySelector('.miniBarInfo .time_stars .rating_count').innerText = `${ratings.length} ${rating}`;
-                              modal.classList.add('active');
-
-                        // Получите координаты маркера
-                        var coordinates = establishment.getGeometry().getCoordinates();
-                          // Преобразуйте координаты в пиксели экрана
-                          var screenPixel = map2.getPixelFromCoordinate(coordinates);
-                          // Установите позицию модального окна
-                          modal.style.top = (screenPixel[1] - modal.offsetHeight - 55) + 'px';
-                          modal.style.left = (screenPixel[0] - modal.offsetWidth / 2) + 'px';
-
-                            });
-                  });
-              }
-          } else {
-              isOverMarker = false;
-              modal.classList.remove('active'); // Скройте модальное окно
-          }
-      } else {
-          isOverMarker = false;
-          modal.classList.remove('active'); // Скройте модальное окно
+      function hideMiniCard() {
+        hoverId = null;
+        modal.classList.remove('active');
       }
-  });
 
-map2.getViewport().addEventListener('mouseout', function() {
-    isOverMarker = false;
-    modal.style.display = 'none'; // Скройте модальное окно
-});
-
-
-
-
-
-      // Синхронизируем две карты
-      // Синхронизируем две карты
-      // map1.getView().on('change:center', function() {
-      //   map2.getView().setCenter(map1.getView().getCenter());
-      // });
-      // map1.getView().on('change:resolution', function() {
-      //   map2.getView().setResolution(map1.getView().getResolution());
-      // });
-
-      map2.getView().on('change:center', function() {
-        map1.getView().setCenter(map2.getView().getCenter());
-      });
-      map2.getView().on('change:resolution', function() {
-        map1.getView().setResolution(map2.getView().getResolution());
-      });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+      function showMiniCard(id, at) {
+        hoverId = id;
+        Promise.all([
+          fetch(`/getEstablishments/${id}`).then(response => response.json()),
+          fetch(`/getRatings/${id}`).then(response => response.json()),
+        ]).then(function ([data, ratings]) {
+          if (hoverId !== id) return;
+          const en = localStorage.getItem('lang') == 'en';
+          const photos = data.photos || [];
+          const average = ratings.length ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length : 0;
+          document.querySelector('.miniBarInfo .info .text p').innerText = data.name;
+          document.querySelector('.miniBarInfo .info .text span').innerText = data.address;
+          document.querySelector('.miniBarInfo .time_stars .opened').innerText =
+            `${en ? 'Open till' : 'Открыто до'} ${(data.weekdayHours && data.weekdayHours.close) || ''}`;
+          document.querySelector('.miniBarInfo .info .photo img').src = photos[0] || '';
+          document.querySelector('.miniBarInfo .info .photo .count').innerText = photos.length;
+          document.querySelector('.miniBarInfo .time_stars .rating').innerHTML = average.toFixed(1) + '<img src="/img/rating_star.svg" alt="rating">';
+          document.querySelector('.miniBarInfo .time_stars .rating_count').innerText = `${ratings.length} ${en ? 'Rating' : 'Оценок'}`;
+          modal.classList.add('active');
+          modal.style.top = (at.y - modal.offsetHeight - 10) + 'px';
+          modal.style.left = (at.x - modal.offsetWidth / 2) + 'px';
+        });
+      }
 
       // Создайте div для модального окна по клику
 let clickModal = document.querySelector('.bigBarInfo');
-
-// Обработчик события pointermove
-map2.on('pointermove', function(e) {
-  var pixel = map2.getEventPixel(e.originalEvent);
-  var hit = map2.hasFeatureAtPixel(pixel);
-  if (hit) {
-    var feature = map2.forEachFeatureAtPixel(pixel, function(feature) {
-      return feature;
-    });
-    if (feature.get('features').length === 1) {
-      // Если это отдельный маркер, измените курсор и отобразите модальное окно
-      map2.getTargetElement().style.cursor = 'pointer';
-    } else {
-      map2.getTargetElement().style.cursor = '';
-    }
-  } else {
-    map2.getTargetElement().style.cursor = '';
-  }
-});
-
 
 function initPhotoSliderBigModal() {
   // PHOTOS SLIDER IN BIG MODAL 
@@ -1034,21 +814,7 @@ initPhotoSliderBigModal();
 // Обработчик события click
 var currentEstablishmentId = null; // Глобальная переменная для хранения идентификатора текущего заведения
 
-map2.on('click', function(e) {
- 
-    var pixel = map2.getEventPixel(e.originalEvent);
-    var hit = map2.hasFeatureAtPixel(pixel);
-    if (hit) {
-        var feature = map2.forEachFeatureAtPixel(pixel, function(feature) {
-            return feature;
-        });
-        if (feature.get('features').length === 1) {
-
-          console.log('OPEN estate modal')
-
-            var establishment = feature.get('features')[0];
-            var id = establishment.get('id');
-            // Сохраните идентификатор заведения
+function openBigCard(id) {
             currentEstablishmentId = id;
             // Отправьте запрос на сервер
             fetch(`/getEstablishments/${id}`)
@@ -1204,11 +970,7 @@ map2.on('click', function(e) {
                 // Покажите модальное окно
                 clickModal.classList.add('active');
             });
-                }
-    } else {
-        clickModal.style.display = 'none'; // Скройте модальное окно
-    }
-});
+}
 
 
 
@@ -1243,48 +1005,18 @@ function drawMiniStars(rating) {
 
 
 
-function debounce(func, wait) {
-    let timeout;
-    return function(...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-    };
-}
-
-const debouncedLoadData = debounce(loadData, 300);
-
-// При изменении центра карты
-map2.getView().on('change:center', debouncedLoadData);
-
-// При изменении масштаба карты
-map2.getView().on('change:resolution', debouncedLoadData);
-
-
-function loadData() {
-  console.log('pens')
-    var extent = map2.getView().calculateExtent(map2.getSize());
-    var bottomLeft = ol.proj.toLonLat([extent[0], extent[1]]);
-    var topRight = ol.proj.toLonLat([extent[2], extent[3]]);
-
-    fetch(`/establishmentsLocation?bl_lat=${bottomLeft[1]}&bl_lng=${bottomLeft[0]}&tr_lat=${topRight[1]}&tr_lng=${topRight[0]}`)
+// Заведения в видимой части карты; остановки карты tk-map.js ждёт сам.
+function loadVenues(b) {
+    fetch(`/establishmentsLocation?bl_lat=${b.south}&bl_lng=${b.west}&tr_lat=${b.north}&tr_lng=${b.east}`)
         .then(response => response.json())
-        .then(data => {
-            // Удалите все старые маркеры
-            source.clear();
-
-            // Добавьте новые маркеры
-            data.forEach(establishment => {
-                var marker = new ol.Feature(
-                    new ol.geom.Point(
-                        ol.proj.fromLonLat([establishment.location.lng, establishment.location.lat])
-                    )
-                );
-                marker.set('image', './img/mark.svg');
-                marker.set('name', establishment.name);
-                marker.set('id', establishment._id); // Добавьте идентификатор заведения
-                source.addFeature(marker);
-            });
-        });
+        .then(data => venueMap.setPoints(data.map(e => ({
+            id: e._id,
+            lng: e.location.lng,
+            lat: e.location.lat,
+            name: e.name,
+            photo: e.photos && e.photos[0],
+            online: e.online,
+        }))));
 }
 
 

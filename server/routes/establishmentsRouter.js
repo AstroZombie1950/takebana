@@ -96,20 +96,22 @@ router.post('/register-establishment', requireAuth, validate({
 }));
 
 
+// Точки для карты (public/tk-map.js) — только то, что рисует маркер: название,
+// координаты, первое фото, идёт ли камера. Раньше уходили документы целиком —
+// с почтой, телефоном и владельцем — любому, без входа.
 router.get('/establishmentsLocation', wrap(async (req, res) => {
-    const { bl_lat, bl_lng, tr_lat, tr_lng } = req.query;
+    const [south, west, north, east] = ['bl_lat', 'bl_lng', 'tr_lat', 'tr_lng'].map((k) => Number(req.query[k]));
+    if (![south, west, north, east].every(Number.isFinite)) {
+        return res.status(400).json({ message: 'Нужны границы карты: bl_lat, bl_lng, tr_lat, tr_lng' });
+    }
 
-    // Преобразуйте координаты в числа
-    const [bottomLeftLat, bottomLeftLng, topRightLat, topRightLng] = [bl_lat, bl_lng, tr_lat, tr_lng].map(Number);
-
-    // Найдите все заведения внутри заданных границ
     const establishments = await Establishments.find({
-        'location.lat': { $gte: bottomLeftLat, $lte: topRightLat },
-        'location.lng': { $gte: bottomLeftLng, $lte: topRightLng },
-        'status': true  // Добавьте это условие, чтобы выбрать только заведения со статусом true
-    });
+        'location.lat': { $gte: south, $lte: north },
+        'location.lng': { $gte: west, $lte: east },
+        status: true, // заведение прошло проверку
+    }).select('name location online photos').lean();
 
-    res.json(establishments);
+    res.json(establishments.map(({ photos, ...e }) => ({ ...e, photos: (photos || []).slice(0, 1) })));
 }));
 
 

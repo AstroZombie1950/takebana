@@ -110,6 +110,9 @@ app.use('/live', express.static(HLS_ROOT, {
     res.setHeader('Cache-Control', file.endsWith('.m3u8') ? 'no-cache' : 'public, max-age=3600');
   },
 }));
+// Подложка карты заведений — плитки, шрифты, значки (ops/basemap/fetch.sh).
+// На проде, как и /live, её отдаёт nginx; здесь — для локального запуска.
+app.use('/basemap', express.static(path.join(__dirname, 'media', 'basemap'), { index: false, maxAge: '1d' }));
 app.use(sessionMiddleware);
 
 // Без ключей маршрут /auth/google отвечает 503, поэтому кнопка «Continue with

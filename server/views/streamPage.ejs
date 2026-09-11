@@ -1,8 +1,8 @@
 <%#
-  Страница ведущего. Вёрстка на дизайн-системе: Tailwind, sweetalert, font-awesome,
-  video-js и шрифты Inter/Urbanist сняты — первый не нужен, остальные не
-  использовались ни строкой. PeerJS убран отдельно: на этой странице его не
-  вызывали, а socket.io грузился дважды — из шапки локально и с CDN.
+  Пульт ведущего: эфир с камеры (/stream/:id) или с OBS (/stream-obs/:id) —
+  две страницы одного шаблона, их различает obsOnly. Общее со страницей
+  зрителя — шапка эфира, чат, счётчик и таймер — в partials/streamInfo,
+  partials/streamChat и /tk-stream.js.
 %>
 <!DOCTYPE html>
 <html lang="ru">
@@ -14,9 +14,11 @@
 </head>
 
 <body class="tk-app"
-      data-obs-only="<%= (typeof obsOnly !== 'undefined' && obsOnly) ? '1' : '0' %>"
+      data-obs-only="<%= obsOnly ? '1' : '0' %>"
       data-stream-id="<%= stream._id %>"
-      data-stream-active="<%= stream.isActive ? '1' : '0' %>">
+      data-stream-key="<%= streamKey %>"
+      data-user-id="<%= currentUser._id %>"
+      data-started-at="<%= stream.isActive && stream.startedAt ? new Date(stream.startedAt).toISOString() : '' %>">
 
 <%- include('partials/header') %>
 
@@ -33,12 +35,12 @@
           <span class="tk-live__id"><span lng="231">Стрим:</span> <code><%= stream._id %></code></span>
         </div>
 
-        <% var obsFirst = (typeof obsOnly !== 'undefined' && obsOnly); %>
+        <%# Режим — это страница: вторая кнопка ведёт на пульт другого режима. %>
         <div class="tk-seg">
-          <button type="button" class="tk-seg__btn web_stream<%= obsFirst ? '' : ' is-on' %>">
+          <button type="button" class="tk-seg__btn web_stream<%= obsOnly ? '' : ' is-on' %>">
             <span lng="232">WEB (браузер)</span>
           </button>
-          <button type="button" class="tk-seg__btn obs_stream<%= obsFirst ? ' is-on' : '' %>">
+          <button type="button" class="tk-seg__btn obs_stream<%= obsOnly ? ' is-on' : '' %>">
             <span lng="233">OBS</span>
           </button>
         </div>
@@ -54,20 +56,21 @@
         <!-- Плеер и управление -->
         <section class="tk-live__col">
           <div class="tk-live__player video-player-area" id="playerContainer">
-            <%# Daily отдаёт картинку в localVideo, OBS — в video через tk-hls.js.
-                Оба скрыты до старта: показывает их скрипт страницы. %>
-            <video id="localVideo" class="video-fit-cover" autoplay muted playsInline webkit-playsinline x5-playsinline x5-video-player-type="h5" style="display: none;"></video>
-            <video id="video" class="video-fit-cover tk-live__video--obs" autoplay muted playsInline webkit-playsinline x5-playsinline x5-video-player-type="h5" style="display: none;"></video>
-
-            <div class="tk-live__hint" id="obsPreviewHint" style="display: none;">
-              <p class="tk-live__hint-title" lng="236">Предпросмотр OBS</p>
-              <p lng="237">Запустите трансляцию в OBS — здесь появится видео.</p>
-            </div>
-
-            <div class="tk-live__hint" id="videoPlaceholder">
-              <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M9 7.5l8 4.5-8 4.5V7.5Z"></path><rect x="3" y="4" width="18" height="16" rx="1"></rect></svg>
-              <p><span lng="238">Нажмите</span> <b lng="239">«Начать стрим»</b> <span lng="240">для запуска</span></p>
-            </div>
+            <% if (obsOnly) { %>
+              <%# Предпросмотр — тот же HLS, что у зрителя; видео показывается с первым кадром. %>
+              <video id="video" class="video-fit-cover tk-live__video--obs" autoplay muted playsinline style="display: none;"></video>
+              <div class="tk-live__hint" id="obsPreviewHint">
+                <p class="tk-live__hint-title" lng="236">Предпросмотр OBS</p>
+                <p lng="237">Запустите трансляцию в OBS — здесь появится видео.</p>
+              </div>
+            <% } else { %>
+              <%# Картинку своей камеры Daily отдаёт сюда после выхода в эфир. %>
+              <video id="localVideo" class="video-fit-cover" autoplay muted playsinline style="display: none;"></video>
+              <div class="tk-live__hint" id="videoPlaceholder">
+                <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M9 7.5l8 4.5-8 4.5V7.5Z"></path><rect x="3" y="4" width="18" height="16" rx="1"></rect></svg>
+                <p><span lng="238">Нажмите</span> <b lng="239">«Начать стрим»</b> <span lng="240">для запуска</span></p>
+              </div>
+            <% } %>
 
             <div class="tk-live__badges">
               <span class="tk-live__badge stream-paused-message<%= stream.isActive ? ' hidden' : '' %>" lng="126">Стрим на паузе или не начат</span>
@@ -81,85 +84,45 @@
             </button>
           </div>
 
-          <!-- Информация об эфире -->
-          <div class="tk-live__info stream-info">
-            <h1 class="tk-live__title stream-title"><%= stream.title %></h1>
-
-            <div class="tk-live__meta stream-meta">
-              <div class="tk-live__author author-section">
-                <a href="/userPage/<%= user._id %>" class="tk-live__avatar avatar"<% if (!user.avatarStyle.url) { %> data-avatar-gradient="<%= user.avatarStyle.gradient %>"<% } %>>
-                  <% if (user.avatarStyle.url) { %>
-                    <img src="<%= user.avatarStyle.url %>" alt="<%= user.displayName %>">
-                  <% } else { %>
-                    <%= user.avatarStyle.initial %>
-                  <% } %>
-                </a>
-                <div class="author-info">
-                  <a href="/userPage/<%= user._id %>" class="tk-live__author-name author-name"><%= user.displayName %></a>
-                  <span class="tk-live__role streamer-badge">Ведущий</span>
-                </div>
-              </div>
-
-              <div class="tk-live__stats stats-section">
-                <span class="tk-live__stat live-indicator">
-                  <i class="stream-indicator"></i>
-                  <span class="live-text">Онлайн</span>
-                  <span id="streamDuration" class="duration-text">00:00:00</span>
-                </span>
-
-                <span class="tk-live__stat viewer-count">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>
-                  <span class="online__pepole-count">
-                    <span class="viewers-number"><%= stream.viewers %></span>
-                    <% const _v = Number(stream.viewers) || 0, _d10 = _v % 10, _d100 = _v % 100;
-                       const _vw = (_d10 === 1 && _d100 !== 11) ? 'зритель'
-                                 : (_d10 >= 2 && _d10 <= 4 && (_d100 < 12 || _d100 > 14)) ? 'зрителя' : 'зрителей'; %>
-                    <span class="viewers-text"><%= _vw %></span>
-                  </span>
-                </span>
-              </div>
-            </div>
-
-            <% if (stream.description) { %>
-              <p class="tk-live__desc stream-description"><%= stream.description %></p>
-            <% } %>
-          </div>
+          <%- include('partials/streamInfo', { isStreamer: true }) %>
 
           <!-- Управление -->
           <div class="tk-live__controls">
-            <div class="web_tab<%= obsFirst ? ' hidden' : '' %>">
-              <p class="tk-live__lead" lng="144">Выберите камеру и начните стрим из браузера, нажав «Начать стрим».</p>
-              <select id="cameraSelect" class="tk-field tk-select"></select>
+            <% if (obsOnly) { %>
+              <div class="obs_tab">
+                <p class="tk-live__lead">
+                  <span lng="145">Скачайте и запустите OBS:</span>
+                  <a href="https://obsproject.com/ru/download" target="_blank" rel="noopener" lng="146">Скачать OBS Studio</a>
+                </p>
 
-              <div class="tk-live__actions">
-                <button type="button" class="tk-btn tk-btn--outline tk-btn--sm btn pause_stream<%= stream.isActive ? '' : ' hidden' %>" lng="120">Поставить на паузу</button>
-                <button type="button" class="tk-btn tk-btn--primary tk-btn--sm btn start_stream<%= stream.isActive ? ' hidden' : '' %>" id="startStream" lng="119">Начать стрим</button>
+                <ol class="tk-live__steps">
+                  <li lng="147">Настройте сцену: камера, рабочий стол, игра.</li>
+                  <li lng="148">Перейдите в настройки → трансляция.</li>
+                  <li>
+                    <span lng="149">В поле «Сервер» вставьте:</span>
+                    <code class="tk-live__key"><%= rtmpUrl %></code>
+                  </li>
+                  <li>
+                    <span lng="150">В поле «Ключ потока» вставьте свой ключ — никому его не показывайте:</span>
+                    <code class="tk-live__key"><%= obsStreamKey %></code>
+                    <% if (obsKeyExpiresAt) { %>
+                      <span class="tk-live__note">Ключ действует до <%= obsKeyExpiresAt.toLocaleDateString('ru-RU') %>. После этой даты откройте страницу заново — здесь будет новый.</span>
+                    <% } %>
+                  </li>
+                  <li lng="151">Нажмите «Применить» и начинайте трансляцию в программе.</li>
+                </ol>
               </div>
-            </div>
+            <% } else { %>
+              <div class="web_tab">
+                <p class="tk-live__lead" lng="144">Выберите камеру и начните стрим из браузера, нажав «Начать стрим».</p>
+                <select id="cameraSelect" class="tk-field tk-select"></select>
 
-            <div class="obs_tab<%= obsFirst ? '' : ' hidden' %>">
-              <p class="tk-live__lead">
-                <span lng="145">Скачайте и запустите OBS:</span>
-                <a href="https://obsproject.com/ru/download" target="_blank" rel="noopener" lng="146">Скачать OBS Studio</a>
-              </p>
-
-              <ol class="tk-live__steps">
-                <li lng="147">Настройте сцену: камера, рабочий стол, игра.</li>
-                <li lng="148">Перейдите в настройки → трансляция.</li>
-                <li>
-                  <span lng="149">В поле «Сервер» вставьте:</span>
-                  <code class="tk-live__key"><%= (start_server_env === 'local') ? 'rtmp://localhost:1935/live' : 'rtmp://takebana.com:1935/live' %></code>
-                </li>
-                <li>
-                  <span lng="150">В поле «Ключ потока» вставьте свой ключ — никому его не показывайте:</span>
-                  <code class="tk-live__key"><%= typeof obsStreamKey !== 'undefined' && obsStreamKey ? obsStreamKey : streamKey %></code>
-                  <% if (typeof obsKeyExpiresAt !== 'undefined' && obsKeyExpiresAt) { %>
-                    <span class="tk-live__note">Ключ действует до <%= obsKeyExpiresAt.toLocaleDateString('ru-RU') %>. После этой даты откройте страницу заново — здесь будет новый.</span>
-                  <% } %>
-                </li>
-                <li lng="151">Нажмите «Применить» и начинайте трансляцию в программе.</li>
-              </ol>
-            </div>
+                <div class="tk-live__actions">
+                  <button type="button" class="tk-btn tk-btn--outline tk-btn--sm btn pause_stream<%= stream.isActive ? '' : ' hidden' %>" lng="120">Поставить на паузу</button>
+                  <button type="button" class="tk-btn tk-btn--primary tk-btn--sm btn start_stream<%= stream.isActive ? ' hidden' : '' %>" id="startStream" lng="119">Начать стрим</button>
+                </div>
+              </div>
+            <% } %>
 
             <div class="tk-live__danger">
               <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-btn--block btn stop_stream" lng="229">Полностью завершить и удалить стрим</button>
@@ -167,1480 +130,267 @@
           </div>
         </section>
 
-        <!-- Чат -->
-        <%# chat-container — крючок выдвижной панели на узких экранах,
-            chat__box и messeg-box — крючки чата. Имена оставлены прежними. %>
-        <aside class="tk-live__chat chat-container chat__box">
-          <div class="tk-live__chat-head">
-            <h2 lng="135">Чат трансляции</h2>
-            <button type="button" class="tk-live__chat-close close-chat-btn" aria-label="Закрыть чат">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-            </button>
-          </div>
-
-          <div class="wrapper__masseg">
-            <div class="messeg-box"></div>
-
-            <div class="input__messeng-box">
-              <textarea class="tk-field input__messeng" rows="1" lng="218" placeholder="Сообщение..." maxlength="140"></textarea>
-              <button type="button" class="tk-btn tk-btn--primary tk-btn--sm starting__buttone" lng="109">Отправить</button>
-            </div>
-            <p class="tk-live__limit" lng="247">Максимум 140 символов</p>
-          </div>
-        </aside>
+        <%- include('partials/streamChat') %>
       </div>
     </div>
   </main>
 </div>
 
-<%# Ярлычок и подложка чата: ниже 1100px чат уезжает в выдвижную панель. %>
-<button type="button" class="tk-live__chat-tab" id="chatTab" aria-label="Чат">
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
-  <span>Чат</span>
-</button>
-<div class="tk-live__chat-overlay" id="chatOverlay"></div>
-
-<%# socket.io грузит шапка, локальной копией. Плеер HLS нужен только предпросмотру OBS. %>
-<% if (typeof obsOnly !== 'undefined' && obsOnly) { %>
-<script src="/tk-hls.js" defer></script>
+<%# socket.io и tk-daily.js грузит шапка. Плеер HLS нужен только предпросмотру OBS. %>
+<% if (obsOnly) { %>
+<script src="/tk-hls.js"></script>
 <% } %>
-
-    <script src="/lang.js"></script>
-
-    <script>
-        // Глобальные переменные
-        const streamKey = "<%= streamKey %>";
-        const serverEnv = '<%= start_server_env || "local" %>';
-
-        console.log('=== STREAMER PAGE DEBUG ===');
-        console.log('StreamKey from template:', streamKey);
-        console.log('StreamKey type:', typeof streamKey);
-        console.log('StreamKey length:', streamKey ? streamKey.length : 0);
-        let currentStream;
-        let lastMessageTime = null;
-        let socket;
-
-        // ОТЛАДКА: Проверяем что переменные определены правильно
-        console.log('🔍 ОТЛАДКА переменных:');
-        console.log('- streamKey:', streamKey);
-        console.log('- serverEnv:', serverEnv);
-
-        // Инициализация Socket.IO
-        console.log('[Streamer] Initializing socket with serverEnv:', serverEnv);
-        // Адрес берём из самой страницы, а не из зашитых строк.
-        // Раньше здесь было две ветки: 'prod' → https://takebana.com и 'local' →
-        // https://localhost:3000. Ветки для 'http' (наш режим локальной разработки)
-        // не было вообще — socket оставался undefined, и первый же socket.on(...)
-        // ронял весь скрипт страницы: ни чата, ни счётчика зрителей, ни реакции на
-        // смену типа эфира. Плюс зашитый боевой домен ломал бы проверку сервера
-        // по IP до переключения DNS.
-        socket = io(window.location.origin, {
-            transports: ['websocket'],
-            reconnection: true,
-            reconnectionDelay: 1000,
-            reconnectionAttempts: 5
-        });
-        
-        // Регистрируем обработчики ДО подключения
-        console.log('[Streamer] Registering event handlers before connection...');
-        
-        // Функция для присоединения к комнате стрима
-        const joinStreamRoom = () => {
-            if (!streamKey || streamKey === 'undefined' || streamKey === 'null' || streamKey === '') {
-                console.error('[Streamer] Cannot join: streamKey is invalid!', streamKey);
-                return;
-            }
-            
-            if (!socket.connected) {
-                console.warn('[Streamer] Socket not connected, cannot join stream room');
-                return;
-            }
-            
-            console.log('[Streamer] Emitting join-stream-room, socket.connected:', socket.connected, 'socket.id:', socket.id);
-            socket.emit('join-stream-room', streamKey, (response) => {
-                console.log('[Streamer] join-stream-room callback response:', response);
-                // Добираем пропущенное только после того, как вошли в комнату:
-                // иначе сообщение, пришедшее между запросом и входом, потерялось бы.
-                if (typeof fetchNewMessages === 'function') fetchNewMessages();
-            });
-            console.log('[Streamer] Sent join-stream-room event with key:', streamKey);
-        };
-
-        // Стример тоже присоединяется к комнате, чтобы видеть счетчик
-        socket.on('connect', () => {
-            console.log('[Streamer] Socket connected! Socket ID:', socket.id);
-            console.log('[Streamer] Socket connected state:', socket.connected);
-            console.log('[Streamer] Attempting to join stream room with key:', streamKey);
-            
-            // Небольшая задержка чтобы убедиться что socket полностью подключен
-            setTimeout(() => {
-                joinStreamRoom();
-            }, 100);
-        });
-        
-        socket.on('connect_error', (error) => {
-            console.error('[Streamer] Socket connection error:', error);
-        });
-        
-        socket.on('disconnect', (reason) => {
-            console.log('[Streamer] Socket disconnected, reason:', reason);
-        });
-        
-        socket.on('reconnect', (attemptNumber) => {
-            console.log('[Streamer] Socket reconnected after', attemptNumber, 'attempts');
-            // При переподключении снова присоединяемся к комнате
-            if (streamKey && streamKey !== 'undefined' && streamKey !== 'null' && streamKey !== '') {
-                setTimeout(() => {
-                    joinStreamRoom();
-                }, 100);
-            }
-        });
-        
-        // Если socket уже подключен (например, при переподключении), сразу присоединяемся
-        if (socket.connected) {
-            console.log('[Streamer] Socket already connected, joining immediately');
-            setTimeout(() => {
-                joinStreamRoom();
-            }, 100);
-        }
-
-
-
-        // Регистрируем обработчик ДО подключения, чтобы не пропустить события
-        console.log('[Streamer] Registering viewers-count-updated handler...');
-        
-        // Обновление счетчика зрителей
-        socket.on('viewers-count-updated', (data) => {
-            console.log('[Streamer] ===== VIEWERS COUNT UPDATED EVENT RECEIVED =====');
-            console.log('[Streamer] Full data:', JSON.stringify(data, null, 2));
-            console.log('[Streamer] Received viewers count:', data);
-            console.log('[Streamer] Comparing streamKey - received:', data.streamKey, 'local:', streamKey, 'match:', data.streamKey === streamKey);
-            if (data.streamKey === streamKey) {
-                // Склонение слова «зритель». В шаблоне стояло жёсткое «зрителей»,
-                // поэтому при одном зрителе выходило «1 зрителей».
-                function viewersWord(n) {
-                    n = Math.abs(Number(n) || 0);
-                    const d10 = n % 10, d100 = n % 100;
-                    if (d10 === 1 && d100 !== 11) return 'зритель';
-                    if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return 'зрителя';
-                    return 'зрителей';
-                }
-                function setViewersCount(n) {
-                    const num = document.querySelector('.viewers-number');
-                    const word = document.querySelector('.viewers-text');
-                    if (num) num.textContent = n;
-                    if (word) word.textContent = viewersWord(n);
-                }
-                // Пробуем обновить через .viewers-number (вложенный span)
-                const viewersNumber = document.querySelector('.viewers-number');
-                const countElement = document.querySelector('.online__pepole-count');
-                
-                console.log('[Streamer] Count element found:', !!countElement);
-                console.log('[Streamer] Viewers number element found:', !!viewersNumber);
-                
-                if (viewersNumber) {
-                    // Обновляем число зрителей
-                    const oldText = viewersNumber.textContent;
-                    setViewersCount(data.count);
-                    console.log('[Streamer] Updated viewers-number from', oldText, 'to', data.count);
-                } else if (countElement) {
-                    // Fallback: обновляем весь элемент
-                    const oldText = countElement.textContent;
-                    countElement.textContent = `${data.count} зрителей`;
-                    console.log('[Streamer] Updated count element from', oldText, 'to', countElement.textContent);
-                } else {
-                    console.error('[Streamer] ERROR: Neither .viewers-number nor .online__pepole-count element found!');
-                    // Попробуем найти через другой селектор
-                    const allCountElements = document.querySelectorAll('[class*="pepole"], [class*="viewer"]');
-                    console.log('[Streamer] Found potential count elements:', allCountElements.length);
-                }
-            } else {
-                console.warn('[Streamer] StreamKey mismatch! Received:', data.streamKey, 'Expected:', streamKey);
-            }
-        });
-
-        // OBS preview для стримера на OBS-странице
-        document.addEventListener('DOMContentLoaded', function () {
-            const OBS_ONLY = document.body?.dataset?.obsOnly === '1';
-            if (!OBS_ONLY) return;
-
-            const previewVideo = document.getElementById('video');
-            const hint = document.getElementById('obsPreviewHint');
-            const placeholder = document.getElementById('videoPlaceholder');
-
-            if (placeholder) placeholder.style.display = 'none';
-            if (hint) hint.style.display = 'flex';
-
-            if (!previewVideo) return;
-
-            // Предпросмотр — тот же HLS, что видят зрители, через tk-hls.js.
-            // Раньше здесь был HTTP-FLV через flv.js: ради него жили HTTP-сервер
-            // медиасервера на :8000 и прокси к нему. Задержка HLS в несколько
-            // секунд предпросмотру не мешает — ведущий видит ровно то, что зритель.
-            // Плеер ждёт плейлист, пока OBS не начал вещать, и снова ждёт после обрыва.
-            previewVideo.style.display = 'none';
-            previewVideo.addEventListener('playing', () => {
-                if (hint) hint.style.display = 'none';
-                previewVideo.style.display = 'block';
-            });
-            TKHls.play(previewVideo, `/live/${streamKey}/index.m3u8`);
-        });
-
-        // Переключение между типами стрима
-        document.addEventListener('DOMContentLoaded', function() {
-            const OBS_ONLY = document.body?.dataset?.obsOnly === '1';
-            const STREAM_ID = document.body?.dataset?.streamId;
-            const choiceWebBtn = document.querySelector('.web_stream');
-            const choiceObsBtn = document.querySelector('.obs_stream');
-            const choiceWebTab = document.querySelector('.web_tab');
-            const choiceObsTab = document.querySelector('.obs_tab');
-
-            // Применяем градиенты аватаров из data-атрибутов
-            try {
-                document.querySelectorAll('[data-avatar-gradient]').forEach((el) => {
-                    const g = el.getAttribute('data-avatar-gradient');
-                    if (g) el.style.background = g;
-                });
-            } catch (e) {}
-
-            if (choiceWebBtn && choiceObsBtn) {
-                choiceWebBtn.addEventListener('click', function() {
-                    // Если это OBS-страница — кнопка WEB переводит на WEB-страницу
-                    if (OBS_ONLY) {
-                        window.location.href = `/stream/${STREAM_ID}`;
-                        return;
-                    }
-                    // Отметка на переключателе и показ нужной панели. Прежде здесь
-                    // перебирались восемь классов Tailwind в обе стороны; теперь
-                    // состояние — один класс, а вид его описан в stream.css.
-                    choiceWebBtn.classList.add('is-on');
-                    choiceObsBtn.classList.remove('is-on');
-                    choiceWebTab.classList.remove('hidden');
-                    choiceObsTab.classList.add('hidden');
-                });
-
-                choiceObsBtn.addEventListener('click', function() {
-                    // Если это WEB-страница — кнопка OBS ведёт на отдельную OBS-страницу
-                    if (!OBS_ONLY) {
-                        window.location.href = `/stream-obs/${STREAM_ID}`;
-                        return;
-                    }
-                    choiceObsBtn.classList.add('is-on');
-                    choiceWebBtn.classList.remove('is-on');
-                    choiceObsTab.classList.remove('hidden');
-                    choiceWebTab.classList.add('hidden');
-                });
-            }
-        });
-
-
-
-
-    </script>
-
-    <script>
-        // JavaScript код для управления модальными окнами и поведением на странице
-
-        let profile = document.querySelector(".profile__box")
-        let Avatar = document.querySelector(".AVATAR")
-        let buttonExit = document.querySelector(".button__exit")
-        let shodow = document.querySelector(".shodow")
-        let chatMessegProfil = document.querySelectorAll(".chat__profile")
-        let chatListBox = document.querySelector(".chat__list-box")
-        let chatMesseg = document.querySelector(".chat__messeg")
-        let buttonBackChat = document.querySelector(".button__back")
-        let serhButton = document.querySelector(".serh-button")
-        let serhWrapper = document.querySelector(".serh__wrapper")
-        let inputSerh = document.querySelector(".input__serh")
-        let buttonLine = document.querySelector(".button__line")
-        let categoriesBox = document.querySelector(".categories__box")
-        let titleCategories = document.querySelectorAll(".title__categories")
-        let titleBox = document.querySelector(".title__box")
-        let profilName = document.querySelectorAll(".profil__name")
-        let priwMore = document.querySelector(".priw__more")
-
-
-
-        if (Avatar) {
-            Avatar.addEventListener("click", () => {
-                if (profile) profile.classList.add("display-block")
-                if (notification) notification.classList.remove("display-block")
-                if (shodow) shodow.classList.add("display-block")
-            });
-        }
-
-        if (buttonExit) {
-            buttonExit.addEventListener("click", () => {
-                if (profile) profile.classList.remove("display-block")
-                if (shodow) shodow.classList.remove("display-block")
-            });
-        }
-
-        if (shodow) {
-            shodow.addEventListener("click", () => {
-                if (notification) notification.classList.remove("display-block")
-                if (profile) profile.classList.remove("display-block")
-                if (shodow) shodow.classList.remove("display-block")
-                if (categoriesBox) categoriesBox.style = null;
-                if (titleBox) titleBox.style = null;
-                if (titleCategories) {
-                    titleCategories.forEach((el) => {
-                        el.style = null;
-                    });
-                }
-                if (profilName) {
-                    profilName.forEach((el) => {
-                        el.style = null;
-                    });
-                }
-                if (priwMore) priwMore.style = null;
-            });
-        }
-
-        if (chatMessegProfil) {
-            chatMessegProfil.forEach((el) => {
-                if (el) {
-                    el.addEventListener("click", () => {
-                        if (chatListBox) chatListBox.classList.add("no-look")
-                        if (chatMesseg) chatMesseg.classList.add("look")
-                    })
-                }
-            });
-        }
-
-        if (buttonBackChat) {
-            buttonBackChat.addEventListener("click", () => {
-                if (chatListBox) chatListBox.classList.remove("no-look")
-                if (chatMesseg) chatMesseg.classList.remove("look")
-            });
-        }
-
-        function CheckEntr(event) {
-            if (event.keyCode == "13") {
-                serhWrapper.style.display = "none"
-                inputSerh.style.display = "none"
-                serhButton.style.display = "block"
-            }
-        }
-
-        if (serhButton) {
-            serhButton.addEventListener("click", () => {
-                if (serhWrapper) serhWrapper.style.display = "flex"
-                if (inputSerh) inputSerh.style.display = "flex"
-                if (serhButton) serhButton.style.display = "none"
-                window.addEventListener("keydown", CheckEntr, false);
-            });
-        }
-
-
-    // BURGER BUTTON 
-        let buttonLin = document.querySelector('.button__line');
-        let leftMenu = document.querySelector('.categories__box');
-        if (buttonLin) {
-            buttonLin.addEventListener('click', function() {
-                if (leftMenu) {
-                    if (leftMenu.classList.contains('open')) {
-                        leftMenu.classList.remove('open');
-                    } else {
-                        leftMenu.classList.add('open');
-                    }
-                }
-            });
-        }
-
-
-    </script>
-
-    <!-- // ПРОВЕРКА АКТИВНОСТИ СТРИМЕРА  -->
-    <!-- // ПРОВЕРКА АКТИВНОСТИ СТРИМЕРА  -->
-    <!-- // ПРОВЕРКА АКТИВНОСТИ СТРИМЕРА  -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const streamId = '<%= stream._id %>';
-
-            // Страница открыта — сообщаем серверу, какая: веб или OBS. Раньше это
-            // писал в базу сам GET страницы, и эфир снимали префетч браузера
-            // и предпросмотр ссылки в мессенджере (routes/streaming/streamPages.js).
-            fetch(`/stream/${streamId}/enter`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: document.body.dataset.obsOnly === '1' ? 'obs' : 'web' })
-            }).catch((error) => console.error('Не удалось отметить вход на страницу эфира:', error));
-
-            // Устойчивый heartbeat активности стримера (обновляет updatedAt)
-            const HEARTBEAT_MS = 20000; // базовая частота
-            let lastPing = 0;
-
-            async function pingActivity(reason) {
-                const now = Date.now();
-                // анти-спам если события прилетают часто
-                if (now - lastPing < 3000) return;
-                lastPing = now;
-                try {
-                    // keepalive помогает при закрытии вкладки (не везде, но лучше чем ничего)
-                    await fetch(`/stream/active/${streamId}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        keepalive: true
-                    });
-                } catch (error) {
-                    console.error('Ошибка при отправке активности стримера:', reason, error);
-                }
-            }
-
-            // Основной интервал (может троттлиться в фоне)
-            setInterval(() => pingActivity('interval'), HEARTBEAT_MS);
-            // Первый пинг сразу
-            pingActivity('init');
-
-            // При возврате на вкладку — пингуем сразу
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') {
-                    pingActivity('visible');
-                } else {
-                    // При уходе в фон / закрытии — стараемся отправить beacon
-                    try {
-                        const ok = navigator.sendBeacon && navigator.sendBeacon(`/stream/active/${streamId}`);
-                        if (!ok) pingActivity('hidden_fallback');
-                    } catch (_) {
-                        pingActivity('hidden_exception');
-                    }
-                }
-            });
-
-            // При закрытии/перезагрузке
-            window.addEventListener('pagehide', () => {
-                try { navigator.sendBeacon && navigator.sendBeacon(`/stream/active/${streamId}`); } catch (_) {}
-            });
-        });
-    </script>
-        
-
-
-
-
-
-
-
-
-
-
-
+<script src="/lang.js"></script>
+<script src="/tk-stream.js"></script>
 <script>
-    
-    console.log("🎥 Подготовка для Dallyy.co стриминга...");
+(function () {
+  const data = document.body.dataset;
+  const streamId = data.streamId;
+  const streamKey = data.streamKey;
+  const OBS = data.obsOnly === '1';
 
+  const post = (url, body) => fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then((r) => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r;
+  });
 
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log("🎥 Инициализация системы стриминга...");
+  // Пульт открыт — сообщаем серверу, какой: веб или OBS. Сам GET страницы
+  // в базу не пишет: его делают префетч браузера и предпросмотр ссылок.
+  post(`/stream/${streamId}/enter`, { mode: OBS ? 'obs' : 'web' })
+    .catch((e) => console.error('[stream] вход на пульт не отмечен:', e));
 
-    // Камеру спрашиваем только у того, кто вещает с камеры.
-    // Раньше разрешение запрашивалось у всех подряд, включая вещателей через OBS,
-    // которым камера не нужна вообще: браузер показывал запрос доступа, а при
-    // отказе выскакивал блокирующий alert. Для трансляций с пульта это лишний шаг
-    // ровно там, где его быть не должно.
-    if ('<%= stream.streamType %>' !== 'daily-stream') {
-        console.log('Тип эфира не требует камеры — разрешение не запрашиваем');
-        return;
-    }
+  // Пульс ведущего: пока пульт открыт, эфир не считается брошенным —
+  // jobs/streamCleanup.js смотрит на updatedAt. Таймеры фоновой вкладки
+  // браузер душит, поэтому пульс уходит и при каждой смене видимости.
+  let lastBeat = 0;
+  function beat() {
+    if (Date.now() - lastBeat < 3000) return;
+    lastBeat = Date.now();
+    fetch(`/stream/active/${streamId}`, { method: 'POST', keepalive: true }).catch(() => {});
+  }
+  beat();
+  setInterval(beat, 20000);
+  document.addEventListener('visibilitychange', beat);
+  window.addEventListener('pagehide', () => navigator.sendBeacon(`/stream/active/${streamId}`));
 
+  document.querySelector(OBS ? '.web_stream' : '.obs_stream').addEventListener('click', () => {
+    location.href = OBS ? `/stream/${streamId}` : `/stream-obs/${streamId}`;
+  });
+
+  const player = document.getElementById('playerContainer');
+  document.getElementById('streamerFsButton').addEventListener('click', () => {
+    TKStream.fullscreen(player, player.querySelector('video'));
+  });
+
+  const liveBadge = document.querySelector('.stream-active-message');
+  const pausedBadge = document.querySelector('.stream-paused-message');
+  function showLive(on) {
+    liveBadge.classList.toggle('hidden', !on);
+    pausedBadge.classList.toggle('hidden', on);
+  }
+
+  const stopBtn = document.querySelector('.stop_stream');
+  stopBtn.addEventListener('click', async () => {
+    const sure = await confirmDialog(
+      t('241') || 'Вы уверены, что хотите полностью завершить стрим? Это действие нельзя отменить.',
+      { okText: 'Завершить' });
+    if (!sure) return;
+
+    stopBtn.disabled = true;
+    stopBtn.textContent = t('242') || 'Завершение...';
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        console.log('✅ Доступ к камере/микрофону получен');
-        // Поток нужен был только ради разрешения — сразу отпускаем устройство,
-        // иначе индикатор камеры горит всё время, пока открыта страница.
-        stream.getTracks().forEach(track => track.stop());
+      if (window.dailyStreamer && window.dailyStreamer.isConnected) await window.dailyStreamer.stopStream();
+      await post('/terminate-stream', { streamId });
+      location.href = '/streaming';
+    } catch (e) {
+      toast((t('244') || 'Произошла ошибка при завершении стрима: ') + e.message, 'error');
+      stopBtn.disabled = false;
+      stopBtn.textContent = t('229') || 'Полностью завершить и удалить стрим';
+    }
+  });
+
+  if (OBS) {
+    // Предпросмотр ждёт плейлист, пока OBS не начал вещать, и снова ждёт после обрыва.
+    const preview = document.getElementById('video');
+    const hint = document.getElementById('obsPreviewHint');
+    preview.addEventListener('playing', () => {
+      hint.style.display = 'none';
+      preview.style.display = 'block';
+    });
+    TKHls.play(preview, `/live/${streamKey}/index.m3u8`);
+
+    // Идёт ли OBS-эфир, решает приём RTMP (mediaServer.js) — он и присылает
+    // stream:update. Пульт перекрашивает метку и ведёт таймер только на смене
+    // состояния: тот же stream:update шлёт и отметка входа на пульт.
+    let live = !!data.startedAt;
+    TKStream.onUpdate((u) => {
+      if (typeof u.isActive !== 'boolean' || u.isActive === live) return;
+      live = u.isActive;
+      showLive(live);
+      if (live) TKStream.timer.start(u.startedAt || new Date().toISOString());
+      else TKStream.timer.stop();
+    });
+    return;
+  }
+
+  // ── Эфир с камеры через Daily ──
+  const startBtn = document.getElementById('startStream');
+  const pauseBtn = document.querySelector('.pause_stream');
+  const localVideo = document.getElementById('localVideo');
+  const placeholder = document.getElementById('videoPlaceholder');
+  const select = document.getElementById('cameraSelect');
+
+  function setLive(on) {
+    showLive(on);
+    startBtn.classList.toggle('hidden', on);
+    pauseBtn.classList.toggle('hidden', !on);
+  }
+
+  function showLocalVideo(track) {
+    TKDaily.attach(localVideo, track);
+    localVideo.style.display = track ? 'block' : 'none';
+    placeholder.style.display = track ? 'none' : '';
+  }
+
+  // Камера в списке: «device:<id>», а если браузер список не отдал (iOS) —
+  // «facing:user» или «facing:environment».
+  async function useCamera(call, value) {
+    const v = value.slice('device:'.length);
+    if (!v) return;
+    if (value.startsWith('device:')) await call.setInputDevicesAsync({ videoDeviceId: v });
+    else await call.startCamera({ facingMode: v });
+  }
+
+  async function fillCameras() {
+    let cams = [];
+    try {
+      cams = (await navigator.mediaDevices.enumerateDevices()).filter((dev) => dev.kind === 'videoinput');
+    } catch (_) {}
+    const was = select.value;
+    const options = cams.length
+      ? cams.map((c, i) => ['device:' + c.deviceId, c.label || `Камера ${i + 1}`])
+      : [['facing:user', 'Фронтальная камера'], ['facing:environment', 'Основная камера']];
+    select.replaceChildren(...options.map(([value, label]) => new Option(label, value)));
+    if (options.some(([value]) => value === was)) select.value = was;
+  }
+
+  // Разрешение спрашиваем один раз и сразу на камеру с микрофоном: без него
+  // браузер не отдаёт названий камер, а эфир без микрофона не начнётся.
+  // На OBS-пульте камера не нужна вовсе — до этого места он не доходит.
+  (async () => {
+    if (!navigator.mediaDevices) return;
+    try {
+      const media = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      media.getTracks().forEach((track) => track.stop());
     } catch (err) {
-        console.error('❌ Ошибка при запросе доступа к камере/микрофону:', err);
-        if (err.name === 'NotAllowedError') {
-            toast('Доступ к камере и микрофону не разрешён. Эфир с камеры не запустится — ' +
-                         'разрешите доступ в настройках браузера или ведите эфир через OBS.');
-        } else {
-            toast('Не удалось получить доступ к камере и микрофону: ' + err.name, 'error');
-        }
+      toast(err.name === 'NotAllowedError'
+        ? 'Доступ к камере и микрофону не разрешён. Эфир с камеры не запустится — разрешите доступ в настройках браузера или ведите эфир через OBS.'
+        : 'Не удалось получить доступ к камере и микрофону: ' + err.name, 'error');
     }
-});
+    await fillCameras();
+    navigator.mediaDevices.addEventListener('devicechange', fillCameras);
+  })();
 
-// ========== ОБРАБОТЧИКИ ДЛЯ КНОПКИ ПАУЗЫ ==========
-const pauseButton = document.querySelector('.pause_stream');
-if (pauseButton) {
-    pauseButton.addEventListener('click', async function() {
-        console.log('🛑 Кнопка паузы нажата!');
-        
-        // Проверяем что кнопка видима (не на паузе уже)
-        if (pauseButton.classList.contains('hidden')) {
-            console.log('⚠️ Кнопка паузы скрыта, игнорируем клик');
-            return;
-        }
-        
-        // Временно отключаем кнопку чтобы избежать двойных кликов
-        pauseButton.disabled = true;
-        try {
-            // Проверяем какая система стриминга активна
-            // Если это Daily.co система - останавливаем её через класс
-            if (window.dailyStreamer && window.dailyStreamer.isConnected) {
-                console.log('🛑 Останавливаем Daily.co стрим...');
-                await window.dailyStreamer.stopStream();
-            }
-            
-            // Деактивируем стрим в базе данных
-            console.log('🔄 Деактивация стрима в базе...');
-            await diactivateStream();
-
-            toast((window.langDict?.['245']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Стрим поставлен на паузу');
-        } catch (error) {
-            console.error('❌ Ошибка при постановке на паузу:', error);
-            toast((window.langDict?.['246']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Произошла ошибка при постановке на паузу', 'error');
-        } finally {
-            // Включаем кнопку обратно
-            pauseButton.disabled = false;
-        }
-    });
-}
-
-// Обработчик для кнопки "Полностью завершить стрим"
-const stopButton = document.querySelector('.stop_stream');
-if (stopButton) {
-    stopButton.addEventListener('click', async function() {
-        console.log('🛑 Кнопка "Полностью завершить стрим" нажата!');
-        
-        // Подтверждение от пользователя
-        const confirmed = await confirmDialog(
-            (window.langDict?.['241']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')])
-                || 'Вы уверены, что хотите полностью завершить стрим? Это действие нельзя отменить.',
-            { okText: 'Завершить' });
-        if (!confirmed) {
-            console.log('⚠️ Пользователь отменил завершение стрима');
-            return;
-        }
-        
-        // Временно отключаем кнопку чтобы избежать двойных кликов
-        stopButton.disabled = true;
-        stopButton.textContent = (window.langDict?.['242']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Завершение...';
-        
-        try {
-            // Проверяем какая система стриминга активна
-            // Если это Daily.co система - останавливаем её через класс
-            if (window.dailyStreamer && window.dailyStreamer.isConnected) {
-                console.log('🛑 Останавливаем Daily.co стрим...');
-                await window.dailyStreamer.stopStream();
-            }
-            
-            // Полностью удаляем стрим из базы данных
-            console.log('🗑️ Удаление стрима из базы...');
-            await terminateStream();
-
-            toast((window.langDict?.['243']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Стрим полностью завершен');
-            
-            // Перенаправляем на главную страницу или страницу стримера
-            window.location.href = '/streaming';
-            
-        } catch (error) {
-            console.error('❌ Ошибка при завершении стрима:', error);
-            toast(((window.langDict?.['244']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Произошла ошибка при завершении стрима: ') + error.message, 'error');
-        } finally {
-            // Включаем кнопку обратно
-            stopButton.disabled = false;
-            stopButton.textContent = (window.langDict?.['229']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Полностью завершить стрим';
-        }
-    });
-}
-
-
-
-    // Функция для активации стрима на сервере (упрощенная для Daily.co)
-    async function activateStream() {
-        // устанавливает исЭктив в ACTIVE наш экземпляр стрима в базе
-        const serverUrl = '/set-active';
-
-        try {
-            const response = await fetch(serverUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ streamKey: streamKey }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Ошибка активации стрима на сервере');
-            }
-
-            const data = await response.json();
-            console.log('✅ Стрим активирован в базе данных:', data);
-        } catch (err) {
-            console.error('❌ Ошибка активации стрима:', err);
-            throw err;
-        }
-    }
-
-    async function activateStreamObs() {
-        // устанавливает исЭктив в ACTIVE наш экземпляр стрима в базе
-        const serverUrl = '/set-active';
-
-        try {
-            const response = await fetch(serverUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ streamKey: streamKey }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Ошибка активации стрима на сервере');
-            }
-
-            const data = await response.json();
-            console.log('✅ Стрим активирован (OBS):', data);
-        } catch (err) {
-            console.error('❌ Ошибка активации стрима:', err);
-        }
-
-        // Обновляем UI - показываем что стрим активен
-        const activeMessage = document.querySelector('.stream-active-message');
-        const pausedMessage = document.querySelector('.stream-paused-message');
-        if (activeMessage && pausedMessage) {
-            activeMessage.classList.remove('hidden');
-            pausedMessage.classList.add('hidden');
-        }
-
-        // Переключаем кнопки: скрываем "Начать стрим", показываем "Поставить на паузу"
-        const startButton = document.querySelector('.start_stream');
-        const pauseButton = document.querySelector('.pause_stream');
-        if (startButton && pauseButton) {
-            startButton.classList.add('hidden');
-            pauseButton.classList.remove('hidden');
-            console.log('🔄 Кнопки переключены: показана "Поставить на паузу" (OBS)');
-        }
-
-        const serverUrle = '/obs-stream-start';
-
-        try {
-            const response = await fetch(serverUrle, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ streamKey: streamKey }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Ошибка установки OBS стрима');
-            }
-
-            const data = await response.json();
-            console.log('✅ OBS стрим установлен:', data);
-        } catch (err) {
-            console.error('❌ Ошибка установки OBS стрима:', err);
-        }
-    }
-
-
-    
-    async function diactivateStream() {
-        // устанавливает исЭктив в FALSE наш экземпляр стрима в базе
-        const serverUrl =
-            '/set-inactive';
-
-        try {
-            const response = await fetch(serverUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ streamKey: streamKey }),
-            });
-
-            if (!response.ok) {
-            throw new Error('Ошибка дизактивации стрима на сервере');
-            }
-
-            const data = await response.json();
-            console.log('Стрим дизактивирован:', data);
-        } catch (err) {
-            console.error('Ошибка дизактивации стрима:', err);
-        }
-        
-        // Обновляем UI - показываем что стрим на паузе
-        const activeMessage = document.querySelector('.stream-active-message');
-        const pausedMessage = document.querySelector('.stream-paused-message');
-        if (activeMessage && pausedMessage) {
-            activeMessage.classList.add('hidden');
-            pausedMessage.classList.remove('hidden');
-        }
-
-        // Переключаем кнопки: показываем "Начать стрим", скрываем "Поставить на паузу"
-        const startButton = document.querySelector('.start_stream');
-        const pauseButton = document.querySelector('.pause_stream');
-        if (startButton && pauseButton) {
-            startButton.classList.remove('hidden');
-            pauseButton.classList.add('hidden');
-            console.log('🔄 Кнопки переключены: показана "Начать стрим"');
-        }
-
-    }
-
-    // Функция для полного завершения стрима (удаление из базы данных)
-    async function terminateStream() {
-        const serverUrl = '/terminate-stream';
-
-        try {
-            const response = await fetch(serverUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    streamId: '<%= stream._id %>'
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Ошибка завершения стрима на сервере');
-            }
-
-            const data = await response.json();
-            console.log('✅ Стрим полностью завершен и удален:', data);
-        } catch (err) {
-            console.error('❌ Ошибка завершения стрима:', err);
-            throw err; // Пробрасываем ошибку выше
-        }
-    }
-
-
-    async function diactivateStreamObs() {
-        // устанавливает исЭктив в FALSE наш экземпляр стрима в базе
-        const serverUrl =
-            '/set-inactive';
-
-        try {
-            const response = await fetch(serverUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ streamKey: streamKey }),
-            });
-
-            if (!response.ok) {
-            throw new Error('Ошибка дизактивации стрима на сервере');
-            }
-
-            const data = await response.json();
-            console.log('Стрим дизактивирован:', data);
-        } catch (err) {
-            console.error('Ошибка дизактивации стрима:', err);
-        }
-        
-        // Обновляем UI - показываем что стрим на паузе
-        const activeMessage = document.querySelector('.stream-active-message');
-        const pausedMessage = document.querySelector('.stream-paused-message');
-        if (activeMessage && pausedMessage) {
-            activeMessage.classList.add('hidden');
-            pausedMessage.classList.remove('hidden');
-        }
-
-        // Переключаем кнопки: показываем "Начать стрим", скрываем "Поставить на паузу"
-        const startButton = document.querySelector('.start_stream');
-        const pauseButton = document.querySelector('.pause_stream');
-        if (startButton && pauseButton) {
-            startButton.classList.remove('hidden');
-            pauseButton.classList.add('hidden');
-            console.log('🔄 Кнопки переключены: показана "Начать стрим" (OBS)');
-        }
-
-
-
-
-        const serverUrle = '/obs-stream-end';
-
+  // Смена камеры посреди эфира. До эфира выбор применяет startStream.
+  select.addEventListener('change', async () => {
+    const call = window.dailyStreamer.callObject;
+    if (!call) return;
     try {
-        const response = await fetch(serverUrle, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ streamKey: streamKey }),
-        });
+      await call.setLocalVideo(false);
+      await useCamera(call, select.value);
+      await call.setLocalVideo(true);
+    } catch (e) {
+      console.warn('[stream] камера не переключилась:', e);
+    }
+  });
 
-        if (!response.ok) {
-            throw new Error('Ошибка завершения OBS стрима');
-        }
-
-        const data = await response.json();
-        console.log('OBS стрим завершен:', data);
-    } catch (err) {
-        console.error('Ошибка завершения OBS стрима:', err);
+  class DailyStreamer {
+    constructor() {
+      this.session = null;
+      this.isConnected = false;
     }
 
-
-}
-
-
-
-
-
-
-
-
-
-// ========== ОБРАБОТЧИКИ ДЛЯ ЧАТА (ДЛЯ ВСЕХ) ==========
-// Кнопка отправки сообщения
-const sendButton = document.querySelector('.starting__buttone');
-const messageInput = document.querySelector('.input__messeng');
-
-if (sendButton && messageInput) {
-    sendButton.addEventListener('click', sendMessage);
-    
-    // Отправка по Enter
-    messageInput.addEventListener('keypress', function(event) {
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            sendMessage();
-        }
-    });
-}
-
-// Функция отправки сообщения в чат
-async function sendMessage() {
-    const messageContent = messageInput.value.trim();
-    const streamId = '<%= stream._id %>';
-    const userId = '<%= currentUser._id %>';
-    const username = '<%= currentUser.displayName %>';
-
-    if (messageContent === '') {
-        return; // Не отправляем пустое сообщение
-    }
-
-    // Проверка длины сообщения
-    if (messageContent.length > 140) {
-        toast((window.langDict?.['248']?.[(localStorage.getItem('lang') === 'en' ? 'en' : 'ru')]) || 'Ошибка: Сообщение не должно превышать 140 символов', 'error');
-        return;
-    }
-
-    try {
-        // Отправка сообщения на бэкенд
-        const response = await fetch('/chat/message', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                streamId,
-                userId,
-                username,
-                message: messageContent
-            }),
-        });
-
-        if (response.ok) {
-            // console.log('Сообщение отправлено успешно!');
-            messageInput.value = ''; // Очищаем поле ввода
-        } else {
-            console.error('Ошибка отправки сообщения');
-            toast('Ошибка при отправке сообщения', 'error');
-        }
-    } catch (error) {
-        console.error('Ошибка при отправке сообщения:', error);
-        toast('Произошла ошибка при отправке сообщения', 'error');
-    }
-}
-
-// ========== ЧАТ ЭФИРА ==========
-// Сообщения приходят сокетом в комнату эфира. Раньше здесь стоял
-// setInterval(fetchNewMessages, 2000): каждый зритель дёргал сервер 30 раз
-// в минуту, почти всегда впустую, и всё равно видел сообщение с задержкой
-// до двух секунд. Опрос остался ровно для двух случаев — первая загрузка
-// и добор пропущенного после обрыва связи.
-
-// Отрисовка одного сообщения. Общая для сокета и для добора опросом.
-function appendChatMessage(message) {
-    const messageBox = document.querySelector('.messeg-box');
-    if (!messageBox) return;
-
-    // Сообщение могло прийти и сокетом, и добором — второй раз не рисуем.
-    if (message._id && messageBox.querySelector(`[data-message-id="${message._id}"]`)) return;
-
-    const messageElement = document.createElement('div');
-    messageElement.classList.add('chat-message');
-    if (message._id) messageElement.dataset.messageId = message._id;
-    messageElement.dataset.timestamp = message.createdAt;
-
-    // Свои сообщения отмечаются классом, а не цветом в разметке: цвет решает
-    // stream.css, и в тёмной теме он не остаётся синим по тёмному.
-    if (message.userId === '<%= currentUser._id %>') messageElement.classList.add('chat-message--own');
-
-    messageElement.innerHTML = `
-        <p class="chat-message__line">
-            <span class="chat-message__who">${escapeHtml(message.username)}</span>
-            <span class="chat-message__text">${escapeHtml(message.message)}</span>
-        </p>
-        <time class="chat-message__time">${new Date(message.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</time>
-    `;
-
-    messageBox.appendChild(messageElement);
-    messageBox.scrollTo({ top: messageBox.scrollHeight, behavior: 'smooth' });
-
-    if (message.createdAt) lastMessageTime = message.createdAt;
-}
-
-// Добор пропущенного: при открытии страницы и после восстановления связи.
-async function fetchNewMessages() {
-    const streamId = '<%= stream._id %>';
-
-    try {
-        const url = `/api/chat/messages/new?streamId=${streamId}&lastMessageTime=${lastMessageTime || ''}`;
-        const response = await fetch(url);
-        if (!response.ok) {
-            console.error('Ошибка при получении новых сообщений, статус:', response.status);
-            return;
-        }
-        (await response.json()).forEach(appendChatMessage);
-    } catch (error) {
-        console.error('Ошибка при запросе новых сообщений:', error);
-    }
-}
-
-// ========== ИНИЦИАЛИЗАЦИЯ ЧАТА ДЛЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (В КОНЦЕ) ==========
-// Инициализация — ставим время последнего сообщения после загрузки страницы
-document.addEventListener('DOMContentLoaded', function () {
-    // console.log("🔥 Инициализация чата запущена для всех пользователей");
-    // console.log("🔍 Проверяем функцию fetchNewMessages:", typeof fetchNewMessages);
-    
-    const messages = document.querySelectorAll('.chat-message');
-    // console.log("📨 Найдено сообщений при загрузке:", messages.length);
-
-    if (messages.length > 0) {
-        lastMessageTime = messages[messages.length - 1].dataset.timestamp || null;
-        // console.log("⏰ Инициализировано время последнего сообщения:", lastMessageTime);
-    } else {
-        lastMessageTime = null;
-        // console.log("⏰ Нет сообщений, lastMessageTime установлен в null");
-    }
-    
-    // Прокручиваем чат вниз при загрузке страницы
-    const messageBox = document.querySelector('.messeg-box');
-    if (messageBox) {
-        setTimeout(() => {
-            messageBox.scrollTo({
-                top: messageBox.scrollHeight,
-                behavior: 'smooth'
-            });
-        }, 500); // Небольшая задержка для загрузки контента
-    }
-    
-    // Новые сообщения приходят сокетом в комнату эфира. Этот вызов — страховка
-    // на случай, если сокет не поднялся: основной добор идёт в подтверждении
-    // входа в комнату, там же и после обрыва. Повторы отсекаются по data-message-id.
-    fetchNewMessages();
-    if (typeof socket !== 'undefined' && socket) {
-        socket.on('chat:message', appendChatMessage);
-    } else {
-        console.error('Сокет недоступен — новые сообщения чата приходить не будут');
-    }
-    // Здесь стояла «автоматическая деактивация при загрузке»: идущий эфир
-    // страница через 2 секунды снимала сама. На веб-странице это теперь делает
-    // POST .../enter, а на OBS-странице это было ошибкой — ведущий открывал
-    // пульт посреди эфира, и эфир помечался снятым, хотя OBS продолжал вещать.
-    // Идёт ли OBS-эфир, решает приём RTMP (mediaServer.js), а не страница.
-});
-
-        // ========== УПРАВЛЕНИЕ АДАПТИВНЫМ ЧАТОМ ==========
-        document.addEventListener('DOMContentLoaded', function () {
-            // Управление адаптивным чатом
-            const chatTab = document.getElementById('chatTab');
-            const chatContainer = document.querySelector('.chat-container');
-            const chatOverlay = document.getElementById('chatOverlay');
-            const closeChatBtn = document.querySelector('.close-chat-btn');
-
-            function openChat() {
-                if (chatContainer && chatOverlay) {
-                    chatOverlay.style.display = 'block';
-                    chatContainer.classList.add('open');
-                    document.body.style.overflow = 'hidden';
-                }
-            }
-
-            function closeChat() {
-                if (chatContainer && chatOverlay) {
-                    chatContainer.classList.remove('open');
-                    chatOverlay.style.display = 'none';
-                    document.body.style.overflow = '';
-                }
-            }
-
-            if (chatTab) {
-                chatTab.addEventListener('click', openChat);
-            }
-
-            if (closeChatBtn) {
-                closeChatBtn.addEventListener('click', closeChat);
-            }
-
-            if (chatOverlay) {
-                chatOverlay.addEventListener('click', closeChat);
-            }
-
-            // Закрытие чата по Escape
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape' && window.innerWidth < 1280) {
-                    closeChat();
-                }
-            });
-                 });
-
-        // ========== ТАЙМЕР ВРЕМЕНИ СУЩЕСТВОВАНИЯ СТРИМА ==========
-        // Функция для форматирования времени
-        function formatDuration(seconds) {
-            const hours = String(Math.floor(seconds / 3600)).padStart(2, '0');
-            const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-            const secs = String(seconds % 60).padStart(2, '0');
-            return `${hours}:${minutes}:${secs}`;
-        }
-
-        // Глобальная переменная для хранения интервала таймера
-        let streamExistenceTimer = null;
-
-        // Функция для запуска таймера времени существования
-        function startStreamExistenceTimer(createdTimeISO) {
-            console.log('⏱️ Запускаем таймер времени существования стрима с:', createdTimeISO);
-            const durationElement = document.getElementById('streamDuration');
-            
-            if (!durationElement) {
-                console.warn('⚠️ Элемент streamDuration не найден');
-                return;
-            }
-
-            // Останавливаем предыдущий таймер если он был
-            if (streamExistenceTimer) {
-                clearInterval(streamExistenceTimer);
-            }
-
-            const createdTime = new Date(createdTimeISO).getTime();
-            
-            function updateDuration() {
-                const now = new Date().getTime();
-                let diffSeconds = Math.floor((now - createdTime) / 1000);
-                
-                if (diffSeconds < 0) diffSeconds = 0;
-                
-                durationElement.textContent = formatDuration(diffSeconds);
-            }
-            
-            // Первоначальный вызов и запуск интервала
-            updateDuration();
-            streamExistenceTimer = setInterval(updateDuration, 1000);
-            console.log('✅ Таймер времени существования стрима запущен');
-        }
-
-        // Функция для остановки таймера (не используется для времени существования)
-        function stopStreamExistenceTimer() {
-            console.log('⏹️ Останавливаем таймер времени существования стрима');
-            const durationElement = document.getElementById('streamDuration');
-            
-            if (streamExistenceTimer) {
-                clearInterval(streamExistenceTimer);
-                streamExistenceTimer = null;
-            }
-            
-            if (durationElement) {
-                durationElement.textContent = '00:00:00';
-            }
-            console.log('✅ Таймер времени существования стрима остановлен');
-        }
-
-        // Время в эфире — с выхода в эфир (startedAt), а не с создания записи:
-        // раньше эфир, созданный утром и запущенный вечером, с первой секунды
-        // показывал «Онлайн 10:00:00». У неидущего эфира таймер стоит на нуле.
-        document.addEventListener('DOMContentLoaded', function() {
-            const startedAt = <%- JSON.stringify(stream.isActive && stream.startedAt ? stream.startedAt : null) %>;
-            if (startedAt) startStreamExistenceTimer(startedAt);
-        });
-
-        // ========== DAILY.CO STREAMER CLASS ==========
-        console.log('🚀 Скрипт Daily.co загружается...');
-        
-        class DailyStreamer {
-                constructor() {
-                console.log('🏗️ DailyStreamer конструктор вызван');
-                this.session = null;
-                this.isConnected = false;
-                this.init();
-                console.log('✅ DailyStreamer инициализирован');
-            }
-
-    // Объект звонка Daily — им переключает камеру switchCameraByValue ниже.
+    // Объект звонка Daily — через него переключается камера.
     get callObject() { return this.session && this.session.call; }
 
-    init() {
-        console.log('🔧 DailyStreamer.init() вызван');
-        this.initElements();
-        this.bindEvents();
-        console.log('✅ DailyStreamer.init() завершен');
-    }
-
-                initElements() {
-                console.log('🔍 DailyStreamer.initElements() - поиск элементов...');
-                this.startStreamBtn = document.getElementById('startStream');
-                this.stopStreamBtn = document.querySelector('.pause_stream');
-                this.videoPlaceholder = document.getElementById('videoPlaceholder');
-                this.activeMessage = document.querySelector('.stream-active-message');
-                this.pausedMessage = document.querySelector('.stream-paused-message');
-                
-
-                
-                console.log('🔍 Найденные элементы:');
-                console.log('- startStreamBtn:', !!this.startStreamBtn, this.startStreamBtn);
-                console.log('- stopStreamBtn:', !!this.stopStreamBtn, this.stopStreamBtn);
-                console.log('- videoPlaceholder:', !!this.videoPlaceholder);
-                console.log('- activeMessage:', !!this.activeMessage);
-                console.log('- pausedMessage:', !!this.pausedMessage);
-                
-                // Получаем streamId из EJS переменной
-                this.streamId = '<%= stream._id %>';
-                console.log('- streamId:', this.streamId);
-            }
-
-    bindEvents() {
-        console.log('🔗 Привязка обработчиков событий...');
-        console.log('Кнопка старта найдена:', !!this.startStreamBtn);
-        console.log('Кнопка остановки найдена:', !!this.stopStreamBtn);
-        
-        if (this.startStreamBtn) {
-            console.log('🔗 Привязываем onclick для кнопки старта...');
-            this.startStreamBtn.onclick = () => {
-                console.log('🎬 Кнопка "Начать стрим" нажата в Daily.co классе!');
-                this.startStream();
-            };
-            console.log('✅ onclick привязан к кнопке старта');
-        } else {
-            console.error('❌ Кнопка старта не найдена! Не могу привязать обработчик');
-        }
-        
-        if (this.stopStreamBtn) {
-            console.log('🔗 Привязываем onclick для кнопки остановки...');
-            this.stopStreamBtn.onclick = () => {
-                console.log('🛑 Кнопка "Остановить стрим" нажата в Daily.co классе!');
-                this.stopStream();
-            };
-            console.log('✅ onclick привязан к кнопке остановки');
-        } else {
-            console.error('❌ Кнопка остановки не найдена! Не могу привязать обработчик');
-        }
-        
-
-    }
-
     // Сервер создаёт комнату и тем же ответом отдаёт токен вещателя. Камеру
-    // и микрофон Daily берёт сам при входе: прежний отдельный getUserMedia
-    // держал вторую копию камеры и не отпускал её до закрытия вкладки.
+    // и микрофон Daily берёт сам при входе.
     async startStream() {
-        this.startStreamBtn.disabled = true;
-        this.startStreamBtn.textContent = 'Подключение...';
-        try {
-            const first = await TKDaily.requestAccess('/api/create-room', { streamId: this.streamId });
-            await new Promise((resolve, reject) => {
-                let firstAccess = first;
-                this.session = TKDaily.connect({
-                    send: true,
-                    video: true,
-                    // Повторный вход после обрыва — в ту же комнату со свежим токеном.
-                    access: () => {
-                        if (!firstAccess) return TKDaily.requestAccess('/api/get-token', { streamId: this.streamId });
-                        const a = firstAccess;
-                        firstAccess = null;
-                        return Promise.resolve(a);
-                    },
-                    onTrack: (track, p, on) => {
-                        if (p.local && track.kind === 'video') this.showLocalVideo(on ? track : null);
-                    },
-                    onMediaError: () => toast('Нет доступа к камере или микрофону — разрешите его в настройках браузера или ведите эфир через OBS', 'error'),
-                    onState: (state) => {
-                        if (state === 'live') resolve();
-                        if (state !== 'ended') return;
-                        reject(new Error('нет связи с сервисом видео'));
-                        if (this.isConnected) {
-                            toast('Связь с сервисом видео потеряна, эфир остановлен', 'error');
-                            this.stopStream();
-                        }
-                    }
-                });
-            });
-            await this.applyCameraPreference();
-            await activateStream();
-            startStreamExistenceTimer(new Date().toISOString());
-
-            this.isConnected = true;
-            this.startStreamBtn.textContent = 'Начать стрим';
-            this.startStreamBtn.classList.add('hidden');
-            this.stopStreamBtn.classList.remove('hidden');
-            this.stopStreamBtn.disabled = false;
-            this.updateStreamStatus(true);
-        } catch (error) {
-            if (this.session) { this.session.leave(); this.session = null; }
-            this.startStreamBtn.disabled = false;
-            this.startStreamBtn.textContent = 'Начать стрим';
-            toast('Ошибка: ' + error.message, 'error');
-        }
-    }
-
-    // Камера, выбранная в списке до запуска. Смена во время эфира —
-    // switchCameraByValue ниже по странице.
-    async applyCameraPreference() {
-        const pref = (document.getElementById('cameraSelect') || {}).value || '';
-        try {
-            if (pref.startsWith('device:') && pref.length > 'device:'.length) {
-                await this.callObject.setInputDevicesAsync({ videoDeviceId: pref.slice('device:'.length) });
-            } else if (pref.startsWith('facing:')) {
-                await this.callObject.startCamera({ facingMode: pref.slice('facing:'.length) });
-            }
-        } catch (_) {}
-    }
-
-    showLocalVideo(track) {
-        const localVideo = document.getElementById('localVideo');
-        if (!localVideo) return;
-        TKDaily.attach(localVideo, track);
-        localVideo.style.display = track ? 'block' : 'none';
-        this.videoPlaceholder.style.display = track ? 'none' : 'block';
+      startBtn.disabled = true;
+      startBtn.textContent = 'Подключение...';
+      try {
+        let first = await TKDaily.requestAccess('/api/create-room', { streamId });
+        await new Promise((resolve, reject) => {
+          this.session = TKDaily.connect({
+            send: true,
+            video: true,
+            // Повторный вход после обрыва — в ту же комнату со свежим токеном.
+            access: () => {
+              if (!first) return TKDaily.requestAccess('/api/get-token', { streamId });
+              const a = first;
+              first = null;
+              return Promise.resolve(a);
+            },
+            onTrack: (track, p, on) => {
+              if (p.local && track.kind === 'video') showLocalVideo(on ? track : null);
+            },
+            onMediaError: () => toast('Нет доступа к камере или микрофону — разрешите его в настройках браузера или ведите эфир через OBS', 'error'),
+            onState: (state) => {
+              if (state === 'live') resolve();
+              if (state !== 'ended') return;
+              reject(new Error('нет связи с сервисом видео'));
+              if (this.isConnected) {
+                toast('Связь с сервисом видео потеряна, эфир остановлен', 'error');
+                this.stopStream();
+              }
+            },
+          });
+        });
+        await useCamera(this.callObject, select.value).catch(() => {});
+        await post('/set-active', { streamKey });
+        this.isConnected = true;
+        TKStream.timer.start(new Date().toISOString());
+        setLive(true);
+      } catch (error) {
+        if (this.session) { this.session.leave(); this.session = null; }
+        toast('Ошибка: ' + error.message, 'error');
+      } finally {
+        startBtn.disabled = false;
+        startBtn.textContent = t('119') || 'Начать стрим';
+      }
     }
 
     async stopStream() {
-        const session = this.session;
-        this.session = null;
-        this.isConnected = false;
-        if (session) await session.leave();
-        stopStreamExistenceTimer();
-        try {
-            await diactivateStream();
-        } catch (error) {
-            console.error('Не удалось снять эфир в базе:', error);
-        }
-        // Удаление комнаты отключает и зрителей.
-        await fetch(`/api/delete-room/${this.streamId}`, { method: 'DELETE' }).catch(() => {});
-
-        this.startStreamBtn.disabled = false;
-        this.startStreamBtn.textContent = 'Начать стрим';
-        this.startStreamBtn.classList.remove('hidden');
-        this.stopStreamBtn.classList.add('hidden');
-        this.stopStreamBtn.disabled = true;
-        this.updateStreamStatus(false);
-        this.showLocalVideo(null);
-        this.videoPlaceholder.textContent = 'Нажмите "Начать стрим" для начала';
-    }
-
-    updateStreamStatus(isActive) {
-        if (this.activeMessage && this.pausedMessage) {
-            if (isActive) {
-                this.activeMessage.classList.remove('hidden');
-                this.pausedMessage.classList.add('hidden');
-            } else {
-                this.activeMessage.classList.add('hidden');
-                this.pausedMessage.classList.remove('hidden');
-            }
-        }
-    }
-
-}
-
-// Старая инициализация удалена - теперь используется упрощенная версия выше
-
-// Инициализация DailyStreamer ТОЛЬКО для Daily.co (daily-stream).
-if ('<%= stream.streamType %>' === 'daily-stream') {
-    console.log('🎬 Инициализация Daily.co стримера (daily-stream)');
-    document.addEventListener('DOMContentLoaded', () => {
-        window.dailyStreamer = new DailyStreamer();
-        console.log('✅ Daily.co стример инициализирован и сохранен в window.dailyStreamer:', window.dailyStreamer);
-    });
-}
-    
-    // Мобильная оптимизация видео
-    document.addEventListener('DOMContentLoaded', function() {
-        const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        
-        if (isMobile) {
-            console.log('📱 Применяем мобильную оптимизацию видео для стримера');
-            
-            // Функция для оптимизации видео элементов
-            function optimizeVideoForMobile(video) {
-                if (video) {
-                    // Для стримера используем cover, но с правильным позиционированием
-                    video.style.objectFit = 'cover';
-                    video.style.objectPosition = 'center';
-                    video.style.background = '#000';
-                    video.setAttribute('webkit-playsinline', 'true');
-                    video.setAttribute('playsinline', 'true');
-                    video.setAttribute('muted', 'true'); // Важно для автовоспроизведения
-                    console.log('📱 Видео стримера оптимизировано для мобильного:', video.id);
-                }
-            }
-            
-            // Оптимизируем видео стримера
-            const localVideo = document.getElementById('localVideo');
-            optimizeVideoForMobile(localVideo);
-            
-            // Наблюдаем за изменениями видео
-            const observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    mutation.addedNodes.forEach(function(node) {
-                        if (node.nodeType === 1) {
-                            const videos = node.tagName === 'VIDEO' ? [node] : node.querySelectorAll('video');
-                            videos.forEach(optimizeVideoForMobile);
-                        }
-                    });
-                });
-            });
-            
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-            
-            // Обработка изменения ориентации
-            window.addEventListener('orientationchange', function() {
-                setTimeout(function() {
-                    const videos = document.querySelectorAll('video');
-                    videos.forEach(optimizeVideoForMobile);
-                    console.log('📱 Видео стримера переоптимизировано после поворота экрана');
-                }, 500);
-            });
-        }
-    });
-</script>
-
-<script>
-(function(){
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  async function populateCameraSelector() {
-    try {
-      const select = document.getElementById('cameraSelect');
-      if (!select) return;
-      // Ensure permission first so labels/deviceIds are available (Safari)
-      // Запросим доступ только к видео для ускорения появления deviceId/label
-      try { await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); } catch(e) {}
-      let devices = [];
-      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-        try { devices = await navigator.mediaDevices.enumerateDevices(); } catch(e) { devices = []; }
-      }
-      const videoInputs = devices.filter(d => d.kind === 'videoinput');
-      select.innerHTML = '';
-      if (videoInputs.length > 0) {
-        videoInputs.forEach((cam, idx) => {
-          const opt = document.createElement('option');
-          opt.value = 'device:' + (cam.deviceId || '');
-          opt.textContent = cam.label || `Камера ${idx + 1}`;
-          select.appendChild(opt);
-        });
-      } else {
-        // iOS fallback: front/back by facingMode
-        const front = document.createElement('option');
-        front.value = 'facing:user';
-        front.textContent = 'Фронтальная камера';
-        const back = document.createElement('option');
-        back.value = 'facing:environment';
-        back.textContent = 'Основная камера';
-        select.appendChild(front);
-        select.appendChild(back);
-      }
-    } catch (err) {
-      console.warn('populateCameraSelector error', err);
+      const session = this.session;
+      this.session = null;
+      this.isConnected = false;
+      if (session) await session.leave();
+      TKStream.timer.stop();
+      await post('/set-inactive', { streamKey })
+        .catch((e) => console.error('[stream] эфир не снят в базе:', e));
+      // Удаление комнаты отключает и зрителей.
+      await fetch(`/api/delete-room/${streamId}`, { method: 'DELETE' }).catch(() => {});
+      setLive(false);
+      showLocalVideo(null);
     }
   }
 
-  async function switchCameraByValue(value) {
+  window.dailyStreamer = new DailyStreamer();
+  startBtn.addEventListener('click', () => window.dailyStreamer.startStream());
+  pauseBtn.addEventListener('click', async () => {
+    pauseBtn.disabled = true;
     try {
-      if (!window.dailyStreamer || !window.dailyStreamer.callObject) return;
-      if (value.startsWith('device:')) {
-        const deviceId = value.slice('device:'.length);
-        if (deviceId) {
-          // Мягкая смена устройства: сначала остановим локальное видео, затем применим девайс и включим заново
-          try { await window.dailyStreamer.callObject.setLocalVideo(false); } catch(_) {}
-          await window.dailyStreamer.callObject.setInputDevicesAsync({ videoDeviceId: deviceId });
-          // Небольшая пауза даёт драйверу время переключиться
-          await new Promise(r => setTimeout(r, 150));
-          await window.dailyStreamer.callObject.setLocalVideo(true);
-          // Принудительно обновим элемент localVideo, если трек ещё не отрисовался
-          try {
-            const localVideo = document.getElementById('localVideo');
-            if (localVideo) {
-              const parts = window.dailyStreamer.callObject.participants();
-              const lp = parts && parts.local;
-              if (lp && lp.video) {
-                localVideo.style.display = 'block';
-                localVideo.srcObject = new MediaStream([lp.video]);
-              }
-            }
-          } catch(_) {}
-          window._preferredCameraValue = value;
-        }
-      } else if (value.startsWith('facing:')) {
-        const mode = value.split(':')[1];
-        try { await window.dailyStreamer.callObject.setLocalVideo(false); } catch(_) {}
-        await window.dailyStreamer.callObject.startCamera({ facingMode: mode });
-        await new Promise(r => setTimeout(r, 150));
-        await window.dailyStreamer.callObject.setLocalVideo(true);
-        window._preferredCameraValue = value;
-      }
-    } catch (err) {
-      console.warn('switchCameraByValue error', err);
+      await window.dailyStreamer.stopStream();
+      toast(t('245') || 'Стрим поставлен на паузу');
+    } finally {
+      pauseBtn.disabled = false;
     }
-  }
-
-  document.addEventListener('DOMContentLoaded', async function(){
-    await populateCameraSelector();
-    const select = document.getElementById('cameraSelect');
-    if (select) {
-      select.addEventListener('change', (e)=> switchCameraByValue(e.target.value));
-      // При инициализации, если сохранён предпочтительный девайс — применим его
-      try {
-        const pref = window._preferredCameraValue;
-        if (pref && typeof pref === 'string') {
-          // Установим в селекте, если опция существует
-          const opt = Array.from(select.options).find(o => o.value === pref);
-          if (opt) { select.value = pref; await switchCameraByValue(pref); }
-        }
-      } catch(_) {}
-    }
-    // Автоматически обновлять список камер при изменении устройств
-    try {
-      if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
-        navigator.mediaDevices.addEventListener('devicechange', () => {
-          populateCameraSelector().catch(()=>{});
-        });
-      }
-    } catch(_) {}
   });
 })();
 </script>
-
-<script>
-// ... existing code ...
-// Полноэкранный режим для стримера
-(function(){
-  function toggleFullscreenStreamer(){
-    try {
-      var container = document.querySelector('.video-player-area');
-      var video = document.getElementById('localVideo');
-      var doc = document;
-      if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
-        if (container.requestFullscreen) container.requestFullscreen();
-        else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen();
-        else if (video && video.webkitEnterFullscreen) video.webkitEnterFullscreen();
-      } else {
-        if (doc.exitFullscreen) doc.exitFullscreen();
-        else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
-      }
-    } catch(e){ console.warn('fullscreen error', e); }
-  }
-  document.addEventListener('DOMContentLoaded', function(){
-    var btn = document.getElementById('streamerFsButton');
-    if (btn) btn.addEventListener('click', toggleFullscreenStreamer);
-  });
-})();
-</script>
-
-
-
 </body>
 </html>

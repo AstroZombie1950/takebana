@@ -605,11 +605,8 @@ if (input) {
               
                           // Покажите модальное окно
                           bigBarInfo.classList.add('active');
-                          var coordinates = ol.proj.fromLonLat([data.location.lng, data.location.lat]);
-                          // Переместите центр карты к координатам заведения
-                          map2.getView().setCenter(coordinates);
-                          // Установите уровень приближения
-                          map2.getView().setZoom(14);
+                          // Карта — к найденному заведению
+                          if (window.venueMap) venueMap.flyTo(data.location.lng, data.location.lat, 14);
                       });
               });
 

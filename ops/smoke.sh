@@ -168,7 +168,6 @@ expect "POST /upload-thumbnail"           "401"     POST /upload-thumbnail
 expect "POST /set-active"                 "401"     POST /set-active                 -H 'Content-Type: application/json' -d '{}'
 expect "POST /set-inactive"               "401"     POST /set-inactive               -H 'Content-Type: application/json' -d '{}'
 expect "POST /stream/:id/enter"           "401"     POST /stream/000000000000000000000000/enter -H 'Content-Type: application/json' -d '{"mode":"web"}'
-expect "POST /obs-stream-start"           "401"     POST /obs-stream-start           -H 'Content-Type: application/json' -d '{}'
 expect "POST /chat/message"               "401"     POST /chat/message               -H 'Content-Type: application/json' -d '{}'
 expect "GET /search-users"                "401|302" GET  /search-users               -H 'X-Requested-With: XMLHttpRequest'
 expect "GET /api/presence"                "401"     GET  /api/presence?ids=000000000000000000000000
