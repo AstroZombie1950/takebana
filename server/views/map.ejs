@@ -1,1085 +1,278 @@
+<%#
+  Карта заведений (/main) в каркасе кабинета. Слева панель: поиск, фильтры,
+  заведения в видимой части карты и кабинет владельца. Справа — карта на своей
+  подложке (public/tk-map.js), поверх неё карточка заведения. Поведение —
+  public/tk-venues.js, вёрстка — public/css/venues.css.
+
+  Фильтры — обычная GET-форма, как в каталоге: адрес с фильтрами можно
+  переслать, а без скрипта форма уходит перезагрузкой. Город и тип —
+  закрытые списки config/catalog.js.
+%>
+<% var anyFilter = filters.city || filters.types.length || filters.live; %>
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Takebana Map</title>
-    <style>
-      #map2 {
-        position: absolute;
-        width: 100%;
-        height: 100vh;
-        top: 0;
-        left: 0;
-      }
-
-      .layers {
-        position: relative;
-      }
-    </style>
-    <%# Карта — своя подложка: public/tk-map.js, MapLibre и pmtiles из /vendor. %>
-    <link rel="stylesheet" href="/vendor/maplibre-gl-6.9.0/maplibre-gl.css">
-    <link rel="stylesheet" href="/css/tk-map.css">
-    <script src="/vendor/pmtiles-4.5.0.js"></script>
-    <script src="/tk-map.js"></script>
-    <link rel="stylesheet" href="css/style.css">
-
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-
-
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.css">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    
-    <%# lightbox.min.js, а не сборка lightbox-plus-jquery: та тащит внутри
-        собственную копию jQuery (98,7 КБ против 9,5), хотя jQuery подключён
-        строкой выше. %>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/js/lightbox.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bxslider/4.2.15/jquery.bxslider.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.inputmask/5.0.8/jquery.inputmask.min.js"></script>
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Urbanist:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
-    
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/css/lightbox.min.css" rel="stylesheet">
-
-  <script src="/toast.js"></script>
+<html lang="ru">
+<head>
+<%- include('partials/tkHead', { title: 'Карта заведений — Takebana' }) %>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/vendor/maplibre-gl-6.9.0/maplibre-gl.css">
+<link rel="stylesheet" href="/css/tk-map.css">
+<link rel="stylesheet" href="/css/venues.css">
 </head>
-  <body>
+<body class="tk-app">
 
-    <div class="left_menu">
-      <div class="close">
-        <img src="img/close_modal_gray.svg" alt="">
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main tk-venues">
+
+    <section class="tk-venues__panel" id="venuePanel" aria-label="Заведения">
+      <div class="tk-venues__head">
+        <div>
+          <p class="tk-kicker">Сервис заведений</p>
+          <h1 class="tk-venues__h1">Карта заведений</h1>
+        </div>
+        <button type="button" class="tk-venues__close" id="venuePanelClose" aria-label="Скрыть список">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+        </button>
       </div>
 
-      <div class="list">
-        <a href="/about" target="_blank" lng="73">О проекте</a>
-        <a href="/terms_of_service">Terms Of Service</a>
-        <a href="/user_agreement">Пользовательское соглашение</a>
-        <a href="/personal_data_processing">Политика обработки персональных данных</a>
+      <div class="tk-venues__search">
+        <svg class="tk-venues__loupe" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+        <input type="search" class="tk-field" id="venueSearch" placeholder="Поиск заведений" lng="31" autocomplete="off" aria-controls="venueFound">
+        <div class="tk-venues__found hidden" id="venueFound"></div>
       </div>
 
+      <form class="tk-venues__filters" id="venueFilters" action="/main" method="get">
+        <label class="tk-venues__ctl">
+          <span class="tk-form__label" lng="48">Город</span>
+          <select name="city" class="tk-field tk-select">
+            <option value="">Все города</option>
+            <% catalog.CITIES.forEach(function (city) { %>
+            <option value="<%= city.code %>"<%= filters.city === city.code ? ' selected' : '' %>><%= city.name %></option>
+            <% }); %>
+          </select>
+        </label>
+
+        <div class="tk-venues__ctl" role="group" aria-labelledby="venueTypeLabel">
+          <span class="tk-form__label" id="venueTypeLabel">Тип заведения</span>
+          <div class="tk-tags">
+            <% catalog.VENUE_TYPES.forEach(function (type) { %>
+            <label class="tk-tag"><input type="checkbox" name="type" value="<%= type.code %>"<%= filters.types.includes(type.code) ? ' checked' : '' %>><span><%= type.name %></span></label>
+            <% }); %>
+          </div>
+        </div>
+
+        <label class="tk-venues__live">
+          <input type="checkbox" name="live" value="1"<%= filters.live ? ' checked' : '' %>>
+          <span class="tk-venues__switch" aria-hidden="true"></span>
+          <span><i class="tk-venues__dot" aria-hidden="true"></i>Сейчас в эфире</span>
+        </label>
+
+        <div class="tk-venues__foot">
+          <%# Нужна только без скрипта: со скриптом фильтр применяется сразу. %>
+          <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm">Показать</button>
+          <a href="/main" class="tk-venues__reset" data-reset<%= anyFilter ? '' : ' hidden' %>>Сбросить фильтры</a>
+        </div>
+      </form>
+
+      <div class="tk-venues__list-head">
+        <span class="tk-form__label">На карте</span>
+        <span class="tk-venues__count" id="venueCount"></span>
+      </div>
+      <ul class="tk-venues__list" id="venueList"></ul>
+      <p class="tk-note tk-note--center" id="venueEmpty" hidden>В этой части карты заведений нет. Отдалите карту или сбросьте фильтры.</p>
+
+      <div class="tk-venues__owner">
+        <% if (hasEstablishments) { %>
+          <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-btn--block" id="myVenuesButton" lng="55">Мои заведения</button>
+        <% } else { %>
+          <a href="/company-register" class="tk-btn tk-btn--outline tk-btn--sm tk-btn--block" lng="41">Зарегистрировать заведение</a>
+        <% } %>
+      </div>
+    </section>
+
+    <div class="tk-venues__map" id="venueMap">
+      <button type="button" class="tk-venues__open" id="venuePanelOpen">
+        <span>Список и фильтры</span>
+        <span class="tk-venues__open-count" id="venueOpenCount"></span>
+      </button>
     </div>
 
-<!-- 
-    <li>
-      <a href="/terms_of_service">Terms Of Service</a>
-    </li>
-    <li>
-      <a href="/user_agreement">Пользовательское соглашение</a>
-    </li>
-    <li>
-      <a href="/personal_data_processing">Политика обработки персональных данных</a>
-    </li> -->
+    <%# Карточка заведения: справа поверх карты, на телефоне — снизу. %>
+    <aside class="tk-vcard hidden" id="venueCard" aria-labelledby="venueCardName">
+      <button type="button" class="tk-vcard__close" id="venueCardClose" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+      <div class="tk-vcard__photos" id="venueCardPhotos"></div>
+      <div class="tk-vcard__body">
+        <p class="tk-vcard__meta" id="venueCardMeta"></p>
+        <h2 class="tk-vcard__name" id="venueCardName"></h2>
+        <p class="tk-vcard__line" id="venueCardAddr"></p>
+        <p class="tk-vcard__line tk-vcard__line--hours" id="venueCardHours"></p>
 
+        <button type="button" class="tk-btn tk-btn--primary tk-btn--block" id="venueWatch">
+          <i class="tk-venues__dot" aria-hidden="true"></i><span lng="43">Смотреть трансляцию</span>
+        </button>
+        <p class="tk-vcard__offline" id="venueOffline" lng="44">Заведение оффлайн</p>
 
-
-
-    <div class="redirect" style="opacity: 0;">
-      <p>Перейти на стриминговую платформу? </p>
-      <div class="btns">
-        <button class="btn yes">Да</button>
-        <button class="btn no">Остаться здесь</button>
+        <div class="tk-vcard__rating">
+          <div class="tk-vcard__score">
+            <span class="tk-vcard__num" id="venueScore">0.0</span>
+            <span>
+              <span class="tk-stars" id="venueStars" aria-hidden="true"></span>
+              <span class="tk-vcard__votes" id="venueVotes"></span>
+            </span>
+          </div>
+          <div class="tk-vcard__vote">
+            <span class="tk-form__label" id="venueVoteLabel">Ваша оценка</span>
+            <%# Звёзды в обратном порядке: при наведении подсвечиваются
+                наведённая и все «младшие» — это делает селектор ~ в CSS. %>
+            <div class="tk-rate" id="venueRate" role="group" aria-labelledby="venueVoteLabel">
+              <% for (var n = 5; n >= 1; n--) { %>
+              <button type="button" data-value="<%= n %>" aria-label="<%= n %> из 5">★</button>
+              <% } %>
+            </div>
+          </div>
+        </div>
       </div>
+    </aside>
+  </main>
+</div>
+
+<%# Камера заведения: гость смотрит то, что показывает владелец (routes/venueLive.js). %>
+<div class="tk-modal hidden" id="venueLiveModal">
+  <div class="tk-modal__card tk-modal__card--wide">
+    <div class="tk-modal__head">
+      <h3 class="tk-modal__title" id="venueLiveTitle">Трансляция</h3>
+      <button type="button" class="tk-modal__close" data-close aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+    </div>
+    <video class="tk-vlive" id="venueLiveVideo" autoplay playsinline controls></video>
+  </div>
+</div>
+
+<%# Фото заведения во весь экран. %>
+<div class="tk-modal hidden" id="venuePhotoModal">
+  <div class="tk-vphoto">
+    <img id="venuePhotoFull" alt="">
+    <button type="button" class="tk-vphoto__nav tk-vphoto__nav--prev" id="venuePhotoPrev" aria-label="Предыдущее фото">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+    </button>
+    <button type="button" class="tk-vphoto__nav tk-vphoto__nav--next" id="venuePhotoNext" aria-label="Следующее фото">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+    </button>
+    <button type="button" class="tk-modal__close tk-vphoto__close" data-close aria-label="Закрыть">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+    </button>
+  </div>
+</div>
+
+<% if (hasEstablishments) { %>
+<%# Кабинет владельца: камера и настройки. %>
+<div class="tk-modal hidden" id="myVenuesModal">
+  <div class="tk-modal__card tk-modal__card--wide">
+    <div class="tk-modal__head">
+      <h3 class="tk-modal__title" lng="55">Мои заведения</h3>
+      <button type="button" class="tk-modal__close" data-close aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+    </div>
+    <div class="tk-modal__body">
+      <ul class="tk-mine" id="myVenuesList"></ul>
+    </div>
+    <div class="tk-modal__foot">
+      <a href="/company-register" class="tk-btn tk-btn--ghost tk-btn--sm">Добавить заведение</a>
+    </div>
+  </div>
+</div>
+
+<div class="tk-modal hidden" id="venueSettingsModal">
+  <form class="tk-modal__card tk-modal__card--wide" id="venueSettingsForm" novalidate>
+    <div class="tk-modal__head">
+      <h3 class="tk-modal__title" lng="60">Настройка заведения</h3>
+      <button type="button" class="tk-modal__close" data-close aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
     </div>
 
-    <script>
+    <div class="tk-modal__body">
+      <label class="tk-form__row">
+        <span class="tk-form__label" lng="49">Название заведения</span>
+        <input class="tk-field" type="text" name="name" maxlength="200">
+      </label>
 
-
-const redirectModal = document.querySelector('.redirect');
-
-      setTimeout(() => {
-        redirectModal.style.opacity = '1';
-      }, 3000);
-
-    const targetService = localStorage.getItem('targetService');
-    if (targetService === 'service2') {
-        window.location.href = '/streaming';
-    }
-
-       // Код для модального окна перехода на стриминговую платформу
-
-    const yesButton = redirectModal.querySelector('.redirect .btn.yes');
-    const noButton = redirectModal.querySelector('.redirect .btn.no');
-
-    yesButton.addEventListener('click', function () {
-        localStorage.setItem('targetService', 'service2');
-        window.location.href = '/streaming';
-    });
-
-    noButton.addEventListener('click', function () {
-        redirectModal.style.display = 'none';
-    });
-    </script>
-
-    <style>
-      .redirect {
-        z-index: 5000;
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        background-color: white;
-        border-radius: 10px;
-        width: 320px;
-        height: auto;
-        padding: 20px;
-        transform: translateX(-50%);
-      }
-
-      .redirect p {
-        text-align: center;
-      }
-
-      .redirect .btns {
-        display: flex;
-        align-items: center;
-        justify-content: space-around;
-      }
-
-      .redirect .btns button {
-        padding: 10px 25px 10px 25px;
-        height: auto;
-      }
-       
-
-    </style>
-
-	<div class="streamingFrame">
-		<img src="/img/close.svg" alt="">
-		<video id="myVideo" controls>
-			<%# источник подставляет JS ниже (querySelector('.streamingFrame video')). %>
-			<%# Раньше здесь стоял <source src="yourStreamSource"> из исходного шаблона — %>
-			<%# браузер запрашивал этот путь на каждом открытии /main и получал 404. %>
-			Ваш браузер не поддерживает HTML5 видео.
-		</video>
-	</div>
-
-    <div class="settingsOverlay">
-      <div class="estateSettings">
-        <div class="head">
-          <p lng="60">Настройка заведения</p>
-          <img src="/img/close_modal_gray.svg" alt="close">
-        </div>
-        <div class="info">
-          <div class="first">
-            <p lng="61">Основная информация</p>
-            <span lng="62">
-              <img src="/img/pen.svg" alt="pen">
-              Изменить</span>
-          </div>
-          <div class="second">
-            <div class="inp">
-              <span lng="47">Страна</span>
-              <input class="blocked country" type="text">
-            </div>
-            <div class="inp">
-              <span lng="48">Город</span>
-              <input class="blocked city" type="text">
-            </div>
-          </div>
-          <div class="three">
-            <div class="inp">
-              <span lng="49">Название заведения</span>
-              <input class="blocked name" type="text">
-            </div>
-            <div class="inp">
-              <span lng="50">Адрес заведения</span>
-              <input class="blocked address" type="text">
-            </div>
-          </div>
-          <div class="four">
-            <p lng="52">Время работы в будни</p>
-            <div class="inp">
-              <span lng="63">С</span>
-              <input type="text" class="time blocked weekdaysOpen" placeholder="00:00">
-            </div>
-            <div class="inp">
-              <span lng="64">До</span>
-              <input type="text" class="time blocked weekdaysClose" placeholder="00:00">
-            </div>
-          </div>
-          <div class="five">
-            <p lng="53">Время работы в выходные</p>
-            <div class="inp">
-              <span lng="63">С</span>
-              <input type="text" class="time blocked weekendOpen" placeholder="00:00">
-            </div>
-            <div class="inp">
-              <span lng="64">До</span>
-              <input type="text" class="time blocked weekendClose" placeholder="00:00">
-            </div>
-          </div>
-        </div>
-        <div class="photo">
-          <p class="title" lng="65">Загрузка фото</p>
-          <div class="files">
-            <div id="drop_zone" >
-              <p lng="66">Перетяните сюда фотографию <br>
-                или</p>
-              <img src="/img/cloud.svg" alt="">
-              <span lng="67">Загрузить фото</span>
-              </div>
-              <input type="file" id="fileInput" multiple style="display:none">
-              <div id="preview"></div>
-          </div>
-        </div>
-        <div class="remove_block">
-          <span class="remove_estate blocked" lng="68">Удалить заведение</span>
-        </div>
-        <div class="buttons">
-          <button class="btn" lng="39">Сохранить</button>
-        </div>
+      <div class="tk-venues__pair">
+        <label class="tk-form__row">
+          <span class="tk-form__label">Тип заведения</span>
+          <select class="tk-field tk-select" name="type">
+            <option value="">Не выбран</option>
+            <% catalog.VENUE_TYPES.forEach(function (type) { %>
+            <option value="<%= type.code %>"><%= type.name %></option>
+            <% }); %>
+          </select>
+        </label>
+        <label class="tk-form__row">
+          <span class="tk-form__label" lng="48">Город</span>
+          <select class="tk-field tk-select" name="city">
+            <option value="">Не выбран</option>
+            <% catalog.CITIES.forEach(function (city) { %>
+            <option value="<%= city.code %>"><%= city.name %></option>
+            <% }); %>
+          </select>
+        </label>
       </div>
+
+      <div class="tk-venues__pair">
+        <label class="tk-form__row">
+          <span class="tk-form__label" lng="47">Страна</span>
+          <input class="tk-field" type="text" name="country" maxlength="100">
+        </label>
+        <label class="tk-form__row">
+          <span class="tk-form__label" lng="50">Адрес заведения</span>
+          <input class="tk-field" type="text" name="address" maxlength="300">
+        </label>
+      </div>
+
+      <div class="tk-venues__hours">
+        <span class="tk-form__label" lng="52">Время работы в будни</span>
+        <span lng="63">с</span><input class="tk-field" type="text" name="weekdayOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
+        <span lng="64">до</span><input class="tk-field" type="text" name="weekdayClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
+        <span class="tk-form__label" lng="53">Время работы в выходные</span>
+        <span lng="63">с</span><input class="tk-field" type="text" name="weekendOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
+        <span lng="64">до</span><input class="tk-field" type="text" name="weekendClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
+      </div>
+
+      <div class="tk-panel">
+        <div class="tk-panel__head">
+          <p class="tk-panel__title" lng="65">Загрузка фото</p>
+          <span class="tk-form__label tk-form__hint">до 6</span>
+        </div>
+        <label class="tk-dropzone" id="venueDrop">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M7 18a4 4 0 01-.6-8A6 6 0 0118 9a4 4 0 01-1 9"></path><path d="M12 12v8M9 15l3-3 3 3"></path></svg>
+          <p>Перетащите фото сюда или нажмите, чтобы выбрать</p>
+          <input type="file" id="venuePhotoInput" accept="image/*" multiple hidden>
+        </label>
+        <div class="tk-thumbs" id="venueThumbs"></div>
+      </div>
+
+      <p class="tk-form__note">После сохранения заведение снова уходит на проверку и пропадает с карты до одобрения.</p>
     </div>
 
-
-
-
-
-    <div class="myEstablishments">
-      <img class="close_estateModal" src="/img/close_modal.svg" alt="close modal">
-      <div class="left-tab">
-        <div class="title">
-          <h1 lng="55">Мои заведения</h1>
-          <a href="/company-register" lng="56">
-            <img src="/img/plus.svg" alt="">
-            Добавить заведение</a>
-        </div>
-        <div class="establishments">
-
-          <!-- <div class="item">
-            <div class="head">
-              <div class="online">
-                <span>Онлайн</span>
-              </div>
-              <div class="offline">
-                <span>Оффлайн</span>
-              </div>
-              <img class="settings" src="/img/settings.svg" alt="settings">
-            </div>
-            <div class="info">
-              <p>Название</p>
-              <span>Очень длинный адрес заведения</span>
-              <div class="time_stars">
-                <p class="rating">5 <img src="/img/rating_star.svg" alt="rating"></p>
-                <p class="rating_count">2 330 оценок</p>
-                <p class="opened">Открыто до 05:00</p>
-              </div>
-            </div>
-            <div class="foot">
-              <button class="btn startStream">
-                <img src="/img/start.svg" alt="start">
-                Запустить трансляцию</button>
-            </div>
-          </div> -->
-
-
-
-        </div>
-      </div>
-
-      <div class="right-tab">
-        <div class="title">
-          <h1 lng="69">Рейтинг заведений</h1>
-        </div>
-        <div class="table">
-          <p class="place" lng="70">Место</p>
-          <p class="name" lng="71">Название</p>
-          <p class="rating" lng="72">рейтинг по отзывам</p>
-        </div>
-        <div class="items">
-
-          <!-- <div class="item">
-            <span>1</span>
-            <p class="name">тест заведение</p>
-            <p class="rating">
-              4
-              <img src="/img/star.svg" alt="star">
-            </p>
-          </div> -->
-      
-        </div>
-      </div>
-
+    <div class="tk-modal__foot">
+      <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" lng="39">Сохранить</button>
     </div>
-
-    <div class="profileInfo">
-      <div class="head">
-        <p lng="32">Профиль</p>
-        <div class="close_modal">
-          <img class="close_img" src="/img/close_modal.svg" alt="close_icon">
-        </div>
-      </div>
-
-      <div class="bio">
-        <input class="transparent" type="text" placeholder="Укажите ваше имя" value="<%= userLogin %>" lng="33">
-      </div>
-
-      <div class="private">
-        <p lng="34">Безопасность <span><i class="fas fa-chevron-down"></i></span></p>
-        <div class="slide_wrap">
-          <div class="old">
-            <input class="transparent" type="text" placeholder="Старый пароль" lng="35">
-            <!-- <a href="">Забыли пароль?</a> -->
-          </div>
-          <div class="new">
-            <input class="transparent newPass" type="text" placeholder="Новый пароль" lng="36">
-            <input class="transparent" type="text" placeholder="Подтвердите пароль" lng="37">
-          </div>
-        </div>
-
-      </div>
-
-      <script>
-        // раскрывашка безопасность 
-        let bezopas = document.querySelector('.profileInfo .private p');
-        let slideWrap = document.querySelector('.profileInfo .private .slide_wrap');
-        bezopas.addEventListener('click', function() {
-          if (slideWrap.classList.contains('active')) {
-            slideWrap.classList.remove('active');
-          } else {
-            slideWrap.classList.add('active');
-          }
-        });
-      </script>
-
-
-      <div class="goStreaming" style="margin-top: 20px;">
-        <i class="fa fa-film"></i>
-        <a href="/streaming">Перейти к платформе для стриминга</a>
-      </div>
-
-      <script>
-        let goStreaming = document.querySelector('.goStreaming a');
-        goStreaming.addEventListener('click', function () {
-            localStorage.setItem('targetService', 'service2');
-        });
-      </script>
-
-      <div class="logout">
-        <a href="/logout" lng="38">Выйти из аккаунта</a>
-      </div>
-
-      <div class="save">
-        <button class="btn" lng="39">Сохранить</button>
-      </div>
-
-    </div>
-
-    <div class="bigBarInfo">
-      <div class="online_mark">
-        <span>Онлайн</span>
-      </div>
-      <div class="rating_mark">
-        <span>Рейтинг 27 395</span>
-      </div>
-      <!-- <div class="modal_bookmark">
-        <img src="/img/modal_bookmark.svg" alt="boockmark">
-      </div> -->
-      <div class="close_modal">
-        <img class="close_img" src="/img/close_modal.svg" alt="close_icon">
-      </div>
-
-      <div class="photo_slider">
-        <a href="/img/slider_1/1.webp" data-lightbox="image-set" class="slide">
-          <img src="/img/slider_1/1.webp" alt="">
-        </a>
-        <a href="/img/slider_1/2.webp" data-lightbox="image-set" class="slide">
-          <img src="/img/slider_1/2.webp" alt="">
-        </a>
-        <a href="/img/slider_1/3.webp" data-lightbox="image-set" class="slide">
-          <img src="/img/slider_1/3.webp" alt="">
-        </a>
-        <a href="/img/slider_1/4.webp" data-lightbox="image-set" class="slide">
-          <img src="/img/slider_1/4.webp" alt="">
-        </a>
-        <a href="/img/slider_1/5.webp" data-lightbox="image-set" class="slide">
-          <img src="/img/slider_1/5.webp" alt="">
-        </a>
-        <a href="/img/slider_1/6.webp" data-lightbox="image-set" class="slide">
-          <img src="/img/slider_1/6.webp" alt="">
-        </a>
-      </div>
-
-      <div class="info">
-        <p class="name">Мята Lounge</p>
-        <p class="description">Кальян-бар, проспект Независимости в очень длинном названии, 19</p>
-        <p class="time" lng="42">Открыто до 05:00</p>
-      </div>
-      <div class="stream_btn">
-        <button class="btn getStream" lng="43">Смотреть трансляцию</button>
-      </div>
-
-      <div class="rating_block">
-          <div class="wrap">
-            <p class="rate">4.5</p>
-            <div class="stars_wrap">
-              <div class="stars">
-
-              </div>
-
-              <p>840 оценок</p>
-
-            </div>
-          </div>
-          <div class="wrap_2">
-            <p>Оцените 
-              это место</p>
-            <div class="stars_vote">
-              <i class="fas fa-star"></i>
-              <i class="fas fa-star"></i>
-              <i class="fas fa-star"></i>
-              <i class="fas fa-star"></i>
-              <i class="fas fa-star"></i>
-            </div>
-          </div>
-      </div>
-    </div>
-
-    <div class="miniBarInfo">
-      <!-- <div class="online_mark">
-        <span>Онлайн</span>
-      </div>
-      <div class="top_mark">
-        <img src="/img/top_star.svg" alt="star">
-        <span>Топ 1000</span>
-      </div> -->
-      <!-- <div class="modal_bookmark">
-        <img src="/img/modal_bookmark.svg" alt="boockmark">
-      </div> -->
-      <div class="info">
-        <div class="text">
-          <p>Пинки Бандитски</p>
-          <span>Кальян-бар, проспект Независимости в очень длинном названии, 19</span>
-        </div>
-      
-        <div class="photo">
-          <img alt=""><%# без src: пустой атрибут заставлял браузер грузить саму страницу %>
-          <div class="count">22</div>
-        </div>
-      </div>
-      <div class="time_stars">
-        <p class="rating">5 <img src="/img/rating_star.svg" alt="rating"></p>
-        <p class="rating_count">2 330 оценок</p>
-        <p class="opened" lng="42">Открыто до 05:00</p>
-      </div>
-    </div>
-
-    <div class="map_dark_overlay">
-
-    </div>
-
-    <div class="map_header">
-
-      <div class="search_panel">
-        <img src="/img/takebana.webp" alt="Takebana" width="123" height="87">
-        <div class="search_wrap">
-          <div class="search_input">
-            <input type="text" placeholder="Поиск заведений" lng="31">
-            <img class="search_icon" src="/img/search.svg" alt="иконка поиска">
-            <img class="clear_input" src="/img/clear_input.svg" alt="очистить поиск">
-          </div>
-        </div>
-
-        <div class="burger">
-          <div class="line"></div>
-          <div class="line"></div>
-          <div class="line"></div>
-        </div>
-
-        <div class="search_results">
-          <!-- <div class="item">
-            <p>Мята Lounge</p>
-            <span>Кальян-бар, проспект Независимости,19</span>
-          </div>
-          <div class="item">
-            <p>Мята Lounge</p>
-            <span>Кальян-бар, проспект Независимости,19</span>
-          </div>
-          <div class="item">
-            <p>Мята Lounge</p>
-            <span>Кальян-бар, проспект Независимости,19</span>
-          </div>
-          <div class="item">
-            <p>Мята Lounge</p>
-            <span>Кальян-бар, проспект Независимости,19</span>
-          </div> -->
-
-        </div>
-      </div>
-
-      <div class="info_panels">
-
-        <div class="filters"> 
-          <img src="/img/filter.svg" alt="фильтры">
-          <p>Фильтры</p>
-        </div>
-
-        <!-- <div class="notif">  -->
-          <!-- <img class="bell" src="/img/bell.svg" alt="уведомления"> -->
-          <!-- <img class="bookmark" src="/img/bookmark.svg" alt="закладка"> -->
-        <!-- </div> -->
-
-        <div class="register"> 
-          <div class="prof">
-            <p></p>
-          </div>
-        
-          <% if (hasEstablishments) { %>
-            <a href="#" class="back_btn transparent_btn myEstates" lng="40">Мое заведение</a>
-          <% } else { %>
-            <a href="/company-register" class="back_btn transparent_btn" lng="41">Зарегистрировать заведение</a>
-          <% } %>
-
-          <div class="eng_swich">
-            <div class="sw">
-              <div class="circle"></div>
-              <div class="words">
-                <span class="ru active">RU</span>
-                <span class="en">EN</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-    </div>
-
-    <script src="/lang.js"></script>
-    <script>
- 
-     let eng_switch = document.querySelector('.eng_swich');
-     let ru_span = eng_switch.querySelector('span.ru');
-     let en_span = eng_switch.querySelector('span.en');
-     let circle = eng_switch.querySelector('.circle');
- 
-     if (localStorage.getItem('lang') == null) {
-       localStorage.setItem('lang', 'ru');
-     } else {
-       let lang = localStorage.getItem('lang');
-       if (lang == 'ru') {
-         eng_switch.classList.remove('active');
-         ru_span.classList.add('active');
-         en_span.classList.remove('active');
-         circle.classList.remove('active');
-         localStorage.setItem('lang', 'ru');
-       }
-       if (lang == 'en') {
-         eng_switch.classList.add('active');
-         ru_span.classList.remove('active');
-         en_span.classList.add('active');
-         circle.classList.add('active');
-         localStorage.setItem('lang', 'en');
-       }
-     }
- 
- 
-     eng_switch.addEventListener('click', function() {
-       if (!eng_switch.classList.contains('active')) {
-         eng_switch.classList.add('active');
-         ru_span.classList.remove('active');
-         en_span.classList.add('active');
-         circle.classList.add('active');
-         localStorage.setItem('lang', 'en');
-         updateLang();
-       } else {
-         eng_switch.classList.remove('active');
-         ru_span.classList.add('active');
-         en_span.classList.remove('active');
-         circle.classList.remove('active');
-         localStorage.setItem('lang', 'ru');
-         updateLang();
-       }
-     });
- 
- 
-     document.addEventListener('DOMContentLoaded', function() {
-       updateLang();
-     });
- 
-     function updateLang() {
-         // Получаем текущий язык из localStorage
-         let currentLang = localStorage.getItem('lang');
-         // Находим все элементы с атрибутом lng
-         let elements = document.querySelectorAll('[lng]');
-         elements.forEach(function(element) {
-          // Получаем значение атрибута lng
-          let key = element.getAttribute('lng');
-          // Находим соответствующий перевод в объекте lang
-          let translation = lang[key];
-          if (translation) {
-              // Проверяем, является ли элемент input
-              if (element.tagName === 'INPUT') {
-                  // Обновляем плейсхолдер input
-                  element.placeholder = translation[currentLang];
-              } else {
-                  // Получаем исходный текст элемента
-                  let originalText = element.innerHTML;
-                  // Если исходный текст не является пробелом или переносом строки, продолжаем обработку
-                  if (!/^[\s\n]*$/.test(originalText)) {
-                      // Получаем новый текст
-                      let newText = translation[currentLang];
-                      // Устанавливаем новый текст элемента
-                      element.innerHTML = newText;
-                  }
-              }
-          }
-      });
-     };
- 
-   </script>
-
-
-
-    <div class="layers">
-      <div id="map2"></div>
-    </div>
-
-
-    <script src="/tk-daily.js"></script>
-
-
-
-
-
-
-
-
-    <script>
-      let userId = "<%= userId %>";
-      console.log(userId)
-
-
-
-      $(document).ready(function(){
-      $(".time").inputmask("99:99");
-    });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-    
-    
-    </script>
-    
-    
-    
-    
-
-
-
-
-
-    <script>
-
-
-      // BURGER & LEFT MENU
-      let burg = document.querySelector('.burger');
-      let left_menu = document.querySelector('.left_menu');
-      let close_left_menu = document.querySelector('.left_menu .close');
-      if (burg) {
-        left_menu.addEventListener('click', function(e) {
-          e.stopPropagation();
-        });
-        burg.addEventListener('click', function(e) {
-          e.stopPropagation();
-          if (left_menu.classList.contains('active')) {
-            left_menu.classList.remove('active');
-          } else {
-            left_menu.classList.add('active');
-          }
-        });
-        close_left_menu.addEventListener('click', function() {
-          left_menu.classList.remove('active');
-        });
-      }
-      document.addEventListener('click', function() {
-        left_menu.classList.remove('active');
-      });
-
-
-      // PROFILE CHARS 
-        document.addEventListener('DOMContentLoaded', function() {
-        const userLogin = "<%= userLogin %>"; // Получаем логин пользователя из EJS
-        let initials = 'anon';
-
-        if (userLogin) {
-          const words = userLogin.split(' ');
-          if (words.length > 1) {
-            // Если имя пользователя состоит из двух слов, берем по одной букве из каждого слова
-            initials = words[0][0] + words[1][0];
-          } else {
-            // Если имя пользователя состоит из одного слова, берем первые две буквы
-            initials = userLogin.slice(0, 2);
-          }
-        }
-
-        const profileElement = document.querySelector('.prof p');
-        profileElement.textContent = initials.toUpperCase();
-      });
-
-
-
-      // Карта — public/tk-map.js на своей подложке. Раньше здесь были две
-      // карты OpenLayers друг над другом с плитками общественного сервера
-      // OpenStreetMap, который стал отвечать «Access blocked». Вид — по месту
-      // пользователя, если он разрешит, иначе Белград.
-      window.venueMap = null;
-      TKMap.mount(document.getElementById('map2')).then(function (map) {
-        window.venueMap = map;
-        map.on('hover', function (id, at) { if (id) showMiniCard(id, at); else hideMiniCard(); });
-        map.on('click', openBigCard);
-        map.on('move', loadVenues);
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(function (p) {
-            map.flyTo(p.coords.longitude, p.coords.latitude, 11);
-          });
-        }
-      }).catch(function (e) {
-        console.error('Карта не загрузилась:', e);
-      });
-
-      var modal = document.querySelector('.miniBarInfo');
-
-      // Подсказка при наведении на заведение. hoverId отсекает ответ,
-      // пришедший, когда указатель уже ушёл с маркера.
-      var hoverId = null;
-
-      function hideMiniCard() {
-        hoverId = null;
-        modal.classList.remove('active');
-      }
-
-      function showMiniCard(id, at) {
-        hoverId = id;
-        Promise.all([
-          fetch(`/getEstablishments/${id}`).then(response => response.json()),
-          fetch(`/getRatings/${id}`).then(response => response.json()),
-        ]).then(function ([data, ratings]) {
-          if (hoverId !== id) return;
-          const en = localStorage.getItem('lang') == 'en';
-          const photos = data.photos || [];
-          const average = ratings.length ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length : 0;
-          document.querySelector('.miniBarInfo .info .text p').innerText = data.name;
-          document.querySelector('.miniBarInfo .info .text span').innerText = data.address;
-          document.querySelector('.miniBarInfo .time_stars .opened').innerText =
-            `${en ? 'Open till' : 'Открыто до'} ${(data.weekdayHours && data.weekdayHours.close) || ''}`;
-          document.querySelector('.miniBarInfo .info .photo img').src = photos[0] || '';
-          document.querySelector('.miniBarInfo .info .photo .count').innerText = photos.length;
-          document.querySelector('.miniBarInfo .time_stars .rating').innerHTML = average.toFixed(1) + '<img src="/img/rating_star.svg" alt="rating">';
-          document.querySelector('.miniBarInfo .time_stars .rating_count').innerText = `${ratings.length} ${en ? 'Rating' : 'Оценок'}`;
-          modal.classList.add('active');
-          modal.style.top = (at.y - modal.offsetHeight - 10) + 'px';
-          modal.style.left = (at.x - modal.offsetWidth / 2) + 'px';
-        });
-      }
-
-      // Создайте div для модального окна по клику
-let clickModal = document.querySelector('.bigBarInfo');
-
-function initPhotoSliderBigModal() {
-  // PHOTOS SLIDER IN BIG MODAL 
-var slider = $('.photo_slider').bxSlider({
-  pager: false,
-  minSlides: 4,
-  maxSlides: 4,
-  slideWidth: 300,
-  slideMargin: 10,
-  infiniteLoop: false,
-  auto: true,
-  pause: 5000,
-  hideControlOnEnd: true, // Скрывает стрелки, когда достигнут конец или начало слайдера
-  controls: $('.photo_slider').children().length > 4 // Показывает стрелки только если есть больше четырех слайдов
-});
-
-
-// END PHOTOS SLIDER IN BIG MODAL 
-};
-initPhotoSliderBigModal();
-
-// Обработчик события click
-var currentEstablishmentId = null; // Глобальная переменная для хранения идентификатора текущего заведения
-
-function openBigCard(id) {
-            currentEstablishmentId = id;
-            // Отправьте запрос на сервер
-            fetch(`/getEstablishments/${id}`)
-            .then(response => response.json())
-            .then(data => {
-                // Заполните модальное окно данными заведения
-                document.querySelector('.bigBarInfo .name').innerText = data.name;
-                document.querySelector('.bigBarInfo .description').innerText = data.address;
-                let open_till
-                if (localStorage.getItem('lang') == 'ru') {
-                  open_till = 'Открыто до'
-                } else if (localStorage.getItem('lang') == 'en') {
-                  open_till = 'Open till'
-                }
-                      
-                document.querySelector('.bigBarInfo .time').innerText = `${open_till} ${data.weekdayHours.close}`;
-
-
-
-                // Проверьте, есть ли фотографии
-                // Получите все слайды
-                var slides = document.querySelectorAll('.photo_slider .slide');
-                // Если у заведения есть фотографии, обновите src каждого изображения и href каждого слайда
-                if (data.photos && data.photos.length > 0) {
-                    for (var i = 0; i < slides.length; i++) {
-                        if (i < data.photos.length) {
-                            // Если у заведения есть фотография для этого слайда, обновите src и href
-                            slides[i].querySelector('img').src = data.photos[i];
-                            slides[i].href = data.photos[i];
-                        } else {
-                            // Если у заведения нет фотографии для этого слайда, оставьте src и href пустыми
-                            slides[i].querySelector('img').src = '';
-                            slides[i].href = '';
-                        }
-                    }
-                } else {
-                    // Если у заведения нет фотографий, оставьте src всех изображений и href всех слайдов пустыми
-                    slides.forEach(slide => {
-                        slide.querySelector('img').src = '';
-                        slide.href = '';
-                    });
-                }
-
-
-                  // Проверьте статус online
-                  var streamButton = document.querySelector('.stream_btn .btn');
-                  streamButton.setAttribute('data-id', data._id);
-                  if (data.online) {
-                      // Если заведение онлайн, покажите кнопку трансляции
-                      streamButton.classList.add('active');
-
-                      console.log('sos')
-                      let watch
-                      if (localStorage.getItem('lang') == 'ru') {
-                        watch = 'Смотреть трансляцию'
-                      } else if (localStorage.getItem('lang') == 'en') {
-                        watch = 'Watch the broadcast'
-                      }
-
-                      streamButton.innerText = watch;
-                  } else {
-                    let watch
-                      if (localStorage.getItem('lang') == 'ru') {
-                        watch = 'Заведение оффлайн'
-                      } else if (localStorage.getItem('lang') == 'en') {
-                        watch = 'Offline establishment'
-                      }
-
-                      // Если заведение оффлайн, измените текст кнопки
-                      streamButton.classList.remove('active');
-                      streamButton.innerText = watch;
-                  }
-
-
-
-
-
-                // Получите все оценки для этого заведения
-                fetch(`/getRatings/${id}`)
-            .then(response => response.json())
-            .then(ratings => {
-                var averageRating = 0;
-
-                // Проверьте, есть ли оценки
-                if (ratings.length > 0) {
-                    // Вычислите средний рейтинг
-                    var totalRating = 0;
-                    ratings.forEach(rating => {
-                        totalRating += rating.rating;
-                    });
-                    averageRating = totalRating / ratings.length;
-                }
-
-                drawMiniStars(averageRating);
-
-
-                // Заполните модальное окно данными о рейтинге
-                document.querySelector('.bigBarInfo .rating_block .wrap p.rate').innerText = averageRating.toFixed(1);
-
-                let rating
-                            if (localStorage.getItem('lang') == 'ru') {
-                              rating = 'Оценок'
-                            } else if (localStorage.getItem('lang') == 'en') {
-                              rating = 'Rating'
-                            }
-
-                document.querySelector('.bigBarInfo .rating_block .wrap .stars_wrap p').innerText = `${ratings.length} ${rating}`;
-
-                // Заполните звезды в соответствии с рейтингом
-                var stars = document.querySelectorAll('.bigBarInfo .rating_block .wrap .stars .fa-star');
-                for (var i = 0; i < Math.round(averageRating); i++) {
-                    stars[i].classList.add('active');
-                }
-            });
-
-                // Проверьте, оценивал ли пользователь это заведение ранее
-                fetch(`/getUserRating/${userId}/${id}`)
-                    .then(response => response.json())
-                    .then(ratingData => {
-                        if (ratingData) {
-
-
-                          let rating
-                            if (localStorage.getItem('lang') == 'ru') {
-                              rating = 'Вы уже оценили это заведение!'
-                            } else if (localStorage.getItem('lang') == 'en') {
-                              rating = 'You have already rated this place!'
-                            }
-                            // Если пользователь уже оценивал это заведение, покажите сообщение
-                            wrap.innerHTML = `<p class="done">${rating}</p>`;
-                        } else {
-
-                          let rating
-                            if (localStorage.getItem('lang') == 'ru') {
-                              rating = 'Оцените это место'
-                            } else if (localStorage.getItem('lang') == 'en') {
-                              rating = 'Rate this place'
-                            }
-
-                            // Если пользователь еще не оценивал это заведение, покажите звезды для оценки
-                            wrap.innerHTML = `  <p>${rating}</p>
-                            <div class="stars_vote">
-                              <i class="fas fa-star"></i>
-                              <i class="fas fa-star"></i>
-                              <i class="fas fa-star"></i>
-                              <i class="fas fa-star"></i>
-                              <i class="fas fa-star"></i>
-                            </div>`;
-                            updateStars();
-                        }
-                    });
-
-                // Покажите модальное окно
-                clickModal.classList.add('active');
-            });
-}
-
-
-
-
-// RATING BIG BAR MODAL 
-
-
-function drawMiniStars(rating) {
-  let st = document.querySelector('.stars_wrap .stars');
-  st.innerHTML = "";
-  for (var i = 1; i <= 5; i++) {
-  var star = document.createElement('i');
-  if (rating >= i) {
-    star.className = 'fas fa-star'; // Полная звезда
-  } else if (rating > i - 1) {
-    star.className = 'fas fa-star-half-alt'; // Половинная звезда
-  } else {
-    star.className = 'far fa-star'; // Пустая звезда
-  }
-
-  if (st) {
-    st.appendChild(star);
-  }
-  
-}
-}
-
-
-// END RATING BIG MODAL 
-
-
-
-
-
-// Заведения в видимой части карты; остановки карты tk-map.js ждёт сам.
-function loadVenues(b) {
-    fetch(`/establishmentsLocation?bl_lat=${b.south}&bl_lng=${b.west}&tr_lat=${b.north}&tr_lng=${b.east}`)
-        .then(response => response.json())
-        .then(data => venueMap.setPoints(data.map(e => ({
-            id: e._id,
-            lng: e.location.lng,
-            lat: e.location.lat,
-            name: e.name,
-            photo: e.photos && e.photos[0],
-            online: e.online,
-        }))));
-}
-
-
-    </script>
-
-
-
-
-
-    <script>
-      // Камера заведения: гость смотрит то, что показывает владелец
-      // (routes/venueLive.js). Раньше поток шёл через публичный сервер PeerJS
-      // напрямую между браузерами и за NAT мобильного оператора часто не доходил.
-      // Обработчик кнопки один на страницу: прежде он навешивался заново при
-      // каждом открытии карточки, и после пятой карточки один щелчок
-      // подключался пять раз.
-      (function () {
-        var frame = document.querySelector('.streamingFrame');
-        var video = frame.querySelector('video');
-        var watchBtn = document.querySelector('.stream_btn .btn');
-        var watching = null;
-
-        function stopWatching() {
-          if (watching) { watching.leave(); watching = null; }
-          video.srcObject = null;
-          frame.classList.remove('active');
-        }
-
-        watchBtn.addEventListener('click', function () {
-          if (!this.classList.contains('active')) return;
-          var id = this.getAttribute('data-id');
-          var media = new MediaStream();
-          stopWatching();
-          video.srcObject = media;
-          frame.classList.add('active');
-          watching = TKDaily.connect({
-            send: false,
-            access: function () { return TKDaily.requestAccess('/api/venues/' + id + '/watch'); },
-            onTrack: function (track, p, on) {
-              if (p.local) return;
-              if (on) media.addTrack(track); else media.removeTrack(track);
-              video.srcObject = media;
-              video.play().catch(function () {});
-            },
-            onState: function (s) {
-              if (s !== 'ended') return;
-              stopWatching();
-              toast('Заведение сейчас не показывает камеру');
-            }
-          });
-        });
-
-        frame.querySelector('img').addEventListener('click', stopWatching);
-      })();
-    </script>
-
-
-
-
-
-
-
-    <script src="main.js"></script>
-    <script src="service.js"></script>
-  </body>
+  </form>
+</div>
+<% } %>
+
+<%# Названия типов и городов — для строк списка и карточки. %>
+<script>window.TKVenueDict = <%- JSON.stringify({ types: catalog.VENUE_TYPE_NAME, cities: catalog.CITY_NAME }) %>;</script>
+<script src="/vendor/pmtiles-4.5.0.js"></script>
+<script src="/tk-map.js"></script>
+<script src="/lang.js"></script>
+<script src="/tk-venues.js"></script>
+</body>
 </html>

@@ -30,21 +30,21 @@ const USERS = [
 
 const PLACES = [
   {
-    name: 'Бар «Тэкэбана»', country: 'Сербия', city: 'Белград',
+    name: 'Бар «Тэкэбана»', type: 'bar', country: 'Сербия', city: 'belgrade',
     address: 'Кнеза Михаила, 12', phone: '+381 11 000-00-01',
     weekdayHours: { open: '12:00', close: '00:00' },
     weekendHours: { open: '12:00', close: '02:00' },
     location: { lat: 44.8168, lng: 20.4601 }, status: true, online: true,
   },
   {
-    name: 'Кафе «Дунав»', country: 'Сербия', city: 'Нови-Сад',
+    name: 'Кафе «Дунав»', type: 'cafe', country: 'Сербия', city: 'novi-sad',
     address: 'Змај Јовина, 4', phone: '+381 21 000-00-02',
     weekdayHours: { open: '09:00', close: '22:00' },
     weekendHours: { open: '10:00', close: '23:00' },
     location: { lat: 45.2551, lng: 19.8452 }, status: true, online: false,
   },
   {
-    name: 'Паб «Морава»', country: 'Сербия', city: 'Ниш',
+    name: 'Паб «Морава»', type: 'pub', country: 'Сербия', city: 'nis',
     address: 'Обреновићева, 30', phone: '+381 18 000-00-03',
     weekdayHours: { open: '11:00', close: '23:00' },
     weekendHours: { open: '11:00', close: '01:00' },
@@ -100,6 +100,11 @@ async function main() {
         ...p, email: owner.email, owner: owner._id, photos: [],
       });
       created.push('заведение «' + p.name + '»');
+    } else if (exists.type !== p.type || exists.city !== p.city) {
+      // Тип и город — коды config/catalog.js с 11 сентября 2026: у записей,
+      // созданных раньше, город лежал строкой, а типа не было вовсе.
+      await Establishments.updateOne({ _id: exists._id }, { $set: { type: p.type, city: p.city } });
+      created.push('заведение «' + p.name + '»: тип и город');
     }
   }
 

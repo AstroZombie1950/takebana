@@ -35,6 +35,7 @@
         country: val("country"),
         city: val("city"),
         name: val("name"),
+        type: val("type"),
         address: val("address"),
         email: val("email"),
         phone: val("phone"),
@@ -44,7 +45,7 @@
 
       // Сервер тоже проверяет, но здесь ответ мгновенный и без запроса.
       var required = [
-        establishment.country, establishment.city, establishment.name,
+        establishment.country, establishment.city, establishment.name, establishment.type,
         establishment.address, establishment.email, establishment.phone,
         establishment.weekdayHours.open, establishment.weekdayHours.close,
         establishment.weekendHours.open, establishment.weekendHours.close,

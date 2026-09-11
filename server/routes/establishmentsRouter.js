@@ -1,3 +1,6 @@
+// Заведения: заявка, карта, карточка, оценки, кабинет владельца.
+// Камера заведения — routes/venueLive.js, страница карты — views/map.ejs.
+
 const express = require('express');
 const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
@@ -7,6 +10,8 @@ const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
 const daily = require('../utils/daily');
 const { roomName: venueRoomName } = require('./venueLive');
+const { CITY_NAME, VENUE_TYPE_NAME } = require('../config/catalog');
+const { readVenueFilters } = require('../utils/venueFilters');
 const multer = require('multer');
 const path = require('path');
 
@@ -38,6 +43,8 @@ const storage = multer.diskStorage({
 const { requireAuth, requireOwner, wrap } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
+const OBJECT_ID = /^[a-f\d]{24}$/i;
+
 // Часы работы и координаты повторяются в двух маршрутах — держим схемы рядом.
 // `json: true` нужен из-за multipart: там всё приходит строками.
 const HOURS = { type: 'object', json: true, schema: {
@@ -48,18 +55,25 @@ const LOCATION = { type: 'object', json: true, label: 'Координаты', sc
     lat: { type: 'number', min: -90, max: 90 },
     lng: { type: 'number', min: -180, max: 180 },
 } };
+// Город и тип — закрытые списки config/catalog.js: по ним фильтрует карта,
+// свободный ввод дал бы «Белград», «Beograd» и «белград » тремя городами.
+const CITY = { type: 'string', values: Object.keys(CITY_NAME), label: 'Город' };
+const TYPE = { type: 'string', values: Object.keys(VENUE_TYPE_NAME), label: 'Тип заведения' };
+
+// То, что видит любой вошедший: карточка на карте и поиск. Почта, телефон
+// и владелец — только самому владельцу, в /user-establishments.
+const PUBLIC_FIELDS = 'name type city country address weekdayHours weekendHours location photos online';
 
 const upload = multer({ storage: storage });
 
 
-
-
-// Видимо создание заведения хз пока 
-
+// Заявка на заведение — страница /company-register (public/tk-company.js).
+// На карту заведение попадает после проверки: status выставляет админка.
 router.post('/register-establishment', requireAuth, validate({
     name: { type: 'string', required: true, max: 200, label: 'Название' },
+    type: { ...TYPE, required: true },
     country: { type: 'string', required: true, max: 100, label: 'Страна' },
-    city: { type: 'string', required: true, max: 100, label: 'Город' },
+    city: { ...CITY, required: true },
     address: { type: 'string', required: true, max: 300, label: 'Адрес' },
     email: { type: 'email', required: true, label: 'Почта' },
     phone: { type: 'string', required: true, max: 32, label: 'Телефон' },
@@ -68,16 +82,17 @@ router.post('/register-establishment', requireAuth, validate({
     lat: { type: 'number', min: -90, max: 90, label: 'Широта' },
     lng: { type: 'number', min: -180, max: 180, label: 'Долгота' },
 }), wrap(async (req, res) => {
-    const { name, country, city, address, email, phone, weekdayHours, weekendHours, lat, lng } = req.body;
+    const { name, type, country, city, address, email, phone, weekdayHours, weekendHours, lat, lng } = req.body;
 
     const establishment = new Establishments({
         name,
+        type,
         country,
         city,
         address,
         email,
         phone,
-        status: false, 
+        status: false,
         weekdayHours,
         weekendHours,
         location: {
@@ -96,78 +111,89 @@ router.post('/register-establishment', requireAuth, validate({
 }));
 
 
-// Точки для карты (public/tk-map.js) — только то, что рисует маркер: название,
-// координаты, первое фото, идёт ли камера. Раньше уходили документы целиком —
-// с почтой, телефоном и владельцем — любому, без входа.
+// Точки для карты (public/tk-venues.js) — только то, что рисуют маркер и
+// строка списка. Фильтры те же, что в адресе страницы (utils/venueFilters.js).
+// Раньше уходили документы целиком — с почтой, телефоном и владельцем.
 router.get('/establishmentsLocation', wrap(async (req, res) => {
     const [south, west, north, east] = ['bl_lat', 'bl_lng', 'tr_lat', 'tr_lng'].map((k) => Number(req.query[k]));
     if (![south, west, north, east].every(Number.isFinite)) {
         return res.status(400).json({ message: 'Нужны границы карты: bl_lat, bl_lng, tr_lat, tr_lng' });
     }
 
-    const establishments = await Establishments.find({
+    const filters = readVenueFilters(req.query);
+    const where = {
         'location.lat': { $gte: south, $lte: north },
         'location.lng': { $gte: west, $lte: east },
         status: true, // заведение прошло проверку
-    }).select('name location online photos').lean();
+    };
+    if (filters.city) where.city = filters.city;
+    if (filters.types.length) where.type = { $in: filters.types };
+    if (filters.live) where.online = true;
+
+    // Потолок — на случай, когда карта отдалена на всю Европу: список
+    // в панели всё равно показывает только видимое.
+    const establishments = await Establishments.find(where)
+        .select('name type city location online photos')
+        .limit(500)
+        .lean();
 
     res.json(establishments.map(({ photos, ...e }) => ({ ...e, photos: (photos || []).slice(0, 1) })));
 }));
 
 
+// Карточка заведения: сведения, средняя оценка и оценка того, кто смотрит.
+// Раньше это были три запроса, /getRatings отдавал оценки вместе
+// с идентификаторами проголосовавших, а /getUserRating/:userId/… — чужую
+// оценку по идентификатору в адресе.
+router.get('/api/venues/:id', requireAuth, wrap(async (req, res) => {
+    if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Заведение не найдено' });
 
-router.get('/getEstablishments/:id', wrap(async (req, res) => {
-    const id = req.params.id;
+    const venue = await Establishments.findOne({ _id: req.params.id, status: true }).select(PUBLIC_FIELDS).lean();
+    if (!venue) return res.status(404).json({ message: 'Заведение не найдено' });
 
-    // Найдите заведение с заданным идентификатором
-    const establishment = await Establishments.findById(id);
+    const ratings = await Rating.find({ establishment: venue._id }).select('user rating').lean();
+    const mine = ratings.find((r) => String(r.user) === String(req.session.userId));
+    const sum = ratings.reduce((s, r) => s + r.rating, 0);
 
-    if (establishment) {
-        res.json(establishment);
-    } else {
-        res.status(404).send('Establishment not found');
-    }
+    res.json({
+        ...venue,
+        rating: {
+            average: ratings.length ? sum / ratings.length : 0,
+            count: ratings.length,
+            mine: mine ? mine.rating : null,
+        },
+    });
 }));
 
 
-router.get('/searchEstablishments/:name', wrap(async (req, res) => {
-    const name = req.params.name;
-
+// Поиск по названию для панели карты.
+router.get('/searchEstablishments/:name', requireAuth, wrap(async (req, res) => {
     // Спецсимволы экранируются: строка вроде `(a+)+$` собирала регулярное
     // выражение с катастрофическим откатом и вешала процесс на одном запросе.
-    var regex = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const name = req.params.name.slice(0, 100);
+    const regex = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
-    // Найдите все заведения, имена которых соответствуют регулярному выражению
-    const establishments = await Establishments.find({ name: regex });
+    const establishments = await Establishments.find({ name: regex, status: true })
+        .select('name type city address location online')
+        .limit(10)
+        .lean();
 
-    if (establishments) {
-        res.json(establishments);
-    } else {
-        res.status(404).send('No establishments found');
-    }
+    res.json(establishments);
 }));
 
 
-
-
+// «Мои заведения» — всё, включая неодобренные, со всеми полями: это кабинет владельца.
 router.get('/user-establishments', requireAuth, wrap(async (req, res) => {
-    const userId = req.session.userId;
-
-    // Используйте ваш контроллер для получения заведений пользователя
-    const establishments = await Establishments.find({ owner: userId });
-
-    if (establishments) {
-        res.json(establishments);
-    } else {
-        res.status(404).send('No establishments found');
-    }
+    const establishments = await Establishments.find({ owner: req.session.userId }).lean();
+    res.json(establishments);
 }));
 
 // validate стоит после multer: до разбора multipart тела ещё нет.
 router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments), upload.array('newPhotos'), validate({
     name: { type: 'string', max: 200, label: 'Название' },
+    type: TYPE,
     country: { type: 'string', max: 100, label: 'Страна' },
-    city: { type: 'string', max: 100, label: 'Город' },
+    city: CITY,
     address: { type: 'string', max: 300, label: 'Адрес' },
     email: { type: 'email', label: 'Почта' },
     phone: { type: 'string', max: 32, label: 'Телефон' },
@@ -179,12 +205,12 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
     uploadedPhotos: { type: 'array', json: true, max: 6, default: [],
         of: { type: 'string', max: 300 }, label: 'Фотографии' },
 }), wrap(async (req, res) => {
-    
+
     if (req.files.length > 6) {
         req.files = req.files.slice(0, 6);
     }
 
-    const { name, country, city, address, email, phone, weekdayHours, weekendHours, location, uploadedPhotos } = req.body;
+    const { name, type, country, city, address, email, phone, weekdayHours, weekendHours, location, uploadedPhotos } = req.body;
     const { lat, lng } = location || {};
 
     // Пустое тело после разбора и означает «обновлять нечего». Три JSON.parse
@@ -195,19 +221,20 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
 
     const establishment = {
         name,
+        type,
         country,
         city,
         address,
         email,
         phone,
-        status: false, 
+        status: false,
         weekdayHours,
         weekendHours,
         location: lat !== undefined && lng !== undefined ? { lat, lng } : undefined,
         // Абсолютный URL от корня сайта. file.path раньше давал относительный
         // 'uploads/имя.jpg', и на вложенных страницах вида /userPage/:id браузер
         // искал его по /userPage/uploads/... — картинка не находилась.
-        photos: uploadedPhotos.concat(req.files.map(file => `/uploads/establishments/${file.filename}`))
+        photos: uploadedPhotos.concat(req.files.map(file => `/uploads/establishments/${file.filename}`)).slice(0, 6)
     };
 
     try {
@@ -215,7 +242,7 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
         res.json(updatedEstablishment);
     } catch (err) {
         console.error(err); // Логируем ошибку
-        res.status(500).json({ message: 'An error occurred while updating the establishment.' }); // Change this line
+        res.status(500).json({ message: 'An error occurred while updating the establishment.' });
     }
 }));
 
@@ -234,7 +261,7 @@ router.post('/updateEstablishmentsOnlineStatus', requireAuth, async (req, res) =
 });
 
 
-
+// Оценка: одна от человека, повторная заменяет прежнюю.
 router.post('/rateEstablishment', requireAuth, validate({
     establishmentId: { type: 'objectId', required: true, label: 'Заведение' },
     // Оценка пятибалльная: без верхней границы одним запросом ставилась
@@ -242,58 +269,16 @@ router.post('/rateEstablishment', requireAuth, validate({
     rating: { type: 'int', required: true, min: 1, max: 5, label: 'Оценка' },
 }), wrap(async (req, res) => {
     const { establishmentId, rating } = req.body;
-
-    // Получите идентификатор пользователя из сессии
-    const userId = req.session.userId;
-
-    try {
-        // Проверьте, существует ли уже оценка от этого пользователя для этого заведения
-        let userRating = await Rating.findOne({ user: userId, establishment: establishmentId });
-
-        if (userRating) {
-            // Если оценка существует, обновите ее
-            userRating.rating = rating;
-            await userRating.save();
-        } else {
-            // Если оценки не существует, создайте новую
-            userRating = new Rating({
-                user: userId,
-                establishment: establishmentId,
-                rating: rating
-            });
-            await userRating.save();
-        }
-
-        res.json(userRating);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+    if (!(await Establishments.exists({ _id: establishmentId, status: true }))) {
+        return res.status(404).json({ message: 'Заведение не найдено' });
     }
+
+    const userRating = await Rating.findOneAndUpdate(
+        { user: req.session.userId, establishment: establishmentId },
+        { $set: { rating } },
+        { upsert: true, new: true }
+    );
+    res.json({ rating: userRating.rating });
 }));
-
-router.get('/getUserRating/:userId/:establishmentId', async (req, res) => {
-    const { userId, establishmentId } = req.params;
-
-    try {
-        // Проверьте, существует ли уже оценка от этого пользователя для этого заведения
-        const userRating = await Rating.findOne({ user: userId, establishment: establishmentId });
-
-        res.json(userRating);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-});
-
-router.get('/getRatings/:establishmentId', async (req, res) => {
-    const { establishmentId } = req.params;
-
-    try {
-        // Получите все оценки для этого заведения
-        const ratings = await Rating.find({ establishment: establishmentId });
-
-        res.json(ratings);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-});
 
 module.exports = router;

@@ -46,6 +46,20 @@ const CITIES = [
   { code: 'subotica', name: 'Суботица' },
 ];
 
+// Типы заведений для карты (/main): владелец выбирает тип при регистрации
+// и в настройках, по нему фильтрует карта. Закрытый список — по той же
+// причине, что и города.
+const VENUE_TYPES = [
+  { code: 'bar', name: 'Бар' },
+  { code: 'restaurant', name: 'Ресторан' },
+  { code: 'cafe', name: 'Кафе' },
+  { code: 'club', name: 'Клуб' },
+  { code: 'pub', name: 'Паб' },
+  { code: 'hookah', name: 'Кальянная' },
+];
+
+const VENUE_TYPE_NAME = Object.fromEntries(VENUE_TYPES.map((t) => [t.code, t.name]));
+
 // Код подкатегории → код категории. Коды подкатегорий не повторяются между
 // категориями, поэтому на общей вкладке фильтр идёт по одному полю.
 const SUB_CATEGORY = {};
@@ -61,4 +75,4 @@ const SUBS_JSON = JSON.stringify(Object.fromEntries(
   Object.entries(CATEGORIES).map(([cat, { subs }]) => [cat, subs.map((s) => [s.code, s.name])])
 ));
 
-module.exports = { CATEGORIES, CITIES, SUB_CATEGORY, CITY_NAME, SUBS_JSON };
+module.exports = { CATEGORIES, CITIES, SUB_CATEGORY, CITY_NAME, SUBS_JSON, VENUE_TYPES, VENUE_TYPE_NAME };

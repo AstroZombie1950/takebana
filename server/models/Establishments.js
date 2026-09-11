@@ -2,8 +2,9 @@ const mongoose = require('mongoose');
 
 const EstablishmentsSchema = new mongoose.Schema({
     name: String, // название
+    type: String, // тип — код из VENUE_TYPES в config/catalog.js; по нему фильтрует карта
     country: String, // страна
-    city: String, // город
+    city: String, // город — код из CITIES в config/catalog.js, как у эфиров
     address: String, // адрес
     email: String, // email
     phone: String, // номер телефона

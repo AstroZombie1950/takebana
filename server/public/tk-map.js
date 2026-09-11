@@ -12,7 +12,8 @@
 //   карта.on('hover', fn(id, { x, y }) — наведение на заведение; fn(null) — ушли)
 //   карта.on('click', fn(id))
 //   карта.on('move', fn({ west, south, east, north })) — после остановки карты
-//   карта.flyTo(lng, lat, zoom)
+//   карта.flyTo(lng, lat, zoom, padding) — padding { right } или { bottom }:
+//     точка встаёт в середину той части карты, что не закрыта карточкой
 (function () {
   var LIB = '/vendor/maplibre-gl-6.9.0/maplibre-gl.mjs';
   var protocolReady = false;
@@ -188,8 +189,8 @@
           }),
         });
       },
-      flyTo: function (lng, lat, zoom) {
-        map.flyTo({ center: [lng, lat], zoom: zoom || 14 });
+      flyTo: function (lng, lat, zoom, padding) {
+        map.flyTo({ center: [lng, lat], zoom: zoom || 14, padding: padding || 0 });
       },
     };
     return api;

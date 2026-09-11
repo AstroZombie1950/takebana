@@ -222,46 +222,7 @@
   color: var(--tk-muted);
 }
 
-.tk-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* Тег — чекбокс формы фильтров. Сам input прозрачный и растянут на весь
- * тег: нажатие, фокус и отметка остаются нативными, без обработчиков. */
-.tk-tag {
-  position: relative;
-  border: 1px solid var(--tk-rule);
-  padding: 7px 12px;
-  cursor: pointer;
-  font-family: Oswald, sans-serif;
-  font-size: 12px;
-  letter-spacing: .08em;
-  color: var(--tk-beige);
-  transition: border-color .18s ease, color .18s ease, background-color .18s ease;
-}
-
-.tk-tag input {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.tk-tag:hover { border-color: var(--tk-beige); color: var(--tk-paper); }
-
-.tk-tag:has(:focus-visible) {
-  outline: 2px solid var(--tk-accent);
-  outline-offset: 2px;
-}
-
-.tk-tag:has(:checked) {
-  border-color: var(--tk-accent);
-  background: rgba(227, 66, 52, .12);
-  color: var(--tk-paper);
-}
+/* Теги (.tk-tag, .tk-tags) — в app.css: ими же фильтрует карта заведений. */
 
 /* ── Фильтры над сеткой ── */
 .tk-cat__bar {

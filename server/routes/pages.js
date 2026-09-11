@@ -7,6 +7,9 @@ const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const User = require('../models/User');
 const Establishments = require('../models/Establishments');
+const catalog = require('../config/catalog');
+const { commonDataMiddleware } = require('./streaming/shared');
+const { readVenueFilters } = require('../utils/venueFilters');
 
 // Куда вести человека после входа. Значение в сессию кладёт /set-next,
 // читают его /, /login, /register и userRoutes. Блок был скопирован в трёх
@@ -82,23 +85,18 @@ router.get('/register', (req, res) => {
 
 router.get('/company-register', (req, res) => {
   let userLoggedIn = !!req.session.login;
-  res.render('newCompany.ejs', { title: 'Главная страница', userLoggedIn: userLoggedIn });
+  res.render('newCompany.ejs', { title: 'Главная страница', userLoggedIn: userLoggedIn, catalog });
 });
 
 
-router.get('/main', checkLoggedIn, async (req, res) => {
-  const userId = req.session.userId;
-  // Найти пользователя по ID
-  const user = await User.findById(userId);
-  if (!user) {
-    return res.status(400).json({ message: 'User not found' });
-  }
-  const userLogin = user ? user.login : '';
-  // Найти все заведения, принадлежащие пользователю
-  const establishments = await Establishments.find({ owner: userId });
-  // Проверить, есть ли у пользователя зарегистрированные заведения
-  const hasEstablishments = establishments.length > 0;
-  res.render('map', { title: 'map', userLogin: userLogin, hasEstablishments: hasEstablishments, userId: userId });
+// Карта заведений — в каркасе кабинета, поэтому commonDataMiddleware:
+// шапке и левой панели нужны профиль, подписки и уведомления.
+router.get('/main', checkLoggedIn, commonDataMiddleware, async (req, res) => {
+  res.render('map', {
+    catalog,
+    filters: readVenueFilters(req.query),
+    hasEstablishments: !!(await Establishments.exists({ owner: req.session.userId })),
+  });
 });
 
 

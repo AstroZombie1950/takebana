@@ -27,12 +27,24 @@
     <p class="tk-company__done" id="tkCompanyDone" hidden data-i18n="company.finish">Спасибо за заявку — мы рассмотрим её в ближайшее время и свяжемся с вами по почте или телефону.</p>
 
     <form class="tk-auth__form" id="tkCompanyForm" novalidate>
+      <%# Город и тип — закрытые списки config/catalog.js: по ним фильтрует карта. %>
       <div class="tk-company__pair">
         <input class="tk-field" type="text" name="country" placeholder="Страна" data-i18n-placeholder="company.ph.country" autocomplete="country-name" required>
-        <input class="tk-field" type="text" name="city" placeholder="Город" data-i18n-placeholder="company.ph.city" autocomplete="address-level2" required>
+        <select class="tk-field tk-select" name="city" required>
+          <option value="" data-i18n="company.ph.city">Город</option>
+          <% catalog.CITIES.forEach(function (city) { %>
+          <option value="<%= city.code %>"><%= city.name %></option>
+          <% }); %>
+        </select>
       </div>
 
       <input class="tk-field" type="text" name="name" placeholder="Название заведения" data-i18n-placeholder="company.ph.name" required>
+      <select class="tk-field tk-select" name="type" required>
+        <option value="" data-i18n="company.ph.type">Тип заведения</option>
+        <% catalog.VENUE_TYPES.forEach(function (type) { %>
+        <option value="<%= type.code %>" data-i18n="venue.<%= type.code %>"><%= type.name %></option>
+        <% }); %>
+      </select>
       <input class="tk-field" type="text" name="address" placeholder="Адрес заведения" data-i18n-placeholder="company.ph.address" autocomplete="street-address" required>
       <input class="tk-field" type="email" name="email" placeholder="Email" data-i18n-placeholder="company.ph.email" autocomplete="email" required>
       <input class="tk-field" type="tel" name="phone" placeholder="Телефон для связи" data-i18n-placeholder="company.ph.phone" autocomplete="tel" required>
