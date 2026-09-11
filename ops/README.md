@@ -66,7 +66,7 @@ cd /srv/takebana
 cp server/.env.example server/.env
 bash ops/gen-secrets.sh --write server/.env    # SESSION_SECRET и RTMP_PUBLISH_SECRET
 nano server/.env                               # START_SERVER=prod, NODE_ENV=production,
-                                               # PLAYER_VIDEO=https://<домен>, ключи Daily
+                                               # ключи Daily
 
 # 5. takebana: первый деплой и админ
 bash ops/deploy.sh
@@ -186,11 +186,11 @@ this.isLocal = this.ip === '127.0.0.1' || this.ip === '::1' || this.ip == '::fff
 **Первый запуск `provision.sh` закрывает вход по паролю.** Пока не проверите
 `ssh takebana@<IP>` в отдельном окне, текущую сессию не закрывайте.
 
-**`PLAYER_VIDEO` должен быть боевым доменом.** Из него собирается адрес потока
-для зрителя (`routes/streaming/streamPages.js`). Дефолтный `http://localhost:8000`
-отправит браузер зрителя на его собственную машину, а на HTTPS-странице это ещё
-и заблокируется как mixed content. nginx проксирует `/live/`, `*.m3u8` и `*.ts`
-на медиасервер сам.
+**HLS отдаёт nginx с диска.** ffmpeg пишет плейлист и сегменты в
+`server/media/live/<ключ>/`, nginx раздаёт их по `/live/` мимо Node. Адрес
+плейлиста у плеера относительный, так что `PLAYER_VIDEO` больше не нужен — из
+старого `.env` его можно убрать. HTTP-сервера медиасервера на `:8000` нет:
+node-media-server принимает только RTMP на 1935.
 
 **Порядок загрузки конфигурации — это поведение.** `dotenv` подключается первой
 строкой `app.js`. Когда он стоял ниже проверки `START_SERVER`, `trust proxy` не

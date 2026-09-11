@@ -2,18 +2,17 @@ const NodeMediaServer = require('node-media-server');
 require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env', quiet: true });
 
 
-const fs = require('fs');
 const path = require('path');
 const { isPublishAuthEnabled, getSecret } = require('./utils/rtmpAuth');
 const hls = require('./utils/hls');
 
 // Право публиковать проверяется подписью, а не знанием ключа: ключ трансляции
-// уходит каждому зрителю в исходнике страницы — по нему собирается URL
-// воспроизведения `/live/<streamKey>.flv`, без него плеер поток не найдёт.
+// уходит каждому зрителю в исходнике страницы — по нему собирается адрес
+// плейлиста `/live/<streamKey>/index.m3u8`, без него плеер поток не найдёт.
 // Значит, сам по себе ключ ничего не защищает. Формат подписи — utils/rtmpAuth.js.
 //
-// play намеренно оставлен открытым: эфир смотрят без входа, а закрывать раздачу
-// надо не здесь, а подписанными ссылками на уровне CDN.
+// play намеренно оставлен открытым: RTMP-воспроизведение забирает наш ffmpeg
+// с 127.0.0.1, а закрывать раздачу зрителям надо подписанными ссылками CDN.
 const publishAuth = isPublishAuthEnabled();
 
 if (!publishAuth && (process.env.START_SERVER === 'prod' || process.env.NODE_ENV === 'production')) {
@@ -37,14 +36,10 @@ const config = {
     play: false,
     secret: getSecret()
   },
-  http: {
-    port: 8000,
-    // Путь абсолютный: relative './media' считался бы от cwd процесса, а pm2
-    // и `npm start` запускают приложение из разных каталогов — HLS уезжал бы
-    // мимо того места, откуда его раздаёт этот же сервер.
-    mediaroot: path.join(__dirname, 'media'),
-    allow_origin: '*'
-  },
+  // Секции http нет намеренно: без неё node-media-server не поднимает свой
+  // HTTP-сервер на 8000. HLS пишет наш ffmpeg (utils/hls.js), а раздаёт
+  // с диска nginx — медиасервер в тракте зрителя не участвует. HTTP-FLV,
+  // ради которого сервер был нужен, ушёл вместе с flv.js.
   log: {
     level: 3, // 0=error, 1=warn, 2=info, 3=debug
     file: path.join(__dirname, 'media', 'server.log')

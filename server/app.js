@@ -95,13 +95,21 @@ const https = require('https');
 const { Server } = require('socket.io');
 const { readTlsOptions } = require('./config/tls');
 const { sessionMiddleware } = require('./config/session');
-const { liveProxy } = require('./routes/liveProxy');
+const { HLS_ROOT } = require('./utils/hls');
 const { router: googleRouter, googleOAuthConfigured } = require('./auth/google');
 const { registerSockets } = require('./sockets');
 
 const options = readTlsOptions();
 
-app.use('/live', liveProxy);
+// HLS, который пишет ffmpeg (utils/hls.js). На проде его отдаёт nginx с диска
+// и сюда запросы не доходят; здесь — для локального запуска, с теми же
+// заголовками кэша, что в ops/nginx/takebana.conf.
+app.use('/live', express.static(HLS_ROOT, {
+  index: false,
+  setHeaders(res, file) {
+    res.setHeader('Cache-Control', file.endsWith('.m3u8') ? 'no-cache' : 'public, max-age=3600');
+  },
+}));
 app.use(sessionMiddleware);
 
 // Без ключей маршрут /auth/google отвечает 503, поэтому кнопка «Continue with

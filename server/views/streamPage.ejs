@@ -54,7 +54,7 @@
         <!-- Плеер и управление -->
         <section class="tk-live__col">
           <div class="tk-live__player video-player-area" id="playerContainer">
-            <%# Daily отдаёт картинку в localVideo, OBS — в video через flv.js.
+            <%# Daily отдаёт картинку в localVideo, OBS — в video через tk-hls.js.
                 Оба скрыты до старта: показывает их скрипт страницы. %>
             <video id="localVideo" class="video-fit-cover" autoplay muted playsInline webkit-playsinline x5-playsinline x5-video-player-type="h5" style="display: none;"></video>
             <video id="video" class="video-fit-cover tk-live__video--obs" autoplay muted playsInline webkit-playsinline x5-playsinline x5-video-player-type="h5" style="display: none;"></video>
@@ -200,9 +200,9 @@
 </button>
 <div class="tk-live__chat-overlay" id="chatOverlay"></div>
 
-<%# socket.io грузит шапка, локальной копией. flv.js нужен только предпросмотру OBS. %>
+<%# socket.io грузит шапка, локальной копией. Плеер HLS нужен только предпросмотру OBS. %>
 <% if (typeof obsOnly !== 'undefined' && obsOnly) { %>
-<script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+<script src="/tk-hls.js" defer></script>
 <% } %>
 
     <script src="/lang.js"></script>
@@ -210,9 +210,8 @@
     <script>
         // Глобальные переменные
         const streamKey = "<%= streamKey %>";
-        const streamUrl = "<%= streamUrl %>";
         const serverEnv = '<%= start_server_env || "local" %>';
-        
+
         console.log('=== STREAMER PAGE DEBUG ===');
         console.log('StreamKey from template:', streamKey);
         console.log('StreamKey type:', typeof streamKey);
@@ -224,7 +223,6 @@
         // ОТЛАДКА: Проверяем что переменные определены правильно
         console.log('🔍 ОТЛАДКА переменных:');
         console.log('- streamKey:', streamKey);
-        console.log('- streamUrl:', streamUrl);
         console.log('- serverEnv:', serverEnv);
 
         // Инициализация Socket.IO
@@ -375,74 +373,17 @@
 
             if (!previewVideo) return;
 
-            // Автоплей в браузерах почти всегда требует muted
-            previewVideo.muted = true;
-
-            const flvUrl = `/live/${streamKey}.flv`;
-            console.log('[OBS Preview] Trying to play:', flvUrl);
-
-            if (!(window.flvjs && flvjs.isSupported())) {
-                console.error('[OBS Preview] flv.js is not supported in this browser');
-                return;
-            }
-
-            let player = null;
-            let retryTimer = null;
-            const RETRY_MS = 2000;
-
-            function cleanupPlayer() {
-                if (!player) return;
-                try { player.pause(); } catch (_) {}
-                try { player.unload(); } catch (_) {}
-                try { player.detachMediaElement(); } catch (_) {}
-                try { player.destroy(); } catch (_) {}
-                player = null;
-            }
-
-            function showHint() {
-                if (hint) hint.style.display = 'flex';
-                previewVideo.style.display = 'none';
-            }
-
-            function startPreview() {
-                cleanupPlayer();
-                showHint();
-
-                player = flvjs.createPlayer(
-                    { type: 'flv', url: flvUrl, isLive: true },
-                    { enableStashBuffer: false, stashInitialSize: 128 }
-                );
-
-                player.attachMediaElement(previewVideo);
-                player.load();
-                player.play().catch((e) => console.warn('[OBS Preview] Autoplay blocked:', e));
-
-                player.on(flvjs.Events.ERROR, (type, detail, info) => {
-                    const status = info?.code;
-                    // Ожидаемо, когда OBS еще не начал пушить: 404/502/503 и т.п.
-                    if (detail === 'HttpStatusCodeInvalid' && (status === 404 || status === 502 || status === 503)) {
-                        console.warn('[OBS Preview] Stream not ready yet. Retrying...', { type, detail, info });
-                    } else {
-                        console.error('[OBS Preview] Player error:', { type, detail, info });
-                    }
-                    cleanupPlayer();
-                    showHint();
-                    if (retryTimer) clearTimeout(retryTimer);
-                    retryTimer = setTimeout(startPreview, RETRY_MS);
-                });
-            }
-
+            // Предпросмотр — тот же HLS, что видят зрители, через tk-hls.js.
+            // Раньше здесь был HTTP-FLV через flv.js: ради него жили HTTP-сервер
+            // медиасервера на :8000 и прокси к нему. Задержка HLS в несколько
+            // секунд предпросмотру не мешает — ведущий видит ровно то, что зритель.
+            // Плеер ждёт плейлист, пока OBS не начал вещать, и снова ждёт после обрыва.
+            previewVideo.style.display = 'none';
             previewVideo.addEventListener('playing', () => {
                 if (hint) hint.style.display = 'none';
                 previewVideo.style.display = 'block';
             });
-
-            startPreview();
-
-            window.addEventListener('beforeunload', () => {
-                if (retryTimer) clearTimeout(retryTimer);
-                cleanupPlayer();
-            });
+            TKHls.play(previewVideo, `/live/${streamKey}/index.m3u8`);
         });
 
         // Переключение между типами стрима
@@ -616,6 +557,15 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const streamId = '<%= stream._id %>';
+
+            // Страница открыта — сообщаем серверу, какая: веб или OBS. Раньше это
+            // писал в базу сам GET страницы, и эфир снимали префетч браузера
+            // и предпросмотр ссылки в мессенджере (routes/streaming/streamPages.js).
+            fetch(`/stream/${streamId}/enter`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: document.body.dataset.obsOnly === '1' ? 'obs' : 'web' })
+            }).catch((error) => console.error('Не удалось отметить вход на страницу эфира:', error));
 
             // Устойчивый heartbeat активности стримера (обновляет updatedAt)
             const HEARTBEAT_MS = 20000; // базовая частота
@@ -1189,21 +1139,11 @@ document.addEventListener('DOMContentLoaded', function () {
     } else {
         console.error('Сокет недоступен — новые сообщения чата приходить не будут');
     }
-    
-    // ========== АВТОМАТИЧЕСКАЯ ДЕАКТИВАЦИЯ СТРИМА ПРИ ЗАГРУЗКЕ ==========
-    // Проверяем статус стрима при загрузке страницы
-    const INITIAL_STREAM_IS_ACTIVE = document.body?.dataset?.streamActive === '1';
-    if (INITIAL_STREAM_IS_ACTIVE) {
-        console.log('🔄 Стрим активен при загрузке страницы, автоматически деактивируем...');
-        setTimeout(async () => {
-            try {
-                await diactivateStream();
-                console.log('✅ Стрим автоматически деактивирован при загрузке страницы');
-            } catch (error) {
-                console.error('❌ Ошибка автоматической деактивации при загрузке:', error);
-            }
-        }, 2000); // Задержка в 2 секунды для полной загрузки страницы
-    }
+    // Здесь стояла «автоматическая деактивация при загрузке»: идущий эфир
+    // страница через 2 секунды снимала сама. На веб-странице это теперь делает
+    // POST .../enter, а на OBS-странице это было ошибкой — ведущий открывал
+    // пульт посреди эфира, и эфир помечался снятым, хотя OBS продолжал вещать.
+    // Идёт ли OBS-эфир, решает приём RTMP (mediaServer.js), а не страница.
 });
 
         // ========== УПРАВЛЕНИЕ АДАПТИВНЫМ ЧАТОМ ==========

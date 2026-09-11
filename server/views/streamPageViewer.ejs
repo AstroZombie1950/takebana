@@ -159,14 +159,13 @@
 <div class="tk-live__chat-overlay" id="chatOverlay"></div>
 
 <% if (stream.streamType === 'obs-stream') { %>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<script src="/tk-hls.js" defer></script>
 <% } %>
                 <script src="/lang.js"></script>
 
                 <script>
                     // Глобальные переменные
                     const streamKey = "<%= streamKey %>";
-                    const streamUrl = "<%= streamUrl %>";
                     const isStreamer = false;
                     const serverEnv = '<%= start_server_env || "local" %>';
                     let lastMessageTime = null;
@@ -450,97 +449,16 @@
                     });
 
                     <% if (stream.streamType === 'obs-stream') { %>
-                    // Плеер OBS-эфира: HLS.
-                    //
-                    // Раньше здесь был HTTP-FLV через flv.js. На iPhone он не играл и
-                    // играть не мог: flv.js собирает поток через Media Source Extensions,
-                    // а в Safari на iOS их нет. HLS Safari проигрывает нативно, остальным
-                    // браузерам его собирает hls.js — тоже через MSE, но там они есть.
+                    // Плеер OBS-эфира: HLS, общий с предпросмотром ведущего — tk-hls.js.
+                    // Раньше здесь был HTTP-FLV через flv.js: на iPhone он не играл
+                    // и играть не мог — в Safari на iOS нет Media Source Extensions.
                     document.addEventListener('DOMContentLoaded', function () {
                         const video = document.getElementById('video');
-                        if (!video) {
-                            console.log('[OBS/HLS] Video element not found');
-                            return;
-                        }
-
+                        if (!video) return;
                         const hlsUrl = `/live/${streamKey}/index.m3u8`;
-
-                        // Оба атрибута обязательны на iOS: без muted браузер не даст
-                        // автозапуск, без playsinline видео уходит в полноэкранный плеер.
-                        video.muted = true;
-                        video.playsInline = true;
-                        video.setAttribute('playsinline', '');
-
-                        let player = null;
-
-                        // Плейлист появляется не сразу: ffmpeg дописывает index.m3u8 только
-                        // после первых сегментов — через несколько секунд после старта эфира.
-                        async function waitForPlaylist(attempts) {
-                            for (let i = 0; i < attempts; i++) {
-                                try {
-                                    const r = await fetch(hlsUrl, { method: 'HEAD', cache: 'no-store' });
-                                    if (r.ok) return true;
-                                } catch (_) { /* эфир ещё не поднялся */ }
-                                await new Promise((next) => setTimeout(next, 2000));
-                            }
-                            return false;
-                        }
-
-                        function playNative() {
-                            console.log('[OBS/HLS] нативный HLS:', hlsUrl);
-                            video.src = hlsUrl;
-                            video.play().catch((e) => console.warn('[OBS/HLS] автозапуск заблокирован:', e));
-                        }
-
-                        function playWithHlsJs() {
-                            console.log('[OBS/HLS] hls.js:', hlsUrl);
-                            player = new Hls({
-                                lowLatencyMode: true,
-                                liveSyncDurationCount: 3,  // держимся у живого края, а не у начала окна
-                                backBufferLength: 30,      // не копим прошлое: эфир, а не запись
-                            });
-                            player.loadSource(hlsUrl);
-                            player.attachMedia(video);
-                            player.on(Hls.Events.MANIFEST_PARSED, () => {
-                                video.play().catch((e) => console.warn('[OBS/HLS] автозапуск заблокирован:', e));
-                            });
-                            player.on(Hls.Events.ERROR, (_evt, data) => {
-                                if (!data.fatal) return;
-                                // Сеть и медиа чинятся на месте; всё остальное — только пересозданием.
-                                if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                                    console.warn('[OBS/HLS] сетевая ошибка, переподключаемся');
-                                    player.startLoad();
-                                } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-                                    console.warn('[OBS/HLS] ошибка медиа, восстанавливаем');
-                                    player.recoverMediaError();
-                                } else {
-                                    console.error('[OBS/HLS] фатальная ошибка:', data);
-                                    player.destroy();
-                                    player = null;
-                                }
-                            });
-                        }
-
-                        (async () => {
-                            if (!await waitForPlaylist(30)) {
-                                console.error('[OBS/HLS] плейлист не появился за минуту:', hlsUrl);
-                                return;
-                            }
-                            // Порядок важен: Safari умеет и то и другое, но нативный
-                            // плеер на iOS экономнее и не требует MSE.
-                            if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                                playNative();
-                            } else if (window.Hls && Hls.isSupported()) {
-                                playWithHlsJs();
-                            } else {
-                                console.error('[OBS/HLS] браузер не умеет HLS ни нативно, ни через hls.js');
-                            }
-                        })();
-
-                        window.addEventListener('beforeunload', () => {
-                            if (player) {
-                                try { player.destroy(); } catch (_) {}
-                            }
+                        TKHls.play(video, hlsUrl, {
+                            attempts: 30,
+                            onGiveUp: () => console.error('[OBS/HLS] плейлист не появился за минуту:', hlsUrl),
                         });
                     });
                     <% } %>

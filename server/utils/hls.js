@@ -17,9 +17,9 @@ const { isPlainFileName } = require('./safePath');
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 
-// Пишем туда, откуда node-media-server раздаёт статику (config.http.mediaroot),
-// поэтому зритель забирает плейлист по /live/<streamKey>/index.m3u8 — тем же
-// путём, что уже описан в ops/nginx/takebana.conf.
+// Отсюда плейлист и сегменты раздаёт nginx (location /live/ в
+// ops/nginx/takebana.conf), а локально — express.static в app.js: зритель
+// забирает /live/<streamKey>/index.m3u8.
 const HLS_ROOT = path.join(__dirname, '..', 'media', 'live');
 
 const SEGMENT_SECONDS = 2;

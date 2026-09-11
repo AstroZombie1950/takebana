@@ -8,8 +8,20 @@ const User = require('../../models/User');
 const Stream = require('../../models/Stream');
 const ChatMessage = require('../../models/ChatMessage');
 const Subscription = require('../../models/Subscription');
+const { requireAuth, requireOwner } = require('../../middleware/auth');
+const { validate } = require('../../middleware/validate');
 const { commonDataMiddleware, getRandomGradient } = require('./shared');
 const { buildObsStreamKey, getSignExpiry } = require('../../utils/rtmpAuth');
+
+const OBJECT_ID = /^[a-f\d]{24}$/i;
+
+// Что значит «ведущий открыл страницу»: веб-страница переводит эфир на Daily
+// и считает его ещё не начатым — он стартует с кнопки; OBS-страница переводит
+// эфир на приём с пульта.
+const PAGE_MODES = {
+  web: { streamType: 'daily-stream', streamProvider: 'web-stream', isActive: false, startedAt: null },
+  obs: { streamType: 'obs-stream', streamProvider: 'obs' },
+};
 
 router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
   if (!req.session.userId) { // Проверка авторизации
@@ -22,7 +34,7 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
     // ВЕБ-страница стримера (Daily/WebRTC). Это отдельная страница от OBS.
     const stream = await Stream.findById(streamId).populate('userId');
 
-    
+
     if (!stream) {
       // Рендерим кастомный шаблон для отсутствующего стрима
       return res.status(404).render('streamNotFound');
@@ -39,45 +51,11 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
       return res.render('ageGate');
     }
 
-    const io = req.app && req.app.get ? req.app.get('io') : null;
-
-    // Если это стример и он открыл WEB-страницу — фиксируем тип стрима как Daily/WebRTC
-    if (isStreamer) {
-      try {
-        await Stream.updateOne(
-          { _id: streamId, userId: stream.userId._id },
-          {
-            $set: {
-              streamType: 'daily-stream',
-              streamProvider: 'web-stream',
-              // при переходе на WEB-страницу считаем, что WEB-стрим еще не запущен
-              isActive: false,
-              startedAt: null,
-              updatedAt: Date.now()
-            }
-          }
-        );
-        // синхронизируем объект для шаблона
-        stream.streamType = 'daily-stream';
-        stream.streamProvider = 'web-stream';
-        stream.isActive = false;
-        stream.startedAt = null;
-
-        // Уведомляем зрителей о смене типа (чтобы перезагрузились и сменили плеер)
-        try {
-          if (io && stream.streamKey) {
-            io.to(`stream:${stream.streamKey}`).emit('stream:update', {
-              streamKey: stream.streamKey,
-              streamType: 'daily-stream',
-              streamProvider: 'web-stream',
-              isActive: !!stream.isActive
-            });
-          }
-        } catch (_) {}
-      } catch (e) {
-        console.warn('[stream] failed to set web stream type on page enter', e?.message || e);
-      }
-    }
+    // Ведущему страница показывает эфир таким, каким его сделает POST .../enter,
+    // который она отправит сразу после загрузки. Сам GET в базу не пишет:
+    // раньше писал, и эфир снимали префетч браузера, предпросмотр ссылки
+    // в мессенджере и обход ссылок аудитом.
+    if (isStreamer) Object.assign(stream, PAGE_MODES.web);
 
     // Подготавливаем данные стримера для шаблона
     const streamerUser = stream.userId;
@@ -110,7 +88,7 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
     // (иначе у стримера и у зрителей будут разные ключи и счетчик не обновится).
     // Источник истины — поле Stream.streamKey.
     let streamKey = stream.streamKey;
-    
+
     // ВАЖНО: Проверяем что streamKey есть, если нет - берем из user.streamKey
     if (!streamKey || streamKey === '') {
       console.warn('[WARNING] Stream.streamKey is empty, using user.streamKey');
@@ -118,13 +96,6 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
       if (!streamKey) {
         console.error('[ERROR] No streamKey found for stream:', stream._id);
       }
-    }
-    
-    let streamUrl = null; // URL для стрима (OBS: HTTP-FLV; Daily: WebRTC)
-    if (!isStreamer) {
-      // Генерируем URL для зрителей (OBS: HTTP-FLV) (Node Media Server отдает на порту 8000)
-      // Используем streamKey из стрима, а не из user
-      streamUrl = `${process.env.PLAYER_VIDEO || 'http://localhost:8000'}/live/${streamKey}.flv`;
     }
 
     // На всякий случай синхронизируем user.streamKey если вдруг пустой (стрим уже создан, key есть).
@@ -152,7 +123,6 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
         // Ключ вместе с подписью — то, что вставляют в OBS. Видит только владелец.
         obsStreamKey: buildObsStreamKey(streamKey),
         obsKeyExpiresAt: getSignExpiry(),
-        streamUrl, // Передаем URL HLS потока для зрителей
         chatMessages, // Передаем сообщения в шаблон
         start_server_env,
         obsOnly: false
@@ -164,7 +134,6 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
         isStreamer,
         isSubscribed, // Статус подписки
         streamKey, // Передаем streamKey ВСЕМ (и стримеру, и зрителям) для счетчика
-        streamUrl, // Передаем URL HLS потока для зрителей
         chatMessages, // Передаем сообщения в шаблон
         start_server_env
       });
@@ -191,26 +160,8 @@ router.get('/stream-obs/:streamId', commonDataMiddleware, async (req, res) => {
       return res.redirect(`/stream/${streamId}`);
     }
 
-    // При входе на OBS-страницу сразу фиксируем тип
-    await Stream.updateOne(
-      { _id: streamId, userId: stream.userId._id },
-      { $set: { streamType: 'obs-stream', streamProvider: 'obs', updatedAt: Date.now() } }
-    );
-    stream.streamType = 'obs-stream';
-    stream.streamProvider = 'obs';
-
-    // Уведомляем зрителей о смене типа
-    try {
-      const io = req.app && req.app.get ? req.app.get('io') : null;
-      if (io && stream.streamKey) {
-        io.to(`stream:${stream.streamKey}`).emit('stream:update', {
-          streamKey: stream.streamKey,
-          streamType: 'obs-stream',
-          streamProvider: 'obs',
-          isActive: !!stream.isActive
-        });
-      }
-    } catch (_) {}
+    // Как и у веб-страницы: показываем, а пишет в базу POST .../enter.
+    Object.assign(stream, PAGE_MODES.obs);
 
     const streamerUser = stream.userId;
     const displayName = streamerUser.login || (streamerUser.email ? streamerUser.email.split('@')[0] : 'Неизвестный пользователь');
@@ -232,7 +183,6 @@ router.get('/stream-obs/:streamId', commonDataMiddleware, async (req, res) => {
       streamKey,
       obsStreamKey: buildObsStreamKey(streamKey),
       obsKeyExpiresAt: getSignExpiry(),
-      streamUrl: null,
       chatMessages: [],
       start_server_env,
       obsOnly: true
@@ -241,6 +191,31 @@ router.get('/stream-obs/:streamId', commonDataMiddleware, async (req, res) => {
     console.error('Ошибка при открытии OBS страницы:', e);
     res.status(500).send('Ошибка сервера');
   }
+});
+
+// Ведущий открыл страницу эфира — веб или OBS. Отдельным POST, а не внутри
+// GET страницы: GET обязан быть безопасным, его делают префетч браузера,
+// предпросмотр ссылок в мессенджерах и краулеры. Зрители получают
+// stream:update и перезагружают плеер под новый тип эфира.
+router.post('/stream/:streamId/enter', requireAuth,
+  // requireOwner ищет эфир по :streamId, и кривой идентификатор ронял бы его в 500.
+  (req, res, next) => (OBJECT_ID.test(req.params.streamId) ? next() : res.status(404).json({ message: 'Эфир не найден' })),
+  validate({ mode: { type: 'string', required: true, values: Object.keys(PAGE_MODES), label: 'Страница' } }),
+  requireOwner(Stream, { param: 'streamId', field: 'userId' }), async (req, res) => {
+  const stream = await Stream.findByIdAndUpdate(req.params.streamId,
+    { $set: { ...PAGE_MODES[req.body.mode], updatedAt: Date.now() } },
+    { new: true }).select('streamKey streamType streamProvider isActive').lean();
+
+  const io = req.app.get('io');
+  if (io && stream.streamKey) {
+    io.to(`stream:${stream.streamKey}`).emit('stream:update', {
+      streamKey: stream.streamKey,
+      streamType: stream.streamType,
+      streamProvider: stream.streamProvider,
+      isActive: !!stream.isActive
+    });
+  }
+  res.json({ ok: true });
 });
 
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.

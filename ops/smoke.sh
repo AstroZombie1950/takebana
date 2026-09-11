@@ -167,6 +167,7 @@ expect "DELETE /profile/gallery/:name"    "401"     DELETE /profile/gallery/x.jp
 expect "POST /upload-thumbnail"           "401"     POST /upload-thumbnail
 expect "POST /set-active"                 "401"     POST /set-active                 -H 'Content-Type: application/json' -d '{}'
 expect "POST /set-inactive"               "401"     POST /set-inactive               -H 'Content-Type: application/json' -d '{}'
+expect "POST /stream/:id/enter"           "401"     POST /stream/000000000000000000000000/enter -H 'Content-Type: application/json' -d '{"mode":"web"}'
 expect "POST /obs-stream-start"           "401"     POST /obs-stream-start           -H 'Content-Type: application/json' -d '{}'
 expect "POST /chat/message"               "401"     POST /chat/message               -H 'Content-Type: application/json' -d '{}'
 expect "GET /search-users"                "401|302" GET  /search-users               -H 'X-Requested-With: XMLHttpRequest'
@@ -202,12 +203,13 @@ expect "/updateEstablishmentOnlineStatus" "404" POST /updateEstablishmentOnlineS
 
 step "Обход каталогов"
 # Проверяются пути, которые берут имя файла от клиента и живы сейчас: раздача
-# статики и прокси на медиасервер. Ответ 200 здесь — авария.
+# статики и HLS с диска. Ответ 200 здесь — авария.
 # Маршруты /segment/:key/:file и /hls/* проверялись раньше здесь же; они удалены
 # вместе со всем прежним конвейером, и их отсутствие проверяется шагом выше.
 expect "статика ../../app.js"   "400|403|404" GET "/uploads/..%2F..%2Fapp.js"
 expect "картинки ../../.env"    "400|403|404" GET "/img/..%2F..%2F.env"
-expect "медиа ../../app.js"     "400|403|404|502" GET "/live/..%2F..%2Fapp.js"
+expect "медиа ../../app.js"     "400|403|404" GET "/live/..%2F..%2Fapp.js"
+expect "медиа ../server.log"    "400|403|404" GET "/live/..%2Fserver.log"
 
 # ═════════════════════════════════════════════════════════════════════════════
 step "Socket.IO"

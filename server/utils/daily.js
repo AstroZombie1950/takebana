@@ -69,6 +69,18 @@ async function deleteRoom(name) {
   }
 }
 
+// Есть ли комната в Daily. Нужна там, где база может разойтись с Daily:
+// вкладка владельца умерла, не успев сказать серверу, что показ окончен.
+async function roomExists(name) {
+  try {
+    await api('GET', `/rooms/${encodeURIComponent(name)}`);
+    return true;
+  } catch (err) {
+    if (err.status === 404) return false;
+    throw err;
+  }
+}
+
 function roomUrl(name) {
   return `https://${process.env.DAILY_DOMAIN}.daily.co/${name}`;
 }
@@ -114,4 +126,4 @@ async function meetingToken({ room, userId, owner = false, canSend = false, pres
   });
 }
 
-module.exports = { configured, createRoom, deleteRoom, roomUrl, meetingToken };
+module.exports = { configured, createRoom, deleteRoom, roomExists, roomUrl, meetingToken };

@@ -10,8 +10,10 @@ const Report = require('../models/Report');
 const User = require('../models/User');
 const Stream = require('../models/Stream');
 const ChatMessage = require('../models/ChatMessage');
+const Establishments = require('../models/Establishments');
 const { validate } = require('../middleware/validate');
 const daily = require('../utils/daily');
+const { roomName: venueRoom } = require('./venueLive');
 
 // Разрыв идущего вещания. Подключается лениво и намеренно: require('../mediaServer')
 // на верхнем уровне поднимает RTMP-сервер как побочный эффект, и тогда любой
@@ -215,7 +217,15 @@ router.post('/api/moderation/users/:id/ban', requireModerator, validate({
         }
     }
 
-    return res.json({ ok: true, streamsStopped: live.length });
+    // Камера заведения — тоже вещание, и тоже через Daily: без этого гости
+    // смотрели бы её и после бана владельца.
+    const venues = await Establishments.find({ owner: req.params.id, online: true }).select('_id').lean();
+    if (venues.length) {
+        await Establishments.updateMany({ _id: { $in: venues.map(v => v._id) } }, { $set: { online: false } });
+        for (const v of venues) dropDailyRoom(venueRoom(v._id));
+    }
+
+    return res.json({ ok: true, streamsStopped: live.length, venuesStopped: venues.length });
 }));
 
 router.post('/api/moderation/users/:id/unban', requireModerator, wrap(async (req, res) => {
