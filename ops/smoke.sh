@@ -156,6 +156,9 @@ step "Закрытые маршруты: аноним не должен прох
 # Каждая строка — воспроизведённая дыра из аудита 4 сентября.
 expect "POST /api/create-room"            "401"     POST /api/create-room            -H 'Content-Type: application/json' -d '{}'
 expect "POST /api/get-token"              "401"     POST /api/get-token              -H 'Content-Type: application/json' -d '{}'
+expect "POST /api/venues/:id/live"        "401"     POST /api/venues/000000000000000000000000/live
+expect "POST /api/venues/:id/watch"       "401"     POST /api/venues/000000000000000000000000/watch
+expect "POST /api/calls/create"           "401"     POST /api/calls/create           -H 'Content-Type: application/json' -d '{}'
 expect "PUT /updateEstablishment/:id"     "401"     PUT  /updateEstablishment/000000000000000000000000
 expect "POST /register-establishment"     "401"     POST /register-establishment     -H 'Content-Type: application/json' -d '{}'
 expect "GET /user-establishments"         "401|302" GET  /user-establishments        -H 'X-Requested-With: XMLHttpRequest'
@@ -191,6 +194,11 @@ expect "/test-callback" "404" GET /test-callback
 expect "/segments"      "404" GET /segments
 expect "/clear-segments" "404" POST /clear-segments -H 'Content-Type: application/json' -d '{}'
 expect "/streams/x"     "404" GET /streams/x
+# Комнаты Daily закрыты токенами: ни адрес, ни настройки комнаты больше не
+# отдаются отдельно, а статус камеры заведения ставит только venueLive.
+expect "/api/room-info/:name"             "404" GET  /api/room-info/x
+expect "/api/get-stream-room/:id"         "404" GET  /api/get-stream-room/000000000000000000000000
+expect "/updateEstablishmentOnlineStatus" "404" POST /updateEstablishmentOnlineStatus -H 'Content-Type: application/json' -d '{}'
 
 step "Обход каталогов"
 # Проверяются пути, которые берут имя файла от клиента и живы сейчас: раздача

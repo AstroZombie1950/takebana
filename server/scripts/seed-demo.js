@@ -97,7 +97,7 @@ async function main() {
     const exists = await Establishments.findOne({ name: p.name, owner: owner._id });
     if (!exists) {
       await Establishments.create({
-        ...p, email: owner.email, owner: owner._id, photos: [], peerId: '',
+        ...p, email: owner.email, owner: owner._id, photos: [],
       });
       created.push('заведение «' + p.name + '»');
     }

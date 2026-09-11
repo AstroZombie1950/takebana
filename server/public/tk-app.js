@@ -967,324 +967,75 @@ document.addEventListener('DOMContentLoaded', () => {
       setPresence(String(u._id), !!u.isOnline, u.lastSeen);
     });
 
-    // ===== Calls client bindings =====
-    window.startAudioCall = async function(calleeId){
+    // ===== Звонки =====
+    // Сервер будит собеседника сокетом, после приёма создаёт закрытую комнату
+    // Daily и каждому участнику выдаёт свой токен. Вход, переподключение
+    // и качество сети — в tk-daily.js; окна звонка — ниже по файлу.
+    const closeCall = (callId) => (window.closeCall ? window.closeCall(callId) : false);
+
+    async function startCall(calleeId, type) {
       try {
-        window._callType = 'audio';
-        const res = await fetch('/api/calls/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calleeId, type: 'audio' }) });
+        const res = await fetch('/api/calls/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calleeId, type }) });
         const data = await res.json();
-        console.log('[client] startAudioCall response', data);
-        if (!data.success) throw new Error(data.error || 'call_create_failed');
+        if (!data.success) throw new Error(data.message || data.error || 'call_create_failed');
         window.currentCallId = data.callId;
         window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Ожидание ответа…');
       } catch (e) {
-        console.error('[client] startAudioCall error', e);
+        window.hideOutgoingCall && window.hideOutgoingCall();
         toast('Не удалось начать звонок: ' + e.message, 'error');
       }
-    };
+    }
+    window.startAudioCall = (calleeId) => startCall(calleeId, 'audio');
+    window.startVideoCall = (calleeId) => startCall(calleeId, 'video');
 
-    window.startVideoCall = async function(calleeId){
-      try {
-        window._callType = 'video';
-        const res = await fetch('/api/calls/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calleeId, type: 'video' }) });
-        const data = await res.json();
-        console.log('[client] startVideoCall response', data);
-        if (!data.success) throw new Error(data.error || 'call_create_failed');
-        window.currentCallId = data.callId;
-        window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Ожидание ответа…');
-      } catch (e) {
-        console.error('[client] startVideoCall error', e);
-        toast('Не удалось начать звонок: ' + e.message, 'error');
-      }
-    };
-
-    socket.on('incoming_call', ({ callId, type, from, daily }) => {
-      console.log('[client] incoming_call', { callId, type, from, daily });
+    socket.on('incoming_call', ({ callId, type, from }) => {
       if (!from) return;
-      window._incomingCallType = type;
-      window._callType = type;
+      // Уже разговариваем: второй звонок получает «отклонено», а не окно
+      // поверх идущего разговора.
+      if (window.currentCallId) { socket.emit('call:decline', { callId }); return; }
       window.showIncomingCall && window.showIncomingCall({
         userId: from.userId,
         displayName: from.displayName,
         avatarUrl: from.avatarUrl,
         callType: type,
-        onAccept: () => socket.emit('call:accept', { callId }),
+        onAccept: () => { window.currentCallId = callId; socket.emit('call:accept', { callId }); },
         onDecline: () => socket.emit('call:decline', { callId })
       });
-      window.pendingDaily = daily || null;
     });
 
-    socket.on('call:accepted', async ({ callId, daily }) => {
-      console.log('[client] call:accepted', callId);
-      window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Соединение установлено');
-      window.currentCallId = callId;
-      try {
-        if (typeof window.DailyIframe === 'undefined') {
-          const s = document.createElement('script');
-          s.src = 'https://unpkg.com/@daily-co/daily-js@0.83.1/dist/daily-iframe.js';
-          document.head.appendChild(s);
-          await new Promise(r => { s.onload = r; s.onerror = r; });
-        }
-        const d = daily || window.pendingDaily || {};
-        if (d && (d.roomUrl || d.roomName)) {
-          // Предпочитаем roomUrl, присланный сервером (он уже содержит правильный daily subdomain).
-          // Fallback оставляем на исторический домен, чтобы ребрендинг не ломал звонки.
-          const url = d.roomUrl || `https://webcatravel.daily.co/${d.roomName}`;
-          window._audioCallObject = window.DailyIframe.createCallObject();
-          await window._audioCallObject.join({ url });
-          // Тип вызова (для обоих сторон)
-          const wantVideo = (window._callType === 'video');
-          // Включим echoCancellation/noiseSuppression на локальном аудио
-          try {
-            const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
-            const track = mic.getAudioTracks()[0];
-            const devId = track && track.getSettings && track.getSettings().deviceId;
-            if (devId && window._audioCallObject.setInputDevicesAsync) {
-              await window._audioCallObject.setInputDevicesAsync({ audioDeviceId: devId });
-            }
-            try { mic.getTracks().forEach(t => t.stop()); } catch(_) {}
-          } catch(e) { console.warn('getUserMedia with echo cancel failed', e); }
-          await window._audioCallObject.setLocalVideo(!!wantVideo);
-          await window._audioCallObject.setLocalAudio(true);
-          // Постараемся разблокировать воспроизведение на iOS/Safari
-          async function unlockAudio(){
-            try { await window._audioCallObject.startAudio(); console.log('[client] startAudio ok'); return true; } catch(e){ console.warn('[client] startAudio failed', e); return false; }
-          }
-          const ok = await unlockAudio();
-          if (!ok) {
-            const handler = async () => { await unlockAudio(); document.removeEventListener('click', handler, true); };
-            document.addEventListener('click', handler, true);
-          }
-          console.log('[client] daily joined', wantVideo ? 'video' : 'audio');
-          // Видео контейнеры (показываем, если видеозвонок)
-          function setVideoVisible(visible){
-            const ov = document.getElementById('outgoingVideos');
-            const iv = document.getElementById('incomingVideos');
-            if (ov) ov.classList.toggle('hidden', !visible);
-            if (iv) iv.classList.toggle('hidden', !visible);
-          }
-          setVideoVisible(!!wantVideo);
-          const oa = document.getElementById('outgoingAudioUI');
-          const ia = document.getElementById('incomingAudioUI');
-          if (oa) oa.classList.remove('hidden');
-          if (ia) ia.classList.remove('hidden');
-          // Привязка треков к <video>
-          function bindTrackToVideo(videoEl, track, muted){
-            if (!videoEl) return;
-            if (track) {
-              const ms = new MediaStream();
-              ms.addTrack(track);
-              try { videoEl.srcObject = ms; } catch(e) {}
-              try { videoEl.muted = !!muted; } catch(e) {}
-              try { videoEl.playsInline = true; videoEl.setAttribute('playsinline',''); } catch(e) {}
-              try { videoEl.play().catch(()=>{}); } catch(e) {}
-            }
-          }
-          function updateVideoElements(){
-            try {
-              const parts = window._audioCallObject.participants();
-              const local = Object.values(parts||{}).find(p => p.local);
-              const remote = Object.values(parts||{}).find(p => !p.local);
-              const localTrack = (local && (local.tracks && local.tracks.video && local.tracks.video.track)) || local?.videoTrack || null;
-              const remoteTrack = (remote && (remote.tracks && remote.tracks.video && remote.tracks.video.track)) || remote?.videoTrack || null;
-              bindTrackToVideo(document.getElementById('outLocalVideo'), localTrack, true);
-              bindTrackToVideo(document.getElementById('inLocalVideo'), localTrack, true);
-              bindTrackToVideo(document.getElementById('outRemoteVideo'), remoteTrack, false);
-              bindTrackToVideo(document.getElementById('inRemoteVideo'), remoteTrack, false);
-            } catch(e) {}
-          }
-          if (wantVideo) {
-            updateVideoElements();
-            window._audioCallObject.on('participant-joined', updateVideoElements);
-            window._audioCallObject.on('participant-updated', updateVideoElements);
-            window._audioCallObject.on('participant-left', updateVideoElements);
-          }
-          // Участники
-          function renderParticipants(){
-            try {
-              const participants = window._audioCallObject.participants();
-              const list = Object.values(participants || {}).map(p => p.info?.user_name || (p.local ? 'Вы' : 'Гость')).filter(Boolean);
-              const txt = 'Участники: ' + list.join(', ');
-              const oP = document.getElementById('outgoingParticipants');
-              const iP = document.getElementById('incomingParticipants');
-              if (oP) { oP.textContent = txt; oP.classList.remove('hidden'); }
-              if (iP) { iP.textContent = txt; iP.classList.remove('hidden'); }
-            } catch(e) {}
-          }
-          renderParticipants();
-          window._audioCallObject.on('participant-joined', renderParticipants);
-          window._audioCallObject.on('participant-left', renderParticipants);
-          window._audioCallObject.on('participant-updated', renderParticipants);
-          // уровни аудио убраны
-          // Диагностика аудио: разрешения, девайсы, треки
-          async function audioDiagnostics(){
-            try {
-              const perms = navigator.permissions && navigator.permissions.query ? await navigator.permissions.query({ name: 'microphone' }) : null;
-              const devices = await navigator.mediaDevices.enumerateDevices();
-              const parts = window._audioCallObject.participants();
-              const me = Object.values(parts||{}).find(p => p.local);
-              const other = Object.values(parts||{}).find(p => !p.local);
-              const outA = document.getElementById('outRemoteAudio');
-              const inA = document.getElementById('inRemoteAudio');
-              const sinkSupported = !!(HTMLMediaElement.prototype && HTMLMediaElement.prototype.setSinkId);
-              const diag = {
-                permissionState: perms && perms.state || 'unknown',
-                devices: devices.map(d => ({ kind: d.kind, label: d.label, deviceId: d.deviceId, groupId: d.groupId })),
-                localHasAudio: !!(me && (me.tracks && me.tracks.audio && me.tracks.audio.state === 'playable')), 
-                remoteHasAudio: !!(other && (other.tracks && other.tracks.audio && other.tracks.audio.state === 'playable')),
-                localAudioEnabled: !!(me && me.audio),
-                remoteAudioEnabled: !!(other && other.audio),
-                output: {
-                  sinkApiSupported: sinkSupported,
-                  outElementVolume: outA ? outA.volume : null,
-                  inElementVolume: inA ? inA.volume : null,
-                  // sinkId is readable in Chromium; Safari does not expose
-                  outSinkId: (outA && 'sinkId' in outA) ? outA.sinkId : null,
-                  inSinkId: (inA && 'sinkId' in inA) ? inA.sinkId : null,
-                }
-              };
-              console.log('[audio] diagnostics', diag);
-              const oDbg = document.getElementById('outAudioDebug');
-              const iDbg = document.getElementById('inAudioDebug');
-              if (oDbg) { oDbg.textContent = JSON.stringify(diag, null, 2); oDbg.classList.remove('hidden'); }
-              if (iDbg) { iDbg.textContent = JSON.stringify(diag, null, 2); iDbg.classList.remove('hidden'); }
-            } catch(e) { console.warn('audioDiagnostics failed', e); }
-          }
-          // диагностика убрана
-          // Привязка remote audio к <audio>
-          function updateAudioElements(){
-            try {
-              const parts = window._audioCallObject.participants();
-              const remote = Object.values(parts||{}).find(p => !p.local);
-              const remoteTrack = (remote && (remote.tracks && remote.tracks.audio && remote.tracks.audio.track)) || remote?.audioTrack || null;
-              const outA = document.getElementById('outRemoteAudio');
-              const inA = document.getElementById('inRemoteAudio');
-              if (remoteTrack) {
-                const ms = new MediaStream();
-                ms.addTrack(remoteTrack);
-                // Отдаём звук только в видимую модалку
-                const outgoingVisible = document.getElementById('outgoingCallModal') && !document.getElementById('outgoingCallModal').classList.contains('hidden');
-                const incomingVisible = document.getElementById('incomingCallModal') && !document.getElementById('incomingCallModal').classList.contains('hidden');
-                if (outA) { outA.srcObject = null; }
-                if (inA) { inA.srcObject = null; }
-                const tuneOutput = async (el) => {
-                  if (!el) return;
-                  try {
-                    // На поддерживаемых браузерах выведем на коммуникационное устройство
-                    if (typeof el.setSinkId === 'function') {
-                      const devices = await navigator.mediaDevices.enumerateDevices();
-                      const outs = devices.filter(d => d.kind === 'audiooutput');
-                      const pref = outs.find(d => /communications|headset|earpiece/i.test(d.label));
-                      if (pref) { await el.setSinkId(pref.deviceId); }
-                    }
-                  } catch(_) {}
-                  try { el.volume = (window._callType === 'audio') ? 0.7 : 1.0; } catch(_) {}
-                };
-                if (outgoingVisible && outA) { try { outA.srcObject = ms; outA.muted = false; outA.play().catch(()=>{}); tuneOutput(outA); } catch(e){} }
-                else if (incomingVisible && inA) { try { inA.srcObject = ms; inA.muted = false; inA.play().catch(()=>{}); tuneOutput(inA); } catch(e){} }
-              }
-            } catch(e) {}
-          }
-          updateAudioElements();
-          window._audioCallObject.on('participant-joined', updateAudioElements);
-          window._audioCallObject.on('participant-updated', updateAudioElements);
-          window._audioCallObject.on('participant-left', () => {
-            updateAudioElements();
-            // если удалённый участник ушёл — закрыть обе модалки и очистить состояние
-            try {
-              const parts = window._audioCallObject.participants();
-              const hasRemote = Object.values(parts||{}).some(p => !p.local);
-              if (!hasRemote) {
-                window.hideIncomingCall && window.hideIncomingCall();
-                window.hideOutgoingCall && window.hideOutgoingCall();
-                if (window._audioCallObject){ window._audioCallObject.leave(); window._audioCallObject.destroy(); window._audioCallObject=null; }
-                clearInterval(window._callTick);
-                window.currentCallId = null;
-              }
-            } catch(e){}
-          });
+    // Разговор идёт в одной вкладке с каждой стороны: у звонящего — там, где
+    // нажали «позвонить», у собеседника — там, где приняли. Остальные вкладки
+    // в комнату на двоих не ломятся.
+    socket.on('call:accepted', ({ callId, type, url, token }) => {
+      if (callId !== window.currentCallId || window._call) return;
+      window.startCallMedia && window.startCallMedia(callId, type, { url, token });
+    });
 
-          // Кнопки разблокировки аудио (для iOS/Safari)
-          // тихая попытка включить аудио без UI
-          try { await window._audioCallObject.startAudio(); } catch(e) {}
-          // уровни не отображаем
-          // Переведём исходящую кнопку в “Завершить”
-          const btn = document.getElementById('outgoingCancelBtn');
-          if (btn) { btn.textContent = 'Завершить'; btn.classList.remove('tk-btn--danger'); btn.classList.add('tk-btn--mute'); }
-          // Назначим завершение звонка на кнопку
-          if (btn) {
-            btn.onclick = function(){ endCallLocal(); };
-          }
-          // Преобразуем входящую модалку в активный звонок
-          const iS = document.getElementById('incomingStatus');
-          if (iS) iS.textContent = 'Соединение установлено';
-          const iT = document.getElementById('incomingTimer');
-          if (iT) iT.classList.remove('hidden');
-          const acc = document.getElementById('incomingAcceptBtn');
-          const dec = document.getElementById('incomingDeclineBtn');
-          const cls = document.getElementById('incomingCloseBtn');
-          if (acc) {
-            acc.disabled = false; acc.textContent = 'Завершить';
-            acc.classList.remove('tk-btn--ok');
-            acc.classList.add('tk-btn--mute');
-            // «Отклонить» скрывается — кнопка остаётся одна на всю ширину
-            acc.parentElement.classList.remove('tk-call__actions--pair');
-            acc.onclick = function(){ endCallLocal(); };
-          }
-          if (dec) { dec.classList.add('hidden'); }
-          if (cls) { cls.classList.add('hidden'); }
-        }
-      } catch (e) {
-        console.error('[client] daily join error', e);
-      }
-      try {
-        // Показать таймер и статус
-        const oT = document.getElementById('outgoingTimer');
-        const iT = document.getElementById('incomingTimer');
-        const iS = document.getElementById('incomingStatus');
-        if (oT) oT.classList.remove('hidden');
-        if (iT) iT.classList.remove('hidden');
-        if (iS) iS.textContent = 'Соединение установлено';
-        let sec = 0; clearInterval(window._callTick);
-        window._callTick = setInterval(() => {
-          sec++; const mm = String(Math.floor(sec/60)).padStart(2,'0'); const ss = String(sec%60).padStart(2,'0');
-          if (oT && !oT.classList.contains('hidden')) oT.textContent = mm+':'+ss;
-          if (iT && !iT.classList.contains('hidden')) iT.textContent = mm+':'+ss;
-        }, 1000);
-      } catch(e){}
+    // Повторный вход после обрыва: свежий токен у сервера, пока звонок жив.
+    window.requestCallToken = (callId) => new Promise((resolve, reject) => {
+      socket.timeout(10000).emit('call:token', { callId }, (err, res) => {
+        if (err) return reject(new Error('timeout')); // сокет ещё не вернулся — попробуем снова
+        if (res && res.token) return resolve(res);
+        const e = new Error((res && res.error) || 'call_ended');
+        e.final = true;
+        reject(e);
+      });
+    });
+
+    socket.on('call:failed', ({ callId }) => {
+      if (closeCall(callId)) toast('Не удалось соединить: сервис видеосвязи недоступен', 'error');
     });
     socket.on('call:declined', ({ callId }) => {
-      console.log('[client] call:declined', callId);
+      if (callId !== window.currentCallId) return;
+      window.currentCallId = null;
       window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Отклонено');
       setTimeout(() => window.hideOutgoingCall && window.hideOutgoingCall(), 1000);
-      if (window.currentCallId === callId) window.currentCallId = null;
     });
-    socket.on('call:canceled', ({ callId }) => {
-      console.log('[client] call:canceled', callId);
-      window.hideIncomingCall && window.hideIncomingCall();
-      if (window.currentCallId === callId) window.currentCallId = null;
-      if (window._audioCallObject) { try { window._audioCallObject.leave(); window._audioCallObject.destroy(); } catch(e){} window._audioCallObject=null; }
-      try { clearInterval(window._callTick); } catch(e){}
-    });
-    socket.on('call:ended', ({ callId }) => {
-      console.log('[client] call:ended', callId);
-      window.hideIncomingCall && window.hideIncomingCall();
-      window.hideOutgoingCall && window.hideOutgoingCall();
-      if (window.currentCallId === callId) window.currentCallId = null;
-      if (window._audioCallObject) { try { window._audioCallObject.leave(); window._audioCallObject.destroy(); } catch(e){} window._audioCallObject=null; }
-      try { clearInterval(window._callTick); } catch(e){}
-    });
+    socket.on('call:canceled', ({ callId }) => closeCall(callId));
+    socket.on('call:ended', ({ callId }) => closeCall(callId));
     socket.on('call:timeout', ({ callId }) => {
-      console.log('[client] call:timeout', callId);
-      window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Нет ответа');
-      // Закрываем обе модалки на всякий случай
-      setTimeout(() => {
-        window.hideOutgoingCall && window.hideOutgoingCall();
-        window.hideIncomingCall && window.hideIncomingCall();
-      }, 200);
-      if (window.currentCallId === callId) window.currentCallId = null;
-      if (window._audioCallObject) { try { window._audioCallObject.leave(); window._audioCallObject.destroy(); } catch(e){} window._audioCallObject=null; }
-      try { clearInterval(window._callTick); } catch(e){}
+      if (callId === window.currentCallId) window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Нет ответа');
+      setTimeout(() => closeCall(callId), 800);
     });
 
     // Инициализация: подхватить присутствующие на странице id
@@ -1311,23 +1062,45 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 })();
 
-// Глобальные помощники модалок звонков
+// Окна звонка: исходящее — у звонящего, входящее — у того, кому звонят.
+// После соединения разговор идёт в том же окне.
 document.addEventListener('DOMContentLoaded', function(){
   const outgoing = document.getElementById('outgoingCallModal');
-  const outName = document.getElementById('outgoingName');
-  const outType = document.getElementById('outgoingType');
-  const outStatus = document.getElementById('outgoingStatus');
-  const outAvatar = document.getElementById('outgoingAvatar');
-  const outClose = document.getElementById('outgoingCloseBtn');
-  const outCancel = document.getElementById('outgoingCancelBtn');
-
   const incoming = document.getElementById('incomingCallModal');
-  const inName = document.getElementById('incomingName');
-  const inType = document.getElementById('incomingType');
-  const inAvatar = document.getElementById('incomingAvatar');
-  const inClose = document.getElementById('incomingCloseBtn');
-  const inDecline = document.getElementById('incomingDeclineBtn');
-  const inAccept = document.getElementById('incomingAcceptBtn');
+  if (!outgoing || !incoming) return;
+
+  const $ = (id) => document.getElementById(id);
+  const outName = $('outgoingName');
+  const outType = $('outgoingType');
+  const outAvatar = $('outgoingAvatar');
+  const outClose = $('outgoingCloseBtn');
+  const outCancel = $('outgoingCancelBtn');
+  const inName = $('incomingName');
+  const inType = $('incomingType');
+  const inAvatar = $('incomingAvatar');
+  const inClose = $('incomingCloseBtn');
+  const inDecline = $('incomingDeclineBtn');
+  const inAccept = $('incomingAcceptBtn');
+
+  function side(prefix, short) {
+    const voice = $(prefix + 'VoiceBtn');
+    return {
+      status: $(prefix + 'Status'),
+      beacon: $(prefix + 'Status').previousElementSibling,
+      timer: $(prefix + 'Timer'),
+      net: $(prefix + 'Net'),
+      stage: $(prefix + 'Videos'),
+      voice,
+      actions: voice.parentElement,
+      remoteVideo: $(short + 'RemoteVideo'),
+      localVideo: $(short + 'LocalVideo'),
+      remoteAudio: $(short + 'RemoteAudio'),
+    };
+  }
+  const OUT = side('outgoing', 'out');
+  const IN = side('incoming', 'in');
+
+  const NET_LABEL = { good: 'хорошая', low: 'слабая', bad: 'плохая' };
 
   function renderAvatar(el, url, name){
     if (!el) return;
@@ -1339,110 +1112,217 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   }
 
+  // Точка у статуса: у входящего до ответа — «звонит», в разговоре — зелёная,
+  // при обрыве — снова тревожная. Раньше у принявшего она оставалась красной
+  // и после соединения.
+  function setBeacon(s, ok) {
+    s.beacon.classList.toggle('tk-call__beacon--ok', ok);
+    s.beacon.classList.toggle('tk-call__beacon--ring', !ok);
+  }
+
+  function resetSide(s) {
+    setBeacon(s, s === OUT);
+    s.timer.textContent = '00:00';
+    s.timer.classList.add('hidden');
+    s.net.classList.add('hidden');
+    s.stage.classList.add('hidden');
+    s.voice.classList.add('hidden');
+    s.voice.setAttribute('aria-pressed', 'false');
+    s.voice.textContent = 'Только голос';
+  }
+
+  // Окно переходит в разговор: «Отменить» и «Принять» становятся «Завершить»,
+  // у видеозвонка рядом встаёт «Только голос».
+  function goLive(s, isVideo) {
+    s.stage.classList.toggle('hidden', !isVideo);
+    s.stage.classList.add('tk-call__stage--empty', 'tk-call__stage--nolocal');
+    s.voice.classList.toggle('hidden', !isVideo);
+    s.actions.classList.toggle('tk-call__actions--pair', isVideo);
+    if (s === OUT) {
+      outCancel.textContent = 'Завершить';
+      outCancel.classList.remove('tk-btn--danger');
+      outCancel.classList.add('tk-btn--mute');
+    } else {
+      inAccept.disabled = false;
+      inAccept.textContent = 'Завершить';
+      inAccept.classList.remove('tk-btn--ok');
+      inAccept.classList.add('tk-btn--mute');
+      inAccept.onclick = endCallLocal;
+      inDecline.classList.add('hidden');
+      inClose.classList.add('hidden');
+    }
+  }
+
+  function startTimer(s) {
+    let sec = 0;
+    s.timer.classList.remove('hidden');
+    clearInterval(window._callTick);
+    window._callTick = setInterval(() => {
+      sec++;
+      s.timer.textContent = String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+    }, 1000);
+  }
+
+  window.startCallMedia = function (callId, type, first) {
+    const s = incoming.classList.contains('hidden') ? OUT : IN;
+    const isVideo = type === 'video';
+    let firstAccess = first;
+    let state = 'connecting';
+    let peers = 0;
+    let hadPeer = false;
+    let started = false;
+
+    function paint() {
+      setBeacon(s, state !== 'reconnecting');
+      if (state === 'reconnecting') s.status.textContent = 'Связь прервалась, переподключаемся…';
+      else if (state === 'connecting') s.status.textContent = 'Подключаемся…';
+      else if (peers) s.status.textContent = 'Соединение установлено';
+      else s.status.textContent = hadPeer ? 'Собеседник переподключается…' : 'Ждём собеседника…';
+    }
+
+    goLive(s, isVideo);
+    paint();
+    window._call = TKDaily.connect({
+      send: true,
+      video: isVideo,
+      access: () => {
+        if (!firstAccess) return window.requestCallToken(callId);
+        const a = firstAccess;
+        firstAccess = null;
+        return Promise.resolve(a);
+      },
+      onTrack: (track, p, on) => {
+        if (track.kind === 'video') {
+          TKDaily.attach(p.local ? s.localVideo : s.remoteVideo, on && track);
+          s.stage.classList.toggle(p.local ? 'tk-call__stage--nolocal' : 'tk-call__stage--empty', !on);
+        }
+        else if (!p.local) TKDaily.attach(s.remoteAudio, on && track);
+      },
+      onPeers: (n) => {
+        peers = n;
+        if (n) hadPeer = true;
+        paint();
+      },
+      onState: (st) => {
+        if (st === 'ended') {
+          endCallLocal();
+          toast('Связь потеряна, звонок завершён', 'error');
+          return;
+        }
+        state = st;
+        // Свой объект звонка пересоздаётся, и о пропаже дорожек старый уже не
+        // сообщает: без этого сцена оставалась чёрной, а в углу — пустая рамка.
+        if (st === 'reconnecting') s.stage.classList.add('tk-call__stage--empty', 'tk-call__stage--nolocal');
+        if (st === 'live' && !started) { started = true; startTimer(s); }
+        paint();
+      },
+      onMediaError: () => toast('Нет доступа к микрофону или камере — разрешите его в настройках браузера', 'error'),
+      onNetwork: (n) => {
+        s.net.dataset.net = n;
+        s.net.setAttribute('aria-label', 'Сеть: ' + (NET_LABEL[n] || n));
+        s.net.title = s.net.getAttribute('aria-label');
+        s.net.classList.remove('hidden');
+      }
+    });
+  };
+
+  [OUT, IN].forEach((s) => s.voice.addEventListener('click', () => {
+    if (!window._call) return;
+    const on = s.voice.getAttribute('aria-pressed') !== 'true';
+    window._call.setVoiceOnly(on);
+    s.voice.setAttribute('aria-pressed', String(on));
+    s.voice.textContent = on ? 'Вернуть видео' : 'Только голос';
+    s.stage.classList.toggle('hidden', on);
+  }));
+
+  function stopMedia() {
+    if (window._call) { window._call.leave(); window._call = null; }
+    clearInterval(window._callTick);
+    [OUT, IN].forEach((s) => [s.remoteVideo, s.localVideo, s.remoteAudio].forEach((el) => TKDaily.attach(el, null)));
+  }
+
   window.showOutgoingCall = function(opts){
-    if (!outgoing) return;
     const displayName = opts && opts.displayName || 'Пользователь';
-    const avatarUrl = opts && opts.avatarUrl || '';
     const callType = opts && opts.callType || 'video';
     outName.textContent = displayName;
     outType.textContent = callType === 'audio' ? 'Исходящий аудиозвонок' : 'Исходящий видеозвонок';
-    outStatus.textContent = 'Соединение...';
-    renderAvatar(outAvatar, avatarUrl, displayName);
+    OUT.status.textContent = 'Соединение...';
+    renderAvatar(outAvatar, opts && opts.avatarUrl || '', displayName);
+    resetSide(OUT);
+    OUT.actions.classList.remove('tk-call__actions--pair');
+    outCancel.textContent = 'Отменить';
+    outCancel.classList.remove('tk-btn--mute');
+    outCancel.classList.add('tk-btn--danger');
     outgoing.classList.remove('hidden');
-    // сброс таймера
-    const t = document.getElementById('outgoingTimer');
-    if (t) { t.textContent = '00:00'; t.classList.add('hidden'); }
-    // В состоянии дозвона кнопка = Отменить
-    const btn = document.getElementById('outgoingCancelBtn');
-    if (btn) { btn.textContent = 'Отменить'; btn.classList.remove('tk-btn--mute'); btn.classList.add('tk-btn--danger'); }
   };
-  window.updateOutgoingCallStatus = function(text){ if (outStatus) outStatus.textContent = text || ''; };
-  window.hideOutgoingCall = function(){
-    if (outgoing){
-      outgoing.classList.add('hidden');
-    }
-    // При скрытии исходящей модалки — стоп её <audio>
-    try { const a = document.getElementById('outRemoteAudio'); if (a) a.srcObject = null; } catch(e){}
-  };
+  window.updateOutgoingCallStatus = function(text){ OUT.status.textContent = text || ''; };
+  window.hideOutgoingCall = function(){ outgoing.classList.add('hidden'); };
 
   function hideIncoming(){
-    if (incoming){
-      incoming.classList.add('hidden');
-      inAccept.onclick=null; inDecline.onclick=null; inClose.onclick=null;
-    }
-    // При скрытии входящей модалки — стоп её <audio>
-    try { const a = document.getElementById('inRemoteAudio'); if (a) a.srcObject = null; } catch(e){}
+    incoming.classList.add('hidden');
+    inAccept.onclick = null; inDecline.onclick = null; inClose.onclick = null;
   }
+  window.hideIncomingCall = hideIncoming;
+
   window.showIncomingCall = function(opts){
-    if (!incoming) return;
     const displayName = opts && opts.displayName || 'Пользователь';
-    const avatarUrl = opts && opts.avatarUrl || '';
     const callType = opts && opts.callType || 'video';
     const onAccept = opts && opts.onAccept;
     const onDecline = opts && opts.onDecline;
     inName.textContent = displayName;
     inType.textContent = callType === 'audio' ? 'Входящий аудиозвонок' : 'Входящий видеозвонок';
-    renderAvatar(inAvatar, avatarUrl, displayName);
-    // Reset UI state to initial (new call)
-    try {
-      window.pendingDaily = null;
-      const st = document.getElementById('incomingStatus');
-      const it = document.getElementById('incomingTimer');
-      const ip = document.getElementById('incomingParticipants');
-      const acc = document.getElementById('incomingAcceptBtn');
-      const dec = document.getElementById('incomingDeclineBtn');
-      const cls = document.getElementById('incomingCloseBtn');
-      if (st) st.textContent = 'Звонит...';
-      if (it) { it.textContent = '00:00'; it.classList.add('hidden'); }
-      if (ip) { ip.textContent = ''; ip.classList.add('hidden'); }
-      if (acc) {
-        acc.disabled = false; acc.textContent = 'Принять';
-        acc.classList.remove('tk-btn--mute');
-        acc.classList.add('tk-btn--ok');
-        acc.parentElement.classList.add('tk-call__actions--pair');
-      }
-      if (dec) { dec.disabled = false; dec.classList.remove('hidden'); }
-      if (cls) { cls.disabled = false; cls.classList.remove('hidden'); }
-    } catch(e) {}
+    renderAvatar(inAvatar, opts && opts.avatarUrl || '', displayName);
+    resetSide(IN);
+    IN.status.textContent = 'Звонит...';
+    IN.actions.classList.add('tk-call__actions--pair');
+    inAccept.disabled = false;
+    inAccept.textContent = 'Принять';
+    inAccept.classList.remove('tk-btn--mute');
+    inAccept.classList.add('tk-btn--ok');
+    inDecline.disabled = false;
+    inDecline.classList.remove('hidden');
+    inClose.disabled = false;
+    inClose.classList.remove('hidden');
     incoming.classList.remove('hidden');
     inAccept.onclick = function(){
-      try {
-        // UI: сообщим пользователю, что идёт подключение
-        const st = document.getElementById('incomingStatus');
-        if (st) st.textContent = 'Подключаемся...';
-        const it = document.getElementById('incomingTimer');
-        if (it) it.classList.add('hidden');
-        inAccept.disabled = true; inDecline.disabled = true; inClose.disabled = true;
-        onAccept && onAccept();
-      } catch(e) {}
-      // не закрываем, ждём call:accepted
+      IN.status.textContent = 'Подключаемся...';
+      inAccept.disabled = true; inDecline.disabled = true; inClose.disabled = true;
+      onAccept && onAccept();
+      // окно не закрываем: ждём call:accepted
     };
-    inDecline.onclick = function(){ try{ onDecline && onDecline(); }catch(e){} hideIncoming(); };
-    inClose.onclick = function(){ try{ onDecline && onDecline(); }catch(e){} hideIncoming(); };
+    inDecline.onclick = function(){ onDecline && onDecline(); hideIncoming(); };
+    inClose.onclick = function(){ onDecline && onDecline(); hideIncoming(); };
   };
-  // Экспортируем хелпер для внешних событий (cancel/timeout)
-  window.hideIncomingCall = hideIncoming;
 
   function endCallLocal(){
-    try { if (window.callSocket && window.currentCallId) window.callSocket.emit('call:end', { callId: window.currentCallId }); } catch(e){}
-    window.hideIncomingCall && window.hideIncomingCall();
-    window.hideOutgoingCall && window.hideOutgoingCall();
-    try { if (window._audioCallObject){ window._audioCallObject.leave(); window._audioCallObject.destroy(); window._audioCallObject=null; } } catch(e){}
-    try { clearInterval(window._callTick); } catch(e){}
+    if (window.callSocket && window.currentCallId) window.callSocket.emit('call:end', { callId: window.currentCallId });
     window.currentCallId = null;
+    stopMedia();
+    hideIncoming();
+    window.hideOutgoingCall();
   }
   window.endCallLocal = endCallLocal;
 
-  if (outClose) outClose.addEventListener('click', function(){
-    try { if (window.callSocket && window.currentCallId) window.callSocket.emit('call:cancel', { callId: window.currentCallId }); } catch(e) {}
-    window.hideOutgoingCall();
+  // Звонок завершён, отменён или не состоялся. Чужой callId не трогает
+  // идущий разговор; у звонка, который ещё только звонит, callId пуст.
+  window.closeCall = function (callId) {
+    if (window.currentCallId && callId !== window.currentCallId) return false;
     window.currentCallId = null;
-  });
-  if (outCancel) outCancel.addEventListener('click', function(){
-    try { if (window.callSocket && window.currentCallId) window.callSocket.emit('call:cancel', { callId: window.currentCallId }); } catch(e) {}
+    stopMedia();
+    hideIncoming();
     window.hideOutgoingCall();
-    window.currentCallId = null;
-  });
-});
+    return true;
+  };
 
-// ... existing code ...
+  // Крестик и нижняя кнопка исходящего окна: до ответа — отмена, в разговоре —
+  // завершение. Раньше крестик во время разговора прятал окно, а звонок
+  // продолжался невидимым.
+  function outgoingButton() {
+    if (window._call) return endCallLocal();
+    if (window.callSocket && window.currentCallId) window.callSocket.emit('call:cancel', { callId: window.currentCallId });
+    window.currentCallId = null;
+    window.hideOutgoingCall();
+  }
+  outClose.addEventListener('click', outgoingButton);
+  outCancel.addEventListener('click', outgoingButton);
+});

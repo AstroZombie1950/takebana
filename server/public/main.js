@@ -495,9 +495,7 @@ if (input) {
               
                           // Проверьте статус online
                           var streamButton = document.querySelector('.stream_btn .btn');
-                          let closeStreamButton = document.querySelector('.streamingFrame img');
                           streamButton.setAttribute('data-id', data._id);
-                          streamButton.setAttribute('peer-id', data.peerId);
                           if (data.online) {
                               // Если заведение онлайн, покажите кнопку трансляции
                               streamButton.classList.add('active');
@@ -524,37 +522,6 @@ if (input) {
                               streamButton.innerText = watch;
                           }
 
-                          streamButton.addEventListener('click', function() {
-                            console.log('подключаемся')
-                            // Получаем идентификатор пира, к которому хотим подключиться
-                            var another_peer_id = this.getAttribute('peer-id');
-                            console.log('another peer');
-                            console.log(another_peer_id)
-                            var conn = peer.connect(another_peer_id);
-                
-                            conn.on('open', function() {
-                              console.log('Connection established with: ' + another_peer_id);
-                              conn.send('Hello from ' + peer_id + '!');
-                            });
-                            // Логируем полученные данные
-                            conn.on('data', function(data) {
-                              console.log('Received', data);
-                            });
-                          });
-
-
-
-                          closeStreamButton.addEventListener('click', function() {
-                            let streamFrame = document.querySelector('.streamingFrame');
-                            let videoElement = document.querySelector('.streamingFrame video'); // Замените на класс вашего видеоэлемента
-                            videoElement.srcObject.getTracks().forEach(track => track.stop());
-                            streamFrame.classList.remove('active');
-                            videoElement.srcObject = null;
-                            // Отключитесь от пира
-                            if (conn) {
-                              conn.close();
-                            }
-                          });
 
 
 

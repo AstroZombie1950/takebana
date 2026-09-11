@@ -635,7 +635,7 @@ const redirectModal = document.querySelector('.redirect');
     </div>
 
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+    <script src="/tk-daily.js"></script>
 
 
 
@@ -669,95 +669,6 @@ const redirectModal = document.querySelector('.redirect');
 
 
 
-// localStorage.setItem('userId', userId);
-
-      // PEER 
-    // Создание нового Peer объекта
-    // Создание нового Peer объекта с использованием облачного сервера PeerJS
-//     const peer = new Peer();
-
-
-//     peer.on('call', function(call) {
-//     navigator.mediaDevices.getUserMedia({ video: false, audio: true })
-//       .then(function(stream) {
-//         call.answer(stream);
-//         call.on('stream', function(remoteStream) {
-//           // Здесь вы можете обработать входящий стрим
-//         });
-//       })
-//       .catch(function(err) {
-//         console.error('Error answering call:', err);
-//       });
-//   });
-
-
-// document.addEventListener('click', (e) => {
-//   if (e.target.classList.contains('startStream')) {
-//     navigator.mediaDevices.getUserMedia({ video: false, audio: true }).then(function(stream) {
-//       const call = peer.call('pendo', stream);
-//       const streamId = call.peer;
-//       console.log(`Stream started with ID: ${streamId}`);
-//     }).catch(function(err) {
-//       console.error('Error starting stream:', err);
-//     });
-//   }
-
-//   if (e.target.classList.contains('getStream')) {
-//     const streamId = 'pendo'; // Replace 'pendo' with the actual stream ID
-//     if (!streamId) {
-//       console.error('Stream ID is undefined');
-//       return;
-//     }
-//     const call = peer.call(streamId);
-//     if (!call) {
-//       console.error('Call is undefined');
-//       return;
-//     }
-//     call.on('stream', function(remoteStream) {
-//       document.getElementById('stream-video').srcObject = remoteStream;
-//     }).catch(function(err) {
-//       console.error('Error receiving stream:', err);
-//     });
-//   }
-// });
-
-
-// Начало стрима при нажатии кнопки
-// let startStream = document.querySelector('.myEstablishments .left-tab .item .foot button.startStream');
-
-
-// if (startStream ) {
-//   startStream.addEventListener('click', function() {
-//       // Получение медиапотока с веб-камеры
-//       console.log('11')
-//       // navigator.mediaDevices.getUserMedia({ video: false, audio: true }).then(function(stream) {
-//       //     console.log('запустили')
-//       //     // Создание вызова с медиапотоком
-//       //     const call = peer.call('pipeone', stream);
-
-//       //     // Получение ID стрима
-//       //     const streamId = call.peer;
-
-//       //     console.log(streamId)
-//       // }).catch(function(err) {
-//       //     console.log(err);
-//       // });
-//   });
-// }
-
-
-// Просмотр стрима при нажатии кнопки
-// document.querySelector('.bigBarInfo .stream_btn button').addEventListener('click', function() {
-//     const streamId = 'pipeone'; // Замените 'stream-id' на реальный идентификатор стрима
-//     console.log('смотрим')
-//     // Инициирование вызова к другому пиру
-//     const call = peer.call(streamId);
-
-//     call.on('stream', function(remoteStream) {
-//         // Показ стрима в видеоэлементе
-//         document.getElementById('stream-video').srcObject = remoteStream;
-//     });
-// });
 
     
     
@@ -1184,9 +1095,7 @@ map2.on('click', function(e) {
 
                   // Проверьте статус online
                   var streamButton = document.querySelector('.stream_btn .btn');
-                  let closeStreamButton = document.querySelector('.streamingFrame img');
                   streamButton.setAttribute('data-id', data._id);
-                  streamButton.setAttribute('peer-id', data.peerId);
                   if (data.online) {
                       // Если заведение онлайн, покажите кнопку трансляции
                       streamButton.classList.add('active');
@@ -1214,35 +1123,6 @@ map2.on('click', function(e) {
                   }
 
 
-				  streamButton.addEventListener('click', function() {
-            console.log('подключаемся')
-            // Получаем идентификатор пира, к которому хотим подключиться
-            var another_peer_id = this.getAttribute('peer-id');
-            console.log('another peer');
-            console.log(another_peer_id)
-            var conn = peer.connect(another_peer_id);
-
-            conn.on('open', function() {
-              console.log('Connection established with: ' + another_peer_id);
-              conn.send('Hello from ' + peer_id + '!');
-            });
-            // Логируем полученные данные
-            conn.on('data', function(data) {
-              console.log('Received', data);
-            });
-				  });
-
-				  closeStreamButton.addEventListener('click', function() {
-            let streamFrame = document.querySelector('.streamingFrame');
-            let videoElement = document.querySelector('.streamingFrame video'); // Замените на класс вашего видеоэлемента
-            videoElement.srcObject.getTracks().forEach(track => track.stop());
-            streamFrame.classList.remove('active');
-            videoElement.srcObject = null;
-            // Отключитесь от пира
-            if (conn) {
-              conn.close();
-            }
-				  });
 
 
 
@@ -1415,137 +1295,50 @@ function loadData() {
 
 
     <script>
-      // STREAMS 
-      function generateId(length) {
-          var result = '';
-          var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-          var charactersLength = characters.length;
-          for (var i = 0; i < length; i++) {
-              result += characters.charAt(Math.floor(Math.random() * charactersLength));
-          }
-          return result;
-      }
+      // Камера заведения: гость смотрит то, что показывает владелец
+      // (routes/venueLive.js). Раньше поток шёл через публичный сервер PeerJS
+      // напрямую между браузерами и за NAT мобильного оператора часто не доходил.
+      // Обработчик кнопки один на страницу: прежде он навешивался заново при
+      // каждом открытии карточки, и после пятой карточки один щелчок
+      // подключался пять раз.
+      (function () {
+        var frame = document.querySelector('.streamingFrame');
+        var video = frame.querySelector('video');
+        var watchBtn = document.querySelector('.stream_btn .btn');
+        var watching = null;
 
-      var peer_id = generateId(128);
-        var localStream;
+        function stopWatching() {
+          if (watching) { watching.leave(); watching = null; }
+          video.srcObject = null;
+          frame.classList.remove('active');
+        }
 
-        // var peer = new Peer(peer_id, {
-        //     host: 'takebana.com',
-        //     path: '/peerjs',
-        //     proxied: true,
-        //     config: {
-        //         iceServers: [
-        //             { urls: 'stun:stun.l.google.com:19302' },
-        //             { urls: 'stun:stun1.l.google.com:19302' }
-        //         ]
-        //     },
-        //     secure: true
-        // });
-
-        var peer = new Peer(peer_id);
-
-
-        console.log('peer')
-        console.log(peer)
-
-        // Логируем идентификатор пира при открытии соединения
-        peer.on('open', function(id) {
-            console.log('My peer ID is: ' + id);
+        watchBtn.addEventListener('click', function () {
+          if (!this.classList.contains('active')) return;
+          var id = this.getAttribute('data-id');
+          var media = new MediaStream();
+          stopWatching();
+          video.srcObject = media;
+          frame.classList.add('active');
+          watching = TKDaily.connect({
+            send: false,
+            access: function () { return TKDaily.requestAccess('/api/venues/' + id + '/watch'); },
+            onTrack: function (track, p, on) {
+              if (p.local) return;
+              if (on) media.addTrack(track); else media.removeTrack(track);
+              video.srcObject = media;
+              video.play().catch(function () {});
+            },
+            onState: function (s) {
+              if (s !== 'ended') return;
+              stopWatching();
+              toast('Заведение сейчас не показывает камеру');
+            }
+          });
         });
 
-		// Обновляем список подключенных пиров, когда к нам подключается новый пир
-        peer.on('connection', function(conn) {
-
-            conn.on('open', function() {
-				console.log('peer conected')
-				console.log(conn.peer)
-                // var li = document.createElement('li');
-                // li.textContent = conn.peer;
-                // li.id = conn.peer;
-                // document.getElementById('connected_peers').appendChild(li);
-
-
-                if (localStream) {
-                    var call = peer.call(conn.peer, localStream);
-                    call.on('stream', function(remoteStream) {
-                        // Показываем входящий поток в нашем видеоэлементе
-                        document.getElementById('video').srcObject = remoteStream;
-                    });
-                }
-
-            });
-
-            conn.on('error', function(err) {
-                console.log('Connection error: ', err);
-				console.log('ошибка');
-            });
-            
-
-        	// Обрабатываем отключение пира
-			conn.on('close', function() {
-				console.log('closed');
-			});
-
-        });
-
-
-		 // Обрабатываем входящие видеопотоки
-		 peer.on('call', function(call) {
-			let videoFrame = document.querySelector('.streamingFrame');
-			let videoElement = document.querySelector('.streamingFrame video');
-			videoFrame.classList.add('active');
-            call.answer(localStream); // Отвечаем на вызов с нашим потоком
-            call.on('stream', function(remoteStream) {
-                // Показываем входящий поток в нашем видеоэлементе
-                videoElement.srcObject = remoteStream;
-
-                // Обрабатываем окончание стрима
-                remoteStream.onended = function() {
-                    toast('Стрим закончился');
-                };
-
-            });
-        });
-
-
-
-		// document.getElementById('connect').addEventListener('click', function() {
-
-        // });
-
-        // document.getElementById('start').addEventListener('click', function() {
-
-        // });
-
-
-
-
-		
-
-
-
-		window.addEventListener('beforeunload', function (e) {
-			// Отмените событие по умолчанию
-			e.preventDefault();
-
-			// Отправьте запрос на сервер для обновления статуса всех заведений, принадлежащих пользователю
-			fetch('/updateEstablishmentsOnlineStatus', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					userId: userId,
-					online: false,
-					peerId: ""
-				})
-			});
-
-			// Chrome требует возврата строки
-			e.returnValue = '';
-		});
-
-
+        frame.querySelector('img').addEventListener('click', stopWatching);
+      })();
     </script>
 
 

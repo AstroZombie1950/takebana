@@ -11,10 +11,6 @@
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="/css/stream.css">
-
-<%# Daily.co — единственная внешняя библиотека, оставшаяся на странице:
-    браузерное вещание держится на ней. %>
-<script defer src="https://unpkg.com/@daily-co/daily-js@0.83.1/dist/daily-iframe.js"></script>
 </head>
 
 <body class="tk-app"
@@ -805,9 +801,7 @@ if (stopButton) {
     // Функция для активации стрима на сервере (упрощенная для Daily.co)
     async function activateStream() {
         // устанавливает исЭктив в ACTIVE наш экземпляр стрима в базе
-        const serverUrl = serverEnv === 'local'
-            ? 'https://localhost:3000/set-active'
-            : 'https://takebana.com/set-active';
+        const serverUrl = '/set-active';
 
         try {
             const response = await fetch(serverUrl, {
@@ -832,9 +826,7 @@ if (stopButton) {
 
     async function activateStreamObs() {
         // устанавливает исЭктив в ACTIVE наш экземпляр стрима в базе
-        const serverUrl = serverEnv === 'local'
-            ? 'https://localhost:3000/set-active'
-            : 'https://takebana.com/set-active';
+        const serverUrl = '/set-active';
 
         try {
             const response = await fetch(serverUrl, {
@@ -872,9 +864,7 @@ if (stopButton) {
             console.log('🔄 Кнопки переключены: показана "Поставить на паузу" (OBS)');
         }
 
-        const serverUrle = serverEnv === 'local'
-            ? 'https://localhost:3000/obs-stream-start'
-            : 'https://takebana.com/obs-stream-start';
+        const serverUrle = '/obs-stream-start';
 
         try {
             const response = await fetch(serverUrle, {
@@ -901,9 +891,7 @@ if (stopButton) {
     async function diactivateStream() {
         // устанавливает исЭктив в FALSE наш экземпляр стрима в базе
         const serverUrl =
-            serverEnv === 'local'
-            ? 'https://localhost:3000/set-inactive'
-            : 'https://takebana.com/set-inactive';
+            '/set-inactive';
 
         try {
             const response = await fetch(serverUrl, {
@@ -945,9 +933,7 @@ if (stopButton) {
 
     // Функция для полного завершения стрима (удаление из базы данных)
     async function terminateStream() {
-        const serverUrl = serverEnv === 'local'
-            ? 'https://localhost:3000/terminate-stream'
-            : 'https://takebana.com/terminate-stream';
+        const serverUrl = '/terminate-stream';
 
         try {
             const response = await fetch(serverUrl, {
@@ -976,9 +962,7 @@ if (stopButton) {
     async function diactivateStreamObs() {
         // устанавливает исЭктив в FALSE наш экземпляр стрима в базе
         const serverUrl =
-            serverEnv === 'local'
-            ? 'https://localhost:3000/set-inactive'
-            : 'https://takebana.com/set-inactive';
+            '/set-inactive';
 
         try {
             const response = await fetch(serverUrl, {
@@ -1019,9 +1003,7 @@ if (stopButton) {
 
 
 
-        const serverUrle = serverEnv === 'local'
-        ? 'https://localhost:3000/obs-stream-end'
-        : 'https://takebana.com/obs-stream-end';
+        const serverUrle = '/obs-stream-end';
 
     try {
         const response = await fetch(serverUrle, {
@@ -1328,27 +1310,28 @@ document.addEventListener('DOMContentLoaded', function () {
             console.log('✅ Таймер времени существования стрима остановлен');
         }
 
+        // Время в эфире — с выхода в эфир (startedAt), а не с создания записи:
+        // раньше эфир, созданный утром и запущенный вечером, с первой секунды
+        // показывал «Онлайн 10:00:00». У неидущего эфира таймер стоит на нуле.
         document.addEventListener('DOMContentLoaded', function() {
-            // Инициализация при загрузке страницы - показываем время существования стрима
-            console.log('🕐 Запускаем таймер времени существования стрима');
-            startStreamExistenceTimer('<%= stream.createdAt.toISOString() %>');
+            const startedAt = <%- JSON.stringify(stream.isActive && stream.startedAt ? stream.startedAt : null) %>;
+            if (startedAt) startStreamExistenceTimer(startedAt);
         });
 
         // ========== DAILY.CO STREAMER CLASS ==========
         console.log('🚀 Скрипт Daily.co загружается...');
-        console.log('window.DailyIframe:', typeof window.DailyIframe !== 'undefined' ? 'ДОСТУПЕН' : 'НЕ ЗАГРУЖЕН!');
         
         class DailyStreamer {
                 constructor() {
                 console.log('🏗️ DailyStreamer конструктор вызван');
-                console.log('🔍 window.DailyIframe доступен:', typeof window.DailyIframe !== 'undefined');
-                this.callObject = null;
-                this.roomData = null;
-                this.authToken = null;
+                this.session = null;
                 this.isConnected = false;
                 this.init();
                 console.log('✅ DailyStreamer инициализирован');
             }
+
+    // Объект звонка Daily — им переключает камеру switchCameraByValue ниже.
+    get callObject() { return this.session && this.session.call; }
 
     init() {
         console.log('🔧 DailyStreamer.init() вызван');
@@ -1409,455 +1392,102 @@ document.addEventListener('DOMContentLoaded', function () {
 
     }
 
+    // Сервер создаёт комнату и тем же ответом отдаёт токен вещателя. Камеру
+    // и микрофон Daily берёт сам при входе: прежний отдельный getUserMedia
+    // держал вторую копию камеры и не отпускал её до закрытия вкладки.
     async startStream() {
+        this.startStreamBtn.disabled = true;
+        this.startStreamBtn.textContent = 'Подключение...';
         try {
-            this.log('Начинаем стрим...');
-            this.updateStatus('Создание комнаты...');
-            this.startStreamBtn.disabled = true;
-            this.startStreamBtn.textContent = 'Создание комнаты...';
-            
-            // 1. Создаем комнату
-            const response = await fetch('/api/create-room', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    streamId: this.streamId
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to create room');
-            }
-            
-            const data = await response.json();
-            
-            if (!data.success) {
-                throw new Error(data.message || 'Room creation failed');
-            }
-            
-            this.roomData = data.room;
-            this.log('Комната создана: ' + this.roomData.name);
-            
-            // 2. Получаем токен для стримера
-            this.updateStatus('Получение токена...');
-            this.startStreamBtn.textContent = 'Получение токена...';
-            
-            const tokenResponse = await fetch('/api/get-token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    roomName: this.roomData.name,
-                    role: 'streamer'
-                })
-            });
-            
-            if (!tokenResponse.ok) {
-                throw new Error('Failed to get token');
-            }
-            
-            const tokenData = await tokenResponse.json();
-            
-            if (!tokenData.success) {
-                throw new Error(tokenData.message || 'Token generation failed');
-            }
-            
-            this.authToken = tokenData.token;
-            this.log('Токен получен, подключаемся к комнате...');
-            
-            // 3. Подключаемся к комнате и запускаем камеру
-            this.updateStatus('Подключение к комнате...');
-            this.startStreamBtn.textContent = 'Подключение...';
-            
-            // Проверяем поддержку getUserMedia (исправлено для Safari и Android)
-            if (!navigator.mediaDevices) {
-                navigator.mediaDevices = {};
-            }
-            
-            if (!navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia = function(constraints) {
-                    const getUserMedia = navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
-                    if (!getUserMedia) {
-                        throw new Error('getUserMedia не поддерживается в этом браузере. Требуется HTTPS для Safari на iOS.');
-                    }
-                    return new Promise(function(resolve, reject) {
-                        getUserMedia.call(navigator, constraints, resolve, reject);
-                    });
-                }
-            }
-            
-            // ИСПРАВЛЕНИЕ: Добавляем fallback для enumerateDevices (Safari iOS)
-            if (!navigator.mediaDevices.enumerateDevices) {
-                navigator.mediaDevices.enumerateDevices = function() {
-                    console.log('⚠️ enumerateDevices не поддерживается в Safari iOS, используем fallback');
-                    return Promise.resolve([]);
-                }
-            }
-            
-            // Проверяем HTTPS для Safari и мобильных устройств
-            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                this.log('⚠️ Внимание: getUserMedia может не работать без HTTPS на Safari и мобильных устройствах');
-                this.updateStatus('⚠️ Требуется HTTPS для камеры на мобильных устройствах');
-            }
-            
-            // Определяем мобильное устройство для специальной обработки
-            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            const isAndroid = /Android/i.test(navigator.userAgent);
-            
-            if (isMobile) {
-                this.log('📱 Обнаружено мобильное устройство, применяем специальные настройки');
-            }
-            
-            // Получаем камеру и микрофон
-            this.log('📹 Запрашиваем доступ к камере и микрофону...');
-            this.updateStatus('Запрос доступа к камере...');
-            
-            // Настройки для мобильных устройств
-            const mediaConstraints = {
-                video: {
-                    width: isMobile ? { ideal: 640, max: 1280 } : { ideal: 1280, max: 1920 },
-                    height: isMobile ? { ideal: 480, max: 720 } : { ideal: 720, max: 1080 },
-                    frameRate: isMobile ? { ideal: 30, max: 30 } : { ideal: 30, max: 60 },
-                    facingMode: isAndroid ? { ideal: 'user' } : undefined // Предпочитаем фронтальную камеру на Android
-                },
-                audio: true
-            };
-            // Применяем выбранную камеру из селектора (и запомним её для повторного применения)
-            try {
-                const selectedVal = document.getElementById('cameraSelect')?.value;
-                if (selectedVal) {
-                    if (selectedVal.startsWith('device:')) {
-                        const id = selectedVal.slice('device:'.length);
-                        if (id) mediaConstraints.video.deviceId = { exact: id };
-                    } else if (selectedVal.startsWith('facing:')) {
-                        const mode = selectedVal.split(':')[1];
-                        if (mode) mediaConstraints.video.facingMode = { ideal: mode };
-                    }
-                    window._preferredCameraValue = selectedVal;
-                }
-            } catch(_) {}
-            
-            const localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-            this.log('✅ Доступ к камере и микрофону получен');
-            
-            // Специальная обработка для Android - проверяем треки
-            if (isAndroid) {
-                const videoTracks = localStream.getVideoTracks();
-                const audioTracks = localStream.getAudioTracks();
-                
-                this.log(`📱 Android: Видео треков: ${videoTracks.length}, Аудио треков: ${audioTracks.length}`);
-                
-                // Проверяем состояние треков
-                videoTracks.forEach((track, index) => {
-                    this.log(`📱 Android: Видео трек ${index}: ${track.readyState}, enabled: ${track.enabled}`);
-                    if (track.readyState === 'ended') {
-                        this.log(`⚠️ Android: Видео трек ${index} завершён, возможна проблема`);
-                    }
-                });
-                
-                audioTracks.forEach((track, index) => {
-                    this.log(`📱 Android: Аудио трек ${index}: ${track.readyState}, enabled: ${track.enabled}`);
-                    if (track.readyState === 'ended') {
-                        this.log(`⚠️ Android: Аудио трек ${index} завершён, возможна проблема`);
-                    }
-                });
-            }
-            
-            // Создаем call object
-            this.callObject = window.DailyIframe.createCallObject();
-            
-            // Настраиваем обработчики событий
-            this.setupEventListeners();
-            
-            // Подключаемся к комнате БЕЗ медиа сначала
-            this.log('Подключение к комнате: ' + this.roomData.name);
-            // Важно: используем URL, который возвращает Daily API при создании комнаты.
-            // Это предотвращает поломку при ребрендинге домена (например, webcatravel -> takebana),
-            // если Daily subdomain ещё не сменён.
-            const joinUrl = (this.roomData && (this.roomData.url || this.roomData.roomUrl)) 
-                ? (this.roomData.url || this.roomData.roomUrl)
-                : `https://webcatravel.daily.co/${this.roomData.name}`;
-
-            await this.callObject.join({
-                url: joinUrl,
-                token: this.authToken
-            });
-            
-            this.log('Подключились к комнате');
-            
-            // Включаем камеру и микрофон ПОСЛЕ подключения к комнате
-            this.updateStatus('Включение камеры...');
-            this.startStreamBtn.textContent = 'Включение камеры...';
-            
-            try {
-                // Небольшая пауза для iOS, чтобы объект комнаты стабилизировался
-                await new Promise(r => setTimeout(r, 500));
-                
-                this.log('Включаем локальный звук...');
-                await this.callObject.setLocalAudio(true);
-                this.log('Локальный звук включен');
-                
-                // На iOS иногда требуется отдельная пауза перед включением видео
-                await new Promise(r => setTimeout(r, 200));
-                // Применим выбранную камеру перед включением видео
-                try {
-                    const sel = document.getElementById('cameraSelect');
-                    const pref = (sel && sel.value) || window._preferredCameraValue || '';
-                    if (pref && pref.startsWith('device:')) {
-                        const id = pref.slice('device:'.length);
-                        if (id) { await this.callObject.setInputDevicesAsync({ videoDeviceId: id }); }
-                    } else if (pref && pref.startsWith('facing:')) {
-                        const mode = pref.split(':')[1];
-                        if (mode) { await this.callObject.startCamera({ facingMode: mode }); }
-                    }
-                } catch(_) {}
-                this.log('Включаем локальное видео...');
-                await this.callObject.setLocalVideo(true);
-                this.log('Локальное видео включено');
-                
-                // Показываем контроль громкости сразу после включения аудио
-                if (this.streamerVolumeControl) {
-                    this.streamerVolumeControl.style.display = 'block';
-                    this.log('Контроль громкости показан');
-                }
-                
-                // ПРИНУДИТЕЛЬНО показываем видео для iOS Safari
-                setTimeout(() => {
-                    this.log('Принудительное отображение видео...');
-                    const localVideo = document.getElementById('localVideo');
-                    if (localVideo) {
-                        try {
-                            const participants = this.callObject.participants();
-                            const localParticipant = participants.local;
-                            if (localParticipant && localParticipant.video) {
-                                this.log('Видео трек найден через participants, отображаем...');
-                                localVideo.style.display = 'block';
-                                localVideo.srcObject = new MediaStream([localParticipant.video]);
-                                this.videoPlaceholder.style.display = 'none';
-                            }
-                        } catch (error) {
-                            this.log('Ошибка получения видео трека: ' + error.message);
+            const first = await TKDaily.requestAccess('/api/create-room', { streamId: this.streamId });
+            await new Promise((resolve, reject) => {
+                let firstAccess = first;
+                this.session = TKDaily.connect({
+                    send: true,
+                    video: true,
+                    // Повторный вход после обрыва — в ту же комнату со свежим токеном.
+                    access: () => {
+                        if (!firstAccess) return TKDaily.requestAccess('/api/get-token', { streamId: this.streamId });
+                        const a = firstAccess;
+                        firstAccess = null;
+                        return Promise.resolve(a);
+                    },
+                    onTrack: (track, p, on) => {
+                        if (p.local && track.kind === 'video') this.showLocalVideo(on ? track : null);
+                    },
+                    onMediaError: () => toast('Нет доступа к камере или микрофону — разрешите его в настройках браузера или ведите эфир через OBS', 'error'),
+                    onState: (state) => {
+                        if (state === 'live') resolve();
+                        if (state !== 'ended') return;
+                        reject(new Error('нет связи с сервисом видео'));
+                        if (this.isConnected) {
+                            toast('Связь с сервисом видео потеряна, эфир остановлен', 'error');
+                            this.stopStream();
                         }
                     }
-                }, 800);
-                
-            } catch (mediaError) {
-                this.log('Ошибка включения медиа: ' + mediaError.message);
-                // Повторная попытка включения видео на iOS
-                try {
-                    await new Promise(r => setTimeout(r, 800));
-                    this.log('Повтор: включаем локальное видео...');
-                    await this.callObject.setLocalVideo(true);
-                    this.log('Локальное видео включено со второй попытки');
-                } catch (retryErr) {
-                    this.log('Повтор включения видео не удался: ' + retryErr.message);
-                }
-            }
-            
-            // 4. Активируем стрим в базе данных
-            this.updateStatus('Активация стрима...');
-            this.startStreamBtn.textContent = 'Активация...';
+                });
+            });
+            await this.applyCameraPreference();
             await activateStream();
-            
+            startStreamExistenceTimer(new Date().toISOString());
+
             this.isConnected = true;
-            this.startStreamBtn.disabled = true;
             this.startStreamBtn.textContent = 'Начать стрим';
             this.startStreamBtn.classList.add('hidden');
             this.stopStreamBtn.classList.remove('hidden');
             this.stopStreamBtn.disabled = false;
             this.updateStreamStatus(true);
-            this.videoPlaceholder.style.display = 'none';
-            
-            this.log('Стрим успешно запущен!');
-            
         } catch (error) {
-            this.log('Ошибка запуска стрима: ' + error.message);
-            this.updateStatus('Ошибка: ' + error.message);
-            
-            // Сброс кнопки при ошибке
+            if (this.session) { this.session.leave(); this.session = null; }
             this.startStreamBtn.disabled = false;
             this.startStreamBtn.textContent = 'Начать стрим';
-            
-            // Детальная диагностика
-            if (error.message.includes('getUserMedia')) {
-                this.log('💡 Решение: Используйте HTTPS URL (ngrok) для Safari на iOS');
-            }
-            
             toast('Ошибка: ' + error.message, 'error');
         }
     }
 
-                async stopStream() {
-                try {
-                    this.log('Остановка стрима...');
-                    this.updateStatus('Остановка...');
-                    
-                    // Скрываем контроль громкости при остановке стрима
-                    if (this.streamerVolumeControl) {
-                        this.streamerVolumeControl.style.display = 'none';
-                        this.log('Контроль громкости скрыт');
-                    }
-                    
-                    if (this.callObject) {
-                        await this.callObject.leave();
-                        this.callObject.destroy();
-                        this.callObject = null;
-                    }
-                    
-                    // Деактивируем стрим в базе данных ПЕРЕД удалением комнаты
-                    try {
-                        await diactivateStream();
-                        this.log('✅ Стрим деактивирован в базе данных');
-                    } catch (error) {
-                        this.log('⚠️ Ошибка деактивации стрима в базе: ' + error.message);
-                    }
-                    
-                    // Удаляем комнату Daily.co и очищаем данные
-                    if (this.streamId) {
-                        try {
-                            await fetch(`/api/delete-room/${this.streamId}`, {
-                                method: 'DELETE'
-                            });
-                            this.log('✅ Комната Daily.co удалена');
-                        } catch (error) {
-                            this.log('⚠️ Ошибка удаления комнаты: ' + error.message);
-                        }
-                    }
-            
-            this.isConnected = false;
-            this.authToken = null;
-            this.roomData = null;
-            
-            // Сброс интерфейса
-            this.startStreamBtn.disabled = false;
-            this.startStreamBtn.textContent = 'Начать стрим';
-            this.startStreamBtn.classList.remove('hidden');
-            this.stopStreamBtn.classList.add('hidden');
-            this.stopStreamBtn.disabled = true;
-            this.updateStreamStatus(false);
-            this.videoPlaceholder.textContent = 'Нажмите "Начать стрим" для начала';
-            this.videoPlaceholder.style.display = 'block';
-            
-            // Скрываем видео
-            const localVideo = document.getElementById('localVideo');
-            if (localVideo) {
-                localVideo.style.display = 'none';
-                localVideo.srcObject = null;
+    // Камера, выбранная в списке до запуска. Смена во время эфира —
+    // switchCameraByValue ниже по странице.
+    async applyCameraPreference() {
+        const pref = (document.getElementById('cameraSelect') || {}).value || '';
+        try {
+            if (pref.startsWith('device:') && pref.length > 'device:'.length) {
+                await this.callObject.setInputDevicesAsync({ videoDeviceId: pref.slice('device:'.length) });
+            } else if (pref.startsWith('facing:')) {
+                await this.callObject.startCamera({ facingMode: pref.slice('facing:'.length) });
             }
-            
-            this.log('Стрим остановлен');
-            
-        } catch (error) {
-            this.log('Ошибка остановки стрима: ' + error.message);
-            console.error('Stop error:', error);
-        }
+        } catch (_) {}
     }
 
-    setupEventListeners() {
-        // Участники подключились/отключились
-        this.callObject.on('participant-joined', (event) => {
-            this.log('Участник присоединился: ' + (event.participant.user_name || 'Гость'));
-        });
+    showLocalVideo(track) {
+        const localVideo = document.getElementById('localVideo');
+        if (!localVideo) return;
+        TKDaily.attach(localVideo, track);
+        localVideo.style.display = track ? 'block' : 'none';
+        this.videoPlaceholder.style.display = track ? 'none' : 'block';
+    }
 
-        this.callObject.on('participant-left', (event) => {
-            this.log('Участник покинул: ' + (event.participant.user_name || 'Гость'));
-        });
+    async stopStream() {
+        const session = this.session;
+        this.session = null;
+        this.isConnected = false;
+        if (session) await session.leave();
+        stopStreamExistenceTimer();
+        try {
+            await diactivateStream();
+        } catch (error) {
+            console.error('Не удалось снять эфир в базе:', error);
+        }
+        // Удаление комнаты отключает и зрителей.
+        await fetch(`/api/delete-room/${this.streamId}`, { method: 'DELETE' }).catch(() => {});
 
-        // Трек добавлен (видео участника)
-        this.callObject.on('track-started', (event) => {
-            this.log('Новое видео: ' + (event.participant.user_name || 'Участник') + ' (тип: ' + event.track.kind + ')');
-            
-            if (event.participant.local && event.track.kind === 'video') {
-                // Показываем локальное видео стримера
-                this.log('Локальное видео отображается');
-                const localVideo = document.getElementById('localVideo');
-                if (localVideo) {
-                    // Настройка видео элемента для iOS и Android (КРИТИЧНО!)
-                    localVideo.muted = true; // iOS и Android требуют muted для autoplay
-                    localVideo.playsInline = true; // iOS требует playsInline
-                    localVideo.autoplay = true;
-                    
-                    localVideo.style.display = 'block';
-                    
-                    // Безопасное создание MediaStream для Android
-                    try {
-                        // Проверяем валидность трека перед созданием MediaStream
-                        if (event.track && event.track.readyState === 'live') {
-                            const mediaStream = new MediaStream([event.track]);
-                            localVideo.srcObject = mediaStream;
-                            this.log('✅ MediaStream успешно создан для Android/iOS');
-                        } else {
-                            this.log('⚠️ Трек не готов, попробуем позже');
-                            // Повторная попытка через небольшую задержку
-                            setTimeout(() => {
-                                if (event.track && event.track.readyState === 'live') {
-                                    try {
-                                        const mediaStream = new MediaStream([event.track]);
-                                        localVideo.srcObject = mediaStream;
-                                        this.log('✅ MediaStream создан при повторной попытке');
-                                    } catch (retryError) {
-                                        this.log('❌ Повторная попытка создания MediaStream не удалась: ' + retryError.message);
-                                    }
-                                }
-                            }, 500);
-                        }
-                    } catch (streamError) {
-                        this.log('❌ Ошибка создания MediaStream: ' + streamError.message);
-                        
-                        // Fallback для Android - используем track напрямую
-                        if (/Android/i.test(navigator.userAgent)) {
-                            this.log('📱 Android fallback: пытаемся использовать track напрямую');
-                            try {
-                                // Создаём пустой MediaStream и добавляем трек
-                                const emptyStream = new MediaStream();
-                                emptyStream.addTrack(event.track);
-                                localVideo.srcObject = emptyStream;
-                                this.log('✅ Android fallback MediaStream создан');
-                            } catch (fallbackError) {
-                                this.log('❌ Android fallback также не удался: ' + fallbackError.message);
-                                this.updateStatus('Ошибка видео на Android: ' + fallbackError.message);
-                            }
-                        }
-                    }
-                    
-                    this.videoPlaceholder.style.display = 'none';
-                }
-            }
-        });
-
-        // Трек остановлен
-        this.callObject.on('track-stopped', (event) => {
-            this.log('Трек остановлен: ' + (event.participant.user_name || 'Участник') + ' (тип: ' + event.track.kind + ')');
-            
-            if (event.participant.local) {
-                if (event.track.kind === 'video') {
-                    // Скрываем локальное видео
-                    const localVideo = document.getElementById('localVideo');
-                    if (localVideo) {
-                        localVideo.style.display = 'none';
-                        this.videoPlaceholder.style.display = 'block';
-                    }
-                } else if (event.track.kind === 'audio') {
-                    this.log('Локальный аудио трек остановлен');
-                    
-                    // Скрываем контроль громкости
-                    if (this.streamerVolumeControl) {
-                        this.streamerVolumeControl.style.display = 'none';
-                    }
-                }
-            }
-        });
-
-        // Ошибки
-        this.callObject.on('error', (event) => {
-            this.log('Daily.co ошибка: ' + event.errorMsg);
-            console.error('Daily.co error:', event);
-            this.updateStatus('Ошибка: ' + event.errorMsg);
-        });
-
-        // Подключение установлено
-        this.callObject.on('joined-meeting', (event) => {
-            this.log('Успешно подключились к встрече');
-        });
+        this.startStreamBtn.disabled = false;
+        this.startStreamBtn.textContent = 'Начать стрим';
+        this.startStreamBtn.classList.remove('hidden');
+        this.stopStreamBtn.classList.add('hidden');
+        this.stopStreamBtn.disabled = true;
+        this.updateStreamStatus(false);
+        this.showLocalVideo(null);
+        this.videoPlaceholder.textContent = 'Нажмите "Начать стрим" для начала';
     }
 
     updateStreamStatus(isActive) {
@@ -1871,15 +1501,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     }
-
-    updateStatus(status) {
-        this.log('Статус: ' + status);
-    }
-
-    log(message) {
-        console.log('[Daily Streamer]', message);
-    }
-    
 
 }
 

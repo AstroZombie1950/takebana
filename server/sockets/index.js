@@ -6,10 +6,18 @@
 // работ за рамками текущего объёма.
 
 const User = require('../models/User');
+const daily = require('../utils/daily');
 
 // Список подписок приходит от клиента, поэтому и формат, и длина проверяются.
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 const PRESENCE_SUBSCRIBE_LIMIT = 200;
+
+// Сколько ждать возвращения человека, прежде чем считать обрыв сокета концом
+// звонка. Звук и видео идут через Daily, а не через сокет: смена сети на
+// телефоне рвёт сокет на секунды, а разговор при этом продолжается. Раньше
+// любой такой обрыв завершал звонок у обоих. 20 секунд — столько же Daily
+// сам ждёт восстановления своей сигнализации, прежде чем выкинуть участника.
+const CALL_GRACE_MS = 20000;
 
 // Возвращает общие хранилища, чтобы app.js положил их в app.set(...):
 // маршрут /api/calls/create достаёт их оттуда.
@@ -17,7 +25,41 @@ function registerSockets(io) {
   const userConnections = new Map(); // userId -> count
   const userRooms = new Map(); // userId -> Set(socketIds)
   const pendingCalls = new Map(); // callId -> {callerId, calleeId, type, createdAt}
-  const activeCalls = new Map(); // callId -> {callerId, calleeId, roomName, roomUrl, startedAt}
+  const activeCalls = new Map(); // callId -> {callerId, calleeId, type, roomName, startedAt}
+
+  // Зрители эфира — все сокеты в его комнате, кроме вкладок самого ведущего.
+  // Раньше ведущий считал и себя: «1 зритель», когда не смотрит никто.
+  function viewersIn(roomName, streamKey) {
+    const room = io.sockets.adapter.rooms.get(roomName);
+    if (!room) return 0;
+    let n = 0;
+    for (const id of room) {
+      const s = io.sockets.sockets.get(id);
+      if (s && s.data.ownStreamKey !== streamKey) n++;
+    }
+    return n;
+  }
+
+  const bothSides = (call) => io.to(`user:${call.callerId}`).to(`user:${call.calleeId}`);
+  const isParty = (call, userId) => !!call && (userId === call.callerId || userId === call.calleeId);
+
+  // Комнату звонка удаляем сразу: иначе она жила бы до своего exp,
+  // и в неё можно было бы вернуться с ещё действующим токеном.
+  function finishCall(callId, event = 'call:ended') {
+    const call = pendingCalls.get(callId) || activeCalls.get(callId);
+    if (!call) return;
+    pendingCalls.delete(callId);
+    activeCalls.delete(callId);
+    bothSides(call).emit(event, { callId });
+    if (call.roomName) {
+      daily.deleteRoom(call.roomName).catch((e) => console.error('[call] room delete', e.message));
+    }
+  }
+
+  function finishCallsOf(userId) {
+    for (const [id, c] of pendingCalls) if (isParty(c, userId)) finishCall(id);
+    for (const [id, c] of activeCalls) if (isParty(c, userId)) finishCall(id);
+  }
 
   io.on('connection', async (socket) => {
     console.log('[socket] connected id=', socket.id, 'userId=', socket.data.userId);
@@ -62,12 +104,13 @@ function registerSockets(io) {
       }
     });
 
-    let currentStreamKey = null; 
-    
-    // Регистрируем обработчик сразу после подключения
-    // Простая логика: join в комнату стрима
-    socket.on('join-stream-room', (streamKey, callback) => {
-      if (!streamKey || streamKey === 'undefined' || streamKey === 'null' || streamKey === '') {
+    let currentStreamKey = null;
+
+    // Вход в комнату эфира: чат, счётчик зрителей, смена типа эфира.
+    // Ключ приходит от клиента — только строка: объект ушёл бы в запрос
+    // к базе оператором Mongo.
+    socket.on('join-stream-room', async (streamKey, callback) => {
+      if (typeof streamKey !== 'string' || !streamKey || streamKey === 'undefined' || streamKey === 'null') {
         console.warn('[socket] join-stream-room с негодным streamKey:', streamKey);
         if (callback) callback({ error: 'Invalid streamKey' });
         return;
@@ -76,64 +119,49 @@ function registerSockets(io) {
       currentStreamKey = streamKey;
       const roomName = `stream:${streamKey}`;
 
-      // Присоединяемся к комнате
-      socket.join(roomName);
-
-      // Небольшая задержка чтобы socket точно присоединился
-      setTimeout(() => {
-        // Получаем количество участников в комнате
-        const room = io.sockets.adapter.rooms.get(roomName);
-        const count = room ? room.size : 0;
-
-        // Отправляем обновленный счет всем в комнате (включая стримера)
-        io.to(roomName).emit('viewers-count-updated', { streamKey, count });
-
-        if (callback) {
-          callback({ success: true, count });
+      // Ключ эфира — ключ пользователя: вкладку ведущего узнаём по нему.
+      try {
+        if (socket.data.userId && await User.exists({ _id: socket.data.userId, streamKey })) {
+          socket.data.ownStreamKey = streamKey;
         }
-      }, 100);
+      } catch (e) {
+        console.error('[socket] owner check', e.message);
+      }
+
+      socket.join(roomName);
+      const count = viewersIn(roomName, streamKey);
+      io.to(roomName).emit('viewers-count-updated', { streamKey, count });
+      if (callback) callback({ success: true, count });
     });
 
     socket.on('disconnect', async () => {
       // Если был в комнате стрима, обновляем счет
       if (currentStreamKey) {
         const roomName = `stream:${currentStreamKey}`;
-        
+
         // Небольшая задержка чтобы socket точно покинул комнату
         setTimeout(() => {
-          const room = io.sockets.adapter.rooms.get(roomName);
-          // Socket уже покинул комнату, поэтому просто берем размер
-          const count = room ? room.size : 0;
-          
-          // Отправляем обновленный счет всем в комнате
-          io.to(roomName).emit('viewers-count-updated', { streamKey: currentStreamKey, count });
+          io.to(roomName).emit('viewers-count-updated', {
+            streamKey: currentStreamKey,
+            count: viewersIn(roomName, currentStreamKey),
+          });
         }, 50);
       }
 
-      // Presence disconnect + end call if active
       try {
         const userId = socket.data.userId;
         if (userId) {
-          // завершение активных звонков, где этот user участник
-          try {
-            for (const [id, c] of pendingCalls.entries()) {
-              if (c.callerId === userId || c.calleeId === userId) {
-                io.to(`user:${c.callerId}`).emit('call:ended', { callId: id });
-                io.to(`user:${c.calleeId}`).emit('call:ended', { callId: id });
-                pendingCalls.delete(id);
-              }
-            }
-            for (const [id, c] of activeCalls.entries()) {
-              if (c.callerId === userId || c.calleeId === userId) {
-                io.to(`user:${c.callerId}`).emit('call:ended', { callId: id });
-                io.to(`user:${c.calleeId}`).emit('call:ended', { callId: id });
-                activeCalls.delete(id);
-              }
-            }
-          } catch(e) { console.error('[call] cleanup on disconnect', e); }
           const set = userRooms.get(userId) || new Set();
           if (set.has(socket.id)) set.delete(socket.id);
           if (set.size === 0) userRooms.delete(userId); else userRooms.set(userId, set);
+
+          // Звонки завершаем, только если человек не вернулся ни одной вкладкой.
+          if (set.size === 0) {
+            setTimeout(() => {
+              if (!userRooms.has(userId)) finishCallsOf(userId);
+            }, CALL_GRACE_MS).unref();
+          }
+
           const cur = (userConnections.get(userId) || 1) - 1;
           if (cur <= 0) {
             userConnections.delete(userId);
@@ -151,65 +179,76 @@ function registerSockets(io) {
 
     });
 
-    // Calls: accept/decline/cancel/end
-    socket.on('call:accept', ({ callId }) => {
-      const call = pendingCalls.get(callId);
-      if (!call) return;
-      console.log('[call] accept', callId, call);
-      // mark as no longer pending to prevent timeout firing
-      try { pendingCalls.delete(callId); } catch(e) {}
-      // Create Daily room for active call (2 hours)
-      (async () => {
-        let roomName = null;
-        let roomUrl = null;
-        try {
-          if (process.env.DAILY_API_KEY) {
-            const r = await fetch('https://api.daily.co/v1/rooms', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.DAILY_API_KEY}` },
-              body: JSON.stringify({ name: `call_${callId}`, properties: { exp: Math.floor(Date.now()/1000)+7200, start_video_off: true, start_audio_off: false, enable_chat: false } })
-            });
-            const j = await r.json();
-            if (j && j.name) { roomName = j.name; roomUrl = j.url; }
-            console.log('[daily] active room created', roomName);
-          }
-        } catch (e) { console.error('[daily] active room create error', e); }
+    // Звонки. Каждое действие проверяет, кто его совершает: раньше принять,
+    // отклонить или завершить чужой звонок мог любой сокет, знающий callId.
 
-        activeCalls.set(callId, { callerId: call.callerId, calleeId: call.calleeId, roomName, roomUrl, startedAt: Date.now() });
-        io.to(`user:${call.callerId}`).emit('call:accepted', { callId, type: call.type, calleeId: call.calleeId, callerId: call.callerId, daily: { roomName, roomUrl } });
-        io.to(`user:${call.calleeId}`).emit('call:accepted', { callId, type: call.type, calleeId: call.calleeId, callerId: call.callerId, daily: { roomName, roomUrl } });
-      })();
-    });
-
-    socket.on('call:decline', ({ callId }) => {
+    socket.on('call:accept', async ({ callId } = {}) => {
       const call = pendingCalls.get(callId);
-      if (!call) return;
-      console.log('[call] decline', callId, call);
-      io.to(`user:${call.callerId}`).emit('call:declined', { callId });
+      if (!call || call.calleeId !== socket.data.userId) return;
       pendingCalls.delete(callId);
-    });
 
-    socket.on('call:cancel', ({ callId }) => {
-      const call = pendingCalls.get(callId);
-      if (!call) return;
-      console.log('[call] cancel', callId, call);
-      io.to(`user:${call.calleeId}`).emit('call:canceled', { callId });
-      pendingCalls.delete(callId);
-    });
+      // В активные — до запроса к Daily, чтобы отмена или обрыв во время
+      // создания комнаты нашли звонок и завершили его.
+      const roomName = `call_${callId}`;
+      const active = { ...call, roomName, startedAt: Date.now() };
+      activeCalls.set(callId, active);
 
-    socket.on('call:end', ({ callId }) => {
-      const call = pendingCalls.get(callId);
-      const active = activeCalls.get(callId);
-      console.log('[call] end', callId, call || active);
-      if (call) {
-        io.to(`user:${call.callerId}`).emit('call:ended', { callId });
-        io.to(`user:${call.calleeId}`).emit('call:ended', { callId });
-        pendingCalls.delete(callId);
+      // Остальные вкладки того, кому звонят, перестают звонить: разговор
+      // идёт в той, где приняли. Иначе в комнату на двоих ломились бы все.
+      socket.to(`user:${call.calleeId}`).emit('call:canceled', { callId });
+
+      try {
+        if (!daily.configured()) throw new Error('DAILY_API_KEY или DAILY_DOMAIN не заданы');
+        await daily.createRoom(roomName, { max_participants: 2 });
+        if (!activeCalls.has(callId)) {
+          await daily.deleteRoom(roomName);
+          return;
+        }
+        const url = daily.roomUrl(roomName);
+        const [callerToken, calleeToken] = await Promise.all([
+          daily.meetingToken({ room: roomName, userId: call.callerId, canSend: true }),
+          daily.meetingToken({ room: roomName, userId: call.calleeId, canSend: true }),
+        ]);
+        io.to(`user:${call.callerId}`).emit('call:accepted', { callId, type: call.type, url, token: callerToken });
+        socket.emit('call:accepted', { callId, type: call.type, url, token: calleeToken });
+      } catch (e) {
+        console.error('[call] room create', e.message);
+        finishCall(callId, 'call:failed');
       }
-      if (active) {
-        io.to(`user:${active.callerId}`).emit('call:ended', { callId });
-        io.to(`user:${active.calleeId}`).emit('call:ended', { callId });
-        activeCalls.delete(callId);
+    });
+
+    socket.on('call:decline', ({ callId } = {}) => {
+      const call = pendingCalls.get(callId);
+      if (!call || call.calleeId !== socket.data.userId) return;
+      pendingCalls.delete(callId);
+      io.to(`user:${call.callerId}`).emit('call:declined', { callId });
+      socket.to(`user:${call.calleeId}`).emit('call:canceled', { callId });
+    });
+
+    socket.on('call:cancel', ({ callId } = {}) => {
+      const call = pendingCalls.get(callId);
+      if (!call || call.callerId !== socket.data.userId) return;
+      pendingCalls.delete(callId);
+      io.to(`user:${call.calleeId}`).emit('call:canceled', { callId });
+    });
+
+    socket.on('call:end', ({ callId } = {}) => {
+      if (isParty(pendingCalls.get(callId) || activeCalls.get(callId), socket.data.userId)) finishCall(callId);
+    });
+
+    // Повторный вход после обрыва: Daily выкинул участника, а звонок жив.
+    // Токен выдаётся заново, только участнику и только пока звонок активен.
+    socket.on('call:token', async ({ callId } = {}, ack) => {
+      if (typeof ack !== 'function') return;
+      const call = activeCalls.get(callId);
+      const userId = socket.data.userId;
+      if (!isParty(call, userId)) return ack({ error: 'not_found' });
+      try {
+        const token = await daily.meetingToken({ room: call.roomName, userId, canSend: true });
+        ack({ url: daily.roomUrl(call.roomName), token });
+      } catch (e) {
+        console.error('[call] token', e.message);
+        ack({ error: 'token_failed' });
       }
     });
   });

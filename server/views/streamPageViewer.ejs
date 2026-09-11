@@ -11,11 +11,6 @@
 <link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="/css/stream.css">
 
-<%# Daily.co нужен только веб-эфиру, hls.js — только эфиру с OBS.
-    Грузим то, что относится к этому эфиру, а не обе библиотеки всегда. %>
-<% if (stream.streamType === 'daily-stream') { %>
-<script defer src="https://unpkg.com/@daily-co/daily-js@0.83.1/dist/daily-iframe.js"></script>
-<% } %>
 </head>
 
 <body class="tk-app"
@@ -431,8 +426,12 @@
                     document.addEventListener('DOMContentLoaded', function() {
                         const durationElement = document.getElementById('streamDuration');
                         
-                        // Всегда показываем время существования стрима с момента создания
-                        const streamCreatedTime = new Date('<%= stream.createdAt.toISOString() %>').getTime();
+                        // Время в эфире — с выхода в эфир (startedAt), а не с создания
+                        // записи. У неидущего эфира таймер стоит на нуле; о старте
+                        // придёт stream:update, и страница перезагрузится.
+                        const startedAt = <%- JSON.stringify(stream.isActive && stream.startedAt ? stream.startedAt : null) %>;
+                        if (!startedAt) return;
+                        const streamCreatedTime = new Date(startedAt).getTime();
                         
                         function updateDuration() {
                             const now = new Date().getTime();
@@ -551,12 +550,8 @@
                     class DailyViewer {
                         constructor() {
                             console.log('🎥 DailyViewer инициализируется...');
-                            console.log('🔍 window.DailyIframe доступен:', typeof window.DailyIframe !== 'undefined');
-                            this.callObject = null;
-                            this.authToken = null;
-                            this.isConnected = false;
+                            this.session = null;
                             this.streamId = '<%= stream._id %>';
-                            this.roomName = null;
                             this.init();
                         }
 
@@ -590,271 +585,64 @@
 
                         }
 
-                        async connectToStream() {
-                            try {
-                                // У неактивного эфира комнаты нет по определению, и запрос
-                                // за ней гарантированно возвращает 400. Не ходим: зритель
-                                // всё равно ждёт события о старте, оно и запустит подключение.
-                                if (document.body.dataset.streamActive !== '1') {
-                                    this.updateStatus('Эфир не идёт — ждём начала');
-                                    return;
-                                }
-
-                                this.updateStatus('Поиск активной комнаты...');
-                                
-                                // 1. Получаем данные комнаты стрима
-                                const roomResponse = await fetch(`/api/get-stream-room/${this.streamId}`);
-                                if (!roomResponse.ok) {
-                                    throw new Error('Комната стрима не найдена');
-                                }
-                                
-                                const roomData = await roomResponse.json();
-                                if (!roomData.success || !roomData.roomName) {
-                                    throw new Error('Стрим не активен или комната не создана');
-                                }
-                                
-                                this.roomName = roomData.roomName;
-                                this.roomUrl = roomData.roomUrl || roomData.roomURL || roomData.url || null;
-                                console.log('🏠 Комната найдена:', this.roomName);
-                                
-                                // 2. Получаем токен зрителя
-                                this.updateStatus('Получение токена...');
-                                const tokenResponse = await fetch('/api/get-token', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        roomName: this.roomName,
-                                        role: 'viewer'
-                                    })
-                                });
-                                
-                                if (!tokenResponse.ok) {
-                                    throw new Error('Ошибка получения токена');
-                                }
-                                
-                                const tokenData = await tokenResponse.json();
-                                if (!tokenData.success) {
-                                    throw new Error(tokenData.message || 'Токен не получен');
-                                }
-                                
-                                this.authToken = tokenData.token;
-                                console.log('🎫 Токен зрителя получен');
-                                
-                                // 3. Подключаемся к комнате
-                                this.updateStatus('Подключение к стриму...');
-                                
-                                // Проверяем что Daily.co библиотека загружена
-                                if (typeof window.DailyIframe === 'undefined') {
-                                    throw new Error('Daily.co библиотека не загружена');
-                                }
-                                
-                                this.callObject = window.DailyIframe.createCallObject();
-                                
-                                this.setupEventListeners();
-                                
-                                // Важно: подключаемся по реальному URL комнаты, который вернул бэкенд (Daily API).
-                                // Это предотвращает поломку, если daily subdomain ещё webcatravel, а не takebana.
-                                const joinUrl = this.roomUrl || `https://webcatravel.daily.co/${this.roomName}`;
-                                await this.callObject.join({
-                                    url: joinUrl,
-                                    token: this.authToken
-                                });
-                                
-                                console.log('🔗 Подключен к стриму как зритель');
-                                this.isConnected = true;
-                                this.updateStatus('Подключен к стриму');
-                                
-                            } catch (error) {
-                                console.error('❌ Ошибка подключения к стриму:', error);
-                                this.updateStatus('Ошибка: ' + error.message);
+                        connectToStream() {
+                            // У неактивного эфира комнаты нет по определению, и запрос
+                            // за токеном гарантированно вернул бы отказ. Не ходим: о старте
+                            // придёт stream:update, и страница перезагрузится.
+                            if (document.body.dataset.streamActive !== '1') {
+                                this.updateStatus('Эфир не идёт — ждём начала');
+                                return;
                             }
+                            const STATUS = {
+                                connecting: 'Подключение к эфиру…',
+                                live: 'В эфире',
+                                reconnecting: 'Связь прервалась, переподключаемся…',
+                                ended: 'Эфир недоступен'
+                            };
+                            this.session = TKDaily.connect({
+                                send: false,
+                                access: () => TKDaily.requestAccess('/api/get-token', { streamId: this.streamId }),
+                                onTrack: (track, p, on) => {
+                                    if (p.local) return;
+                                    if (on) this.onTrackStarted(track); else this.onTrackStopped(track);
+                                },
+                                onState: (state) => this.updateStatus(STATUS[state])
+                            });
                         }
 
-                        setupEventListeners() {
-                            // Участник присоединился
-                            this.callObject.on('participant-joined', (event) => {
-                                console.log('👤 Участник присоединился:', event.participant.user_name || 'Гость');
-                            });
+                        onTrackStarted(track) {
+                            if (track.kind === 'video') {
+                                if (!this.remoteVideo) return;
+                                // Звук идёт отдельным элементом, поэтому картинка всегда
+                                // без звука — такую пускает автозапуск любого браузера.
+                                this.remoteVideo.muted = true;
+                                this.remoteVideo.srcObject = new MediaStream([track]);
+                                this.forceVideoDisplay();
+                                this.remoteVideo.play()
+                                    .then(() => setTimeout(() => this.checkVideoState(), 2000))
+                                    .catch(() => this.showPlayButton());
+                                return;
+                            }
+                            if (!this.remoteAudio) return;
+                            this.remoteAudio.srcObject = new MediaStream([track]);
+                            this.remoteAudio.muted = false;
+                            if (this.volumeControl) {
+                                this.volumeControl.style.display = 'block';
+                                this.volumeControl.style.opacity = '1';
+                            }
+                            this.remoteAudio.play().catch(() => this.showAudioPlayButton());
+                        }
 
-                            // Участник покинул
-                            this.callObject.on('participant-left', (event) => {
-                                console.log('👋 Участник покинул:', event.participant.user_name || 'Гость');
-                            });
-
-                            // Получен удаленный трек (видео или аудио)
-                            this.callObject.on('track-started', (event) => {
-                                console.log('📹 Новый трек:', event.participant.user_name, event.track.kind);
-                                console.log('🎬 Track details:', {
-                                    kind: event.track.kind,
-                                    id: event.track.id,
-                                    enabled: event.track.enabled,
-                                    readyState: event.track.readyState,
-                                    muted: event.track.muted
-                                });
-                                
-                                if (!event.participant.local) {
-                                    if (event.track.kind === 'video') {
-                                        // Показываем видео стримера
-                                        console.log('📺 Отображаем видео стримера');
-                                        console.log('🎬 Video track:', event.track);
-                                        console.log('🖥️ Remote video element:', this.remoteVideo);
-                                        
-                                        if (this.remoteVideo) {
-                                            const mediaStream = new MediaStream([event.track]);
-                                            console.log('📡 MediaStream создан:', mediaStream);
-                                            console.log('📡 MediaStream tracks:', mediaStream.getTracks());
-                                            console.log('📐 Video dimensions:', event.track.getSettings());
-                                            console.log('📐 Track settings:', {
-                                                width: event.track.getSettings().width,
-                                                height: event.track.getSettings().height,
-                                                frameRate: event.track.getSettings().frameRate,
-                                                aspectRatio: event.track.getSettings().aspectRatio
-                                            });
-                                            
-                                            // Устанавливаем srcObject
-                                            this.remoteVideo.srcObject = mediaStream;
-                                            
-                                            // Принудительно обновляем стили
-                                            this.forceVideoDisplay();
-                                            
-                                            // Добавляем обработчики событий для отладки
-                                            this.remoteVideo.addEventListener('loadedmetadata', () => {
-                                                console.log('📺 Видео метаданные загружены');
-                                                console.log('📏 Размеры видео:', this.remoteVideo.videoWidth, 'x', this.remoteVideo.videoHeight);
-                                            });
-                                            
-                                            this.remoteVideo.addEventListener('canplay', () => {
-                                                console.log('🎬 Видео готово к воспроизведению');
-                                            });
-                                            
-                                            this.remoteVideo.addEventListener('playing', () => {
-                                                console.log('▶️ Видео воспроизводится');
-                                            });
-                                            
-                                            this.remoteVideo.addEventListener('error', (e) => {
-                                                console.error('❌ Ошибка видео элемента:', e);
-                                                console.error('❌ Video error details:', this.remoteVideo.error);
-                                            });
-                                            
-                                            this.remoteVideo.addEventListener('stalled', () => {
-                                                console.warn('⚠️ Видео застряло');
-                                            });
-                                            
-                                            // Попытка автозапуска
-                                            const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                                            
-                                            // Для мобильных устройств сначала пробуем с muted
-                                            if (isMobile) {
-                                                this.remoteVideo.muted = true;
-                                                console.log('📱 Мобильное устройство - запуск видео без звука (звук через audio элемент)');
-                                            }
-                                            
-                                            this.remoteVideo.play()
-                                                .then(() => {
-                                                    console.log('✅ Видео успешно запущено');
-                                                    this.updateStatus('Воспроизведение стрима');
-                                                    
-                                                    // Проверяем состояние видео через 2 секунды
-                                                    setTimeout(() => {
-                                                        this.checkVideoState();
-                                                    }, 2000);
-                                                })
-                                                .catch(e => {
-                                                    console.warn('⚠️ Autoplay заблокирован:', e);
-                                                    console.log('🔍 Запуск видео в muted режиме (звук через audio элемент)...');
-                                                    this.remoteVideo.muted = true;
-                                                    this.remoteVideo.play()
-                                                        .then(() => {
-                                                            console.log('✅ Видео запущено (звук через отдельный audio элемент)');
-                                                            this.updateStatus('Воспроизведение стрима');
-                                                            
-                                                            // Проверяем состояние видео через 2 секунды
-                                                            setTimeout(() => {
-                                                                this.checkVideoState();
-                                                            }, 2000);
-                                                        })
-                                                        .catch(e2 => {
-                                                            console.warn('⚠️ Не удалось запустить даже без звука:', e2);
-                                                            this.showPlayButton();
-                                                        });
-                                                });
-                                        } else {
-                                            console.error('❌ remoteVideo элемент не найден!');
-                                        }
-                                    } else if (event.track.kind === 'audio') {
-                                        // Обрабатываем аудио трек
-                                        console.log('🔊 Аудио трек получен');
-                                        
-                                        if (this.remoteAudio) {
-                                            const audioStream = new MediaStream([event.track]);
-                                            this.remoteAudio.srcObject = audioStream;
-                                            this.remoteAudio.style.display = 'block';
-                                            
-                                            // Настройки аудио
-                                            this.remoteAudio.volume = 1.0;
-                                            this.remoteAudio.muted = false;
-                                            
-                                            // Показываем контроль громкости
-                                            if (this.volumeControl) {
-                                                this.volumeControl.style.display = 'block';
-                                                this.volumeControl.style.opacity = '1';
-                                            }
-                                            
-                                            // Обновляем статус когда аудио готово
-                                            this.updateStatus('Воспроизведение стрима');
-                                            
-                                            // Запускаем аудио
-                                            this.remoteAudio.play()
-                                                .then(() => {
-                                                    console.log('✅ Аудио запущено');
-                                                })
-                                                .catch(e => {
-                                                    console.warn('⚠️ Ошибка автозапуска аудио:', e);
-                                                    // Попробуем запустить с пользовательским взаимодействием
-                                                    this.showAudioPlayButton();
-                                                });
-                                        }
-                                    }
+                        onTrackStopped(track) {
+                            if (track.kind === 'video') {
+                                if (this.remoteVideo) {
+                                    this.remoteVideo.style.display = 'none';
+                                    this.remoteVideo.srcObject = null;
                                 }
-                            });
-
-                            // Видео трек остановлен
-                            this.callObject.on('track-stopped', (event) => {
-                                console.log('⏹️ Трек остановлен:', event.participant.user_name, event.track.kind);
-                                
-                                if (!event.participant.local) {
-                                    if (event.track.kind === 'video') {
-                                        if (this.remoteVideo) {
-                                            this.remoteVideo.style.display = 'none';
-                                            this.remoteVideo.srcObject = null;
-                                            this.updateStatus('Стрим остановлен');
-                                        }
-                                    } else if (event.track.kind === 'audio') {
-                                        if (this.remoteAudio) {
-                                            this.remoteAudio.style.display = 'none';
-                                            this.remoteAudio.srcObject = null;
-                                            console.log('🔇 Аудио остановлено');
-                                        }
-                                        
-                                        // Скрываем контроль громкости
-                                        if (this.volumeControl) {
-                                            this.volumeControl.style.display = 'none';
-                                        }
-                                    }
-                                }
-                            });
-
-                            // Ошибки
-                            this.callObject.on('error', (event) => {
-                                console.error('❌ Daily.co ошибка:', event.errorMsg);
-                                this.updateStatus('Ошибка: ' + event.errorMsg);
-                            });
-
-                            // Подключение установлено
-                            this.callObject.on('joined-meeting', (event) => {
-                                console.log('✅ Успешно подключились как зритель');
-                                this.updateStatus('В стриме');
-                            });
+                                return;
+                            }
+                            if (this.remoteAudio) this.remoteAudio.srcObject = null;
+                            if (this.volumeControl) this.volumeControl.style.display = 'none';
                         }
 
                         updateStatus(message) {

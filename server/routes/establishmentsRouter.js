@@ -5,6 +5,8 @@ asyncify(router); // ошибки async-обработчиков уходят в
 
 const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
+const daily = require('../utils/daily');
+const { roomName: venueRoomName } = require('./venueLive');
 const multer = require('multer');
 const path = require('path');
 
@@ -216,58 +218,17 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
 }));
 
 
-// Владелец берётся из сессии, а не из тела запроса. Раньше userId приходил
-// от клиента: вошедший подставлял чужой идентификатор и разом переписывал
-// online и peerId у всех заведений другого пользователя. Воспроизводилось.
-router.post('/updateEstablishmentsOnlineStatus', requireAuth, validate({
-    online: { type: 'bool', required: true, label: 'Статус' },
-    peerId: { type: 'string', max: 128, default: '', label: 'PeerId' },
-}), function(req, res) {
-    const { online, peerId } = req.body;
+// Уход владельца с карты гасит камеры всех его заведений. Владелец берётся
+// из сессии: раньше userId приходил в теле, и вошедший переписывал статус
+// чужих заведений. Включение и выключение одной камеры — routes/venueLive.js.
+router.post('/updateEstablishmentsOnlineStatus', requireAuth, async (req, res) => {
     const userId = req.session.userId;
-
-    Establishments.updateMany({ owner: userId }, { online: online, peerId: peerId })
-        .then(result => {
-            res.send(result);
-        })
-        .catch(err => {
-            res.send(err);
-        });
-});
-
-// Здесь проверка владельца была бутафорской: establishment.owner сверялся
-// с userId из того же тела запроса, поэтому достаточно было прислать
-// идентификатор настоящего владельца. Сверяем с сессией.
-router.post('/updateEstablishmentOnlineStatus', requireAuth, validate({
-    establishmentId: { type: 'objectId', required: true, label: 'Заведение' },
-    online: { type: 'bool', required: true, label: 'Статус' },
-    peerId: { type: 'string', max: 128, default: '', label: 'PeerId' },
-}), function(req, res) {
-    const { establishmentId, online, peerId } = req.body;
-    const userId = req.session.userId;
-
-    // Найдите заведение по идентификатору
-    Establishments.findById(establishmentId)
-        .then(establishment => {
-            if (!establishment) {
-                throw new Error('Заведение не найдено');
-            }
-            // Проверьте, принадлежит ли заведение пользователю
-            if (establishment.owner && establishment.owner.toString() === userId) {
-                // Обновите статус онлайн и peerId заведения
-                establishment.online = online;
-                establishment.peerId = peerId; // обновите peerId здесь
-                return establishment.save();
-            } else {
-                throw new Error('Вы не являетесь владельцем этого заведения');
-            }
-        })
-        .then(updatedEstablishment => {
-            res.send(updatedEstablishment);
-        })
-        .catch(err => {
-            res.status(400).send(err.message);
-        });
+    const live = await Establishments.find({ owner: userId, online: true }).select('_id').lean();
+    await Establishments.updateMany({ owner: userId }, { $set: { online: false } });
+    for (const { _id } of live) {
+        daily.deleteRoom(venueRoomName(_id)).catch(err => console.error('[venue-live]', err.message));
+    }
+    res.json({ ok: true });
 });
 
 

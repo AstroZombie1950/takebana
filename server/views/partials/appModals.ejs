@@ -238,9 +238,9 @@
       <p class="tk-call__status">
         <span class="tk-call__beacon tk-call__beacon--ok"></span>
         <span id="outgoingStatus">Соединение...</span>
+        <span class="tk-call__net hidden" id="outgoingNet" role="img" aria-label="Качество сети"><i></i><i></i><i></i></span>
       </p>
       <p class="tk-call__timer"><span id="outgoingTimer" class="hidden">00:00</span></p>
-      <p class="tk-call__timer hidden" id="outgoingParticipants"></p>
 
       <div class="tk-call__stage hidden" id="outgoingVideos">
         <div class="pip-call-container">
@@ -249,11 +249,10 @@
         </div>
       </div>
 
-      <div class="hidden" id="outgoingAudioUI">
-        <audio id="outRemoteAudio" autoplay playsinline></audio>
-      </div>
+      <audio id="outRemoteAudio" autoplay playsinline></audio>
 
       <div class="tk-call__actions">
+        <button type="button" id="outgoingVoiceBtn" class="tk-btn tk-btn--outline tk-btn--sm hidden" aria-pressed="false">Только голос</button>
         <button type="button" id="outgoingCancelBtn" class="tk-btn tk-btn--danger tk-btn--sm tk-btn--block">Отменить</button>
       </div>
     </div>
@@ -280,9 +279,9 @@
       <p class="tk-call__status">
         <span class="tk-call__beacon tk-call__beacon--ring"></span>
         <span id="incomingStatus">Звонит...</span>
+        <span class="tk-call__net hidden" id="incomingNet" role="img" aria-label="Качество сети"><i></i><i></i><i></i></span>
       </p>
       <p class="tk-call__timer"><span id="incomingTimer" class="hidden">00:00</span></p>
-      <p class="tk-call__timer hidden" id="incomingParticipants"></p>
 
       <div class="tk-call__stage hidden" id="incomingVideos">
         <div class="pip-call-container">
@@ -291,11 +290,10 @@
         </div>
       </div>
 
-      <div class="hidden" id="incomingAudioUI">
-        <audio id="inRemoteAudio" autoplay playsinline></audio>
-      </div>
+      <audio id="inRemoteAudio" autoplay playsinline></audio>
 
       <div class="tk-call__actions tk-call__actions--pair">
+        <button type="button" id="incomingVoiceBtn" class="tk-btn tk-btn--outline tk-btn--sm hidden" aria-pressed="false">Только голос</button>
         <button type="button" id="incomingDeclineBtn" class="tk-btn tk-btn--outline tk-btn--sm">Отклонить</button>
         <button type="button" id="incomingAcceptBtn" class="tk-btn tk-btn--ok tk-btn--sm">Принять</button>
       </div>

@@ -121,8 +121,9 @@ app.use(require('./routes/adminRouter'));
 app.use(require('./routes/streaming'));
 app.use(require('./routes/moderation'));
 
-// Daily.co API роуты
+// Daily.co: комнаты веб-эфира и камеры заведений
 app.use('/api', require('./routes/dailyApiRoutes'));
+app.use(require('./routes/venueLive').router);
 
 app.set('view engine', 'ejs');
 // Установка пути к папке с шаблонами

@@ -1160,6 +1160,24 @@ body.tk-app {
   .tk-call__beacon { animation: none; }
 }
 
+/* Сеть — три деления, как у телефона. Оценку даёт сам Daily
+ * (network-quality-change): good — все три, low — два, bad — одно. */
+.tk-call__net:not(.hidden) {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+  color: var(--tk-green);
+}
+.tk-call__net i { width: 3px; background: currentColor; }
+.tk-call__net i:nth-child(1) { height: 4px; }
+.tk-call__net i:nth-child(2) { height: 8px; }
+.tk-call__net i:nth-child(3) { height: 12px; }
+.tk-call__net[data-net="low"] { color: var(--tk-beige); }
+.tk-call__net[data-net="bad"] { color: var(--tk-accent); }
+.tk-call__net[data-net="low"] i:nth-child(3),
+.tk-call__net[data-net="bad"] i:nth-child(n+2) { opacity: .25; }
+
 .tk-call__timer {
   margin: 6px 0 0;
   text-align: center;
@@ -1220,6 +1238,23 @@ body.tk-app {
   background: #000;
   z-index: 10;
 }
+
+/* Картинки собеседника нет — ещё не пришла, он выключил камеру или
+ * переподключается. Вместо чёрного прямоугольника — подпись. Своей картинки
+ * нет — пустую рамку в углу не показываем. */
+.tk-call__stage--empty .pip-call-container::before {
+  content: 'Видео собеседника нет';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  color: var(--tk-muted);
+}
+.tk-call__stage--empty .pip-remote,
+.tk-call__stage--nolocal .pip-local { visibility: hidden; }
 
 @media (min-width: 640px) {
   .pip-local { width: 140px; height: 90px; right: 12px; bottom: 12px; }
@@ -1291,12 +1326,19 @@ body.tk-app {
   .tk-modal { padding: 0; }
 
   .tk-modal__card,
-  .tk-modal__card--call {
+  .tk-modal__card--call,
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) {
     max-width: none;
     height: 100vh;
     max-height: 100vh;
     border: none;
   }
+
+  /* Окно звонка без видео — дозвон, аудиозвонок, «только голос» — занимает
+   * весь экран: статус встаёт посередине, а не прижимается к шапке над
+   * пустотой. Правило :has выше перебивало высоту на телефоне, и из-под окна
+   * видеозвонка торчали шапка сайта и язычок панели. */
+  .tk-modal__card--call:not(:has(.tk-call__stage:not(.hidden))) .tk-call__status { margin-top: auto; }
 
   .tk-modal__head { padding: 14px 16px; }
   .tk-modal__body { padding: 16px; }

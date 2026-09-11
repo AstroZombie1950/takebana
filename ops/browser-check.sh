@@ -52,7 +52,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-"$CHROME" --headless=new --remote-debugging-port="$CDP_PORT" --disable-gpu \
+# --mute-audio: на страницах эфира Chrome становится зрителем и вывел бы звук
+# эфира на колонки машины, с которой идёт проверка.
+"$CHROME" --headless=new --remote-debugging-port="$CDP_PORT" --disable-gpu --mute-audio \
           --hide-scrollbars --no-first-run --no-default-browser-check \
           --user-data-dir="$PROFILE" about:blank >/dev/null 2>&1 &
 CHROME_PID=$!

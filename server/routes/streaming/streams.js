@@ -14,6 +14,7 @@ const { validate } = require('../../middleware/validate');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
 const { CATEGORIES, SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
 const { upload } = require('./uploads');
+const daily = require('../../utils/daily');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
 const { randomUUID: uuidv4 } = require('crypto');
 
@@ -79,23 +80,21 @@ router.post('/start-stream', requireNotBanned, validate({
 
   try {
     // Проверка на наличие активного стрима - улучшенная логика
-    const existingStream = await Stream.findOne({ 
-      userId: userId, 
-      $or: [
-        { isActive: true },
-        { dailyRoom: { $exists: true, $ne: null } } // Проверяем также наличие Daily.co комнаты
-      ]
+    // Прежнее условие { dailyRoom: { $exists: true, $ne: null } } совпадало
+    // с любым эфиром: схема сама заводит dailyRoom = { name: null, url: null }.
+    const existingStream = await Stream.findOne({
+      userId: userId,
+      $or: [{ isActive: true }, { dailyRoomName: { $ne: null } }]
     });
-    
+
     if (existingStream) {
-      // Если есть активный стрим или комната Daily.co, но стрим неактивен
       if (existingStream.isActive) {
         return res.status(400).json({ message: 'У вас уже есть активный стрим.' });
-      } else if (existingStream.dailyRoom && existingStream.dailyRoom.name) {
-        // Очищаем зависшую Daily.co комнату
-        console.log('🧹 Очищаем зависшую Daily.co комнату для пользователя:', userId);
-        await Stream.findByIdAndDelete(existingStream._id);
       }
+      // Зависший веб-эфир: комната Daily от него пережила бы запись в базе.
+      await daily.deleteRoom(existingStream.dailyRoomName)
+        .catch(err => console.error('[daily] stale room', err.message));
+      await Stream.findByIdAndDelete(existingStream._id);
     }
 
     // Получение пользователя из базы

@@ -577,7 +577,7 @@ let lang = {
         en : `Stream via OBS`
     },
     '144' : {
-        ru : `Выберите камеру и начнитие стрим из браузера нажав кнопку Старт.`,
+        ru : `Выберите камеру и начните эфир кнопкой «Начать стрим».`,
         en : `Select a camera and start streaming from the browser by clicking the Start button.`
     },
     '145' : {

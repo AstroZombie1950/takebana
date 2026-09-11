@@ -212,7 +212,7 @@ if (myEstatesModal && myEstatesBtn) {
     })
     .then(response => response.json())
     .then(establishments => {
-      establishments.forEach((establishment, index) => {
+      establishments.forEach((establishment) => {
         // Получить рейтинги заведения
         fetch('/getRatings/' + establishment._id, {
           method: 'GET',
@@ -267,7 +267,7 @@ if (myEstatesModal && myEstatesBtn) {
                 <div class="offline ${offlineStatus}">
                   <span>${ofl}</span>
                 </div>
-                <img class="settings" src="/img/settings.svg" alt="settings">
+                <img class="settings" data-id="${establishment._id}" src="/img/settings.svg" alt="settings">
               </div>
               <div class="info">
                 <p>${establishment.name}</p>
@@ -287,11 +287,11 @@ if (myEstatesModal && myEstatesBtn) {
             </div>
           `;
       
+          // Идентификатор шестерёнке — в самой разметке. Раньше он ставился
+          // по индексу, а карточки дорисовываются в порядке прихода ответов:
+          // индекс промахивался, падал TypeError, и шестерёнка могла открыть
+          // настройки чужого заведения.
           establishmentsBlock.innerHTML += itemHTML;
-      
-          // Найти шестеренку для этого заведения
-          var settingsIcons = document.querySelectorAll('.item .settings');
-          settingsIcons[index].dataset.id = establishment._id;
 
           estateListeners()
           
@@ -308,148 +308,88 @@ if (myEstatesModal && myEstatesBtn) {
 
 
 
+// Камера заведения (routes/venueLive.js): владелец вещает в закрытую комнату
+// Daily, гости на карте смотрят. Раньше поток шёл через публичный PeerJS.
+var venueLive = {};
+
+function setBroadcastUi(btn, on) {
+  var en = localStorage.getItem('lang') == 'en';
+  var label = on ? (en ? 'Stop broadcasting' : 'Остановить трансляцию')
+                 : (en ? 'Start broadcasting' : 'Запустить трансляцию');
+  var head = btn.parentElement.parentElement;
+  var offlineMark = head.querySelector('.myEstablishments .left-tab .item .head .offline');
+  var onlineMark = head.querySelector('.myEstablishments .left-tab .item .head .online');
+  btn.classList.toggle('active', on);
+  btn.innerHTML = '<img src="/img/' + (on ? 'pause' : 'start') + '.svg" alt="">' + label;
+  if (offlineMark) offlineMark.classList.toggle('active', !on);
+  if (onlineMark) onlineMark.classList.toggle('active', on);
+}
+
+function startVenueLive(id, btn) {
+  if (venueLive[id]) return;
+  btn.disabled = true;
+  TKDaily.requestAccess('/api/venues/' + id + '/live').then(function (first) {
+    var firstAccess = first;
+    venueLive[id] = TKDaily.connect({
+      send: true,
+      video: true,
+      // Повторный вход после обрыва — через /watch: комнату не пересоздаём,
+      // иначе обрыв у владельца выкидывал бы всех гостей.
+      access: function () {
+        if (!firstAccess) return TKDaily.requestAccess('/api/venues/' + id + '/watch');
+        var a = firstAccess;
+        firstAccess = null;
+        return Promise.resolve(a);
+      },
+      onMediaError: function () {
+        toast('Нет доступа к камере или микрофону — разрешите его в настройках браузера', 'error');
+      },
+      onState: function (s) {
+        if (s === 'live') { btn.disabled = false; setBroadcastUi(btn, true); }
+        if (s === 'ended') {
+          toast('Трансляция прервалась: нет связи с сервисом видео', 'error');
+          stopVenueLive(id, btn);
+        }
+      }
+    });
+  }).catch(function (err) {
+    btn.disabled = false;
+    toast(err.message, 'error');
+  });
+}
+
+function stopVenueLive(id, btn) {
+  var session = venueLive[id];
+  delete venueLive[id];
+  if (session) session.leave();
+  btn.disabled = false;
+  setBroadcastUi(btn, false);
+  fetch('/api/venues/' + id + '/live', { method: 'DELETE' }).catch(function () {});
+}
+
+// Ушли со страницы с включённой камерой — гасим её на сервере, иначе
+// заведение висело бы «онлайн» с пустой комнатой. Раньше здесь стоял
+// beforeunload с preventDefault: диалог «Покинуть сайт?» получал каждый,
+// кто уходил с карты, даже без всякой трансляции.
+window.addEventListener('pagehide', function () {
+  if (Object.keys(venueLive).length) navigator.sendBeacon('/updateEstablishmentsOnlineStatus');
+});
+
+
 function estateListeners() {
 
   // нажатие кнопок начала стрима 
   let startStreambtns = document.querySelectorAll('.startStream');
   startStreambtns.forEach((el) => {
-    el.addEventListener('click', function(e) {
-		this.classList.add('blocked');
-		setTimeout(() => {
-			this.classList.remove('blocked');
-		}, 1000);
+    el.addEventListener('click', function() {
+      this.classList.add('blocked');
+      setTimeout(() => {
+        this.classList.remove('blocked');
+      }, 1000);
 
-
-		let estateId = this.getAttribute('data-id');
-		
-		let offlineMark = this.parentElement.parentElement.querySelector('.myEstablishments .left-tab .item .head .offline');
-		let onlineMark = this.parentElement.parentElement.querySelector('.myEstablishments .left-tab .item .head .online');
-
-      if (this.classList.contains('active')) {
-
-		console.log('закончили стрим');
-		fetch('/updateEstablishmentOnlineStatus', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				userId: userId,
-				establishmentId: estateId,
-				online: false, // или true, в зависимости от того, что вы хотите установить
-				peerId: ""
-			})
-		})
-		.then(response => response.json())
-		.then(data => {
-			console.log(data);
-		})
-		.catch(error => {
-			console.error('Ошибка:', error);
-		});
-
-	
-		
-		// Проверьте, существует ли локальный стрим
-		if (localStream) {
-			// Остановите все треки в стриме
-			localStream.getTracks().forEach(function(track) {
-				track.stop();
-			});
-			// Обнулите локальный стрим
-			localStream = null;
-		} else {
-			toast('Нет активного стрима');
-		}
-
-    let start;
-
-    if (localStorage.getItem('lang') == 'ru') {
-      start = 'Запустить трансляцию'
-    } else if (localStorage.getItem('lang') == 'en') {
-      start = 'Start broadcasting'
-    }
-
-
-		e.target.classList.remove('active');
-		e.target.innerHTML = `
-					<img src="/img/start.svg" alt="start">
-					${start}
-				`
-		offlineMark.classList.add('active');
-		onlineMark.classList.remove('active');
-      } else {
-		// var video = document.getElementById('video');
-		// Запрос разрешений на видео и звук
-		if (localStream) {
-			toast('У вас уже есть активный стрим, перезагрузите страницу для завершения')
-		} else {
-			navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-			.then(function(stream) {
-			
-
-				fetch('/updateEstablishmentOnlineStatus', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify({
-						userId: userId,
-						establishmentId: estateId,
-						online: true,
-						peerId: peer_id  // или true, в зависимости от того, что вы хотите установить
-					})
-				})
-				.then(response => response.json())
-				.then(data => {
-					console.log(data);
-				})
-				.catch(error => {
-					console.error('Ошибка:', error);
-				});
-				// Начинаем стрим
-				// video.srcObject = stream;
-				// video.play();
-				localStream = stream;
-
-        let end;
-
-        if (localStorage.getItem('lang') == 'ru') {
-          end = 'Остановить трансляцию'
-        } else if (localStorage.getItem('lang') == 'en') {
-          end = 'Stop broadcasting'
-        }
-
-
-				e.target.classList.add('active');
-				e.target.innerHTML = `
-					<img src="/img/pause.svg" alt="start">
-					${end}
-				`;
-				offlineMark.classList.remove('active');
-				onlineMark.classList.add('active');
-
-				// Звоним всем подключенным пирам и передаем им наш поток
-				Object.values(peer.connections).forEach(function(conn) {
-					var call = peer.call(conn[0].peer, stream);
-					// call.on('stream', function(remoteStream) {
-					//     // Показываем входящий поток в нашем видеоэлементе
-					//     video.srcObject = remoteStream;
-					// });
-				});
-				
-			})
-			.catch(function(err) {
-				console.log('An error occurred: ' + err);
-				if (err.name === 'NotFoundError') {
-					toast('Веб-камера или микрофон не найдены. Подключите и попробуйте еще раз.');
-				} else {
-					toast('Произошла ошибка: ' + err.message, 'error');
-				}
-			});
-		}
-	  }
-      
+      const id = this.getAttribute('data-id');
+      if (this.classList.contains('active')) stopVenueLive(id, this);
+      else startVenueLive(id, this);
     });
   });
   

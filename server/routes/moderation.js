@@ -11,12 +11,21 @@ const User = require('../models/User');
 const Stream = require('../models/Stream');
 const ChatMessage = require('../models/ChatMessage');
 const { validate } = require('../middleware/validate');
+const daily = require('../utils/daily');
 
 // Разрыв идущего вещания. Подключается лениво и намеренно: require('../mediaServer')
 // на верхнем уровне поднимает RTMP-сервер как побочный эффект, и тогда любой
 // скрипт, которому нужен только этот роутер, начинал слушать 1935.
 function dropPublisher(streamKey) {
     return require('../mediaServer').dropPublisher(streamKey);
+}
+
+// Веб-эфир идёт через комнату Daily, и медиасервер о нём не знает: без этого
+// «стоп-эфир» веб-эфира снова был бы пометкой в базе. Удаление комнаты
+// выгоняет из неё и вещателя, и зрителей.
+function dropDailyRoom(roomName) {
+    if (!roomName) return;
+    daily.deleteRoom(roomName).catch(err => console.error('[moderation] daily', err.message));
 }
 const {
     requireAuthApi,
@@ -185,7 +194,7 @@ router.post('/api/moderation/users/:id/ban', requireModerator, validate({
     // не гасит: OBS уже подключён к 1935 и продолжает лить. Гасим явно —
     // и в базе, и на медиасервере.
     const live = await Stream.find({ userId: req.params.id, isActive: true })
-        .select('streamKey')
+        .select('streamKey dailyRoomName')
         .lean();
 
     if (live.length) {
@@ -200,7 +209,10 @@ router.post('/api/moderation/users/:id/ban', requireModerator, validate({
                 updatedAt: new Date()
             }
         );
-        for (const s of live) dropPublisher(s.streamKey);
+        for (const s of live) {
+            dropPublisher(s.streamKey);
+            dropDailyRoom(s.dailyRoomName);
+        }
     }
 
     return res.json({ ok: true, streamsStopped: live.length });
@@ -251,6 +263,7 @@ router.post('/api/moderation/streams/:id/stop', requireAuthApi, validate({
     // Пометка в базе поток не останавливает: OBS продолжает лить, HLS писать
     // сегменты, зритель их получать. Рвём вещание на медиасервере.
     const wasLive = dropPublisher(stream.streamKey);
+    dropDailyRoom(stream.dailyRoomName);
 
     return res.json({ ok: true, byModeration: !isOwner, wasLive });
 }));

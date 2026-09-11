@@ -22,8 +22,7 @@ const EstablishmentsSchema = new mongoose.Schema({
     },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     photos: [String], // массив ссылок на фотографии
-    online: Boolean, // статус онлайн
-    peerId: String
+    online: Boolean // камера заведения включена (routes/venueLive.js)
 });
 
 // Заведения владельца — личный кабинет

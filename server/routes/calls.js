@@ -5,7 +5,7 @@ const express = require('express');
 const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
-const { requireAuthApi } = require('../middleware/auth');
+const { requireAuthApi, requireNotBanned } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const User = require('../models/User');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
@@ -14,7 +14,9 @@ const { randomUUID: uuidv4 } = require('crypto');
 // ===== Call API (create outgoing call) =====
 // requireAuthApi отвечает тем же 401 { error: 'unauthorized' }, что стояло
 // внутри обработчика, но до схемы: анониму незачем узнавать имена полей.
-router.post('/api/calls/create', requireAuthApi, validate({
+// Звонок — это передача своего голоса, поэтому ограничение аккаунта
+// действует и здесь, как на переписке и эфире.
+router.post('/api/calls/create', requireAuthApi, requireNotBanned, validate({
   calleeId: { type: 'objectId', required: true, label: 'Собеседник' },
   // Ровно то, что шлёт шапка (views/partials/header.ejs): аудио или видео.
   type: { type: 'string', required: true, values: ['audio', 'video'], label: 'Тип звонка' },
@@ -22,6 +24,7 @@ router.post('/api/calls/create', requireAuthApi, validate({
   try {
     const callerId = String(req.session.userId);
     const { calleeId, type } = req.body;
+    if (calleeId === callerId) return res.status(400).json({ error: 'self_call' });
     const callId = uuidv4();
     // Общие хранилища кладёт app.js после запуска сокетов.
     const io = req.app.get('io');
