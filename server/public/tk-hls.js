@@ -8,6 +8,8 @@
 // качество и одна дорожка. Грузится лениво: 117 КБ сжатого скрипта нужны
 // только браузерам без своего HLS и только когда плейлист уже есть.
 (function () {
+  // Подписи — из общего словаря (public/tk-i18n.js).
+  var t = function (key, arg) { return window.t ? window.t(key, arg) : ''; };
   var SRC = '/vendor/hls-1.7.2.light.min.js';
   var POLL_MS = 2000;
   var loading = null;
@@ -21,7 +23,7 @@
         s.onload = function () { resolve(window.Hls); };
         s.onerror = function () {
           loading = null;
-          reject(new Error('Не загрузился плеер'));
+          reject(new Error(t('stream.playerFailed')));
         };
         document.head.appendChild(s);
       });

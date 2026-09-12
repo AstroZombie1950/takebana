@@ -45,12 +45,12 @@
                 <audio id="remoteAudio" autoplay></audio>
 
                 <div class="tk-live__volume" id="volumeControl" style="display: none;">
-                  <button type="button" id="muteButton" aria-label="Звук" aria-pressed="false">
+                  <button type="button" id="muteButton" aria-label="Звук" data-i18n-aria="viewer.sound" aria-pressed="false">
                     <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5Z"></path><path d="M16 9.5a3.5 3.5 0 010 5"></path></svg>
                   </button>
-                  <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="100" aria-label="Громкость">
+                  <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="100" aria-label="Громкость" data-i18n-aria="viewer.volume">
                   <span id="volumeValue">100</span>
-                  <button type="button" id="fullscreenButton" title="На весь экран" aria-label="На весь экран">
+                  <button type="button" id="fullscreenButton" title="На весь экран" aria-label="На весь экран" data-i18n-title="stream.fullscreen" data-i18n-aria="stream.fullscreen">
                     <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M4.5 15v4.5H9M15 19.5h4.5V15"></path></svg>
                   </button>
                 </div>
@@ -63,8 +63,8 @@
                 <% if (stream.thumbnail) { %>
                   <img class="tk-live__thumb" src="<%= stream.thumbnail %>" alt="">
                 <% } %>
-                <p class="tk-live__hint-title" lng="128">Эфир приостановлен</p>
-                <p lng="129">Трансляция продолжится, как только ведущий вернётся в эфир.</p>
+                <p class="tk-live__hint-title" data-i18n="viewer.pausedTitle">Эфир приостановлен</p>
+                <p data-i18n="viewer.pausedText">Трансляция продолжится, как только ведущий вернётся в эфир.</p>
               </div>
             <% } %>
 
@@ -84,7 +84,6 @@
 <% if (stream.streamType === 'obs-stream') { %>
 <script src="/tk-hls.js"></script>
 <% } %>
-<script src="/lang.js"></script>
 <script src="/tk-stream.js"></script>
 <script>
 (function () {
@@ -143,15 +142,21 @@
   // ── Веб-эфир: зритель — участник комнаты Daily, только на приём ──
   const video = document.getElementById('remoteVideo');
   const audio = document.getElementById('remoteAudio');
+  const t = (key, arg) => (window.t ? window.t(key, arg) : '');
   const status = document.getElementById('dailyStatus');
   const volume = document.getElementById('volumeControl');
   const slider = document.getElementById('volumeSlider');
   const level = document.getElementById('volumeValue');
   const muteBtn = document.getElementById('muteButton');
 
-  const say = (text) => {
-    status.textContent = text;
-    status.style.display = text ? '' : 'none';
+  // Строку статуса пишет скрипт, поэтому ключ переезжает на сам элемент:
+  // общий переключатель языка перерисовывает всё с data-i18n, и статичный
+  // ключ в разметке затирал бы то, что здесь поставлено.
+  const say = (key) => {
+    if (key) status.setAttribute('data-i18n', key);
+    else status.removeAttribute('data-i18n');
+    status.textContent = key ? t(key) : '';
+    status.style.display = key ? '' : 'none';
   };
 
   // Автозапуск придержан браузером — ждём первого нажатия по плееру.
@@ -159,7 +164,7 @@
   function resumeOnTap() {
     if (waitingTap) return;
     waitingTap = true;
-    say('Нажмите на плеер, чтобы включить звук');
+    say('viewer.tapForSound');
     player.addEventListener('click', () => {
       waitingTap = false;
       say('');
@@ -186,15 +191,15 @@
   // У неидущего эфира комнаты нет, и токен вернул бы отказ. Не ходим:
   // о старте придёт stream:update, и страница перезагрузится.
   if (!active) {
-    say('Эфир не идёт — ждём начала');
+    say('viewer.idle');
     return;
   }
 
   const STATUS = {
-    connecting: 'Подключение к эфиру…',
+    connecting: 'viewer.connecting',
     live: '',
-    reconnecting: 'Связь прервалась, переподключаемся…',
-    ended: 'Эфир недоступен',
+    reconnecting: 'viewer.reconnecting',
+    ended: 'viewer.ended',
   };
   TKDaily.connect({
     send: false,

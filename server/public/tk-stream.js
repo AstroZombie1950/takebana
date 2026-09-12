@@ -7,6 +7,8 @@
 // TKStream.onUpdate, TKStream.timer и TKStream.fullscreen. Скрипт стоит в
 // конце <body>, до скриптов страницы: разметка к этому моменту разобрана.
 (function () {
+  // Подписи — из общего словаря (public/tk-i18n.js).
+  var t = function (key, arg) { return window.t ? window.t(key, arg) : ''; };
   var data = document.body.dataset;
   var streamId = data.streamId;
   var streamKey = data.streamKey;
@@ -56,10 +58,10 @@
     }).then(function (r) {
       if (r.ok) { input.value = ''; return; }
       return r.json().catch(function () { return {}; }).then(function (b) {
-        toast(b.message || 'Сообщение не отправлено', 'error');
+        toast(b.message || t('chat.sendFailed'), 'error');
       });
     }, function () {
-      toast('Нет связи — сообщение не отправлено', 'error');
+      toast(t('chat.offline'), 'error');
     });
   }
 
@@ -115,11 +117,13 @@
   var viewersNum = document.querySelector('.viewers-number');
   var viewersText = document.querySelector('.viewers-text');
 
-  function viewersWord(n) {
+  // Формы слова — из словаря: по-английски «few» и «many» совпадают,
+  // поэтому те же правила годятся для обоих языков.
+  function viewersKey(n) {
     var d10 = n % 10, d100 = n % 100;
-    if (d10 === 1 && d100 !== 11) return 'зритель';
-    if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return 'зрителя';
-    return 'зрителей';
+    if (d10 === 1 && d100 !== 11) return 'stream.viewerOne';
+    if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return 'stream.viewerFew';
+    return 'stream.viewerMany';
   }
 
   // ── Сокет ──
@@ -136,7 +140,10 @@
   socket.on('viewers-count-updated', function (d) {
     if (d.streamKey !== streamKey) return;
     viewersNum.textContent = d.count;
-    viewersText.textContent = viewersWord(d.count);
+    // Через tkText: ключ остаётся на элементе, и слово переводится
+    // при переключении языка, а не только при следующем обновлении счётчика.
+    if (window.tkText) window.tkText(viewersText, viewersKey(d.count));
+    else viewersText.textContent = t(viewersKey(d.count));
   });
   socket.on('stream:update', function (u) {
     if (!u || u.streamKey !== streamKey) return;

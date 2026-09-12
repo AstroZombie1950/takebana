@@ -9,7 +9,7 @@
 
 <!-- Основной хедер -->
 <header class="tk-ahead">
-  <button class="tk-ahead__burger" id="mobileMenuButton" aria-label="Меню">
+  <button class="tk-ahead__burger" id="mobileMenuButton" aria-label="Меню" data-i18n-aria="app.menu">
     <span></span><span></span>
   </button>
 
@@ -21,12 +21,12 @@
     <span class="tk-ahead__loupe">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
     </span>
-    <input type="text" class="tk-ahead__field" id="searchInput" placeholder="Поиск по эфирам и людям" lng="152" autocomplete="off">
+    <input type="text" class="tk-ahead__field" id="searchInput" placeholder="Поиск по эфирам и людям" data-i18n-placeholder="app.searchPh" autocomplete="off">
     <div class="tk-ahead__results hidden" id="searchResults"></div>
   </div>
 
   <div class="tk-ahead__right">
-    <button class="tk-ahead__icon tk-ahead__msearch-btn" id="mobileSearchToggle" aria-label="Поиск">
+    <button class="tk-ahead__icon tk-ahead__msearch-btn" id="mobileSearchToggle" aria-label="Поиск" data-i18n-aria="app.search">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
     </button>
 
@@ -36,22 +36,22 @@
         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
       </button>
       <div class="tk-ahead__lang-menu hidden" id="languageDropdown">
-        <button type="button" data-lang="ru">Русский</button>
-        <button type="button" data-lang="en">English</button>
+        <button type="button" data-lang="ru" data-i18n="app.langRu">Русский</button>
+        <button type="button" data-lang="en" data-i18n="app.langEn">English</button>
       </div>
     </div>
 
-    <button class="tk-ahead__icon" id="notificationButton" aria-label="Уведомления">
+    <button class="tk-ahead__icon" id="notificationButton" aria-label="Уведомления" data-i18n-aria="app.notifications">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 5-2 6-2 6h16s-2-1-2-6Z"></path><path d="M10 20h4"></path></svg>
       <% if (notifications && notifications.hasUnread) { %><span class="tk-ahead__dot"></span><% } %>
     </button>
 
-    <a href="/chatsPage" class="tk-ahead__icon tk-ahead__chat" aria-label="Переписка">
+    <a href="/chatsPage" class="tk-ahead__icon tk-ahead__chat" aria-label="Переписка" data-i18n-aria="app.chats">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
     </a>
 
     <div class="tk-ahead__avatar-wrap">
-      <button class="tk-ahead__avatar" id="avatarButton" aria-label="Профиль">
+      <button class="tk-ahead__avatar" id="avatarButton" aria-label="Профиль" data-i18n-aria="app.profile">
         <% if (currentUser.avatarStyle.url) { %>
           <img src="<%= currentUser.avatarStyle.url %>" alt="<%= currentUser.displayName %>">
         <% } else { %>
@@ -74,27 +74,27 @@
           </div>
         </div>
 
-        <button type="button" class="tk-drop__item" id="profileButton" lng="122">Настройки профиля</button>
+        <button type="button" class="tk-drop__item" id="profileButton" data-i18n="app.endStream">Настройки профиля</button>
 
         <button type="button" class="tk-drop__item myChannelButton">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
-          <span lng="123">Страница моего профиля</span>
+          <span data-i18n="app.myProfile">Страница моего профиля</span>
         </button>
 
         <a href="/main" class="tk-drop__item goMap">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
-          <span lng="124">Перейти к сервису заведений</span>
+          <span data-i18n="app.venues">Перейти к сервису заведений</span>
         </a>
 
         <a href="/logout" class="tk-drop__item tk-drop__item--exit">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path><path d="M12 3H5v18h7"></path></svg>
-          <span lng="125">Выход</span>
+          <span data-i18n="app.exit">Выход</span>
         </a>
       </div>
     </div>
 
     <button class="tk-btn tk-btn--primary tk-btn--sm" id="startStreamButtonHeader">
-      <span lng="171">Запустить эфир</span>
+      <span data-i18n="app.startStream">Запустить эфир</span>
     </button>
   </div>
 </header>
@@ -103,8 +103,8 @@
     без этой полосы он видел бы только всплывающие отказы на каждое действие. %>
 <% if (currentUser.banned) { %>
 <div class="tk-banned" role="status">
-  <b>Аккаунт ограничен модерацией.</b>
-  <span>Смотреть и читать можно, писать в чат и выходить в эфир — нет.<% if (currentUser.banReason) { %> Причина: <%= currentUser.banReason %><% } %></span>
+  <b data-i18n="app.bannedTitle">Аккаунт ограничен модерацией.</b>
+  <span><span data-i18n="app.bannedText">Смотреть и читать можно, писать в чат и выходить в эфир — нет.</span><% if (currentUser.banReason) { %> <span data-i18n="app.bannedReason">Причина:</span> <%= currentUser.banReason %><% } %></span>
 </div>
 <% } %>
 
@@ -113,8 +113,8 @@
     <span class="tk-ahead__loupe">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
     </span>
-    <input type="text" class="tk-ahead__field" id="mobileSearchField" placeholder="Поиск пользователей..." lng="153" autocomplete="off">
-    <button class="tk-ahead__icon" id="closeMobileSearch" aria-label="Закрыть поиск" style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%);">
+    <input type="text" class="tk-ahead__field" id="mobileSearchField" placeholder="Поиск пользователей..." data-i18n-placeholder="app.searchUsersPh" autocomplete="off">
+    <button class="tk-ahead__icon" id="closeMobileSearch" aria-label="Закрыть поиск" data-i18n-aria="app.searchClose" style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%);">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
     </button>
     <div class="tk-ahead__results hidden" id="mobileSearchFieldResults"></div>
@@ -125,29 +125,29 @@
   <div class="tk-mmenu__top">
     <img src="/img/logo.webp" alt="Takebana" style="display: block; height: 34px; width: auto;" width="55" height="34">
     <span style="flex: 1;"></span>
-    <button class="tk-ahead__icon" id="closeMobileMenu" aria-label="Закрыть меню">
+    <button class="tk-ahead__icon" id="closeMobileMenu" aria-label="Закрыть меню" data-i18n-aria="app.menuClose">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
     </button>
   </div>
   <nav class="tk-mmenu__nav">
     <a href="/chatsPage" class="tk-aside__item">
       <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
-      <span lng="215">Сообщения</span>
+      <span data-i18n="app.messages">Сообщения</span>
     </a>
-    <a href="/terms_of_service" class="tk-aside__item">Правила платформы</a>
-    <a href="/user_agreement" class="tk-aside__item">Пользовательское соглашение</a>
-    <a href="/personal_data_processing" class="tk-aside__item">Политика обработки персональных данных</a>
+    <a href="/terms_of_service" class="tk-aside__item" data-i18n="app.rules">Правила платформы</a>
+    <a href="/user_agreement" class="tk-aside__item" data-i18n="app.agreement">Пользовательское соглашение</a>
+    <a href="/personal_data_processing" class="tk-aside__item" data-i18n="app.privacy">Политика обработки персональных данных</a>
   </nav>
 
   <%# Язык и запуск эфира: в шапке их ниже 640px нет. %>
   <div class="tk-mmenu__lang">
-    <button type="button" data-lang="ru">Русский</button>
-    <button type="button" data-lang="en">English</button>
+    <button type="button" data-lang="ru" data-i18n="app.langRu">Русский</button>
+    <button type="button" data-lang="en" data-i18n="app.langEn">English</button>
   </div>
 
   <div class="tk-mmenu__cta">
     <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-btn--block" id="startStreamButtonMenu">
-      <span lng="171">Запустить эфир</span>
+      <span data-i18n="app.startStream">Запустить эфир</span>
     </button>
   </div>
 </div>
@@ -159,6 +159,10 @@
     activeStreamId: <%- JSON.stringify(currentUser && currentUser.activeStreamId ? String(currentUser.activeStreamId) : '') %>
   };
 </script>
+<%# Словарь и переключатель языка — один на весь сайт (public/tk-i18n.js).
+    Прежде кабинет переводился отдельным lang.js по числовым ключам и помнил
+    выбор в другом ключе localStorage, поэтому язык не переносился с главной. %>
+<script src="/tk-i18n.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/tk-daily.js"></script>
 <script src="/tk-app.js"></script>

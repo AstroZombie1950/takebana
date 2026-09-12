@@ -137,12 +137,12 @@
       const cancel = document.createElement('button');
       cancel.type = 'button';
       cancel.className = 'tb-cancel';
-      cancel.textContent = opts.cancelText || 'Отмена';
+      cancel.textContent = opts.cancelText || (window.t ? window.t('common.cancel') : 'Отмена');
 
       const ok = document.createElement('button');
       ok.type = 'button';
       ok.className = 'tb-ok-btn';
-      ok.textContent = opts.okText || 'Подтвердить';
+      ok.textContent = opts.okText || (window.t ? window.t('common.confirm') : 'Подтвердить');
 
       buttons.append(cancel, ok);
       dialog.append(text, buttons);

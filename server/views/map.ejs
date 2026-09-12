@@ -27,39 +27,39 @@
 
   <main class="tk-app-main tk-venues">
 
-    <section class="tk-venues__panel" id="venuePanel" aria-label="Заведения">
+    <section class="tk-venues__panel" id="venuePanel" aria-label="Заведения" data-i18n-aria="venues.aria">
       <div class="tk-venues__head">
         <div>
-          <p class="tk-kicker">Сервис заведений</p>
-          <h1 class="tk-venues__h1">Карта заведений</h1>
+          <p class="tk-kicker" data-i18n="venues.kicker">Сервис заведений</p>
+          <h1 class="tk-venues__h1" data-i18n="venues.h1">Карта заведений</h1>
         </div>
-        <button type="button" class="tk-venues__close" id="venuePanelClose" aria-label="Скрыть список">
+        <button type="button" class="tk-venues__close" id="venuePanelClose" aria-label="Скрыть список" data-i18n-aria="venues.hideList">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
         </button>
       </div>
 
       <div class="tk-venues__search">
         <svg class="tk-venues__loupe" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
-        <input type="search" class="tk-field" id="venueSearch" placeholder="Поиск заведений" lng="31" autocomplete="off" aria-controls="venueFound">
+        <input type="search" class="tk-field" id="venueSearch" placeholder="Поиск заведений" data-i18n-placeholder="venues.searchPh" autocomplete="off" aria-controls="venueFound">
         <div class="tk-venues__found hidden" id="venueFound"></div>
       </div>
 
       <form class="tk-venues__filters" id="venueFilters" action="/main" method="get">
         <label class="tk-venues__ctl">
-          <span class="tk-form__label" lng="48">Город</span>
+          <span class="tk-form__label" data-i18n="venues.city">Город</span>
           <select name="city" class="tk-field tk-select">
-            <option value="">Все города</option>
+            <option value="" data-i18n="common.allCities">Все города</option>
             <% catalog.CITIES.forEach(function (city) { %>
-            <option value="<%= city.code %>"<%= filters.city === city.code ? ' selected' : '' %>><%= city.name %></option>
+            <option value="<%= city.code %>"<%= filters.city === city.code ? ' selected' : '' %> data-i18n="<%= city.i18n %>"><%= city.name %></option>
             <% }); %>
           </select>
         </label>
 
         <div class="tk-venues__ctl" role="group" aria-labelledby="venueTypeLabel">
-          <span class="tk-form__label" id="venueTypeLabel">Тип заведения</span>
+          <span class="tk-form__label" id="venueTypeLabel" data-i18n="venues.type">Тип заведения</span>
           <div class="tk-tags">
             <% catalog.VENUE_TYPES.forEach(function (type) { %>
-            <label class="tk-tag"><input type="checkbox" name="type" value="<%= type.code %>"<%= filters.types.includes(type.code) ? ' checked' : '' %>><span><%= type.name %></span></label>
+            <label class="tk-tag"><input type="checkbox" name="type" value="<%= type.code %>"<%= filters.types.includes(type.code) ? ' checked' : '' %>><span data-i18n="venue.<%= type.code %>"><%= type.name %></span></label>
             <% }); %>
           </div>
         </div>
@@ -67,42 +67,42 @@
         <label class="tk-venues__live">
           <input type="checkbox" name="live" value="1"<%= filters.live ? ' checked' : '' %>>
           <span class="tk-venues__switch" aria-hidden="true"></span>
-          <span><i class="tk-venues__dot" aria-hidden="true"></i>Сейчас в эфире</span>
+          <span><i class="tk-venues__dot" aria-hidden="true"></i><span data-i18n="venues.liveNow">Сейчас в эфире</span></span>
         </label>
 
         <div class="tk-venues__foot">
           <%# Нужна только без скрипта: со скриптом фильтр применяется сразу. %>
-          <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm">Показать</button>
-          <a href="/main" class="tk-venues__reset" data-reset<%= anyFilter ? '' : ' hidden' %>>Сбросить фильтры</a>
+          <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="common.show">Показать</button>
+          <a href="/main" class="tk-venues__reset" data-reset<%= anyFilter ? '' : ' hidden' %> data-i18n="common.resetFilters">Сбросить фильтры</a>
         </div>
       </form>
 
       <div class="tk-venues__list-head">
-        <span class="tk-form__label">На карте</span>
+        <span class="tk-form__label" data-i18n="venues.onMap">На карте</span>
         <span class="tk-venues__count" id="venueCount"></span>
       </div>
       <ul class="tk-venues__list" id="venueList"></ul>
-      <p class="tk-note tk-note--center" id="venueEmpty" hidden>В этой части карты заведений нет. Отдалите карту или сбросьте фильтры.</p>
+      <p class="tk-note tk-note--center" id="venueEmpty" hidden data-i18n="venues.emptyHere">В этой части карты заведений нет. Отдалите карту или сбросьте фильтры.</p>
 
       <div class="tk-venues__owner">
         <% if (hasEstablishments) { %>
-          <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-btn--block" id="myVenuesButton" lng="55">Мои заведения</button>
+          <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-btn--block" id="myVenuesButton" data-i18n="venues.mine">Мои заведения</button>
         <% } else { %>
-          <a href="/company-register" class="tk-btn tk-btn--outline tk-btn--sm tk-btn--block" lng="41">Зарегистрировать заведение</a>
+          <a href="/company-register" class="tk-btn tk-btn--outline tk-btn--sm tk-btn--block" data-i18n="venues.register">Зарегистрировать заведение</a>
         <% } %>
       </div>
     </section>
 
     <div class="tk-venues__map" id="venueMap">
       <button type="button" class="tk-venues__open" id="venuePanelOpen">
-        <span>Список и фильтры</span>
+        <span data-i18n="venues.openPanel">Список и фильтры</span>
         <span class="tk-venues__open-count" id="venueOpenCount"></span>
       </button>
     </div>
 
     <%# Карточка заведения: справа поверх карты, на телефоне — снизу. %>
     <aside class="tk-vcard hidden" id="venueCard" aria-labelledby="venueCardName">
-      <button type="button" class="tk-vcard__close" id="venueCardClose" aria-label="Закрыть">
+      <button type="button" class="tk-vcard__close" id="venueCardClose" aria-label="Закрыть" data-i18n-aria="common.close">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
       </button>
       <div class="tk-vcard__photos" id="venueCardPhotos"></div>
@@ -113,9 +113,9 @@
         <p class="tk-vcard__line tk-vcard__line--hours" id="venueCardHours"></p>
 
         <button type="button" class="tk-btn tk-btn--primary tk-btn--block" id="venueWatch">
-          <i class="tk-venues__dot" aria-hidden="true"></i><span lng="43">Смотреть трансляцию</span>
+          <i class="tk-venues__dot" aria-hidden="true"></i><span data-i18n="venues.watch">Смотреть трансляцию</span>
         </button>
-        <p class="tk-vcard__offline" id="venueOffline" lng="44">Заведение оффлайн</p>
+        <p class="tk-vcard__offline" id="venueOffline" data-i18n="venues.offline">Заведение оффлайн</p>
 
         <div class="tk-vcard__rating">
           <div class="tk-vcard__score">
@@ -126,12 +126,12 @@
             </span>
           </div>
           <div class="tk-vcard__vote">
-            <span class="tk-form__label" id="venueVoteLabel">Ваша оценка</span>
+            <span class="tk-form__label" id="venueVoteLabel" data-i18n="venues.yourRating">Ваша оценка</span>
             <%# Звёзды в обратном порядке: при наведении подсвечиваются
                 наведённая и все «младшие» — это делает селектор ~ в CSS. %>
             <div class="tk-rate" id="venueRate" role="group" aria-labelledby="venueVoteLabel">
               <% for (var n = 5; n >= 1; n--) { %>
-              <button type="button" data-value="<%= n %>" aria-label="<%= n %> из 5">★</button>
+              <button type="button" data-value="<%= n %>" aria-label="<%= n %> из 5" data-i18n-aria="venues.starN" data-i18n-vars='{"n": <%= n %>}'>★</button>
               <% } %>
             </div>
           </div>
@@ -145,8 +145,8 @@
 <div class="tk-modal hidden" id="venueLiveModal">
   <div class="tk-modal__card tk-modal__card--wide">
     <div class="tk-modal__head">
-      <h3 class="tk-modal__title" id="venueLiveTitle">Трансляция</h3>
-      <button type="button" class="tk-modal__close" data-close aria-label="Закрыть">
+      <h3 class="tk-modal__title" id="venueLiveTitle" data-i18n="venues.live">Трансляция</h3>
+      <button type="button" class="tk-modal__close" data-close aria-label="Закрыть" data-i18n-aria="common.close">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
       </button>
     </div>
@@ -158,13 +158,13 @@
 <div class="tk-modal hidden" id="venuePhotoModal">
   <div class="tk-vphoto">
     <img id="venuePhotoFull" alt="">
-    <button type="button" class="tk-vphoto__nav tk-vphoto__nav--prev" id="venuePhotoPrev" aria-label="Предыдущее фото">
+    <button type="button" class="tk-vphoto__nav tk-vphoto__nav--prev" id="venuePhotoPrev" aria-label="Предыдущее фото" data-i18n-aria="venues.photoPrev">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
     </button>
-    <button type="button" class="tk-vphoto__nav tk-vphoto__nav--next" id="venuePhotoNext" aria-label="Следующее фото">
+    <button type="button" class="tk-vphoto__nav tk-vphoto__nav--next" id="venuePhotoNext" aria-label="Следующее фото" data-i18n-aria="venues.photoNext">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
     </button>
-    <button type="button" class="tk-modal__close tk-vphoto__close" data-close aria-label="Закрыть">
+    <button type="button" class="tk-modal__close tk-vphoto__close" data-close aria-label="Закрыть" data-i18n-aria="common.close">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
     </button>
   </div>
@@ -175,8 +175,8 @@
 <div class="tk-modal hidden" id="myVenuesModal">
   <div class="tk-modal__card tk-modal__card--wide">
     <div class="tk-modal__head">
-      <h3 class="tk-modal__title" lng="55">Мои заведения</h3>
-      <button type="button" class="tk-modal__close" data-close aria-label="Закрыть">
+      <h3 class="tk-modal__title" data-i18n="venues.mine">Мои заведения</h3>
+      <button type="button" class="tk-modal__close" data-close aria-label="Закрыть" data-i18n-aria="common.close">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
       </button>
     </div>
@@ -184,7 +184,7 @@
       <ul class="tk-mine" id="myVenuesList"></ul>
     </div>
     <div class="tk-modal__foot">
-      <a href="/company-register" class="tk-btn tk-btn--ghost tk-btn--sm">Добавить заведение</a>
+      <a href="/company-register" class="tk-btn tk-btn--ghost tk-btn--sm" data-i18n="venues.add">Добавить заведение</a>
     </div>
   </div>
 </div>
@@ -192,34 +192,34 @@
 <div class="tk-modal hidden" id="venueSettingsModal">
   <form class="tk-modal__card tk-modal__card--wide" id="venueSettingsForm" novalidate>
     <div class="tk-modal__head">
-      <h3 class="tk-modal__title" lng="60">Настройка заведения</h3>
-      <button type="button" class="tk-modal__close" data-close aria-label="Закрыть">
+      <h3 class="tk-modal__title" data-i18n="venues.settings">Настройка заведения</h3>
+      <button type="button" class="tk-modal__close" data-close aria-label="Закрыть" data-i18n-aria="common.close">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
       </button>
     </div>
 
     <div class="tk-modal__body">
       <label class="tk-form__row">
-        <span class="tk-form__label" lng="49">Название заведения</span>
+        <span class="tk-form__label" data-i18n="venues.name">Название заведения</span>
         <input class="tk-field" type="text" name="name" maxlength="200">
       </label>
 
       <div class="tk-venues__pair">
         <label class="tk-form__row">
-          <span class="tk-form__label">Тип заведения</span>
+          <span class="tk-form__label" data-i18n="venues.type">Тип заведения</span>
           <select class="tk-field tk-select" name="type">
-            <option value="">Не выбран</option>
+            <option value="" data-i18n="common.notPicked">Не выбран</option>
             <% catalog.VENUE_TYPES.forEach(function (type) { %>
-            <option value="<%= type.code %>"><%= type.name %></option>
+            <option value="<%= type.code %>" data-i18n="venue.<%= type.code %>"><%= type.name %></option>
             <% }); %>
           </select>
         </label>
         <label class="tk-form__row">
-          <span class="tk-form__label" lng="48">Город</span>
+          <span class="tk-form__label" data-i18n="venues.city">Город</span>
           <select class="tk-field tk-select" name="city">
-            <option value="">Не выбран</option>
+            <option value="" data-i18n="common.notPicked">Не выбран</option>
             <% catalog.CITIES.forEach(function (city) { %>
-            <option value="<%= city.code %>"><%= city.name %></option>
+            <option value="<%= city.code %>" data-i18n="<%= city.i18n %>"><%= city.name %></option>
             <% }); %>
           </select>
         </label>
@@ -227,52 +227,56 @@
 
       <div class="tk-venues__pair">
         <label class="tk-form__row">
-          <span class="tk-form__label" lng="47">Страна</span>
+          <span class="tk-form__label" data-i18n="venues.country">Страна</span>
           <input class="tk-field" type="text" name="country" maxlength="100">
         </label>
         <label class="tk-form__row">
-          <span class="tk-form__label" lng="50">Адрес заведения</span>
+          <span class="tk-form__label" data-i18n="venues.address">Адрес заведения</span>
           <input class="tk-field" type="text" name="address" maxlength="300">
         </label>
       </div>
 
+      <%- include('partials/venuePoint') %>
+
       <div class="tk-venues__hours">
-        <span class="tk-form__label" lng="52">Время работы в будни</span>
-        <span lng="63">с</span><input class="tk-field" type="text" name="weekdayOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
-        <span lng="64">до</span><input class="tk-field" type="text" name="weekdayClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
-        <span class="tk-form__label" lng="53">Время работы в выходные</span>
-        <span lng="63">с</span><input class="tk-field" type="text" name="weekendOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
-        <span lng="64">до</span><input class="tk-field" type="text" name="weekendClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
+        <span class="tk-form__label" data-i18n="venues.weekdayHours">Время работы в будни</span>
+        <span data-i18n="common.from">с</span><input class="tk-field" type="text" name="weekdayOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
+        <span data-i18n="common.till">до</span><input class="tk-field" type="text" name="weekdayClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
+        <span class="tk-form__label" data-i18n="venues.weekendHours">Время работы в выходные</span>
+        <span data-i18n="common.from">с</span><input class="tk-field" type="text" name="weekendOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
+        <span data-i18n="common.till">до</span><input class="tk-field" type="text" name="weekendClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
       </div>
 
       <div class="tk-panel">
         <div class="tk-panel__head">
-          <p class="tk-panel__title" lng="65">Загрузка фото</p>
-          <span class="tk-form__label tk-form__hint">до 6</span>
+          <p class="tk-panel__title" data-i18n="venues.photoUpload">Загрузка фото</p>
+          <span class="tk-form__label tk-form__hint" data-i18n="venues.photoMax">до 6</span>
         </div>
         <label class="tk-dropzone" id="venueDrop">
           <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M7 18a4 4 0 01-.6-8A6 6 0 0118 9a4 4 0 01-1 9"></path><path d="M12 12v8M9 15l3-3 3 3"></path></svg>
-          <p>Перетащите фото сюда или нажмите, чтобы выбрать</p>
+          <p data-i18n="venues.photoDrop">Перетащите фото сюда или нажмите, чтобы выбрать</p>
           <input type="file" id="venuePhotoInput" accept="image/*" multiple hidden>
         </label>
         <div class="tk-thumbs" id="venueThumbs"></div>
       </div>
 
-      <p class="tk-form__note">После сохранения заведение снова уходит на проверку и пропадает с карты до одобрения.</p>
+      <p class="tk-form__note" data-i18n="venues.reviewNote">После сохранения заведение снова уходит на проверку и пропадает с карты до одобрения.</p>
     </div>
 
     <div class="tk-modal__foot">
-      <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" lng="39">Сохранить</button>
+      <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save">Сохранить</button>
     </div>
   </form>
 </div>
 <% } %>
 
-<%# Названия типов и городов — для строк списка и карточки. %>
-<script>window.TKVenueDict = <%- JSON.stringify({ types: catalog.VENUE_TYPE_NAME, cities: catalog.CITY_NAME }) %>;</script>
+<%# Названия типов и городов — для строк списка и карточки, центры городов —
+    чтобы выбор точки открывался на нужном городе (public/tk-point.js). %>
+<script>window.TKVenueDict = <%- JSON.stringify({ types: catalog.VENUE_TYPE_NAME, cities: catalog.CITY_NAME }) %>;
+window.TKCityCenter = <%- JSON.stringify(catalog.CITY_CENTER) %>;</script>
 <script src="/vendor/pmtiles-4.5.0.js"></script>
 <script src="/tk-map.js"></script>
-<script src="/lang.js"></script>
+<script src="/tk-point.js"></script>
 <script src="/tk-venues.js"></script>
 </body>
 </html>

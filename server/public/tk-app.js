@@ -8,6 +8,15 @@
  */
 var TK = window.TK || { userId: '', activeStreamId: '' };
 
+// Подписи — из общего словаря (public/tk-i18n.js), он подключён выше в шапке.
+// Этот файл без обёртки, его `var` попадает в window: поэтому именно ссылка
+// на готовую функцию, а не обёртка вокруг window.t — обёртка присвоилась бы
+// в window.t и вызывала бы саму себя. Заглушка — если словарь не загрузился:
+// кабинет должен остаться рабочим.
+var t = window.t || function () { return ''; };
+// Текст, который переживает переключение языка: ключ остаётся на элементе.
+var tkText = window.tkText || function () {};
+
 // Мобильное меню
           document.addEventListener('DOMContentLoaded', () => {
   const mobileMenuButton = document.getElementById('mobileMenuButton');
@@ -48,50 +57,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// Переключатель языка
+// Выпадашка языка: открыть и закрыть. Сам перевод, подсветку кнопок, ярлык
+// с текущим языком и закрытие после выбора делает общий переключатель
+// (public/tk-i18n.js) — он один на кабинет и публичные страницы.
 document.addEventListener('DOMContentLoaded', () => {
   const languageToggle = document.getElementById('languageToggle');
   const languageDropdown = document.getElementById('languageDropdown');
 
   if (!languageToggle || !languageDropdown) return;
 
-  // Sync current label from localStorage (used by /lang.js)
-  try {
-    const saved = localStorage.getItem('lang');
-    if (saved === 'ru' || saved === 'en') {
-      const label = languageToggle.querySelector('span');
-      if (label) label.textContent = saved.toUpperCase();
-    }
-  } catch (e) {}
-
   languageToggle.addEventListener('click', (e) => {
     e.stopPropagation();
     languageDropdown.classList.toggle('hidden');
-  });
-
-  // Кнопки языка стоят в двух местах: выпадашка шапки и мобильное меню,
-  // где их не видно на широком экране. Обработчик один на документ.
-  function markCurrent(lang) {
-    document.querySelectorAll('.tk-mmenu__lang [data-lang]').forEach((b) => {
-      b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang));
-    });
-  }
-
-  try { markCurrent(localStorage.getItem('lang') || 'ru'); } catch (e) {}
-
-  document.addEventListener('click', (e) => {
-    const btn = e.target && e.target.closest ? e.target.closest('[data-lang]') : null;
-    if (!btn) return;
-    const next = btn.getAttribute('data-lang');
-    if (next !== 'ru' && next !== 'en') return;
-
-    try { localStorage.setItem('lang', next); } catch (e) {}
-    if (typeof window.applyLang === 'function') window.applyLang(next);
-
-    const label = languageToggle.querySelector('span');
-    if (label) label.textContent = next.toUpperCase();
-    markCurrent(next);
-    languageDropdown.classList.add('hidden');
   });
 
   document.addEventListener('click', (e) => {
@@ -169,27 +146,27 @@ document.addEventListener('DOMContentLoaded', () => {
     notificationButton.addEventListener('click', async () => {
       modals.notification.classList.remove('hidden');
       const notificationsContent = document.getElementById('notificationsContent');
-      notificationsContent.innerHTML = `<p class="tk-note tk-note--center" lng="249">${escapeHtml(t('249'))}</p>`;
+      notificationsContent.innerHTML = `<p class="tk-note tk-note--center" data-i18n="modal.notifications.loading">${escapeHtml(t('modal.notifications.loading'))}</p>`;
 
       try {
               const response = await fetch("/api/notifications");
-        if (!response.ok) throw new Error(t('250'));
+        if (!response.ok) throw new Error(t('modal.notifications.error'));
 
               const notifications = await response.json();
 
               if (notifications.length === 0) {
-          notificationsContent.innerHTML = `<p class="tk-note tk-note--center" lng="251">${escapeHtml(t('251'))}</p>`;
+          notificationsContent.innerHTML = `<p class="tk-note tk-note--center" data-i18n="modal.notifications.empty">${escapeHtml(t('modal.notifications.empty'))}</p>`;
                 return;
               }
 
         notificationsContent.innerHTML = notifications.map(notification => {
           const senderName = notification.sender?.login || notification.sender?.email || "неизвестный пользователь";
-                const message = notification.content || t('252');
+                const message = notification.content || t('modal.notifications.fallback');
 
                 return `
             <article class="tk-notice">
               <div class="tk-notice__top">
-                <h4 class="tk-notice__from">${escapeHtml(t('253'))} ${escapeHtml(senderName)}</h4>
+                <h4 class="tk-notice__from">${escapeHtml(t('modal.notifications.from'))} ${escapeHtml(senderName)}</h4>
                 <time class="tk-notice__when">${escapeHtml(new Date(notification.createdAt).toLocaleString())}</time>
               </div>
               <p class="tk-notice__text">${escapeHtml(message)}</p>
@@ -197,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join("");
             } catch (error) {
               console.error("Ошибка:", error);
-        notificationsContent.innerHTML = `<p class="tk-note tk-note--center tk-note--bad" lng="250">${escapeHtml(t('250'))}</p>`;
+        notificationsContent.innerHTML = `<p class="tk-note tk-note--center tk-note--bad" data-i18n="modal.notifications.error">${escapeHtml(t('modal.notifications.error'))}</p>`;
       }
     });
   }
@@ -221,11 +198,11 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log('[terminate] click', { streamId });
 
       if (!streamId) {
-        toast('Не удалось определить активный стрим. Обновите страницу.', 'error');
+        toast(t('app.streamUnknown'), 'error');
         return;
       }
 
-      const ok = await confirmDialog('Завершить стрим? Он будет удалён.', { okText: 'Завершить' });
+      const ok = await confirmDialog(t('app.endStreamConfirm'), { okText: t('app.endStreamOk') });
       if (!ok) return;
 
       terminateStreamButton.disabled = true;
@@ -242,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
           console.error('[terminate] failed', response.status, data);
-          toast(data?.message || 'Ошибка завершения стрима', 'error');
+          toast(data?.message || t('app.endStreamFailed'), 'error');
           return;
         }
 
@@ -252,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.reload();
       } catch (e) {
         console.error('[terminate] exception', e);
-        toast('Ошибка сети при завершении стрима', 'error');
+        toast(t('app.endStreamNetwork'), 'error');
       } finally {
         terminateStreamButton.disabled = false;
         terminateStreamButton.innerHTML = prevHtml;
@@ -504,12 +481,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const confirmPassword = confirmPasswordInput.value.trim();
 
     if (!oldPassword || !newPassword || !confirmPassword) {
-      toast('Пожалуйста, заполните все поля для смены пароля.', 'error');
+      toast(t('app.passwordFields'), 'error');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      toast('Новый пароль и подтверждение не совпадают.', 'error');
+      toast(t('app.passwordMismatch'), 'error');
       return;
     }
 
@@ -528,7 +505,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const result = await response.json();
 
       if (response.ok) {
-        toast('Пароль успешно обновлен!', 'ok');
+        toast(t('app.passwordSaved'), 'ok');
         // Очищаем поля пароля
         oldPasswordInput.value = '';
         newPasswordInput.value = '';
@@ -537,11 +514,11 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('securityFields').classList.add('hidden');
         window.location.reload();
       } else {
-        toast('Ошибка: ' + (result.message || 'Не удалось обновить пароль'), 'error');
+        toast(t('app.errorPrefix', { message: result.message || t('app.passwordFailed') }), 'error');
       }
     } catch (error) {
       console.error('Ошибка:', error);
-      toast('Ошибка при обновлении пароля', 'error');
+      toast(t('app.passwordError'), 'error');
     }
   });
 });
@@ -558,7 +535,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const newName = nameInput.value.trim();
     if (!newName) {
-      toast('Пожалуйста, введите имя', 'error');
+      toast(t('app.nameEmpty'), 'error');
       return;
     }
 
@@ -576,14 +553,14 @@ document.addEventListener('DOMContentLoaded', function() {
       const result = await response.json();
 
       if (response.ok) {
-        toast('Имя успешно обновлено!', 'ok');
+        toast(t('app.nameSaved'), 'ok');
         window.location.reload();
       } else {
-        toast('Ошибка: ' + (result.message || 'Не удалось обновить имя'), 'error');
+        toast(t('app.errorPrefix', { message: result.message || t('app.nameFailed') }), 'error');
       }
     } catch (error) {
       console.error('Ошибка:', error);
-      toast('Ошибка при обновлении имени', 'error');
+      toast(t('app.nameError'), 'error');
     }
   });
 });
@@ -609,7 +586,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const description = streamDescriptionInput.value.trim();
 
     if (!title || !category) {
-      toast('Пожалуйста, заполните название и категорию трансляции.', 'error');
+      toast(t('app.startStreamFields'), 'error');
       return;
     }
 
@@ -634,11 +611,11 @@ document.addEventListener('DOMContentLoaded', function() {
       if (response.ok) {
         window.location.href = `/stream/${result.streamId}`;
       } else {
-        toast(`Ошибка: ${result.message}`, 'error');
+        toast(t('app.errorPrefix', { message: result.message }), 'error');
       }
     } catch (error) {
       console.error('Ошибка при запуске трансляции:', error);
-      toast('Произошла ошибка при запуске трансляции. Пожалуйста, попробуйте снова.', 'error');
+      toast(t('app.startStreamFailed'), 'error');
     }
   });
 });
@@ -654,7 +631,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Подкатегории для стрима. Список приходит из config/catalog.js атрибутом
-// data-subs: [[код, подпись], …] на каждую категорию.
+// data-subs: [[код, подпись], …] на каждую категорию. Подпись из атрибута —
+// русская; на английском её отдаёт словарь по ключу sub.<код>, а data-i18n
+// на созданной строке нужен, чтобы переключение языка её тоже подхватило.
 document.addEventListener('DOMContentLoaded', function() {
   const categorySelect = document.getElementById('streamCategory');
   const subSelect = document.getElementById('streamSubcategory');
@@ -665,10 +644,14 @@ document.addEventListener('DOMContentLoaded', function() {
   categorySelect.addEventListener('change', function() {
     const subs = subcategories[this.value];
     subSelect.disabled = !subs;
-    subSelect.replaceChildren(
-      new Option(subs ? 'Выберите подкатегорию' : 'Сначала выберите категорию', ''),
-      ...(subs || []).map(([code, name]) => new Option(name, code))
-    );
+    const firstKey = subs ? 'modal.stream.subcategoryPick' : 'modal.stream.subcategoryPh';
+    const first = new Option(t(firstKey, subs ? 'Выберите подкатегорию' : 'Сначала выберите категорию'), '');
+    first.setAttribute('data-i18n', firstKey);
+    subSelect.replaceChildren(first, ...(subs || []).map(([code, name]) => {
+      const option = new Option(t('sub.' + code, name), code);
+      option.setAttribute('data-i18n', 'sub.' + code);
+      return option;
+    }));
   });
 });
 
@@ -682,7 +665,7 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.href = '/userPage/' + myUid;
       } else {
         console.error('Current user ID not found');
-        toast('Ошибка: не удалось найти ID пользователя', 'error');
+        toast(t('app.noUserId'), 'error');
       }
     });
   }
@@ -706,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!file) { uploadBtn.disabled = true; return; }
     const valid = /image\/(png|jpeg)/.test(file.type) && file.size <= 5 * 1024 * 1024;
     if (!valid) {
-      hint.textContent = 'Неверный формат или размер файла';
+      tkText(hint, 'app.fileBad');
       uploadBtn.disabled = true;
       return;
     }
@@ -724,7 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const file = fileInput.files && fileInput.files[0];
     if (!file) return;
     uploadBtn.disabled = true;
-    hint.textContent = 'Загрузка...';
+    tkText(hint, 'app.uploading');
     try {
       const form = new FormData();
       form.append('avatar', file);
@@ -752,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (img) img.src = avatarUrl;
       });
       
-      hint.textContent = 'Готово! Фото загружено';
+      tkText(hint, 'app.photoDone');
       
       console.log('Аватар обновлен:', data.url);
       
@@ -826,7 +809,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   uploadBtn.addEventListener('click', () => {
     if (!files.length) return;
-    hint.textContent = 'Загрузка...';
+    tkText(hint, 'app.uploading');
     uploadBtn.disabled = true;
     const form = new FormData();
     files.forEach(f => form.append('photos', f));
@@ -837,7 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Очистим локальный список и обновим UI
         files = [];
         renderPreviews();
-        hint.textContent = `Загружено. Всего фото: ${data.total}`;
+        tkText(hint, 'app.galleryDone', { total: data.total });
         // Добавим загруженные в persisted сетку
         if (persistedGrid && Array.isArray(data.urls)) {
           data.urls.forEach(url => {
@@ -854,7 +837,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       })
       .catch(e => {
-        hint.textContent = 'Ошибка: ' + e.message;
+        hint.textContent = t('app.errorShort', { message: e.message });
       })
       .finally(() => { uploadBtn.disabled = false; });
   });
@@ -873,7 +856,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const card = btn.closest('.group');
           if (card) card.remove();
         })
-        .catch(err => { hint.textContent = 'Ошибка удаления: ' + err.message; })
+        .catch(err => { hint.textContent = t('app.deleteError', { message: err.message }); })
         .finally(() => { btn.disabled = false; });
     });
   }
@@ -892,24 +875,6 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('disconnect', (reason) => console.log('[client] socket disconnected', reason));
 
     function setPresence(userId, online, lastSeen) {
-      const getUILang = () => {
-        try {
-          const v = localStorage.getItem('lang');
-          return (v === 'en' || v === 'ru') ? v : 'ru';
-        } catch (e) {
-          return 'ru';
-        }
-      };
-      const t = (key, fallbackRu, fallbackEn) => {
-        const l = getUILang();
-        try {
-          if (window.langDict && window.langDict[key] && typeof window.langDict[key][l] !== 'undefined') {
-            return window.langDict[key][l];
-          }
-        } catch (e) {}
-        return l === 'en' ? fallbackEn : fallbackRu;
-      };
-
       const nodes = document.querySelectorAll(`[data-presence-user="${userId}"]`);
       nodes.forEach(el => {
         el.classList.remove('presence-online', 'presence-offline');
@@ -921,7 +886,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const textEl = el.querySelector('[data-presence-text]');
         if (textEl) {
-          textEl.textContent = online ? t('159', 'онлайн', 'online') : t('160', 'оффлайн', 'offline');
+          // Ключ переезжает на сам элемент: внутренний <span data-i18n> здесь
+          // затирается, и без этого строка перестала бы переводиться
+          // при следующем переключении языка.
+          tkText(textEl, online ? 'common.online' : 'common.offline');
           textEl.title = lastSeen ? new Date(lastSeen).toLocaleString() : '';
         }
         // Цвет точки — из дизайн-системы, классами. Раньше здесь инлайном
@@ -936,7 +904,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // Обновим строку "Последний раз в сети"
       const lastSeenNodes = document.querySelectorAll(`[data-presence-lastseen-user="${userId}"]`);
       lastSeenNodes.forEach(lsEl => {
-        lsEl.textContent = online ? t('178', 'Сейчас', 'Now') : (lastSeen ? new Date(lastSeen).toLocaleString() : t('179', '—', '—'));
+        // «Сейчас» и прочерк — словарные, дата — нет: ключ снимаем, иначе
+        // переключение языка затёрло бы дату.
+        const key = online ? 'common.now' : (lastSeen ? '' : 'common.dash');
+        tkText(lsEl, key);
+        if (!key) lsEl.textContent = new Date(lastSeen).toLocaleString();
       });
     }
 
@@ -982,7 +954,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Ожидание ответа…');
       } catch (e) {
         window.hideOutgoingCall && window.hideOutgoingCall();
-        toast('Не удалось начать звонок: ' + e.message, 'error');
+        toast(t('call.startFailed', { message: e.message }), 'error');
       }
     }
     window.startAudioCall = (calleeId) => startCall(calleeId, 'audio');
@@ -1023,7 +995,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('call:failed', ({ callId }) => {
-      if (closeCall(callId)) toast('Не удалось соединить: сервис видеосвязи недоступен', 'error');
+      if (closeCall(callId)) toast(t('call.serviceDown'), 'error');
     });
     socket.on('call:declined', ({ callId }) => {
       if (callId !== window.currentCallId) return;
@@ -1128,7 +1100,7 @@ document.addEventListener('DOMContentLoaded', function(){
     s.stage.classList.add('hidden');
     s.voice.classList.add('hidden');
     s.voice.setAttribute('aria-pressed', 'false');
-    s.voice.textContent = 'Только голос';
+    tkText(s.voice, 'call.voiceOnly');
   }
 
   // Окно переходит в разговор: «Отменить» и «Принять» становятся «Завершить»,
@@ -1139,12 +1111,12 @@ document.addEventListener('DOMContentLoaded', function(){
     s.voice.classList.toggle('hidden', !isVideo);
     s.actions.classList.toggle('tk-call__actions--pair', isVideo);
     if (s === OUT) {
-      outCancel.textContent = 'Завершить';
+      tkText(outCancel, 'call.end');
       outCancel.classList.remove('tk-btn--danger');
       outCancel.classList.add('tk-btn--mute');
     } else {
       inAccept.disabled = false;
-      inAccept.textContent = 'Завершить';
+      tkText(inAccept, 'call.end');
       inAccept.classList.remove('tk-btn--ok');
       inAccept.classList.add('tk-btn--mute');
       inAccept.onclick = endCallLocal;
@@ -1174,9 +1146,9 @@ document.addEventListener('DOMContentLoaded', function(){
 
     function paint() {
       setBeacon(s, state !== 'reconnecting');
-      if (state === 'reconnecting') s.status.textContent = 'Связь прервалась, переподключаемся…';
-      else if (state === 'connecting') s.status.textContent = 'Подключаемся…';
-      else if (peers) s.status.textContent = 'Соединение установлено';
+      if (state === 'reconnecting') tkText(s.status, 'call.reconnecting');
+      else if (state === 'connecting') tkText(s.status, 'call.connectingShort');
+      else if (peers) tkText(s.status, 'call.connected');
       else s.status.textContent = hadPeer ? 'Собеседник переподключается…' : 'Ждём собеседника…';
     }
 
@@ -1206,7 +1178,7 @@ document.addEventListener('DOMContentLoaded', function(){
       onState: (st) => {
         if (st === 'ended') {
           endCallLocal();
-          toast('Связь потеряна, звонок завершён', 'error');
+          toast(t('call.lost'), 'error');
           return;
         }
         state = st;
@@ -1216,7 +1188,7 @@ document.addEventListener('DOMContentLoaded', function(){
         if (st === 'live' && !started) { started = true; startTimer(s); }
         paint();
       },
-      onMediaError: () => toast('Нет доступа к микрофону или камере — разрешите его в настройках браузера', 'error'),
+      onMediaError: () => toast(t('call.mediaDenied'), 'error'),
       onNetwork: (n) => {
         s.net.dataset.net = n;
         s.net.setAttribute('aria-label', 'Сеть: ' + (NET_LABEL[n] || n));
@@ -1231,7 +1203,7 @@ document.addEventListener('DOMContentLoaded', function(){
     const on = s.voice.getAttribute('aria-pressed') !== 'true';
     window._call.setVoiceOnly(on);
     s.voice.setAttribute('aria-pressed', String(on));
-    s.voice.textContent = on ? 'Вернуть видео' : 'Только голос';
+    tkText(s.voice, on ? 'call.videoBack' : 'call.voiceOnly');
     s.stage.classList.toggle('hidden', on);
   }));
 
@@ -1245,12 +1217,12 @@ document.addEventListener('DOMContentLoaded', function(){
     const displayName = opts && opts.displayName || 'Пользователь';
     const callType = opts && opts.callType || 'video';
     outName.textContent = displayName;
-    outType.textContent = callType === 'audio' ? 'Исходящий аудиозвонок' : 'Исходящий видеозвонок';
-    OUT.status.textContent = 'Соединение...';
+    tkText(outType, callType === 'audio' ? 'call.outgoingAudio' : 'call.outgoingVideo');
+    tkText(OUT.status, 'call.connecting');
     renderAvatar(outAvatar, opts && opts.avatarUrl || '', displayName);
     resetSide(OUT);
     OUT.actions.classList.remove('tk-call__actions--pair');
-    outCancel.textContent = 'Отменить';
+    tkText(outCancel, 'call.cancel');
     outCancel.classList.remove('tk-btn--mute');
     outCancel.classList.add('tk-btn--danger');
     outgoing.classList.remove('hidden');
@@ -1270,13 +1242,13 @@ document.addEventListener('DOMContentLoaded', function(){
     const onAccept = opts && opts.onAccept;
     const onDecline = opts && opts.onDecline;
     inName.textContent = displayName;
-    inType.textContent = callType === 'audio' ? 'Входящий аудиозвонок' : 'Входящий видеозвонок';
+    tkText(inType, callType === 'audio' ? 'call.incomingAudio' : 'call.incomingVideo');
     renderAvatar(inAvatar, opts && opts.avatarUrl || '', displayName);
     resetSide(IN);
-    IN.status.textContent = 'Звонит...';
+    tkText(IN.status, 'call.ringing');
     IN.actions.classList.add('tk-call__actions--pair');
     inAccept.disabled = false;
-    inAccept.textContent = 'Принять';
+    tkText(inAccept, 'call.accept');
     inAccept.classList.remove('tk-btn--mute');
     inAccept.classList.add('tk-btn--ok');
     inDecline.disabled = false;
@@ -1285,7 +1257,7 @@ document.addEventListener('DOMContentLoaded', function(){
     inClose.classList.remove('hidden');
     incoming.classList.remove('hidden');
     inAccept.onclick = function(){
-      IN.status.textContent = 'Подключаемся...';
+      tkText(IN.status, 'call.connectingShort');
       inAccept.disabled = true; inDecline.disabled = true; inClose.disabled = true;
       onAccept && onAccept();
       // окно не закрываем: ждём call:accepted

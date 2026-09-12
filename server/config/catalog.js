@@ -5,32 +5,34 @@
 // а сервер принимал в category любую строку: демо-эфиры с категорией «Бары»
 // не попадали ни в одну вкладку каталога.
 //
-// lng — ключ словаря lang.js там, где он уже был. Новые подписи в словарь
-// не добавляются (он уходит на tk-i18n.js), поэтому у HoReCa, «Презентации»
-// и городов ключа нет.
+// i18n — ключ словаря public/tk-i18n.js. Прежде здесь стояли числовые ключи
+// старого lang.js, и у HoReCa с «Презентацией» ключа не было вовсе: в словарь
+// их не добавляли, потому что он уходил. Теперь словарь один, ключи у всех.
+// У городов ключи тоже есть: в фильтрах и формах их подписи переводятся,
+// в данных заведений и эфиров остаётся код.
 
 const CATEGORIES = {
   entertainment: {
-    name: 'Развлечения', lng: '84',
-    note: 'Игры, музыка, творчество', noteLng: '157',
+    name: 'Развлечения', i18n: 'cat.entertainment',
+    note: 'Игры, музыка, творчество', noteI18n: 'cat.entertainmentNote',
     subs: [
-      { code: 'podcasts', name: 'Подкасты', lng: '92' },
-      { code: 'tourism', name: 'Туризм', lng: '93' },
-      { code: 'creative', name: 'Креатив', lng: '94' },
-      { code: 'music', name: 'Музыка', lng: '95' },
+      { code: 'podcasts', name: 'Подкасты', i18n: 'sub.podcasts' },
+      { code: 'tourism', name: 'Туризм', i18n: 'sub.tourism' },
+      { code: 'creative', name: 'Креатив', i18n: 'sub.creative' },
+      { code: 'music', name: 'Музыка', i18n: 'sub.music' },
     ],
   },
   business: {
-    name: 'Бизнес', lng: '85',
-    note: 'Презентации, обучение', noteLng: '158',
+    name: 'Бизнес', i18n: 'cat.business',
+    note: 'Презентации, обучение', noteI18n: 'cat.businessNote',
     subs: [
-      { code: 'real_estate', name: 'Недвижимость', lng: '96' },
-      { code: 'services', name: 'Услуги', lng: '97' },
-      { code: 'education', name: 'Образование', lng: '98' },
-      { code: 'auto', name: 'Авто', lng: '99' },
-      { code: 'horeca', name: 'HoReCa' },
-      { code: 'manufacturing', name: 'Производство', lng: '100' },
-      { code: 'presentation', name: 'Презентация' },
+      { code: 'real_estate', name: 'Недвижимость', i18n: 'sub.real_estate' },
+      { code: 'services', name: 'Услуги', i18n: 'sub.services' },
+      { code: 'education', name: 'Образование', i18n: 'sub.education' },
+      { code: 'auto', name: 'Авто', i18n: 'sub.auto' },
+      { code: 'horeca', name: 'HoReCa', i18n: 'sub.horeca' },
+      { code: 'manufacturing', name: 'Производство', i18n: 'sub.manufacturing' },
+      { code: 'presentation', name: 'Презентация', i18n: 'sub.presentation' },
     ],
   },
 };
@@ -38,12 +40,16 @@ const CATEGORIES = {
 // Закрытый список, а не свободный ввод: «Белград», «Beograd» и «белград »
 // иначе становятся тремя городами, и фильтр находит треть эфиров.
 // Стартовый набор — согласовать с заказчиком.
+//
+// center — [долгота, широта] центра города: с него открывается карта, когда
+// владелец ставит точку заведения (public/tk-point.js). Без этого выбор точки
+// начинался бы с Белграда для всех или с пустого места.
 const CITIES = [
-  { code: 'belgrade', name: 'Белград' },
-  { code: 'novi-sad', name: 'Нови-Сад' },
-  { code: 'nis', name: 'Ниш' },
-  { code: 'kragujevac', name: 'Крагуевац' },
-  { code: 'subotica', name: 'Суботица' },
+  { code: 'belgrade', name: 'Белград', i18n: 'city.belgrade', center: [20.4612, 44.8125] },
+  { code: 'novi-sad', name: 'Нови-Сад', i18n: 'city.novi-sad', center: [19.8335, 45.2671] },
+  { code: 'nis', name: 'Ниш', i18n: 'city.nis', center: [21.8958, 43.3209] },
+  { code: 'kragujevac', name: 'Крагуевац', i18n: 'city.kragujevac', center: [20.9114, 44.0142] },
+  { code: 'subotica', name: 'Суботица', i18n: 'city.subotica', center: [19.6650, 46.1001] },
 ];
 
 // Типы заведений для карты (/main): владелец выбирает тип при регистрации
@@ -68,6 +74,7 @@ for (const [cat, { subs }] of Object.entries(CATEGORIES)) {
 }
 
 const CITY_NAME = Object.fromEntries(CITIES.map((c) => [c.code, c.name]));
+const CITY_CENTER = Object.fromEntries(CITIES.map((c) => [c.code, c.center]));
 
 // Подкатегории для формы эфира: вторая выпадашка заполняется на клиенте
 // при выборе категории. Строка собирается один раз, а не на каждую страницу.
@@ -75,4 +82,4 @@ const SUBS_JSON = JSON.stringify(Object.fromEntries(
   Object.entries(CATEGORIES).map(([cat, { subs }]) => [cat, subs.map((s) => [s.code, s.name])])
 ));
 
-module.exports = { CATEGORIES, CITIES, SUB_CATEGORY, CITY_NAME, SUBS_JSON, VENUE_TYPES, VENUE_TYPE_NAME };
+module.exports = { CATEGORIES, CITIES, SUB_CATEGORY, CITY_NAME, CITY_CENTER, SUBS_JSON, VENUE_TYPES, VENUE_TYPE_NAME };

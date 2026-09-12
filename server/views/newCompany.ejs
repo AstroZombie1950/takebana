@@ -7,6 +7,9 @@
 }) %>
 <link rel="stylesheet" href="/css/auth.css">
 <link rel="stylesheet" href="/css/company.css">
+<%# Карта нужна только блоку «Точка на карте» (partials/venuePoint). %>
+<link rel="stylesheet" href="/vendor/maplibre-gl-6.9.0/maplibre-gl.css">
+<link rel="stylesheet" href="/css/tk-map.css">
 </head>
 <body>
 
@@ -20,7 +23,7 @@
       Назад
     </a>
 
-    <span class="tk-auth__kicker">Заявка</span>
+    <span class="tk-auth__kicker" data-i18n="company.kicker">Заявка</span>
     <h1 class="tk-auth__h1" data-i18n="company.h1">Регистрация заведения</h1>
 
     <%# Показывается вместо формы после успешной отправки. %>
@@ -33,7 +36,7 @@
         <select class="tk-field tk-select" name="city" required>
           <option value="" data-i18n="company.ph.city">Город</option>
           <% catalog.CITIES.forEach(function (city) { %>
-          <option value="<%= city.code %>"><%= city.name %></option>
+          <option value="<%= city.code %>" data-i18n="<%= city.i18n %>"><%= city.name %></option>
           <% }); %>
         </select>
       </div>
@@ -48,6 +51,10 @@
       <input class="tk-field" type="text" name="address" placeholder="Адрес заведения" data-i18n-placeholder="company.ph.address" autocomplete="street-address" required>
       <input class="tk-field" type="email" name="email" placeholder="Email" data-i18n-placeholder="company.ph.email" autocomplete="email" required>
       <input class="tk-field" type="tel" name="phone" placeholder="Телефон для связи" data-i18n-placeholder="company.ph.phone" autocomplete="tel" required>
+
+      <div class="tk-company__rule"></div>
+
+      <%- include('partials/venuePoint') %>
 
       <div class="tk-company__rule"></div>
 
@@ -85,9 +92,16 @@
 
 <%- include('partials/tkMenu') %>
 
+<%# Центры городов — с них открывается выбор точки (public/tk-point.js).
+    Сама карта (MapLibre, ~290 КБ) грузится не здесь, а когда до блока
+    доскроллили: до заявки доходят не все, кто открыл страницу. %>
+<script>window.TKCityCenter = <%- JSON.stringify(catalog.CITY_CENTER) %>;</script>
 <script defer src="/tk-i18n.js"></script>
 <script defer src="/tk.js"></script>
 <script defer src="/toast.js"></script>
+<script defer src="/vendor/pmtiles-4.5.0.js"></script>
+<script defer src="/tk-map.js"></script>
+<script defer src="/tk-point.js"></script>
 <script defer src="/tk-company.js"></script>
 </body>
 </html>

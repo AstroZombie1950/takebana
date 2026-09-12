@@ -679,6 +679,15 @@
   gap: 8px;
 }
 
+/* «Удалить» — к правому краю и цветом опасного действия: рядом с «Настройки»
+ * его легко нажать не глядя. */
+.tk-mine__del {
+  margin-left: auto;
+  color: var(--tk-accent);
+}
+
+.tk-mine__del:hover { border-color: var(--tk-accent); }
+
 /* Настройки */
 .tk-venues__pair {
   display: grid;

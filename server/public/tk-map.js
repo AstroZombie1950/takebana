@@ -14,31 +14,75 @@
 //   карта.on('move', fn({ west, south, east, north })) — после остановки карты
 //   карта.flyTo(lng, lat, zoom, padding) — padding { right } или { bottom }:
 //     точка встаёт в середину той части карты, что не закрыта карточкой
+//
+// TKMap.pick(container, { center, zoom, point }) → Promise<выбор точки>:
+//   выбор.on('pick', fn({ lng, lat })) — метку перетащили или поставили щелчком
+//   выбор.setLngLat(lng, lat, zoom), выбор.getLngLat(), выбор.has(), выбор.clear()
+//   выбор.resize() — после показа окна, иначе карта считает себя нулевой
+//
+// TKMap.setLang('ru' | 'en') — подписи всех карт страницы на другом языке;
+// на событие `tk:lang` общего переключателя этот файл подписывается сам
 (function () {
   var LIB = '/vendor/maplibre-gl-6.9.0/maplibre-gl.mjs';
+  var BELGRADE = [20.4612, 44.8125];
   var protocolReady = false;
 
   function lang() {
-    try { return localStorage.getItem('lang') === 'en' ? 'en' : 'ru'; } catch (_) { return 'ru'; }
+    return window.tkLang ? window.tkLang() : 'ru';
   }
 
   // Стиль в git без адресов (ops/basemap/style.mjs): MapLibre нужны
   // абсолютные адреса шрифтов и значков, поэтому они — от адреса страницы.
-  function loadStyle() {
+  // Ответ кэшируется: при смене языка тот же стиль нужен второй раз.
+  var styles = {};
+  function loadStyle(l) {
+    if (styles[l]) return styles[l];
     var origin = location.origin;
-    return fetch('/map/style.' + lang() + '.json')
+    styles[l] = fetch('/map/style.' + l + '.json')
       .then(function (r) { return r.json(); })
       .then(function (s) {
         s.glyphs = origin + '/basemap/fonts/{fontstack}/{range}.pbf';
         s.sprite = origin + '/basemap/sprites/dark';
         s.sources.protomaps.url = 'pmtiles://' + origin + '/basemap/basemap.pmtiles';
         return s;
+      })
+      .catch(function (err) {
+        delete styles[l]; // не запоминаем неудачу
+        throw err;
       });
+    return styles[l];
   }
 
-  function mount(container, opts) {
-    opts = opts || {};
-    return Promise.all([import(LIB), loadStyle()]).then(function (res) {
+  // Все карты страницы: смена языка проходит по ним.
+  var live = [];
+
+  // Подписи на другом языке без перезагрузки. Стили ru и en отличаются только
+  // выражением `text-field` у десяти слоёв подписей, поэтому подменяем именно
+  // их: `setStyle` перебрал бы стиль целиком и снёс наши источники, слои
+  // заведений и маркеры. Раньше подписи оставались на языке, который был
+  // в момент открытия страницы, и менялись только с перезагрузкой.
+  function setLang(next) {
+    var l = next === 'en' ? 'en' : 'ru';
+    return loadStyle(l).then(function (s) {
+      live.forEach(function (map) {
+        s.layers.forEach(function (layer) {
+          var text = layer.layout && layer.layout['text-field'];
+          if (!text || !map.getLayer(layer.id)) return;
+          map.setLayoutProperty(layer.id, 'text-field', text);
+        });
+      });
+    });
+  }
+
+  // Подписи на плитках живут вне DOM, поэтому общий переключатель языка
+  // (public/tk-i18n.js) сообщает о смене событием, а не перерисовкой разметки.
+  document.addEventListener('tk:lang', function (e) {
+    if (live.length) setLang(e.detail && e.detail.lang);
+  });
+
+  // Общее для карты заведений и выбора точки: библиотека, стиль, базовая карта.
+  function createMap(container, opts) {
+    return Promise.all([import(LIB), loadStyle(lang())]).then(function (res) {
       var lib = res[0].default || res[0];
       if (!protocolReady) {
         lib.addProtocol('pmtiles', new pmtiles.Protocol().tile);
@@ -47,7 +91,7 @@
       var map = new lib.Map({
         container: container,
         style: res[1],
-        center: opts.center || [20.4612, 44.8125], // Белград
+        center: opts.center || BELGRADE,
         zoom: opts.zoom || 11,
         attributionControl: { compact: true },
         dragRotate: false,
@@ -55,9 +99,82 @@
       });
       map.touchZoomRotate.disableRotation();
       map.addControl(new lib.NavigationControl({ showCompass: false }), 'bottom-right');
+      live.push(map);
       return new Promise(function (resolve) {
-        map.on('load', function () { resolve(venues(lib, map)); });
+        map.on('load', function () { resolve({ lib: lib, map: map }); });
       });
+    });
+  }
+
+  function mount(container, opts) {
+    return createMap(container, opts || {}).then(function (r) { return venues(r.lib, r.map); });
+  }
+
+  // Выбор точки заведения: одна перетаскиваемая метка и ничего больше —
+  // ни заведений, ни групп. Метка появляется только когда точка задана:
+  // пока владелец её не поставил, у заведения координат нет, и врать
+  // меткой в центре города не следует.
+  function pick(container, opts) {
+    opts = opts || {};
+    return createMap(container, { center: opts.point || opts.center, zoom: opts.zoom || 16 }).then(function (r) {
+      var lib = r.lib, map = r.map;
+
+      var el = document.createElement('span');
+      el.className = 'tk-point';
+      el.setAttribute('aria-hidden', 'true');
+      var marker = new lib.Marker({ element: el, anchor: 'bottom', draggable: true });
+      var placed = false;
+      var handlers = [];
+
+      function place(lng, lat) {
+        marker.setLngLat([lng, lat]);
+        if (!placed) {
+          marker.addTo(map);
+          placed = true;
+        }
+      }
+      function emit() {
+        var p = marker.getLngLat();
+        handlers.forEach(function (fn) { fn({ lng: p.lng, lat: p.lat }); });
+      }
+
+      if (opts.point) place(opts.point[0], opts.point[1]);
+      marker.on('dragend', emit);
+
+      // Щелчок по карте — тоже постановка метки: попасть пальцем в место
+      // проще, чем поймать и протащить метку, а мышью так короче.
+      map.on('click', function (e) {
+        place(e.lngLat.lng, e.lngLat.lat);
+        emit();
+      });
+      map.getCanvas().style.cursor = 'crosshair';
+
+      return {
+        map: map,
+        on: function (ev, fn) {
+          if (ev === 'pick') handlers.push(fn);
+          return this;
+        },
+        has: function () { return placed; },
+        // Окно настроек одно на все заведения: у следующего точки может
+        // не быть, и метка предыдущего осталась бы висеть на карте.
+        clear: function () {
+          if (!placed) return;
+          marker.remove();
+          placed = false;
+        },
+        getLngLat: function () {
+          if (!placed) return null;
+          var p = marker.getLngLat();
+          return { lng: p.lng, lat: p.lat };
+        },
+        setLngLat: function (lng, lat, zoom) {
+          place(lng, lat);
+          map.easeTo({ center: [lng, lat], zoom: zoom || Math.max(map.getZoom(), 16) });
+        },
+        center: function (lng, lat, zoom) { map.jumpTo({ center: [lng, lat], zoom: zoom || map.getZoom() }); },
+        resize: function () { map.resize(); },
+      };
     });
   }
 
@@ -196,5 +313,5 @@
     return api;
   }
 
-  window.TKMap = { mount: mount };
+  window.TKMap = { mount: mount, pick: pick, setLang: setLang };
 })();

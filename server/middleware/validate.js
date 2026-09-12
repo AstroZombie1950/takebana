@@ -97,6 +97,21 @@ function checkOne(name, rule, raw) {
     const check = checks[type];
     if (!check) throw new Error(`validate: неизвестный тип «${type}» у поля «${name}»`);
 
+    // Обрезаем до проверки формата, а не после: адрес с пробелами по краям
+    // иначе не проходил бы регулярку и отбивался как «не похоже на адрес».
+    if (typeof raw === 'string' && rule.trim !== false) raw = raw.trim();
+
+    // Пустая строка — это отсутствие значения, а не значение, и проверять её
+    // форматом нельзя. Раньше этот разбор стоял после проверки типа, то есть
+    // работал только для простых строк: пустое поле «Почта» уходило в разбор
+    // адреса и отбивалось как «не похоже на адрес почты». Из-за этого
+    // заведение без почты — а такие есть на бою — не сохранялось из админки
+    // вообще, при любой правке.
+    if (raw === '' && !rule.allowEmpty) {
+        if (rule.required) return { error: 'обязательное поле' };
+        return { skip: true };
+    }
+
     // Поля multipart-форм приходят строками, в том числе те, что на самом деле
     // объекты и списки: часы работы, список уже загруженных фотографий. Раньше
     // их разбирал голый JSON.parse в обработчике — кривая строка означала 500.
@@ -108,19 +123,9 @@ function checkOne(name, rule, raw) {
         }
     }
 
-    // Обрезаем до проверки формата, а не после: адрес с пробелами по краям
-    // иначе не проходил бы регулярку и отбивался как «не похоже на адрес».
-    if (typeof raw === 'string' && rule.trim !== false) raw = raw.trim();
-
     const result = check(raw, rule);
     if (result.error || result.nested) return result;
     const value = result.value;
-
-    // Пустая строка после обрезки — это отсутствие значения, а не значение.
-    if (value === '' && !rule.allowEmpty) {
-        if (rule.required) return { error: 'обязательное поле' };
-        return { skip: true };
-    }
 
     if (typeof value === 'string') {
         if (rule.min !== undefined && value.length < rule.min) {

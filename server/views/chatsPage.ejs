@@ -18,8 +18,8 @@
       <!-- Список диалогов -->
       <section class="tk-chat__list">
         <div class="tk-chat__list-head">
-          <h1 class="tk-chat__h1" lng="215">Сообщения</h1>
-          <p class="tk-chat__sub" lng="216">Выберите диалог для просмотра</p>
+          <h1 class="tk-chat__h1" data-i18n="app.messages">Сообщения</h1>
+          <p class="tk-chat__sub" data-i18n="chats.pickHint">Выберите диалог для просмотра</p>
         </div>
 
         <div class="tk-chat__scroll" id="conversationsList">
@@ -64,14 +64,14 @@
                           ? conversation.lastMessage.content.substring(0, 40) + '…'
                           : conversation.lastMessage.content %>
                   <% } else { %>
-                    <span lng="107">Нет сообщений</span>
+                    <span data-i18n="chats.empty">Нет сообщений</span>
                   <% } %>
                 </span>
               </span>
             </button>
             <% }); %>
           <% } else { %>
-            <p class="tk-note tk-chat__empty-list" lng="107">Нет сообщений</p>
+            <p class="tk-note tk-chat__empty-list" data-i18n="chats.empty">Нет сообщений</p>
           <% } %>
         </div>
       </section>
@@ -79,7 +79,7 @@
       <!-- Переписка -->
       <section class="tk-chat__area">
         <div class="tk-chat__head">
-          <button type="button" class="tk-chat__back" id="backToList" aria-label="К списку диалогов">
+          <button type="button" class="tk-chat__back" id="backToList" aria-label="К списку диалогов" data-i18n-aria="chats.backToList">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
           </button>
 
@@ -89,10 +89,10 @@
 
           <div class="tk-chat__peer-wrap" id="peerLink">
             <div class="tk-chat__peer" id="chatHeaderPresence" data-presence-user="">
-              <h2 class="avatar__name" lng="108">Выберите диалог</h2>
+              <h2 class="avatar__name" data-i18n="chats.pick">Выберите диалог</h2>
               <span class="presence-dot presence-offline hidden"></span>
             </div>
-            <p class="tk-chat__peer-note" lng="217">для начала переписки</p>
+            <p class="tk-chat__peer-note" data-i18n="chats.startHint">для начала переписки</p>
           </div>
         </div>
 
@@ -106,11 +106,11 @@
               class="tk-field"
               data-id=""
               placeholder="Введите сообщение..."
-              lng="218"
+              data-i18n-placeholder="chats.messagePh"
               autocomplete="off"
             >
             <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm tk-chat__send input__button-icons" data-id="">
-              <span lng="109">Отправить</span>
+              <span data-i18n="chats.send">Отправить</span>
             </button>
           </form>
         </div>
@@ -121,6 +121,5 @@
 </div>
 
 <script src="/chats.js"></script>
-<script src="/lang.js"></script>
 </body>
 </html>

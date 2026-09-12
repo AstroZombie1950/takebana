@@ -1,0 +1,30 @@
+<%#
+  Точка заведения на карте: общий блок для заявки (/company-register)
+  и настроек владельца (/main). Поведение — public/tk-point.js, метка
+  и карта — public/tk-map.js, стили — public/css/tk-map.css.
+
+  Координаты заведения раньше ставила только админка, а владельцу поля
+  не показывали вовсе: заведение оставалось без точки и на карту не попадало.
+  Широта с долготой в форме — не вариант, их никто не знает; поэтому метка
+  и поиск по адресу, который написан в поле выше.
+%>
+<div class="tk-pick" data-point>
+  <div class="tk-pick__head">
+    <span class="tk-form__label" data-i18n="venue.point.label">Точка на карте</span>
+    <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-point-find data-i18n="venue.point.find">Найти по адресу</button>
+  </div>
+
+  <div class="tk-pick__map" data-point-map></div>
+
+  <p class="tk-pick__note" data-point-note data-i18n="venue.point.hint">Нажмите на карту, где стоит заведение, — метку потом можно перетащить.</p>
+
+  <div class="tk-pick__found" data-point-found hidden>
+    <span class="tk-pick__address" data-point-address></span>
+    <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs" data-point-apply data-i18n="venue.point.apply">Подставить в адрес</button>
+  </div>
+
+  <%# Скрытые поля, а не отдельная переменная в скрипте: обе формы собирают
+      тело запроса из своих полей, и точка попадает туда сама. %>
+  <input type="hidden" name="lat" data-point-lat>
+  <input type="hidden" name="lng" data-point-lng>
+</div>

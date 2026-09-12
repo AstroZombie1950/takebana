@@ -28,6 +28,14 @@
       return el ? el.value.trim() : "";
     };
 
+    // Точка на карте: метка и поиск по адресу (public/tk-point.js). Без
+    // координат заведение не попадает на карту вообще, поэтому метка здесь
+    // обязательна — а ставить её рукой можно и без поиска адреса.
+    var pointBox = form.querySelector("[data-point]");
+    var point = pointBox && window.TKPoint
+      ? window.TKPoint.attach(pointBox, { address: form.elements.address, cityField: form.elements.city })
+      : null;
+
     form.addEventListener("submit", function (e) {
       e.preventDefault();
 
@@ -56,6 +64,15 @@
           return;
         }
       }
+
+      var spot = point && point.value();
+      if (!spot) {
+        toast("Поставьте метку заведения на карте");
+        if (pointBox) pointBox.scrollIntoView({ block: "center", behavior: "smooth" });
+        return;
+      }
+      establishment.lat = spot.lat;
+      establishment.lng = spot.lng;
 
       var button = form.querySelector('[type="submit"]');
       button.disabled = true;

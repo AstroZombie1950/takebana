@@ -91,8 +91,13 @@
 <% } %>
 
 <%# admin.js целиком про заведения. Модератору он не нужен и не грузится:
-    иначе его первый же обработчик упал бы на отсутствующем #fields. %>
-<% if (isAdmin) { %><script src="/admin.js"></script><% } %>
+    иначе его первый же обработчик упал бы на отсутствующем #fields.
+    Города и типы приходят со страницей из config/catalog.js: в клиенте
+    списков нет, иначе админка разошлась бы с фильтрами карты. %>
+<% if (isAdmin) { %>
+<script>window.TKCatalog = <%- JSON.stringify({ cities: catalog.CITIES, types: catalog.VENUE_TYPES }) %>;</script>
+<script src="/admin.js"></script>
+<% } %>
 <script src="/panel-moderation.js"></script>
 </body>
 </html>

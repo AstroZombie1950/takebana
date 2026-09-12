@@ -12,6 +12,9 @@
 (function () {
 'use strict';
 
+  // Подписи — из общего словаря (public/tk-i18n.js).
+  var t = function (key, arg) { return window.t ? window.t(key, arg) : ''; };
+
 var modal = document.getElementById('reportModal');
 if (!modal) return;
 
@@ -20,16 +23,17 @@ var reasonInput = document.getElementById('reportReason');
 var commentInput = document.getElementById('reportComment');
 var sendButton = document.getElementById('sendReport');
 
-var KINDS = { stream: 'эфир', user: 'пользователя', message: 'сообщение' };
+var KINDS = { stream: 'report.onStream', user: 'report.onUser', message: 'report.onMessage' };
 
 var current = null;
 
 function open(type, id, name) {
   current = { type: type, id: id };
 
+  var what = KINDS[type] ? t(KINDS[type]) : type;
   targetLine.textContent = name
-    ? 'Жалоба на ' + (KINDS[type] || type) + ' ' + name
-    : 'Жалоба на ' + (KINDS[type] || type);
+    ? t('report.targetNamed', { what: what, name: name })
+    : t('report.target', { what: what });
 
   reasonInput.value = 'abuse';
   commentInput.value = '';
@@ -76,19 +80,19 @@ sendButton.addEventListener('click', async function () {
 
     if (res.ok) {
       close();
-      toast('Жалоба отправлена. Модератор её посмотрит.', 'ok');
+      toast(t('report.sent'), 'ok');
       return;
     }
 
     // 401 — гость: жаловаться может только вошедший, и об этом надо сказать
     // прямо, а не общим «не получилось».
     if (res.status === 401) {
-      toast('Войдите, чтобы пожаловаться', 'error');
+      toast(t('report.needLogin'), 'error');
       return;
     }
-    toast(data.message || 'Не удалось отправить жалобу', 'error');
+    toast(data.message || t('report.failed'), 'error');
   } catch (err) {
-    toast('Не удалось отправить жалобу', 'error');
+    toast(t('report.failed'), 'error');
   } finally {
     sendButton.disabled = false;
   }

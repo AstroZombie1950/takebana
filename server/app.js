@@ -136,6 +136,9 @@ app.use(require('./routes/moderation'));
 app.use('/api', require('./routes/dailyApiRoutes'));
 app.use(require('./routes/venueLive').router);
 
+// Адрес ↔ точка для формы заведения (utils/geocode.js)
+app.use(require('./routes/geocode'));
+
 app.set('view engine', 'ejs');
 // Установка пути к папке с шаблонами
 app.set('views', path.join(__dirname, '/views'));

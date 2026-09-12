@@ -14,12 +14,17 @@ var grid = document.getElementById('fields');
 var statusFilter = document.getElementById('statusFilter');
 var searchInput = document.getElementById('searchInput');
 
+// Города и типы приходят со страницей из config/catalog.js (admin.ejs):
+// список в клиенте разошёлся бы с фильтрами карты.
+var LISTS = window.TKCatalog || { cities: [], types: [] };
+
 // Подписи полей. Прежде здесь стояли плейсхолдеры «name», «lat», «lng»:
 // по-английски и пропадали, как только поле заполнялось.
 var FIELDS = [
   { key: 'name',    label: 'Название', wide: true },
+  { key: 'type',    label: 'Тип заведения', list: 'types' },
+  { key: 'city',    label: 'Город', list: 'cities' },
   { key: 'country', label: 'Страна' },
-  { key: 'city',    label: 'Город' },
   { key: 'address', label: 'Адрес', wide: true },
   { key: 'email',   label: 'Email', type: 'email' },
   { key: 'phone',   label: 'Телефон', type: 'tel' },
@@ -34,14 +39,37 @@ function valueOf(est, key) {
   return est[key] != null ? est[key] : '';
 }
 
+// Выпадающий список по закрытому набору. Заведения, заполненные до этих
+// наборов, держат город строкой («Белград») и не держат типа вовсе: чужое
+// значение показывается первой строкой как есть, чтобы администратор видел,
+// что его надо заменить, а не терял молча. Пустое значение сервер пропускает
+// и поле не меняет.
+function selectHtml(f, est, id) {
+  var value = String(valueOf(est, f.key));
+  var list = LISTS[f.list] || [];
+  var known = list.some(function (o) { return o.code === value; });
+  var first = (known || !value) ? 'Не выбран' : escapeHtml(value) + ' — не из списка';
+
+  return '<select id="' + escapeHtml(id) + '" class="tk-field tk-select ' + f.key + '">' +
+           '<option value=""' + (known ? '' : ' selected') + '>' + first + '</option>' +
+           list.map(function (o) {
+             return '<option value="' + escapeHtml(o.code) + '"' +
+                    (o.code === value ? ' selected' : '') + '>' + escapeHtml(o.name) + '</option>';
+           }).join('') +
+         '</select>';
+}
+
 function cardHtml(est) {
   var on = !!est.status;
   var fields = FIELDS.map(function (f) {
     var id = f.key + '-' + est._id;
+    var control = f.list
+      ? selectHtml(f, est, id)
+      : '<input type="' + (f.type || 'text') + '" id="' + escapeHtml(id) + '" class="tk-field ' + f.key + '" ' +
+               'value="' + escapeHtml(valueOf(est, f.key)) + '">';
     return '<div class="tk-adm__field' + (f.wide ? ' tk-adm__field--wide' : '') + '">' +
              '<label class="tk-adm__label" for="' + escapeHtml(id) + '">' + f.label + '</label>' +
-             '<input type="' + (f.type || 'text') + '" id="' + escapeHtml(id) + '" class="tk-field ' + f.key + '" ' +
-                    'value="' + escapeHtml(valueOf(est, f.key)) + '">' +
+             control +
            '</div>';
   }).join('');
 
@@ -113,8 +141,11 @@ async function loadEstablishments(reset) {
 
 grid.addEventListener('input', function (e) {
   var card = e.target.closest('.tk-adm__card');
-  if (!card || e.target.tagName !== 'INPUT' || e.target.type === 'checkbox') return;
-  // Кнопка оживает только когда есть что сохранять.
+  if (!card) return;
+  // Кнопка оживает только когда есть что сохранять. Переключатель статуса
+  // сохраняется сам, отдельным запросом, и кнопки не касается.
+  var tag = e.target.tagName;
+  if (tag !== 'SELECT' && (tag !== 'INPUT' || e.target.type === 'checkbox')) return;
   card.querySelector('.save').disabled = false;
 });
 
@@ -126,6 +157,7 @@ grid.addEventListener('click', async function (e) {
   if (e.target.classList.contains('save')) {
     var body = {
       name: card.querySelector('.name').value,
+      type: card.querySelector('.type').value,
       country: card.querySelector('.country').value,
       city: card.querySelector('.city').value,
       address: card.querySelector('.address').value,

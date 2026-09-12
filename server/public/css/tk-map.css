@@ -74,3 +74,74 @@
 
 .maplibregl-ctrl-attrib a { color: #C9C2B7; }
 .maplibregl-ctrl-attrib-button { filter: invert(.85); }
+
+/* ── Выбор точки заведения (public/tk-point.js) ─────────────────────────────
+ * Блок живёт и в окне настроек на /main, и в заявке на /company-register,
+ * поэтому стили здесь, рядом с картой, а не в venues.css или company.css.
+ * Цвета — значениями, как и всё в этом файле. */
+
+.tk-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tk-pick__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tk-pick__map {
+  height: 260px;
+  border: 1px solid rgba(144, 113, 99, .5);
+  background: #0A0A0A;
+}
+
+.tk-pick__note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #8A827C;
+}
+
+.tk-pick__found {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid rgba(144, 113, 99, .35);
+  background: rgba(144, 113, 99, .08);
+}
+
+/* display в правилах выше сильнее браузерного [hidden] { display: none },
+ * поэтому скрытие блока и кнопки прописано отдельно. */
+.tk-pick__found[hidden],
+.tk-pick [data-point-apply][hidden] { display: none; }
+
+.tk-pick__address {
+  font-size: 14px;
+  color: #F5F1EA;
+}
+
+/* Метка выбора: капля, а не кружок с фото, — заведения здесь не рисуются.
+ * Рисунком, а не рамками с поворотом: кончик должен приходиться ровно
+ * на точку, а anchor: 'bottom' (tk-map.js) ставит на неё низ элемента. */
+.tk-point {
+  display: block;
+  width: 24px;
+  height: 32px;
+  background: center/contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 32'%3E%3Cpath d='M12 31C12 31 21.5 19.6 21.5 12A9.5 9.5 0 1 0 2.5 12C2.5 19.6 12 31 12 31Z' fill='%23E34234' stroke='%23F5F1EA' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='3.2' fill='%23F5F1EA'/%3E%3C/svg%3E");
+  cursor: grab;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .7));
+}
+
+.tk-point:active { cursor: grabbing; }
+
+@media (max-width: 767px) {
+  .tk-pick__map { height: 200px; }
+}

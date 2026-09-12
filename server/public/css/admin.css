@@ -129,6 +129,14 @@ body {
   font-size: 14px;
 }
 
+/* Город и тип — списками. Отступ справа держим под стрелкой .tk-select:
+ * общее правило поля карточки срезало его, и стрелка ложилась на текст. */
+.tk-adm__field select.tk-field {
+  padding-right: 34px;
+  background-position: right 12px center;
+  background-size: 14px;
+}
+
 /* ── Действия ── */
 .tk-adm__acts {
   margin-top: 16px;

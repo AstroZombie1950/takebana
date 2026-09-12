@@ -9,21 +9,9 @@
 
 var P = window.TK_PROFILE || { userId: '', displayName: '', avatarUrl: '' };
 
-// Подпись из словаря с запасным вариантом: lang.js подключается после этого
-// файла, поэтому на момент разбора его ещё нет, а на момент клика — уже есть.
-function pt(key, ru, en) {
-  var lang = 'ru';
-  try {
-    var v = localStorage.getItem('lang');
-    if (v === 'en' || v === 'ru') lang = v;
-  } catch (e) {}
-  try {
-    if (window.langDict && window.langDict[key] && typeof window.langDict[key][lang] !== 'undefined') {
-      return window.langDict[key][lang];
-    }
-  } catch (e) {}
-  return lang === 'en' ? en : ru;
-}
+// Подписи — из общего словаря (public/tk-i18n.js): свой переводчик
+// с запасными строками здесь стоял, пока у кабинета был отдельный словарь.
+var pt = function (key) { return window.t ? window.t(key) : ''; };
 
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -72,15 +60,15 @@ document.addEventListener('DOMContentLoaded', function () {
           // переключение языка вернёт прежнюю подпись.
           label.setAttribute('lng', off ? '91' : '130');
           label.textContent = off
-            ? pt('91', 'Подписаться', 'Subscribe')
-            : pt('130', 'Отписаться', 'Unsubscribe');
+            ? pt('stream.subscribe')
+            : pt('stream.unsubscribe');
           return;
         }
 
         var result = await response.json().catch(function () { return {}; });
         toast(result.message || (off
-          ? pt('213', 'Ошибка при отписке.', 'Unsubscribe error.')
-          : pt('212', 'Ошибка при подписке.', 'Subscribe error.')), 'error');
+          ? pt('stream.unsubscribeFailed')
+          : pt('stream.subscribeFailed')), 'error');
       } catch (e) {
         console.error('subscribe:', e);
       }

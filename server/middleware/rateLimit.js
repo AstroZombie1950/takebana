@@ -31,4 +31,17 @@ const registerLimiter = rateLimit({
     message: { message: 'Слишком много регистраций с этого адреса. Попробуйте позже.' },
 });
 
-module.exports = { authLimiter, registerLimiter };
+// Поиск адреса (routes/geocode.js): за нашим маршрутом стоит чужой
+// общественный сервис, которому обещано не больше запроса в секунду. Очередь
+// в utils/geocode.js это соблюдает, но без лимита одна страница в цикле
+// заняла бы её на всех. Сорока хватает с избытком: адрес в форме ищут
+// нажатием, а не на каждую букву.
+const geocodeLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    limit: Number(process.env.RATE_LIMIT_GEOCODE) || 40,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { message: 'Слишком много запросов адреса. Попробуйте через несколько минут.' },
+});
+
+module.exports = { authLimiter, registerLimiter, geocodeLimiter };

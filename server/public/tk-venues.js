@@ -8,8 +8,14 @@
   const dict = window.TKVenueDict || { types: {}, cities: {} };
   const $ = (id) => document.getElementById(id);
   const esc = (s) => escapeHtml(s == null ? '' : String(s));
+  // Подписи — из общего словаря (public/tk-i18n.js); он подключён шапкой
+  // кабинета, то есть до этого файла.
+  const t = (key, arg) => (window.t ? window.t(key, arg) : '');
+  const tkText = (el, key, vars) => (window.tkText ? window.tkText(el, key, vars) : undefined);
 
-  const typeCity = (v) => [dict.types[v.type], dict.cities[v.city]].filter(Boolean).join(' · ');
+  const label = (kind, code, fallback) => (code ? t(kind + '.' + code, fallback || '') : '');
+  const typeCity = (v) => [label('venue', v.type, dict.types[v.type]),
+                           label('city', v.city, dict.cities[v.city])].filter(Boolean).join(' · ');
 
   function initial(name) {
     const m = String(name || '').match(/[\p{L}\p{N}]/u);
@@ -114,7 +120,7 @@
     }
   }).catch((e) => {
     console.error('Карта не загрузилась:', e);
-    toast('Карта не загрузилась', 'error');
+    toast(t('venues.mapFailed'), 'error');
   });
 
   // Точки — по видимой части карты и фильтрам. Щёлкнули три тега подряд —
@@ -168,7 +174,7 @@
             <span class="tk-vrow__name">${esc(v.name)}</span>
             <span class="tk-vrow__meta">${esc(typeCity(v))}</span>
           </span>
-          ${v.online ? '<span class="tk-vrow__live"><i class="tk-venues__dot"></i>В эфире</span>' : ''}
+          ${v.online ? `<span class="tk-vrow__live"><i class="tk-venues__dot"></i>${esc(t('venues.onAir'))}</span>` : ''}
         </button>`;
       li.firstElementChild.addEventListener('click', () => {
         focusVenue(v);
@@ -212,7 +218,7 @@
                 <span class="tk-vrow__name">${esc(v.name)}</span>
                 <span class="tk-vrow__meta">${esc([typeCity(v), v.address].filter(Boolean).join(' · '))}</span>
               </button>`).join('')
-          : '<p class="tk-venues__miss">Ничего не нашлось</p>';
+          : `<p class="tk-venues__miss">${esc(t('venues.nothingFound'))}</p>`;
         found.classList.remove('hidden');
         found.querySelectorAll('[data-id]').forEach((b, i) => {
           b.addEventListener('click', () => {
@@ -255,7 +261,7 @@
   function fillCard(v) {
     cardPhotos = v.photos || [];
     $('venueCardPhotos').innerHTML = cardPhotos.length
-      ? cardPhotos.map((src, i) => `<button type="button" data-i="${i}" aria-label="Фото ${i + 1}"><img src="${esc(src)}" alt=""></button>`).join('')
+      ? cardPhotos.map((src, i) => `<button type="button" data-i="${i}" aria-label="${esc(t('venues.photoN', { n: i + 1 }))}"><img src="${esc(src)}" alt=""></button>`).join('')
       : `<span class="tk-vcard__nophoto" aria-hidden="true">${esc(initial(v.name))}</span>`;
 
     $('venueCardMeta').textContent = typeCity(v);
@@ -265,7 +271,9 @@
     // Часы — на сегодня: в субботу и воскресенье выходные.
     const day = new Date().getDay();
     const hours = day === 0 || day === 6 ? v.weekendHours : v.weekdayHours;
-    $('venueCardHours').textContent = hours && hours.open && hours.close ? `Сегодня ${hours.open} – ${hours.close}` : '';
+    $('venueCardHours').textContent = hours && hours.open && hours.close
+      ? t('venues.today', { from: hours.open, to: hours.close })
+      : '';
 
     const watch = $('venueWatch');
     watch.hidden = !v.online;
@@ -276,7 +284,9 @@
     const r = v.rating;
     $('venueScore').textContent = r.average.toFixed(1);
     $('venueStars').style.setProperty('--v', r.average);
-    $('venueVotes').textContent = `${r.count} ${plural(r.count, 'оценка', 'оценки', 'оценок')}`;
+    // Формы слова подбирает plural: по-английски «few» и «many» совпадают,
+    // поэтому те же правила годятся для обоих языков.
+    $('venueVotes').textContent = `${r.count} ${plural(r.count, t('venues.votesOne'), t('venues.votesFew'), t('venues.votesMany'))}`;
     rate.querySelectorAll('button').forEach((b) => {
       b.classList.toggle('is-on', Number(b.dataset.value) === r.mine);
     });
@@ -291,7 +301,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ establishmentId: id, rating: Number(b.dataset.value) }),
     }).then(() => {
-      toast('Спасибо, оценка учтена', 'ok');
+      toast(t('venues.rateThanks'), 'ok');
       openCard(id);
     }).catch((err) => toast(err.message, 'error'));
   });
@@ -336,7 +346,14 @@
     stopWatching();
     const media = new MediaStream();
     liveVideo.srcObject = media;
-    $('venueLiveTitle').textContent = name || 'Трансляция';
+    // Название заведения — не словарная строка, поэтому ключ снимаем;
+    // без названия остаётся «Трансляция» из словаря.
+    if (name) {
+      $('venueLiveTitle').removeAttribute('data-i18n');
+      $('venueLiveTitle').textContent = name;
+    } else {
+      tkText($('venueLiveTitle'), 'venues.live');
+    }
     openModal(liveModal);
     watching = TKDaily.connect({
       send: false,
@@ -350,7 +367,7 @@
       onState: (s) => {
         if (s !== 'ended') return;
         closeModal(liveModal);
-        toast('Заведение сейчас не показывает камеру');
+        toast(t('venues.noCamera'));
       },
     });
   }
@@ -373,7 +390,9 @@
       const on = !!live[v._id];
       const busy = !!starting[v._id];
       const approved = v.status === true;
-      const state = on ? ['is-live', 'В эфире'] : approved ? ['', 'Оффлайн'] : ['is-pending', 'На проверке'];
+      const state = on ? ['is-live', t('venues.onAir')]
+        : approved ? ['', t('venues.offlineState')]
+        : ['is-pending', t('venues.pending')];
       return `
         <li class="tk-mine__item">
           <div class="tk-mine__top">
@@ -386,11 +405,12 @@
           </div>
           <div class="tk-mine__actions">
             <button type="button" class="tk-btn ${on ? 'tk-btn--outline' : 'tk-btn--primary'} tk-btn--sm" data-live="${esc(v._id)}"${busy || !approved ? ' disabled' : ''}>
-              ${busy ? 'Подключение…' : on ? 'Остановить трансляцию' : 'Запустить трансляцию'}
+              ${esc(busy ? t('venues.connecting') : on ? t('venues.stopLive') : t('venues.startLive'))}
             </button>
-            <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" data-settings="${esc(v._id)}">Настройки</button>
+            <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" data-settings="${esc(v._id)}">${esc(t('venues.settingsBtn'))}</button>
+            <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-mine__del" data-remove="${esc(v._id)}">${esc(t('common.delete'))}</button>
           </div>
-          ${approved ? '' : '<p class="tk-form__note">Камера и место на карте — после проверки заведения администратором.</p>'}
+          ${approved ? '' : `<p class="tk-form__note">${esc(t('venues.pendingNote'))}</p>`}
         </li>`;
     }).join('');
   }
@@ -412,11 +432,11 @@
           firstAccess = null;
           return Promise.resolve(a);
         },
-        onMediaError: () => toast('Нет доступа к камере или микрофону — разрешите его в настройках браузера', 'error'),
+        onMediaError: () => toast(t('venues.mediaDenied'), 'error'),
         onState: (s) => {
           if (s === 'live') { delete starting[id]; renderMine(); loadVenues(); }
           if (s === 'ended') {
-            toast('Трансляция прервалась: нет связи с сервисом видео', 'error');
+            toast(t('venues.liveLost'), 'error');
             stopLive(id);
           }
         },
@@ -456,8 +476,36 @@
         return;
       }
       const setBtn = e.target.closest('[data-settings]');
-      if (setBtn) openSettings(setBtn.dataset.settings);
+      if (setBtn) {
+        openSettings(setBtn.dataset.settings);
+        return;
+      }
+      const delBtn = e.target.closest('[data-remove]');
+      if (delBtn) removeVenue(delBtn.dataset.remove, delBtn);
     });
+  }
+
+  // Удаление необратимо, и вместе с заведением уходят его фотографии
+  // и оценки, — поэтому спрашиваем, а не удаляем по щелчку.
+  function removeVenue(id, button) {
+    const v = mine.find((x) => x._id === id);
+    if (!v) return;
+
+    confirmDialog(t('venues.deleteConfirm', { name: v.name }), { okText: t('common.delete') })
+      .then((yes) => {
+        if (!yes) return;
+        button.disabled = true;
+        return api('/establishment/' + encodeURIComponent(id), { method: 'DELETE' })
+          .then(() => {
+            delete live[id];
+            toast(t('venues.deleted'), 'ok');
+            return Promise.all([loadMine(), loadVenues()]);
+          })
+          .catch((err) => {
+            button.disabled = false;
+            toast(err.message, 'error');
+          });
+      });
   }
 
   // ── Настройки заведения ──
@@ -467,6 +515,15 @@
   const photoInput = $('venuePhotoInput');
   const drop = $('venueDrop');
   const MAX_PHOTOS = 6;
+  // Точка на карте: метка и поиск по адресу (public/tk-point.js). Карта
+  // внутри окна поднимается при первом открытии настроек, не раньше.
+  const pointBox = settingsForm && settingsForm.querySelector('[data-point]');
+  const point = pointBox && window.TKPoint
+    ? window.TKPoint.attach(pointBox, {
+        address: settingsForm.elements.address,
+        cityField: settingsForm.elements.city,
+      })
+    : null;
   let editing = null;
   let photos = []; // { url } — уже загруженное, { file, preview } — новое
 
@@ -486,7 +543,7 @@
   function addFiles(files) {
     const room = MAX_PHOTOS - photos.length;
     const images = [...files].filter((f) => /^image\//.test(f.type));
-    if (images.length > room) toast(`Фото не больше шести — добавлены первые ${room}`);
+    if (images.length > room) toast(t('venues.photoLimit', { n: room }));
     images.slice(0, room).forEach((file) => photos.push({ file, preview: URL.createObjectURL(file) }));
     renderThumbs();
   }
@@ -514,6 +571,8 @@
     photos = (v.photos || []).map((url) => ({ url }));
     renderThumbs();
     openModal(settingsModal);
+    // После openModal: скрытой карте MapLibre мерит нулевой размер.
+    if (point) point.open(v.location && v.location.lat, v.location && v.location.lng);
   }
 
   if (settingsForm) {
@@ -542,13 +601,17 @@
       data.append('weekdayHours', JSON.stringify({ open: f.weekdayOpen.value, close: f.weekdayClose.value }));
       data.append('weekendHours', JSON.stringify({ open: f.weekendOpen.value, close: f.weekendClose.value }));
       data.append('uploadedPhotos', JSON.stringify(photos.filter((p) => p.url).map((p) => p.url)));
+      // Точки может не быть: у заведений, заведённых до этой формы, координат
+      // нет, и пустое поле сервер пропускает, а не стирает старое значение.
+      const spot = point && point.value();
+      if (spot) data.append('location', JSON.stringify(spot));
       photos.filter((p) => p.file).forEach((p) => data.append('newPhotos', p.file));
 
       const button = settingsForm.querySelector('[type="submit"]');
       button.disabled = true;
       api('/updateEstablishment/' + editing, { method: 'PUT', body: data })
         .then(() => {
-          toast('Сохранено. Заведение ушло на проверку', 'ok');
+          toast(t('venues.saved'), 'ok');
           closeModal(settingsModal);
           loadMine();
           loadVenues();
@@ -557,6 +620,15 @@
         .finally(() => { button.disabled = false; });
     });
   }
+
+  // Список, карточка и «Мои заведения» собираются скриптом, а переключатель
+  // языка перерисовывает только разметку с ключами — поэтому пересобираем.
+  document.addEventListener('tk:lang', () => {
+    loadVenues();
+    if (mine.length) loadMine().catch(() => {});
+    const openId = $('venueCard') && !$('venueCard').classList.contains('hidden') && $('venueWatch').dataset.id;
+    if (openId) openCard(openId);
+  });
 
   // Для сквозного теста и зонда (temp/): камера без щелчков по кнопкам и карта.
   window.TKVenues = { live, startLive, stopLive, watch, openCard, get map() { return map; } };

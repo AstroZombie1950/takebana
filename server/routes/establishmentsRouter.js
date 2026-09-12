@@ -10,7 +10,6 @@ const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
 const daily = require('../utils/daily');
 const { roomName: venueRoomName } = require('./venueLive');
-const { CITY_NAME, VENUE_TYPE_NAME } = require('../config/catalog');
 const { readVenueFilters } = require('../utils/venueFilters');
 const multer = require('multer');
 const path = require('path');
@@ -41,24 +40,17 @@ const storage = multer.diskStorage({
 })
 
 const { requireAuth, requireOwner, wrap } = require('../middleware/auth');
+const { resolveWithin } = require('../utils/safePath');
 const { validate } = require('../middleware/validate');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
+// Адрес фотографии заведения — только файл в своей папке: его выдаёт загрузка
+// в этом же маршруте, а приходит он обратно от формы.
+const PHOTO_URL = /^\/uploads\/establishments\/[\w.-]+$/;
 
-// Часы работы и координаты повторяются в двух маршрутах — держим схемы рядом.
-// `json: true` нужен из-за multipart: там всё приходит строками.
-const HOURS = { type: 'object', json: true, schema: {
-    open: { type: 'string', max: 5 },
-    close: { type: 'string', max: 5 },
-} };
-const LOCATION = { type: 'object', json: true, label: 'Координаты', schema: {
-    lat: { type: 'number', min: -90, max: 90 },
-    lng: { type: 'number', min: -180, max: 180 },
-} };
-// Город и тип — закрытые списки config/catalog.js: по ним фильтрует карта,
-// свободный ввод дал бы «Белград», «Beograd» и «белград » тремя городами.
-const CITY = { type: 'string', values: Object.keys(CITY_NAME), label: 'Город' };
-const TYPE = { type: 'string', values: Object.keys(VENUE_TYPE_NAME), label: 'Тип заведения' };
+// Часы, координаты, город и тип — в utils/venueFields.js: те же схемы
+// нужны админке, и разъезжаться им нельзя.
+const { HOURS, LOCATION, CITY, TYPE } = require('../utils/venueFields');
 
 // То, что видит любой вошедший: карточка на карте и поиск. Почта, телефон
 // и владелец — только самому владельцу, в /user-establishments.
@@ -202,8 +194,11 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
     location: LOCATION,
     // Список уже загруженных фотографий, который присылает форма. Столько же,
     // сколько принимает загрузка новых, — иначе лимит в 6 обходится этим полем.
+    // Только свои файлы: без образца владелец записывал в photos любую строку —
+    // чужой адрес картинки, а с появлением удаления заведения ещё и путь
+    // с «..», по которому удалялся бы посторонний файл.
     uploadedPhotos: { type: 'array', json: true, max: 6, default: [],
-        of: { type: 'string', max: 300 }, label: 'Фотографии' },
+        of: { type: 'string', max: 300, pattern: PHOTO_URL }, label: 'Фотографии' },
 }), wrap(async (req, res) => {
 
     if (req.files.length > 6) {
@@ -259,6 +254,37 @@ router.post('/updateEstablishmentsOnlineStatus', requireAuth, async (req, res) =
     }
     res.json({ ok: true });
 });
+
+
+// Удалить заведение. Кнопка была в старой вёрстке, но ни обработчика,
+// ни маршрута под ней не существовало — заведение можно было только
+// перестать показывать.
+//
+// requireOwner пускает и администратора: в админке своя кнопка удаления,
+// и логика там та же.
+router.delete('/establishment/:id', requireAuth, requireOwner(Establishments), wrap(async (req, res) => {
+    const venue = req.resource; // requireOwner уже нашёл документ
+
+    // Камера могла идти в этот момент: комната в Daily живёт своей жизнью
+    // и без записи в базе её потом не найти и не удалить.
+    if (venue.online) {
+        await daily.deleteRoom(venueRoomName(venue._id)).catch((err) => console.error('[venue-live]', err.message));
+    }
+
+    await Rating.deleteMany({ establishment: venue._id });
+
+    // Фотографии лежат файлами: без этого они остаются на диске навсегда.
+    // Путь через resolveWithin, даже при проверенном образце в схеме —
+    // на диск ходим только внутри своей папки.
+    for (const url of venue.photos || []) {
+        const file = resolveWithin(ESTABLISHMENT_UPLOAD_DIR, path.basename(url));
+        if (!file) continue;
+        fs.promises.unlink(file).catch(() => {}); // файла может уже не быть
+    }
+
+    await venue.deleteOne();
+    res.json({ ok: true });
+}));
 
 
 // Оценка: одна от человека, повторная заменяет прежнюю.

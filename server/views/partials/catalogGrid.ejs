@@ -40,7 +40,7 @@
         <% var cat = catalog.CATEGORIES[stream.category], city = catalog.CITY_NAME[stream.city]; %>
         <% if (cat || city) { %>
         <div class="tk-card__tags">
-          <% if (cat) { %><span class="tk-card__cat" lng="<%= cat.lng %>"><%= cat.name %></span><% } %>
+          <% if (cat) { %><span class="tk-card__cat" data-i18n="<%= cat.i18n %>"><%= cat.name %></span><% } %>
           <% if (city) { %><span class="tk-card__cat"><%= city %></span><% } %>
         </div>
         <% } %>
@@ -52,15 +52,15 @@
 <% } else if (filtered) { %>
 <div class="tk-empty">
   <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><path d="M3 5h18l-7 8.5V19l-4 2v-7.5L3 5Z"></path></svg>
-  <p class="tk-empty__h">Под эти фильтры эфиров нет</p>
-  <p class="tk-empty__p">Сейчас никто не вещает с такими условиями. Попробуйте другой город или подкатегорию.</p>
-  <a href="<%= base %>" class="tk-btn tk-btn--outline tk-btn--sm" data-reset>Сбросить фильтры</a>
+  <p class="tk-empty__h" data-i18n="catalog.filteredEmptyTitle">Под эти фильтры эфиров нет</p>
+  <p class="tk-empty__p" data-i18n="catalog.filteredEmptyText">Сейчас никто не вещает с такими условиями. Попробуйте другой город или подкатегорию.</p>
+  <a href="<%= base %>" class="tk-btn tk-btn--outline tk-btn--sm" data-reset data-i18n="common.resetFilters">Сбросить фильтры</a>
 </div>
 <% } else { %>
 <div class="tk-empty">
   <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg>
-  <p class="tk-empty__h" lng="175">Нет активных стримов</p>
-  <p class="tk-empty__p" lng="176">В данный момент нет активных трансляций в этой категории. Станьте первым!</p>
-  <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="start-stream-btn" lng="177">Стать первым</button>
+  <p class="tk-empty__h" data-i18n="catalog.emptyTitle">Нет активных стримов</p>
+  <p class="tk-empty__p" data-i18n="catalog.emptyText">В данный момент нет активных трансляций в этой категории. Станьте первым!</p>
+  <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="start-stream-btn" data-i18n="catalog.emptyCta">Стать первым</button>
 </div>
 <% } %>

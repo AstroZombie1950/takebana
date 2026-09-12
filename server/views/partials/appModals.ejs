@@ -12,8 +12,8 @@
 <div class="tk-modal hidden" id="streamSettingsModal">
   <div class="tk-modal__card" id="streamModalContent">
     <div class="tk-modal__head">
-      <h3 class="tk-modal__title" lng="110">Настройки трансляции</h3>
-      <button type="button" class="tk-modal__close" id="closeStreamModal" aria-label="Закрыть">
+      <h3 class="tk-modal__title" data-i18n="modal.stream.title">Настройки трансляции</h3>
+      <button type="button" class="tk-modal__close" id="closeStreamModal" aria-label="Закрыть" data-i18n-aria="common.close">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
       </button>
     </div>
@@ -22,16 +22,16 @@
       <% if (!currentUser.hasActiveStream) { %>
         <div class="tk-form">
           <div class="tk-form__row">
-            <label class="tk-form__label" for="streamTitle" lng="111">Название трансляции</label>
-            <input class="tk-field" type="text" id="streamTitle" placeholder="Введите название трансляции" lng="226">
+            <label class="tk-form__label" for="streamTitle" data-i18n="modal.stream.name">Название трансляции</label>
+            <input class="tk-field" type="text" id="streamTitle" placeholder="Введите название трансляции" data-i18n-placeholder="modal.stream.namePh">
           </div>
 
           <div class="tk-form__row">
-            <label class="tk-form__label" for="streamCategory" lng="112">Категория</label>
+            <label class="tk-form__label" for="streamCategory" data-i18n="modal.stream.category">Категория</label>
             <select id="streamCategory" class="tk-field tk-select">
-              <option value="" lng="113">Выберите категорию</option>
+              <option value="" data-i18n="modal.stream.categoryPh">Выберите категорию</option>
               <% Object.entries(catalog.CATEGORIES).forEach(function ([code, cat]) { %>
-              <option value="<%= code %>" lng="<%= cat.lng %>"><%= cat.name %></option>
+              <option value="<%= code %>" data-i18n="<%= cat.i18n %>"><%= cat.name %></option>
               <% }); %>
             </select>
           </div>
@@ -39,42 +39,40 @@
           <%# Подкатегории берутся из config/catalog.js, как и теги каталога:
               раньше их список был зашит в tk-app.js отдельной копией. %>
           <div class="tk-form__row">
-            <label class="tk-form__label" for="streamSubcategory" lng="114">Подкатегория</label>
+            <label class="tk-form__label" for="streamSubcategory" data-i18n="modal.stream.subcategory">Подкатегория</label>
             <select id="streamSubcategory" class="tk-field tk-select" data-subs="<%= catalog.SUBS_JSON %>" disabled>
-              <option value="" lng="115">Сначала выберите категорию</option>
+              <option value="" data-i18n="modal.stream.subcategoryPh">Сначала выберите категорию</option>
             </select>
           </div>
 
           <div class="tk-form__row">
-            <label class="tk-form__label" for="streamCity">Город <span class="tk-form__hint">(необязательно)</span></label>
+            <label class="tk-form__label" for="streamCity"><span data-i18n="modal.stream.city">Город</span> <span class="tk-form__hint" data-i18n="common.optional">(необязательно)</span></label>
             <select id="streamCity" class="tk-field tk-select">
-              <option value="">Не указан</option>
+              <option value="" data-i18n="common.notSet">Не указан</option>
               <% catalog.CITIES.forEach(function (city) { %>
-              <option value="<%= city.code %>"><%= city.name %></option>
+              <option value="<%= city.code %>" data-i18n="<%= city.i18n %>"><%= city.name %></option>
               <% }); %>
             </select>
           </div>
 
           <div class="tk-form__row">
-            <label class="tk-form__label" for="streamDescription" lng="116">Описание <span class="tk-form__hint">(необязательно)</span></label>
-            <textarea id="streamDescription" class="tk-field" rows="4" placeholder="Описание трансляции (необязательно)" lng="227"></textarea>
+            <label class="tk-form__label" for="streamDescription" data-i18n="modal.stream.description">Описание <span class="tk-form__hint" data-i18n="common.optional">(необязательно)</span></label>
+            <textarea id="streamDescription" class="tk-field" rows="4" placeholder="Описание трансляции (необязательно)" data-i18n-placeholder="modal.stream.descriptionPh"></textarea>
           </div>
 
-          <%# Без lng: словарь уходит вместе с последними двумя страницами
-              на Tailwind, новые подписи в него не добавляем. %>
           <div class="tk-form__row">
             <label class="tk-form__toggle">
               <input type="checkbox" id="streamAdult">
-              <span>Контент 18+</span>
+              <span data-i18n="modal.stream.adult">Контент 18+</span>
             </label>
-            <p class="tk-form__note">Зритель подтвердит возраст перед входом. Снять метку может только модерация.</p>
+            <p class="tk-form__note" data-i18n="modal.stream.adultNote">Зритель подтвердит возраст перед входом. Снять метку может только модерация.</p>
           </div>
         </div>
       <% } else { %>
         <div class="tk-modal__state">
           <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12" rx="1"></rect></svg>
-          <p lng="117">У вас уже есть активный стрим.</p>
-          <a href="/stream/<%= currentUser.activeStreamId %>" class="tk-btn tk-btn--outline tk-btn--sm" lng="118">Перейти к стриму</a>
+          <p data-i18n="modal.stream.active">У вас уже есть активный стрим.</p>
+          <a href="/stream/<%= currentUser.activeStreamId %>" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="modal.stream.goto">Перейти к стриму</a>
         </div>
       <% } %>
     </div>
@@ -82,11 +80,11 @@
     <div class="tk-modal__foot">
       <% if (!currentUser.hasActiveStream) { %>
         <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-btn--block" id="startStreamButton">
-          <span lng="228">Перейти на страницу настроек стрима</span>
+          <span data-i18n="modal.stream.settingsLink">Перейти на страницу настроек стрима</span>
         </button>
       <% } else { %>
         <button type="button" class="tk-btn tk-btn--danger tk-btn--sm tk-btn--block" id="terminateStreamButton">
-          <span lng="225">Завершить стрим</span>
+          <span data-i18n="modal.stream.end">Завершить стрим</span>
         </button>
       <% } %>
     </div>
@@ -97,28 +95,28 @@
 <div class="tk-modal hidden" id="profileInfoModal">
   <div class="tk-modal__card tk-modal__card--wide">
     <div class="tk-modal__head">
-      <h3 class="tk-modal__title" lng="32">Профиль</h3>
-      <button type="button" class="tk-modal__close" id="closeProfileModal" aria-label="Закрыть">
+      <h3 class="tk-modal__title" data-i18n="modal.profile.title">Профиль</h3>
+      <button type="button" class="tk-modal__close" id="closeProfileModal" aria-label="Закрыть" data-i18n-aria="common.close">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
       </button>
     </div>
 
     <div class="tk-modal__body">
       <div class="tk-form__row">
-        <label class="tk-form__label" for="profileNameInput" lng="180">Ваше имя</label>
-        <input id="profileNameInput" class="tk-field" type="text" placeholder="Укажите ваше имя" value="<%= currentUser.displayName %>" lng="33">
-        <button id="saveNameButton" type="button" class="tk-btn tk-btn--primary tk-btn--xs" lng="181">Сохранить имя</button>
+        <label class="tk-form__label" for="profileNameInput" data-i18n="modal.profile.yourName">Ваше имя</label>
+        <input id="profileNameInput" class="tk-field" type="text" placeholder="Укажите ваше имя" value="<%= currentUser.displayName %>" data-i18n="modal.profile.namePh">
+        <button id="saveNameButton" type="button" class="tk-btn tk-btn--primary tk-btn--xs" data-i18n="modal.profile.saveName">Сохранить имя</button>
       </div>
 
       <!-- Фото профиля -->
       <section class="tk-panel">
-        <p class="tk-panel__title" lng="182">Фото профиля</p>
+        <p class="tk-panel__title" data-i18n="modal.profile.photo">Фото профиля</p>
         <div class="tk-avatar-row">
           <div class="tk-avatar-box">
             <% if (currentUser.avatarStyle && currentUser.avatarStyle.url) { %>
               <img id="profileAvatarPreview" src="<%= currentUser.avatarStyle.url %>" alt="">
             <% } else { %>
-              <span id="profileAvatarEmpty">Нет фото</span>
+              <span id="profileAvatarEmpty" data-i18n="modal.profile.noPhoto">Нет фото</span>
               <%# без src: пустой атрибут — это лишний запрос страницы самой к себе. %>
               <%# Реальный адрес проставляет JS после загрузки аватара. %>
               <img id="profileAvatarPreview" class="hidden" alt="">
@@ -128,17 +126,17 @@
           <div class="tk-avatar-row__side">
             <p class="tk-note">
               <% if (currentUser.avatarStyle && currentUser.avatarStyle.url) { %>
-                <span lng="183">Вы можете заменить изображение</span>
+                <span data-i18n="modal.profile.photoReplace">Вы можете заменить изображение</span>
               <% } else { %>
-                <span lng="184">Загрузите изображение PNG/JPG до 5MB</span>
+                <span data-i18n="modal.profile.photoHint">Загрузите изображение PNG/JPG до 5MB</span>
               <% } %>
             </p>
             <input id="profileAvatarInput" type="file" accept="image/png,image/jpeg" class="hidden">
             <div class="tk-panel__actions">
-              <button id="chooseAvatarBtn" type="button" class="tk-btn tk-btn--outline tk-btn--xs" lng="185">Выбрать файл</button>
-              <button id="uploadAvatarBtn" type="button" class="tk-btn tk-btn--primary tk-btn--xs" disabled lng="186">Сохранить фото профиля</button>
+              <button id="chooseAvatarBtn" type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="modal.profile.choosePhoto">Выбрать файл</button>
+              <button id="uploadAvatarBtn" type="button" class="tk-btn tk-btn--primary tk-btn--xs" disabled data-i18n="modal.profile.savePhoto">Сохранить фото профиля</button>
             </div>
-            <p class="tk-note" id="avatarHint" lng="187">PNG/JPG, до 5MB</p>
+            <p class="tk-note" id="avatarHint" data-i18n="modal.profile.photoLimit">PNG/JPG, до 5MB</p>
           </div>
         </div>
       </section>
@@ -146,20 +144,20 @@
       <!-- Личная галерея -->
       <section class="tk-panel">
         <div class="tk-panel__head">
-          <p class="tk-panel__title" lng="188">Личная галерея</p>
-          <span class="tk-note" lng="189">до 100 фото, PNG/JPG до 10MB</span>
+          <p class="tk-panel__title" data-i18n="modal.gallery.title">Личная галерея</p>
+          <span class="tk-note" data-i18n="modal.gallery.limit">до 100 фото, PNG/JPG до 10MB</span>
         </div>
 
         <div id="galleryDropzone" class="tk-dropzone">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7M3 7l3.5-3.5M3 7h18M21 7L17.5 3.5"></path></svg>
-          <p lng="190">Перетащите сюда фото или нажмите, чтобы выбрать</p>
+          <p data-i18n="modal.gallery.drop">Перетащите сюда фото или нажмите, чтобы выбрать</p>
           <input id="galleryInput" type="file" accept="image/png,image/jpeg" multiple class="hidden">
         </div>
 
         <div class="tk-panel__actions">
-          <button id="chooseGalleryBtn" type="button" class="tk-btn tk-btn--outline tk-btn--xs" lng="191">Выбрать фото</button>
-          <button id="uploadGalleryBtn" type="button" class="tk-btn tk-btn--primary tk-btn--xs" disabled><span><span lng="192">Загрузить</span> (<span id="galleryCount">0</span>)</span></button>
-          <span class="tk-note tk-panel__spacer" id="galleryHint" lng="193">Файлы не выбраны</span>
+          <button id="chooseGalleryBtn" type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="modal.gallery.choose">Выбрать фото</button>
+          <button id="uploadGalleryBtn" type="button" class="tk-btn tk-btn--primary tk-btn--xs" disabled><span><span data-i18n="modal.gallery.upload">Загрузить</span> (<span id="galleryCount">0</span>)</span></button>
+          <span class="tk-note tk-panel__spacer" id="galleryHint" data-i18n="modal.gallery.noFiles">Файлы не выбраны</span>
         </div>
 
         <div id="galleryPreview" class="tk-thumbs"></div>
@@ -170,7 +168,7 @@
                  const name = url.split('/').pop(); %>
               <div class="tk-thumb">
                 <img src="<%= url %>" alt="" loading="lazy">
-                <button type="button" data-name="<%= name %>" class="tk-thumb__del" aria-label="Удалить">
+                <button type="button" data-name="<%= name %>" class="tk-thumb__del" aria-label="Удалить" data-i18n-aria="common.delete">
                   <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
                 </button>
               </div>
@@ -183,21 +181,21 @@
       <section class="tk-panel">
         <button type="button" class="tk-panel__toggle" id="securityToggle">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75"></path><rect x="4.5" y="10.5" width="15" height="11" rx="1"></rect></svg>
-          <span lng="34">Безопасность</span>
+          <span data-i18n="modal.profile.security">Безопасность</span>
         </button>
 
         <div class="tk-form hidden" id="securityFields">
-          <input class="tk-field" type="password" placeholder="Старый пароль" id="oldPassword" lng="35" autocomplete="current-password">
-          <input class="tk-field" type="password" placeholder="Новый пароль" id="newPassword" lng="36" autocomplete="new-password">
-          <input class="tk-field" type="password" placeholder="Подтвердите пароль" id="confirmPassword" lng="37" autocomplete="new-password">
-          <button id="savePasswordButton" type="button" class="tk-btn tk-btn--primary tk-btn--xs" lng="197">Сохранить пароль</button>
+          <input class="tk-field" type="password" placeholder="Старый пароль" id="oldPassword" data-i18n-placeholder="modal.profile.oldPassword" autocomplete="current-password">
+          <input class="tk-field" type="password" placeholder="Новый пароль" id="newPassword" data-i18n-placeholder="modal.profile.newPassword" autocomplete="new-password">
+          <input class="tk-field" type="password" placeholder="Подтвердите пароль" id="confirmPassword" data-i18n-placeholder="modal.profile.confirmPassword" autocomplete="new-password">
+          <button id="savePasswordButton" type="button" class="tk-btn tk-btn--primary tk-btn--xs" data-i18n="modal.profile.savePassword">Сохранить пароль</button>
         </div>
       </section>
     </div>
 
     <div class="tk-modal__foot tk-modal__foot--split">
-      <a href="/userPage/<%= currentUser._id %>" class="tk-btn tk-btn--outline tk-btn--sm" lng="198">Открыть профиль</a>
-      <a href="/logout" class="tk-modal__exit" lng="38">Выйти из аккаунта</a>
+      <a href="/userPage/<%= currentUser._id %>" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="modal.profile.open">Открыть профиль</a>
+      <a href="/logout" class="tk-modal__exit" data-i18n="modal.profile.logout">Выйти из аккаунта</a>
     </div>
   </div>
 </div>
@@ -206,14 +204,14 @@
 <div class="tk-modal hidden" id="notificationModal">
   <div class="tk-modal__card">
     <div class="tk-modal__head">
-      <h3 class="tk-modal__title" lng="106">Уведомления</h3>
-      <button type="button" class="tk-modal__close" id="closeNotificationModal" aria-label="Закрыть">
+      <h3 class="tk-modal__title" data-i18n="modal.notifications.title">Уведомления</h3>
+      <button type="button" class="tk-modal__close" id="closeNotificationModal" aria-label="Закрыть" data-i18n-aria="common.close">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
       </button>
     </div>
 
     <div class="tk-modal__body tk-modal__body--list" id="notificationsContent">
-      <p class="tk-note tk-note--center" lng="249">Загрузка уведомлений...</p>
+      <p class="tk-note tk-note--center" data-i18n="modal.notifications.loading">Загрузка уведомлений...</p>
     </div>
   </div>
 </div>
@@ -229,7 +227,7 @@
           <p class="tk-call__type" id="outgoingType">Исходящий звонок...</p>
         </div>
       </div>
-      <button type="button" class="tk-modal__close" id="outgoingCloseBtn" aria-label="Закрыть">
+      <button type="button" class="tk-modal__close" id="outgoingCloseBtn" aria-label="Закрыть" data-i18n-aria="common.close">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
       </button>
     </div>
@@ -238,7 +236,7 @@
       <p class="tk-call__status">
         <span class="tk-call__beacon tk-call__beacon--ok"></span>
         <span id="outgoingStatus">Соединение...</span>
-        <span class="tk-call__net hidden" id="outgoingNet" role="img" aria-label="Качество сети"><i></i><i></i><i></i></span>
+        <span class="tk-call__net hidden" id="outgoingNet" role="img" aria-label="Качество сети" data-i18n-aria="call.network"><i></i><i></i><i></i></span>
       </p>
       <p class="tk-call__timer"><span id="outgoingTimer" class="hidden">00:00</span></p>
 
@@ -270,7 +268,7 @@
           <p class="tk-call__type" id="incomingType">Входящий видеозвонок</p>
         </div>
       </div>
-      <button type="button" class="tk-modal__close" id="incomingCloseBtn" aria-label="Закрыть">
+      <button type="button" class="tk-modal__close" id="incomingCloseBtn" aria-label="Закрыть" data-i18n-aria="common.close">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
       </button>
     </div>
@@ -279,7 +277,7 @@
       <p class="tk-call__status">
         <span class="tk-call__beacon tk-call__beacon--ring"></span>
         <span id="incomingStatus">Звонит...</span>
-        <span class="tk-call__net hidden" id="incomingNet" role="img" aria-label="Качество сети"><i></i><i></i><i></i></span>
+        <span class="tk-call__net hidden" id="incomingNet" role="img" aria-label="Качество сети" data-i18n-aria="call.network"><i></i><i></i><i></i></span>
       </p>
       <p class="tk-call__timer"><span id="incomingTimer" class="hidden">00:00</span></p>
 
@@ -294,7 +292,7 @@
 
       <div class="tk-call__actions tk-call__actions--pair">
         <button type="button" id="incomingVoiceBtn" class="tk-btn tk-btn--outline tk-btn--sm hidden" aria-pressed="false">Только голос</button>
-        <button type="button" id="incomingDeclineBtn" class="tk-btn tk-btn--outline tk-btn--sm">Отклонить</button>
+        <button type="button" id="incomingDeclineBtn" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="call.decline">Отклонить</button>
         <button type="button" id="incomingAcceptBtn" class="tk-btn tk-btn--ok tk-btn--sm">Принять</button>
       </div>
     </div>
@@ -305,8 +303,8 @@
 <div class="tk-modal hidden" id="reportModal">
   <div class="tk-modal__card">
     <div class="tk-modal__head">
-      <h3 class="tk-modal__title">Пожаловаться</h3>
-      <button type="button" class="tk-modal__close" id="closeReportModal" aria-label="Закрыть">
+      <h3 class="tk-modal__title" data-i18n="common.report">Пожаловаться</h3>
+      <button type="button" class="tk-modal__close" id="closeReportModal" aria-label="Закрыть" data-i18n-aria="common.close">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
       </button>
     </div>
@@ -316,26 +314,26 @@
         <p class="tk-form__note" id="reportTarget"></p>
 
         <div class="tk-form__row">
-          <label class="tk-form__label" for="reportReason">Причина</label>
+          <label class="tk-form__label" for="reportReason" data-i18n="report.reason">Причина</label>
           <select id="reportReason" class="tk-field tk-select">
-            <option value="abuse">Оскорбления</option>
-            <option value="spam">Спам</option>
-            <option value="adult">Контент 18+ без метки</option>
-            <option value="violence">Насилие</option>
-            <option value="copyright">Права на контент</option>
-            <option value="other">Другое</option>
+            <option value="abuse" data-i18n="report.abuse">Оскорбления</option>
+            <option value="spam" data-i18n="report.spam">Спам</option>
+            <option value="adult" data-i18n="report.adult">Контент 18+ без метки</option>
+            <option value="violence" data-i18n="report.violence">Насилие</option>
+            <option value="copyright" data-i18n="report.copyright">Права на контент</option>
+            <option value="other" data-i18n="report.other">Другое</option>
           </select>
         </div>
 
         <div class="tk-form__row">
-          <label class="tk-form__label" for="reportComment">Что случилось <span class="tk-form__hint">(необязательно)</span></label>
-          <textarea id="reportComment" class="tk-field" rows="4" maxlength="1000" placeholder="Коротко опишите, что не так"></textarea>
+          <label class="tk-form__label" for="reportComment"><span data-i18n="report.what">Что случилось</span> <span class="tk-form__hint" data-i18n="common.optional">(необязательно)</span></label>
+          <textarea id="reportComment" class="tk-field" rows="4" maxlength="1000" placeholder="Коротко опишите, что не так" data-i18n-placeholder="report.commentPh"></textarea>
         </div>
       </div>
     </div>
 
     <div class="tk-modal__foot">
-      <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-btn--block" id="sendReport">Отправить жалобу</button>
+      <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-btn--block" id="sendReport" data-i18n="report.send">Отправить жалобу</button>
     </div>
   </div>
 </div>

@@ -14,9 +14,9 @@ const { commonDataMiddleware, getStreamUsers, getActiveStreamsCount, getRandomGr
 // Вкладки каталога. popular — все категории разом, остальные совпадают
 // с кодами категорий в config/catalog.js.
 const PAGES = {
-  popular:       { title: 'ПОПУЛЯРНОЕ', lng: '90' },
-  business:      { title: 'БИЗНЕС', lng: '105' },
-  entertainment: { title: 'РАЗВЛЕЧЕНИЯ', lng: '104' },
+  popular:       { title: 'ПОПУЛЯРНОЕ', i18n: 'cat.popularTitle' },
+  business:      { title: 'БИЗНЕС', i18n: 'cat.businessTitle' },
+  entertainment: { title: 'РАЗВЛЕЧЕНИЯ', i18n: 'cat.entertainmentTitle' },
 };
 
 // Прежде роут отдавал не больше четырёх эфиров — с фильтрами это значило бы

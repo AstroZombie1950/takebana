@@ -17,7 +17,7 @@
     <div class="tk-prof">
 
       <% if (isSelf) { %>
-      <p class="tk-kicker" lng="199">Страница вашего профиля</p>
+      <p class="tk-kicker" data-i18n="user.ownPage">Страница вашего профиля</p>
       <% } %>
 
       <!-- Шапка профиля -->
@@ -36,7 +36,7 @@
           <div class="tk-prof__stats">
             <div>
               <span class="tk-prof__num"><%= user.followersCount %></span>
-              <span class="tk-prof__lbl" lng="140">подписчиков</span>
+              <span class="tk-prof__lbl" data-i18n="user.subscribers">подписчиков</span>
             </div>
           </div>
 
@@ -44,22 +44,22 @@
           <div class="tk-prof__acts">
             <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="message-button" data-user-id="<%= user._id %>">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
-              <span lng="141">Сообщение</span>
+              <span data-i18n="user.message">Сообщение</span>
             </button>
 
             <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="video-call-button" data-user-id="<%= user._id %>">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M15.5 10.5l4.5-2.25v7.5l-4.5-2.25"></path><rect x="3.5" y="6" width="12" height="12"></rect></svg>
-              <span lng="200">Видеозвонок</span>
+              <span data-i18n="user.videoCall">Видеозвонок</span>
             </button>
 
             <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="audio-call-button" data-user-id="<%= user._id %>">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M6.5 3h-2A1.5 1.5 0 003 4.5C3 13 11 21 19.5 21a1.5 1.5 0 001.5-1.5v-2l-4-1.5-1.7 2A14 14 0 018 11.7l2-1.7L8.5 6l-2-3Z"></path></svg>
-              <span lng="201">Аудиозвонок</span>
+              <span data-i18n="user.audioCall">Аудиозвонок</span>
             </button>
 
             <button type="button" class="tk-btn tk-btn--outline tk-btn--sm subscribe__button<%= user.isSubscribed ? ' unsubscribe' : '' %>">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
-              <span lng="<%= user.isSubscribed ? '130' : '91' %>"><%= user.isSubscribed ? 'Отписаться' : 'Подписаться' %></span>
+              <span data-i18n="<%= user.isSubscribed ? 'stream.unsubscribe' : 'stream.subscribe' %>"><%= user.isSubscribed ? 'Отписаться' : 'Подписаться' %></span>
             </button>
 
             <%# Окно жалобы лежит в общем партиале шапки, здесь только кнопка. %>
@@ -68,7 +68,7 @@
                     data-report-id="<%= user._id %>"
                     data-report-name="<%= user.displayName %>">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M5 21V4h9l.6 2H20v9h-6l-.6-2H5"></path></svg>
-              <span>Пожаловаться</span>
+              <span data-i18n="user.reportUser">Пожаловаться</span>
             </button>
           </div>
           <% } %>
@@ -78,42 +78,44 @@
       <!-- Активность и эфир -->
       <div class="tk-prof__grid">
         <section class="tk-panel--prof">
-          <p class="tk-kicker" lng="202">Активность</p>
+          <p class="tk-kicker" data-i18n="user.activity">Активность</p>
 
           <div class="tk-prof__rows">
             <div class="tk-prof__row" data-presence-user="<%= user._id %>">
-              <span class="tk-prof__key" lng="203">Статус</span>
+              <span class="tk-prof__key" data-i18n="user.status">Статус</span>
               <span class="tk-prof__val">
                 <%# Цвет точки задаёт общий класс из app.css. Прежде страница
                     держала свою пару правил с зашитыми цветами. %>
                 <span class="presence-dot <%= user.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
                 <span data-presence-text title="<%= user.lastSeen ? new Date(user.lastSeen).toLocaleString() : '' %>">
-                  <span lng="<%= user.isOnline ? '159' : '160' %>"><%= user.isOnline ? 'онлайн' : 'оффлайн' %></span>
+                  <span data-i18n="<%= user.isOnline ? 'common.online' : 'common.offline' %>"><%= user.isOnline ? 'онлайн' : 'оффлайн' %></span>
                 </span>
               </span>
             </div>
 
             <div class="tk-prof__row">
-              <span class="tk-prof__key" lng="204">Последний раз в сети</span>
+              <span class="tk-prof__key" data-i18n="user.lastSeen">Последний раз в сети</span>
               <span class="tk-prof__val" data-presence-lastseen-user="<%= user._id %>">
-                <span lng="<%= user.isOnline ? '178' : '179' %>"><%= user.isOnline ? 'Сейчас' : (user.lastSeen ? new Date(user.lastSeen).toLocaleString() : '—') %></span>
+                <%# Дата последнего входа — не словарная строка, поэтому ключ только
+                    у «Сейчас»: иначе перевод затирал бы дату. %>
+                <span<% if (user.isOnline) { %> data-i18n="common.now"<% } %>><%= user.isOnline ? 'Сейчас' : (user.lastSeen ? new Date(user.lastSeen).toLocaleString() : '—') %></span>
               </span>
             </div>
           </div>
         </section>
 
         <section class="tk-panel--prof">
-          <p class="tk-kicker" lng="205">Стрим</p>
+          <p class="tk-kicker" data-i18n="user.stream">Стрим</p>
 
           <% if (user.isStreaming && user.activeStreamId) { %>
           <div class="tk-prof__live">
-            <span class="tk-prof__live-mark" lng="206">Пользователь в эфире</span>
-            <a href="/stream/<%= user.activeStreamId %>" lng="118">Перейти к стриму</a>
+            <span class="tk-prof__live-mark" data-i18n="user.live">Пользователь в эфире</span>
+            <a href="/stream/<%= user.activeStreamId %>" data-i18n="modal.stream.goto">Перейти к стриму</a>
           </div>
           <% } else { %>
           <div class="tk-prof__none">
             <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg>
-            <p lng="207">Не стримит сейчас</p>
+            <p data-i18n="user.notLive">Не стримит сейчас</p>
           </div>
           <% } %>
         </section>
@@ -122,20 +124,20 @@
       <!-- Галерея -->
       <section class="tk-prof__gal">
         <div class="tk-prof__gal-head">
-          <p class="tk-kicker" style="margin: 0; flex: 1;" lng="208">Галерея</p>
-          <span class="tk-note"><%= (user.gallery || []).length %> <span lng="209">фото</span></span>
+          <p class="tk-kicker" style="margin: 0; flex: 1;" data-i18n="user.gallery">Галерея</p>
+          <span class="tk-note"><%= (user.gallery || []).length %> <span data-i18n="user.photos">фото</span></span>
         </div>
 
         <% if (user.gallery && user.gallery.length) { %>
         <div class="tk-shots">
           <% user.gallery.forEach(function (url, idx) { %>
-          <button type="button" class="tk-shot" aria-label="Фото <%= idx + 1 %>">
+          <button type="button" class="tk-shot" aria-label="Фото <%= idx + 1 %>" data-i18n-aria="user.photoN" data-i18n-vars='{"n": <%= idx + 1 %>}'>
             <img src="<%= url %>" alt="" loading="lazy" data-photo-url="<%= url %>">
           </button>
           <% }); %>
         </div>
         <% } else { %>
-        <p class="tk-note tk-note--center" lng="210">Галерея пуста</p>
+        <p class="tk-note tk-note--center" data-i18n="user.galleryEmpty">Галерея пуста</p>
         <% } %>
       </section>
 
@@ -145,13 +147,13 @@
 
 <!-- Просмотр фотографии -->
 <div id="lightbox" class="tk-lightbox hidden">
-  <button type="button" class="tk-lightbox__btn tk-lightbox__close" id="lightboxClose" aria-label="Закрыть">
+  <button type="button" class="tk-lightbox__btn tk-lightbox__close" id="lightboxClose" aria-label="Закрыть" data-i18n-aria="common.close">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
   </button>
-  <button type="button" class="tk-lightbox__btn tk-lightbox__prev" id="lightboxPrev" aria-label="Предыдущее">
+  <button type="button" class="tk-lightbox__btn tk-lightbox__prev" id="lightboxPrev" aria-label="Предыдущее" data-i18n-aria="user.photoPrev">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
   </button>
-  <button type="button" class="tk-lightbox__btn tk-lightbox__next" id="lightboxNext" aria-label="Следующее">
+  <button type="button" class="tk-lightbox__btn tk-lightbox__next" id="lightboxNext" aria-label="Следующее" data-i18n-aria="user.photoNext">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
   </button>
   <span class="tk-lightbox__count" id="lightboxCounter">1 / 1</span>
@@ -169,6 +171,5 @@
   };
 </script>
 <script src="/profile.js"></script>
-<script src="/lang.js"></script>
 </body>
 </html>

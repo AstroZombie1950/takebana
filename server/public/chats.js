@@ -22,29 +22,13 @@ var currentRecipientAvatar = '';
 var messageCheckInterval = null;
 var feedScrollHandler = null;
 
-// Подпись из словаря с запасным вариантом: lang.js подключается после этого
-// файла, поэтому на момент разбора его ещё нет, а на момент клика — уже есть.
-function t(key, ru, en) {
-  var lang = 'ru';
-  try {
-    var v = localStorage.getItem('lang');
-    if (v === 'en' || v === 'ru') lang = v;
-  } catch (e) {}
-  try {
-    if (window.langDict && window.langDict[key] && typeof window.langDict[key][lang] !== 'undefined') {
-      return window.langDict[key][lang];
-    }
-  } catch (e) {}
-  return lang === 'en' ? en : ru;
-}
+// Подписи и язык — из общего словаря (public/tk-i18n.js). Свой переводчик
+// с запасными строками здесь стоял, пока у кабинета был отдельный словарь.
+// Ссылка, а не обёртка: файл без обёртки, и объявление попадает в window —
+// обёртка вокруг window.t присвоилась бы в него же и вызывала бы себя.
+var t = window.t || function () { return ''; };
 
-function uiLang() {
-  try {
-    var v = localStorage.getItem('lang');
-    if (v === 'en' || v === 'ru') return v;
-  } catch (e) {}
-  return 'ru';
-}
+function uiLang() { return window.tkLang ? window.tkLang() : 'ru'; }
 
 function feed() { return document.getElementById('feed'); }
 
@@ -171,7 +155,7 @@ function renderMessages() {
 
   if (!loadedMessages.length) {
     box.innerHTML = '<p class="tk-note tk-note--center">' +
-      escapeHtml(t('221', 'Нет сообщений в этом диалоге', 'No messages in this conversation')) + '</p>';
+      escapeHtml(t('chats.dialogEmpty')) + '</p>';
     return;
   }
 
@@ -212,7 +196,7 @@ async function sendMessage() {
   var content = input.value.trim();
 
   if (!recipientId || content === '') {
-    toast(t('222', 'Выберите диалог и введите сообщение.', 'Select a conversation and type a message.'), 'error');
+    toast(t('chats.pickAndType'), 'error');
     return;
   }
 
@@ -224,7 +208,7 @@ async function sendMessage() {
     });
 
     if (!response.ok) {
-      toast(t('223', 'Ошибка при отправке сообщения.', 'Failed to send message.'), 'error');
+      toast(t('chats.sendFailed'), 'error');
       return;
     }
 
@@ -236,7 +220,7 @@ async function sendMessage() {
     lastMessageTimestamp = message.sentAt;
   } catch (e) {
     console.error('sendMessage:', e);
-    toast(t('223', 'Ошибка при отправке сообщения.', 'Failed to send message.'), 'error');
+    toast(t('chats.sendFailed'), 'error');
   }
 }
 
@@ -371,7 +355,7 @@ function selectConversation(element) {
   var send = document.querySelector('.input__button-icons');
   if (input) {
     input.setAttribute('data-id', recipientId);
-    input.placeholder = t('224', 'Сообщение для', 'Message to') + ' ' + recipientName + '…';
+    input.placeholder = t('chats.messageTo') + ' ' + recipientName + '…';
     input.removeAttribute('lng');
   }
   if (send) send.setAttribute('data-id', recipientId);

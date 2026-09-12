@@ -10,6 +10,8 @@
 // Движок звонка daily-js при входе всё равно подгружает с серверов Daily.
 // Грузится лениво: 72 КБ сжатого скрипта нужны только в момент соединения.
 (function () {
+  // Подписи — из общего словаря (public/tk-i18n.js).
+  var t = function (key, arg) { return window.t ? window.t(key, arg) : ''; };
   var SRC = '/vendor/daily-0.92.2.js';
   // Паузы между попытками войти заново. Своё переподключение Daily держит
   // около 20 секунд; сюда доходит то, что он не вытянул.
@@ -33,7 +35,7 @@
         s.onload = function () { resolve(window.Daily); };
         s.onerror = function () {
           loading = null;
-          reject(new Error('Не загрузилась библиотека видеосвязи'));
+          reject(new Error(t('stream.libFailed')));
         };
         document.head.appendChild(s);
       });
@@ -48,7 +50,7 @@
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (d) {
           if (r.ok && d.token) return { url: d.url, token: d.token };
-          var err = new Error(d.message || 'Нет доступа к видео');
+          var err = new Error(d.message || t('stream.noVideoAccess'));
           err.final = r.status >= 400 && r.status < 500;
           throw err;
         });

@@ -3,20 +3,20 @@
   // на остальных страницах её нет — тогда не подсвечиваем ничего.
   var cat = typeof category !== 'undefined' ? category : '';
   var sections = [
-    { key: 'popular',       href: '/streaming',               lng: '83', name: 'Популярное',  lng2: '156', note: 'Самые просматриваемые' },
-    { key: 'entertainment', href: '/streaming/entertainment', lng: '84', name: 'Развлечения', lng2: '157', note: 'Игры, музыка, творчество' },
-    { key: 'business',      href: '/streaming/business',      lng: '85', name: 'Бизнес',      lng2: '158', note: 'Презентации, обучение' }
+    { key: 'popular',       href: '/streaming',               i18n: 'cat.popular',       name: 'Популярное',  noteI18n: 'cat.popularNote',       note: 'Самые просматриваемые' },
+    { key: 'entertainment', href: '/streaming/entertainment', i18n: 'cat.entertainment', name: 'Развлечения', noteI18n: 'cat.entertainmentNote', note: 'Игры, музыка, творчество' },
+    { key: 'business',      href: '/streaming/business',      i18n: 'cat.business',      name: 'Бизнес',      noteI18n: 'cat.businessNote',      note: 'Презентации, обучение' }
   ];
   var online = (subscriptions || []).filter(function (x) { return x.status === 'online'; }).length;
 %>
 <%# Видимый край панели на узких экранах: кнопка и затемнение под ней. %>
-<button class="tk-aside__toggle" id="sidebarToggle" aria-label="Меню" aria-controls="sidebar">
+<button class="tk-aside__toggle" id="sidebarToggle" aria-label="Меню" data-i18n-aria="app.menu" aria-controls="sidebar">
   <span></span><span></span><span></span>
 </button>
 <div class="tk-aside__overlay invisible opacity-0" id="sidebarOverlay"></div>
 
 <aside class="tk-aside" id="sidebar">
-  <div class="tk-aside__title"><span>Разделы</span></div>
+  <div class="tk-aside__title"><span data-i18n="side.sections">Разделы</span></div>
 
   <% sections.forEach(function (item) { %>
   <a href="<%= item.href %>" class="tk-aside__item<%= item.key === cat ? ' tk-aside__item--on' : '' %>">
@@ -26,8 +26,8 @@
       <% } else { %><rect x="3" y="7" width="18" height="13"></rect><path d="M9 7V4h6v3"></path><% } %>
     </svg>
     <span>
-      <span lng="<%= item.lng %>"><%= item.name %></span>
-      <span class="tk-aside__sub-state" style="display: block;" lng="<%= item.lng2 %>"><%= item.note %></span>
+      <span data-i18n="<%= item.i18n %>"><%= item.name %></span>
+      <span class="tk-aside__sub-state" style="display: block;" data-i18n="<%= item.noteI18n %>"><%= item.note %></span>
     </span>
   </a>
   <% }); %>
@@ -35,8 +35,8 @@
   <div class="tk-aside__rule"></div>
 
   <div class="tk-aside__title">
-    <span lng="86">Подписки</span>
-    <% if (online) { %><span class="tk-aside__count"><%= online %> в эфире</span><% } %>
+    <span data-i18n="side.subscriptions">Подписки</span>
+    <% if (online) { %><span class="tk-aside__count"><%= online %> <span data-i18n="side.live">в эфире</span></span><% } %>
   </div>
 
   <% if (subscriptions && subscriptions.length > 0) { %>
@@ -49,22 +49,22 @@
       <div style="min-width: 0;">
         <p class="tk-aside__sub-name"><%= sub.displayName %></p>
         <p class="tk-aside__sub-state" data-presence-text>
-          <% if (sub.status === 'online') { %><span lng="159">онлайн</span><% } else { %><span lng="160">оффлайн</span><% } %>
+          <% if (sub.status === 'online') { %><span data-i18n="common.online">онлайн</span><% } else { %><span data-i18n="common.offline">оффлайн</span><% } %>
         </p>
       </div>
     </a>
     <% }); %>
   <% } else { %>
     <div class="tk-aside__empty">
-      <span lng="161">Пока нет подписок</span><br>
-      <span lng="162">Подпишитесь на интересных стримеров</span>
+      <span data-i18n="side.noSubs">Пока нет подписок</span><br>
+      <span data-i18n="side.noSubsHint">Подпишитесь на интересных стримеров</span>
     </div>
   <% } %>
 
   <div class="tk-aside__cta">
-    <p style="margin: 0 0 4px; font-size: 15px; font-weight: 900; letter-spacing: -.01em; text-transform: uppercase; line-height: 1.15;" lng="87">Откройте свой путь к стримингу!</p>
-    <p class="tk-aside__sub-state" style="margin: 0 0 14px;" lng="163">Создайте свой первый стрим</p>
-    <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-btn--block" id="startStreamButtonMain" lng="138">Начать стрим</button>
+    <p style="margin: 0 0 4px; font-size: 15px; font-weight: 900; letter-spacing: -.01em; text-transform: uppercase; line-height: 1.15;" data-i18n="side.ctaTitle">Откройте свой путь к стримингу!</p>
+    <p class="tk-aside__sub-state" style="margin: 0 0 14px;" data-i18n="side.ctaHint">Создайте свой первый стрим</p>
+    <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-btn--block" id="startStreamButtonMain" data-i18n="side.ctaButton">Начать стрим</button>
   </div>
 </aside>
 
