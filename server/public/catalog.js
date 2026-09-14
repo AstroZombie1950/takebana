@@ -47,12 +47,12 @@ document.addEventListener('DOMContentLoaded', function () {
           history.replaceState(null, '', pageUrl);
           if (topReset) topReset.hidden = !(params.has('sub') || params.has('city'));
 
-          // Градиент аватара и перевод подписей ставятся на загрузке страницы,
-          // подгруженной сетке их никто больше не поставит.
+          // Градиент аватара ставится на загрузке страницы, подгруженной
+          // сетке его никто больше не поставит. Подписи сервер отдаёт уже
+          // на языке из cookie.
           results.querySelectorAll('[data-bg]').forEach(function (el) {
             el.style.background = el.getAttribute('data-bg');
           });
-          if (window.applyLang) window.applyLang(localStorage.getItem('lang'));
         })
         .catch(function (err) {
           // Сессия истекла или сервер ответил ошибкой — обычный переход,

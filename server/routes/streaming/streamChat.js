@@ -9,6 +9,7 @@ const ChatMessage = require('../../models/ChatMessage');
 const Stream = require('../../models/Stream');
 const { requireAuth, requireNotBanned } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validate');
+const userView = require('../../utils/userView');
 
 router.post('/chat/message', requireAuth, requireNotBanned, validate({
   streamId: { type: 'objectId', required: true, label: 'Эфир' },
@@ -23,7 +24,7 @@ router.post('/chat/message', requireAuth, requireNotBanned, validate({
       if (!author) {
           return res.status(401).json({ message: 'Необходима авторизация' });
       }
-      const username = author.login || (author.email ? author.email.split('@')[0] : 'Пользователь');
+      const username = userView.displayName(author);
 
       // Создаём новое сообщение
       const chatMessage = new ChatMessage({

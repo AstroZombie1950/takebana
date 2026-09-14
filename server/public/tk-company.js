@@ -6,6 +6,9 @@
 (function () {
   "use strict";
 
+  // Подписи — из общего словаря (public/tk-i18n.js), он грузится раньше.
+  var t = function (key, vars) { return window.t ? window.t(key, vars) : ""; };
+
   // Время: цифры, двоеточие после второй. Пишем и стираем без сюрпризов —
   // никакого «перепрыгивания» курсора, потому что правим только конец строки.
   function initTimeMask() {
@@ -60,14 +63,14 @@
       ];
       for (var i = 0; i < required.length; i++) {
         if (!required[i]) {
-          toast("Заполните все поля");
+          toast(t("company.fillAll"));
           return;
         }
       }
 
       var spot = point && point.value();
       if (!spot) {
-        toast("Поставьте метку заведения на карте");
+        toast(t("company.needPoint"));
         if (pointBox) pointBox.scrollIntoView({ block: "center", behavior: "smooth" });
         return;
       }
@@ -93,7 +96,7 @@
         })
         .catch(function (error) {
           button.disabled = false;
-          toast("Не удалось отправить заявку: " + error.message, "error");
+          toast(t("company.sendFailed", { message: error.message }), "error");
         });
     });
   }

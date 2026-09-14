@@ -12,6 +12,8 @@
 // Побочно закрывается перезапись лишними полями: в `req.body` остаётся только
 // то, что описано в схеме, всё остальное отбрасывается.
 
+const { langOf, tr } = require('../utils/i18n');
+
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 // Ключи трансляций — UUID, но схема допускает и произвольную строку; ограничиваем
 // набор символов, потому что ключ участвует в пути к файлам сегментов.
@@ -20,58 +22,64 @@ const KEY = /^[\w-]{1,128}$/;
 // регулярка по RFC отсекает валидные адреса чаще, чем ловит опечатки.
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Ошибка поля — шаблон и подстановки, а не готовая строка: текст собирается
+// в validate() на языке запроса (utils/i18n.js).
+function fail(text, vars) {
+    return { error: { text, vars } };
+}
+
 function isPlainObject(v) {
     return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
 const checks = {
     string(value) {
-        if (typeof value !== 'string') return { error: 'ожидалась строка' };
+        if (typeof value !== 'string') return fail('ожидалась строка');
         return { value };
     },
     email(value) {
-        if (typeof value !== 'string') return { error: 'ожидалась строка' };
-        if (value.length > 254) return { error: 'слишком длинный адрес' };
-        if (!EMAIL.test(value)) return { error: 'не похоже на адрес почты' };
+        if (typeof value !== 'string') return fail('ожидалась строка');
+        if (value.length > 254) return fail('слишком длинный адрес');
+        if (!EMAIL.test(value)) return fail('не похоже на адрес почты');
         return { value };
     },
     objectId(value) {
-        if (typeof value !== 'string') return { error: 'ожидался идентификатор' };
-        if (!OBJECT_ID.test(value)) return { error: 'некорректный идентификатор' };
+        if (typeof value !== 'string') return fail('ожидался идентификатор');
+        if (!OBJECT_ID.test(value)) return fail('некорректный идентификатор');
         return { value };
     },
     key(value) {
-        if (typeof value !== 'string') return { error: 'ожидался ключ' };
-        if (!KEY.test(value)) return { error: 'некорректный ключ' };
+        if (typeof value !== 'string') return fail('ожидался ключ');
+        if (!KEY.test(value)) return fail('некорректный ключ');
         return { value };
     },
     // Числа приходят строками из форм multipart и числами из JSON — принимаем оба.
     int(value) {
         const n = typeof value === 'string' ? Number(value.trim()) : value;
-        if (typeof n !== 'number' || !Number.isInteger(n)) return { error: 'ожидалось целое число' };
+        if (typeof n !== 'number' || !Number.isInteger(n)) return fail('ожидалось целое число');
         return { value: n };
     },
     number(value) {
         const n = typeof value === 'string' ? Number(value.trim()) : value;
-        if (typeof n !== 'number' || !Number.isFinite(n)) return { error: 'ожидалось число' };
+        if (typeof n !== 'number' || !Number.isFinite(n)) return fail('ожидалось число');
         return { value: n };
     },
     bool(value) {
         if (typeof value === 'boolean') return { value };
         if (value === 'true' || value === '1') return { value: true };
         if (value === 'false' || value === '0') return { value: false };
-        return { error: 'ожидалось да/нет' };
+        return fail('ожидалось да/нет');
     },
     object(value, rule) {
-        if (!isPlainObject(value)) return { error: 'ожидался объект' };
+        if (!isPlainObject(value)) return fail('ожидался объект');
         const { clean, errors } = parseInto(rule.schema || {}, value);
         if (Object.keys(errors).length) return { nested: errors };
         return { value: clean };
     },
     array(value, rule) {
-        if (!Array.isArray(value)) return { error: 'ожидался список' };
+        if (!Array.isArray(value)) return fail('ожидался список');
         if (rule.max !== undefined && value.length > rule.max) {
-            return { error: `не больше ${rule.max} элементов` };
+            return fail('не больше {max} элементов', { max: rule.max });
         }
         const out = [];
         const errors = {};
@@ -108,7 +116,7 @@ function checkOne(name, rule, raw) {
     // заведение без почты — а такие есть на бою — не сохранялось из админки
     // вообще, при любой правке.
     if (raw === '' && !rule.allowEmpty) {
-        if (rule.required) return { error: 'обязательное поле' };
+        if (rule.required) return fail('обязательное поле');
         return { skip: true };
     }
 
@@ -119,7 +127,7 @@ function checkOne(name, rule, raw) {
         try {
             raw = JSON.parse(raw);
         } catch {
-            return { error: 'не разобрать JSON' };
+            return fail('не разобрать JSON');
         }
     }
 
@@ -129,21 +137,21 @@ function checkOne(name, rule, raw) {
 
     if (typeof value === 'string') {
         if (rule.min !== undefined && value.length < rule.min) {
-            return { error: `не короче ${rule.min} символов` };
+            return fail('не короче {min} символов', { min: rule.min });
         }
         if (rule.max !== undefined && value.length > rule.max) {
-            return { error: `не длиннее ${rule.max} символов` };
+            return fail('не длиннее {max} символов', { max: rule.max });
         }
-        if (rule.pattern && !rule.pattern.test(value)) return { error: 'недопустимое значение' };
+        if (rule.pattern && !rule.pattern.test(value)) return fail('недопустимое значение');
     }
 
     if (typeof value === 'number') {
-        if (rule.min !== undefined && value < rule.min) return { error: `не меньше ${rule.min}` };
-        if (rule.max !== undefined && value > rule.max) return { error: `не больше ${rule.max}` };
+        if (rule.min !== undefined && value < rule.min) return fail('не меньше {min}', { min: rule.min });
+        if (rule.max !== undefined && value > rule.max) return fail('не больше {max}', { max: rule.max });
     }
 
     if (rule.values && !rule.values.includes(value)) {
-        return { error: `допустимо только: ${rule.values.join(', ')}` };
+        return fail('допустимо только: {values}', { values: rule.values.join(', ') });
     }
 
     return { value };
@@ -158,7 +166,7 @@ function parseInto(schema, source) {
         const raw = source[name];
 
         if (raw === undefined || raw === null) {
-            if (rule.required) errors[name] = 'обязательное поле';
+            if (rule.required) errors[name] = fail('обязательное поле').error;
             else if (rule.default !== undefined) clean[name] = rule.default;
             continue;
         }
@@ -194,13 +202,16 @@ function validate(schema) {
             // Страницы входа, регистрации и профиля показывают пользователю ровно
             // `message` из ответа, поэтому в него собирается человеческий текст,
             // а не общее «некорректные данные». Разбор по полям остаётся в `errors`.
+            const lang = langOf(req);
+            const text = {};
+            for (const name of failed) text[name] = tr(lang, errors[name].text, errors[name].vars);
             const message = failed
                 .map((name) => {
                     const rule = schema[name.split('.')[0]] || {};
-                    return `${rule.label || name}: ${errors[name]}`;
+                    return `${rule.label ? tr(lang, rule.label) : name}: ${text[name]}`;
                 })
                 .join('; ');
-            return res.status(400).json({ message, errors });
+            return res.status(400).json({ message, errors: text });
         }
 
         req.body = clean;

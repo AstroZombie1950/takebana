@@ -63,6 +63,15 @@ const UserSchema = new mongoose.Schema({
   adultConfirmedAt: {
     type: Date,
     default: null
+  },
+  // Восстановление пароля (routes/passwordReset.js). Хранится хеш токена из
+  // письма, а не сам токен: копия базы не даёт действующих ссылок. Одна
+  // ссылка на человека — новый запрос заменяет прежнюю; после смены пароля
+  // поле снимается. requestedAt — чтобы не слать письма чаще раза в минуту.
+  passwordReset: {
+    tokenHash: String,
+    expiresAt: Date,
+    requestedAt: Date
   }
 });
 
@@ -75,5 +84,9 @@ UserSchema.index({ email: 1, provider: 1 }, { unique: true });
 // Список забаненных в панели. Частичный индекс: строк с banned: true единицы,
 // а платить за индекс по всей коллекции ради них незачем.
 UserSchema.index({ banned: 1 }, { partialFilterExpression: { banned: true } });
+
+// Переход по ссылке из письма ищет по хешу токена. Частичный: ссылка открыта
+// у единиц, остальным строкам место в индексе не нужно.
+UserSchema.index({ 'passwordReset.tokenHash': 1 }, { partialFilterExpression: { 'passwordReset.tokenHash': { $exists: true } } });
 
 module.exports = mongoose.model('User', UserSchema);

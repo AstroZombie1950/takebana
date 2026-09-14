@@ -31,6 +31,17 @@ const registerLimiter = rateLimit({
     message: { message: 'Слишком много регистраций с этого адреса. Попробуйте позже.' },
 });
 
+// Письмо восстановления пароля: 5 запросов с адреса за 15 минут. Считаются
+// все, а не только неудачные: ответ всегда одинаковый, и именно частота —
+// единственное, что мешает забрасывать чужие ящики письмами.
+const resetLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { message: 'Слишком много запросов. Попробуйте через 15 минут.' },
+});
+
 // Поиск адреса (routes/geocode.js): за нашим маршрутом стоит чужой
 // общественный сервис, которому обещано не больше запроса в секунду. Очередь
 // в utils/geocode.js это соблюдает, но без лимита одна страница в цикле
@@ -44,4 +55,4 @@ const geocodeLimiter = rateLimit({
     message: { message: 'Слишком много запросов адреса. Попробуйте через несколько минут.' },
 });
 
-module.exports = { authLimiter, registerLimiter, geocodeLimiter };
+module.exports = { authLimiter, registerLimiter, resetLimiter, geocodeLimiter };

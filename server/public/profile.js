@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ── Подписка ────────────────────────────────────────────────────────────
   var subscribeButton = document.querySelector('.subscribe__button');
   if (subscribeButton) {
-    var label = subscribeButton.querySelector('span[lng]');
+    var label = subscribeButton.querySelector('[data-i18n]');
 
     async function toggleSubscription() {
       var off = subscribeButton.classList.contains('unsubscribe');
@@ -58,10 +58,7 @@ document.addEventListener('DOMContentLoaded', function () {
           subscribeButton.classList.toggle('unsubscribe', !off);
           // Ключ словаря меняем вместе с текстом: иначе следующее
           // переключение языка вернёт прежнюю подпись.
-          label.setAttribute('lng', off ? '91' : '130');
-          label.textContent = off
-            ? pt('stream.subscribe')
-            : pt('stream.unsubscribe');
+          window.tkText(label, off ? 'stream.subscribe' : 'stream.unsubscribe');
           return;
         }
 

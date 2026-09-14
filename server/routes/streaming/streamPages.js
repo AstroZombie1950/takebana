@@ -10,7 +10,8 @@ const Stream = require('../../models/Stream');
 const Subscription = require('../../models/Subscription');
 const { requireAuth, requireOwner } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validate');
-const { commonDataMiddleware, getRandomGradient } = require('./shared');
+const { commonDataMiddleware } = require('./shared');
+const userView = require('../../utils/userView');
 const { buildObsStreamKey, getSignExpiry } = require('../../utils/rtmpAuth');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -30,13 +31,11 @@ async function loadStream(streamId) {
   if (!stream || !stream.userId) return null;
 
   const author = stream.userId;
-  const displayName = author.login || (author.email ? author.email.split('@')[0] : 'Неизвестный пользователь');
+  const displayName = userView.displayName(author);
   const user = {
     _id: author._id,
     displayName,
-    avatarStyle: author.avatar
-      ? { url: author.avatar }
-      : { gradient: getRandomGradient(), initial: displayName.charAt(0).toUpperCase() },
+    avatarStyle: userView.avatarStyle(author, displayName),
   };
   return { stream, user };
 }

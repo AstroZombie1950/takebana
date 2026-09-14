@@ -9,14 +9,15 @@ const Stream = require('../../models/Stream');
 const Subscription = require('../../models/Subscription');
 const { requireAuthApi } = require('../../middleware/auth');
 const { SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
-const { commonDataMiddleware, getStreamUsers, getActiveStreamsCount, getRandomGradient } = require('./shared');
+const { commonDataMiddleware, getStreamUsers, getActiveStreamsCount } = require('./shared');
+const userView = require('../../utils/userView');
 
 // Вкладки каталога. popular — все категории разом, остальные совпадают
 // с кодами категорий в config/catalog.js.
 const PAGES = {
-  popular:       { title: 'ПОПУЛЯРНОЕ', i18n: 'cat.popularTitle' },
-  business:      { title: 'БИЗНЕС', i18n: 'cat.businessTitle' },
-  entertainment: { title: 'РАЗВЛЕЧЕНИЯ', i18n: 'cat.entertainmentTitle' },
+  popular:       { i18n: 'cat.popularTitle' },
+  business:      { i18n: 'cat.businessTitle' },
+  entertainment: { i18n: 'cat.entertainmentTitle' },
 };
 
 // Прежде роут отдавал не больше четырёх эфиров — с фильтрами это значило бы
@@ -56,7 +57,7 @@ async function findStreams(category, filters) {
   // падала вся страница каталога — 500 вместо списка.
   return streams.filter((stream) => stream.userId).map((stream) => {
     const user = stream.userId;
-    const displayName = user.login || (user.email ? user.email.split('@')[0] : 'Неизвестный пользователь');
+    const displayName = userView.displayName(user);
     return {
       streamId: stream._id,
       title: stream.title,
@@ -67,9 +68,7 @@ async function findStreams(category, filters) {
       thumbnail: stream.thumbnail || null,
       user: {
         displayName,
-        avatarStyle: user.avatar
-          ? { url: user.avatar }
-          : { gradient: getRandomGradient(), initial: displayName.charAt(0).toUpperCase() },
+        avatarStyle: userView.avatarStyle(user, displayName),
       },
     };
   });
@@ -98,7 +97,6 @@ router.get('/streaming/:category?', commonDataMiddleware, async (req, res) => {
   ]);
 
   res.render('streamingMain', {
-    title: `${page.title} Стримы`,
     category,
     page,
     filters,
@@ -144,10 +142,8 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
       return res.status(404).send('Пользователь не найден');
     }
 
-    const displayName = user.login || (user.email ? user.email.split('@')[0] : 'Неизвестный пользователь');
-    const avatarStyle = user.avatar
-      ? { url: user.avatar }
-      : { gradient: getRandomGradient(), initial: displayName.charAt(0).toUpperCase() };
+    const displayName = userView.displayName(user);
+    const avatarStyle = userView.avatarStyle(user, displayName);
 
     // Получаем количество подписчиков и подписок для отображаемого пользователя
     const followersCount = await Subscription.countDocuments({ subscribedToId: userId });
@@ -170,7 +166,6 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
 
     // Передача данных в шаблон
     res.render('userPage', {
-      title: `Профиль пользователя ${displayName}`,
       user: {
         displayName,
         avatarStyle,

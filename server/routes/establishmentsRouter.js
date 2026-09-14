@@ -96,9 +96,10 @@ router.post('/register-establishment', requireAuth, validate({
 
     try {
         const savedEstablishment = await establishment.save();
-        res.json({ message: 'Establishment successfully registered!', establishment: savedEstablishment });
+        res.json({ message: 'Заявка отправлена', establishment: savedEstablishment });
     } catch (err) {
-        res.status(500).json({ message: 'Server error: ' + err.message });
+        console.error('Ошибка при сохранении заявки:', err);
+        res.status(500).json({ message: 'Ошибка сервера' });
     }
 }));
 
@@ -211,7 +212,7 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
     // Пустое тело после разбора и означает «обновлять нечего». Три JSON.parse
     // отсюда убраны: их делает схема, и кривая строка теперь даёт 400, а не 500.
     if (!Object.keys(req.body).length) {
-        return res.status(400).json({ message: 'Please specify at least one field to update' });
+        return res.status(400).json({ message: 'Пожалуйста, укажите хотя бы одно поле для обновления' });
     }
 
     const establishment = {
@@ -237,7 +238,7 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
         res.json(updatedEstablishment);
     } catch (err) {
         console.error(err); // Логируем ошибку
-        res.status(500).json({ message: 'An error occurred while updating the establishment.' });
+        res.status(500).json({ message: 'Ошибка сервера' });
     }
 }));
 

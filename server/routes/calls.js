@@ -7,6 +7,7 @@ const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const { requireAuthApi, requireNotBanned } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
+const userView = require('../utils/userView');
 const User = require('../models/User');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
 const { randomUUID: uuidv4 } = require('crypto');
@@ -35,7 +36,7 @@ router.post('/api/calls/create', requireAuthApi, requireNotBanned, validate({
     }
     // user info
     const caller = await User.findById(callerId).lean();
-    const displayName = caller?.login || (caller?.email ? caller.email.split('@')[0] : 'Пользователь');
+    const displayName = caller ? userView.displayName(caller) : '';
     const avatarUrl = caller?.avatar || null;
     // notify callee via socket room
     if (io) {

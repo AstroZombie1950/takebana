@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="<%= lang %>">
 <head>
 <%- include('../partials/tkHead', {
   title: 'Политика в отношении обработки персональных данных — Takebana',
@@ -12,7 +12,8 @@
 <div class="tk-shell">
 <%- include('../partials/tkHeader') %>
 
-<main class="tk-prose" data-bg="paper">
+<%# Документы — только на русском; шапка и подвал — на языке интерфейса. %>
+<main class="tk-prose" data-bg="paper" lang="ru">
   <div class="tk-prose__inner">
     <span class="tk-prose__kicker">Документы</span>
     <h1 class="tk-prose__title">Политика в отношении обработки персональных данных</h1>
@@ -139,6 +140,7 @@
 
 <%- include('../partials/tkMenu') %>
 
+<script defer src="/tk-i18n-<%= lang %>.js"></script>
 <script defer src="/tk-i18n.js"></script>
 <script defer src="/tk.js"></script>
 </body>

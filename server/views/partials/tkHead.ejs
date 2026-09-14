@@ -1,12 +1,21 @@
 <%
-  // Общее начало <head>. Локали: title (обязательна), description (нет).
-  var pageDescription = typeof description !== 'undefined' ? description : '';
+  // Общее начало <head>. Заголовок — ключ словаря titleKey (подстановки —
+  // titleVars) или готовая строка title: название эфира, админка, документы.
+  // Описание — ключ descriptionKey или строка description, необязательно.
+  // С ключом заголовок переключается вместе с языком, без перезагрузки.
+  var headTitleVars = typeof titleVars !== 'undefined' ? titleVars : undefined;
+  var headDescription = typeof descriptionKey !== 'undefined' ? ta(descriptionKey)
+                      : typeof description !== 'undefined' ? description : '';
 %>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<% if (typeof titleKey !== 'undefined') { %>
+<title data-i18n="<%= titleKey %>"<% if (headTitleVars) { %> data-i18n-vars="<%= JSON.stringify(headTitleVars) %>"<% } %>><%= ta(titleKey, headTitleVars) %></title>
+<% } else { %>
 <title><%= title %></title>
-<% if (pageDescription) { %>
-<meta name="description" content="<%= pageDescription %>">
+<% } %>
+<% if (headDescription) { %>
+<meta name="description" content="<%= headDescription %>">
 <% } %>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 

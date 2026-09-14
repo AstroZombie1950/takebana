@@ -5,7 +5,7 @@
   partials/streamInfo, partials/streamChat и /tk-stream.js.
 %>
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { title: stream.title + ' — Takebana' }) %>
 <link rel="stylesheet" href="/css/app.css">
@@ -45,17 +45,17 @@
                 <audio id="remoteAudio" autoplay></audio>
 
                 <div class="tk-live__volume" id="volumeControl" style="display: none;">
-                  <button type="button" id="muteButton" aria-label="Звук" data-i18n-aria="viewer.sound" aria-pressed="false">
+                  <button type="button" id="muteButton" aria-label="<%= ta('viewer.sound') %>" data-i18n-aria="viewer.sound" aria-pressed="false">
                     <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5Z"></path><path d="M16 9.5a3.5 3.5 0 010 5"></path></svg>
                   </button>
-                  <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="100" aria-label="Громкость" data-i18n-aria="viewer.volume">
+                  <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="100" aria-label="<%= ta('viewer.volume') %>" data-i18n-aria="viewer.volume">
                   <span id="volumeValue">100</span>
-                  <button type="button" id="fullscreenButton" title="На весь экран" aria-label="На весь экран" data-i18n-title="stream.fullscreen" data-i18n-aria="stream.fullscreen">
+                  <button type="button" id="fullscreenButton" title="<%= ta('stream.fullscreen') %>" aria-label="<%= ta('stream.fullscreen') %>" data-i18n-title="stream.fullscreen" data-i18n-aria="stream.fullscreen">
                     <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M4.5 15v4.5H9M15 19.5h4.5V15"></path></svg>
                   </button>
                 </div>
 
-                <div class="tk-live__daily-status" id="dailyStatus">Подключение к эфиру…</div>
+                <div class="tk-live__daily-status" id="dailyStatus" data-i18n="viewer.connecting"><%- t('viewer.connecting') %></div>
               </div>
 
             <% } else { %>
@@ -63,8 +63,8 @@
                 <% if (stream.thumbnail) { %>
                   <img class="tk-live__thumb" src="<%= stream.thumbnail %>" alt="">
                 <% } %>
-                <p class="tk-live__hint-title" data-i18n="viewer.pausedTitle">Эфир приостановлен</p>
-                <p data-i18n="viewer.pausedText">Трансляция продолжится, как только ведущий вернётся в эфир.</p>
+                <p class="tk-live__hint-title" data-i18n="viewer.pausedTitle"><%- t('viewer.pausedTitle') %></p>
+                <p data-i18n="viewer.pausedText"><%- t('viewer.pausedText') %></p>
               </div>
             <% } %>
 
@@ -112,20 +112,19 @@
       });
       if (!r.ok) {
         const b = await r.json().catch(() => ({}));
-        toast('Ошибка: ' + (b.message || 'HTTP ' + r.status), 'error');
+        toast(t('app.errorShort', { message: b.message || 'HTTP ' + r.status }), 'error');
         return;
       }
     } catch (_) {
-      toast('Нет связи — попробуйте ещё раз', 'error');
+      toast(t('common.noNetwork'), 'error');
       return;
     }
-    toast(subscribe ? 'Вы успешно подписались на стримера!' : 'Вы успешно отписались от стримера!', 'ok');
+    toast(t(subscribe ? 'stream.subscribed' : 'stream.unsubscribed'), 'ok');
     subBtn.classList.toggle('js-subscribe', !subscribe);
     subBtn.classList.toggle('js-unsubscribe', subscribe);
     subBtn.classList.toggle('tk-btn--primary', !subscribe);
     subBtn.classList.toggle('tk-btn--outline', subscribe);
-    subBtn.setAttribute('lng', subscribe ? '130' : '91');
-    subBtn.textContent = subscribe ? (t('130') || 'Отписаться') : (t('91') || 'Подписаться');
+    tkText(subBtn, subscribe ? 'stream.unsubscribe' : 'stream.subscribe');
   });
 
   if (data.streamType === 'obs-stream') {

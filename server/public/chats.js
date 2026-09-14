@@ -32,46 +32,14 @@ function uiLang() { return window.tkLang ? window.tkLang() : 'ru'; }
 
 function feed() { return document.getElementById('feed'); }
 
-// Дата и время сообщения — в локали интерфейса. По умолчанию toLocaleString
-// берёт локаль браузера, и на русской странице выходило «9/9/2026, 10:04 AM».
-function when(value) {
-  var lang = uiLang();
-  return new Date(value).toLocaleString(lang === 'en' ? 'en-US' : 'ru-RU');
-}
-
-// «5 минут назад» вместо серверного «5 minutes ago»: сервер не знает языка
-// интерфейса, он живёт в localStorage.
-var AGO = {
-  ru: { s: ['секунду', 'секунды', 'секунд'], m: ['минуту', 'минуты', 'минут'],
-        h: ['час', 'часа', 'часов'], d: ['день', 'дня', 'дней'],
-        mo: ['месяц', 'месяца', 'месяцев'], y: ['год', 'года', 'лет'] },
-  en: { s: ['second', 'seconds'], m: ['minute', 'minutes'], h: ['hour', 'hours'],
-        d: ['day', 'days'], mo: ['month', 'months'], y: ['year', 'years'] }
-};
-
-function plural(n, forms) {
-  if (forms.length === 2) return forms[n === 1 ? 0 : 1];
-  var a = n % 100;
-  if (a > 4 && a < 20) return forms[2];
-  var b = n % 10;
-  if (b === 1) return forms[0];
-  if (b > 1 && b < 5) return forms[1];
-  return forms[2];
-}
+// «5 минут назад» на языке интерфейса — так же, как сервер
+// (routes/streaming/messages.js).
+var AGO_STEPS = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60], ['second', 1]];
 
 function timeAgo(value) {
-  var lang = uiLang();
   var sec = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
-  var steps = [['y', 31536000], ['mo', 2592000], ['d', 86400], ['h', 3600], ['m', 60], ['s', 1]];
-
-  for (var i = 0; i < steps.length; i++) {
-    var n = Math.floor(sec / steps[i][1]);
-    if (n >= 1 || steps[i][0] === 's') {
-      var word = plural(n, AGO[lang][steps[i][0]]);
-      return lang === 'en' ? n + ' ' + word + ' ago' : n + ' ' + word + ' назад';
-    }
-  }
-  return '';
+  var step = AGO_STEPS.find(function (x) { return sec >= x[1]; }) || AGO_STEPS[AGO_STEPS.length - 1];
+  return new Intl.RelativeTimeFormat(uiLang()).format(-Math.floor(sec / step[1]), step[0]);
 }
 
 function refreshTimes() {
@@ -160,7 +128,7 @@ function renderMessages() {
   }
 
   loadedMessages.forEach(function (message) {
-    var stamp = escapeHtml(when(message.sentAt));
+    var stamp = escapeHtml(tkDate(message.sentAt));
     var text = escapeHtml(message.content);
     var wrap = document.createElement('div');
 
@@ -318,11 +286,11 @@ function selectConversation(element) {
   if (name) {
     name.textContent = recipientName;
     // Ключ словаря снимаем: иначе applyLang вернёт «Выберите диалог».
-    name.removeAttribute('lng');
+    name.removeAttribute('data-i18n');
   }
 
   var note = document.querySelector('.tk-chat__peer-note');
-  if (note) { note.textContent = ''; note.removeAttribute('lng'); }
+  if (note) { note.textContent = ''; note.removeAttribute('data-i18n'); }
 
   var avatar = document.getElementById('chatAvatar');
   if (avatar) {
@@ -355,8 +323,8 @@ function selectConversation(element) {
   var send = document.querySelector('.input__button-icons');
   if (input) {
     input.setAttribute('data-id', recipientId);
+    input.removeAttribute('data-i18n-placeholder');
     input.placeholder = t('chats.messageTo') + ' ' + recipientName + '…';
-    input.removeAttribute('lng');
   }
   if (send) send.setAttribute('data-id', recipientId);
 
@@ -421,6 +389,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
   window.addEventListener('beforeunload', function () {
     if (messageCheckInterval) clearInterval(messageCheckInterval);
+  });
+
+  // Лента, даты и подсказка поля собираются скриптом, а переключатель языка
+  // переводит только разметку с ключами — поэтому пересобираем сами.
+  document.addEventListener('tk:lang', function () {
+    refreshTimes();
+    if (!currentRecipientId) return;
+    var box = feed();
+    var fromBottom = box.scrollHeight - box.scrollTop;
+    renderMessages();
+    box.scrollTop = box.scrollHeight - fromBottom;
+    var input = document.getElementById('messageInput');
+    if (input) input.placeholder = t('chats.messageTo') + ' ' + currentRecipientName + '…';
   });
 
   updateHeaderNotificationIndicator();

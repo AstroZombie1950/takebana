@@ -8,9 +8,9 @@
   var groups = category === 'popular' ? Object.keys(catalog.CATEGORIES) : [category];
 %>
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { title: title + ' — Takebana' }) %>
+<%- include('partials/tkHead', { titleKey: 'page.' + category + '.title' }) %>
 <link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="/css/catalog.css">
 </head>
@@ -32,30 +32,25 @@
           <%# Ключ словаря содержит заголовок целиком, вместе с категорией
               и переносом. Раньше он висел на подзаголовке, и после applyLang
               строка «ПРЯМЫЕ ТРАНСЛЯЦИИ» печаталась на экране дважды. %>
-          <h1 class="tk-cat__h1" data-i18n="<%= page.i18n %>">
-            Прямые трансляции:<br><%= page.title %>
-          </h1>
+          <h1 class="tk-cat__h1" data-i18n="<%= page.i18n %>"><%- t(page.i18n) %></h1>
 
-          <p class="tk-cat__lede" data-i18n="catalog.lede">
-            Откройте для себя захватывающий мир прямых трансляций.
-            Смотрите, общайтесь и делитесь яркими моментами вместе с тысячами зрителей.
-          </p>
+          <p class="tk-cat__lede" data-i18n="catalog.lede"><%- t('catalog.lede') %></p>
 
           <div class="tk-cat__stats">
             <span class="tk-stat">
               <span class="tk-stat__num"><%= totalStreamsCount %></span>
-              <span data-i18n="catalog.streamers">Стримеров</span>
+              <span data-i18n="catalog.streamers"><%- t('catalog.streamers') %></span>
             </span>
             <span class="tk-stat">
               <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M8.1 16.4a5.5 5.5 0 0 1 7.8 0"></path><path d="M4.9 12.9a10 10 0 0 1 14.2 0"></path><path d="M1.4 9.4a15 15 0 0 1 21.2 0"></path><path d="M12 20h.01"></path></svg>
-              <span data-i18n="catalog.onlineNow">Онлайн</span>
+              <span data-i18n="catalog.onlineNow"><%- t('catalog.onlineNow') %></span>
             </span>
           </div>
         </div>
 
         <!-- Рекомендации -->
         <section>
-          <p class="tk-kicker" data-i18n="catalog.recommendations">Рекомендации</p>
+          <p class="tk-kicker" data-i18n="catalog.recommendations"><%- t('catalog.recommendations') %></p>
 
           <%# Роут отдаёт четверых, в макете показаны трое. Остальные лежат
               скрытыми, их раскрывает «Показать ещё»: раньше эта кнопка
@@ -77,7 +72,7 @@
               <div class="tk-rec__body">
                 <p class="tk-rec__name"><%= user.displayName %></p>
                 <p class="tk-rec__state" data-presence-text>
-                  <% if (user.isOnline) { %><span data-i18n="common.online">онлайн</span><% } else { %><span data-i18n="common.offline">оффлайн</span><% } %>
+                  <% if (user.isOnline) { %><span data-i18n="common.online"><%- t('common.online') %></span><% } else { %><span data-i18n="common.offline"><%- t('common.offline') %></span><% } %>
                 </p>
               </div>
             </a>
@@ -86,7 +81,7 @@
 
           <% if (users.length > 3) { %>
           <button type="button" class="tk-rec__more" id="showMoreUsers">
-            <span data-i18n="catalog.showMore">Показать ещё</span>
+            <span data-i18n="catalog.showMore"><%- t('catalog.showMore') %></span>
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
           </button>
           <% } %>
@@ -100,21 +95,21 @@
 
       <!-- Категории контента -->
       <section class="tk-cat__sec">
-        <p class="tk-kicker" data-i18n="catalog.categories">Категории контента</p>
+        <p class="tk-kicker" data-i18n="catalog.categories"><%- t('catalog.categories') %></p>
 
         <div class="tk-groups">
           <% groups.forEach(function (code) { var cat = catalog.CATEGORIES[code]; %>
-          <div class="tk-group" role="group" aria-label="<%= cat.name %>">
+          <div class="tk-group" role="group" aria-label="<%= ta(cat.i18n, cat.name) %>">
             <div class="tk-group__head">
               <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="square" aria-hidden="true"><%- groupIcons[code] %></svg>
               <div>
-                <p class="tk-group__name" data-i18n="<%= cat.i18n %>"><%= cat.name %></p>
-                <p class="tk-group__note" data-i18n="<%= cat.noteI18n %>"><%= cat.note %></p>
+                <p class="tk-group__name" data-i18n="<%= cat.i18n %>"><%= ta(cat.i18n, cat.name) %></p>
+                <p class="tk-group__note" data-i18n="<%= cat.noteI18n %>"><%= ta(cat.noteI18n, cat.note) %></p>
               </div>
             </div>
             <div class="tk-tags">
               <% cat.subs.forEach(function (sub) { %>
-              <label class="tk-tag"><input type="checkbox" name="sub" value="<%= sub.code %>"<%= filters.subs.includes(sub.code) ? ' checked' : '' %>><span<% if (sub.i18n) { %> data-i18n="<%= sub.i18n %>"<% } %>><%= sub.name %></span></label>
+              <label class="tk-tag"><input type="checkbox" name="sub" value="<%= sub.code %>"<%= filters.subs.includes(sub.code) ? ' checked' : '' %>><span<% if (sub.i18n) { %> data-i18n="<%= sub.i18n %>"<% } %>><%= ta(sub.i18n, sub.name) %></span></label>
               <% }); %>
             </div>
           </div>
@@ -124,32 +119,32 @@
 
       <!-- Активные трансляции -->
       <section class="tk-cat__sec">
-        <h2 class="tk-cat__h2" data-i18n="catalog.popular">Популярные трансляции</h2>
-        <p class="tk-cat__note" data-i18n="catalog.discover">Откройте для себя лучший контент прямо сейчас</p>
+        <h2 class="tk-cat__h2" data-i18n="catalog.popular"><%- t('catalog.popular') %></h2>
+        <p class="tk-cat__note" data-i18n="catalog.discover"><%- t('catalog.discover') %></p>
 
         <div class="tk-cat__bar">
           <label class="tk-cat__ctl">
-            <span class="tk-form__label" data-i18n="common.city">Город</span>
+            <span class="tk-form__label" data-i18n="common.city"><%- t('common.city') %></span>
             <select name="city" class="tk-field tk-select">
-              <option value="" data-i18n="common.allCities">Все города</option>
+              <option value="" data-i18n="common.allCities"><%- t('common.allCities') %></option>
               <% catalog.CITIES.forEach(function (city) { %>
-              <option value="<%= city.code %>"<%= filters.city === city.code ? ' selected' : '' %> data-i18n="<%= city.i18n %>"><%= city.name %></option>
+              <option value="<%= city.code %>"<%= filters.city === city.code ? ' selected' : '' %> data-i18n="<%= city.i18n %>"><%= ta(city.i18n, city.name) %></option>
               <% }); %>
             </select>
           </label>
 
           <label class="tk-cat__ctl">
-            <span class="tk-form__label" data-i18n="catalog.sort">Сортировка</span>
+            <span class="tk-form__label" data-i18n="catalog.sort"><%- t('catalog.sort') %></span>
             <select name="sort" class="tk-field tk-select">
-              <option value="" data-i18n="catalog.sortViewers">По зрителям</option>
-              <option value="new"<%= filters.sort === 'new' ? ' selected' : '' %> data-i18n="catalog.sortNew">Сначала новые</option>
+              <option value="" data-i18n="catalog.sortViewers"><%- t('catalog.sortViewers') %></option>
+              <option value="new"<%= filters.sort === 'new' ? ' selected' : '' %> data-i18n="catalog.sortNew"><%- t('catalog.sortNew') %></option>
             </select>
           </label>
 
           <%# Нужна только без скрипта: со скриптом фильтр применяется сразу
               при смене значения, и catalog.js кнопку убирает. %>
-          <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="common.show">Показать</button>
-          <a href="<%= base %>" class="tk-cat__reset" data-reset<%= filtered ? '' : ' hidden' %> data-i18n="common.resetFilters">Сбросить фильтры</a>
+          <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="common.show"><%- t('common.show') %></button>
+          <a href="<%= base %>" class="tk-cat__reset" data-reset<%= filtered ? '' : ' hidden' %> data-i18n="common.resetFilters"><%- t('common.resetFilters') %></a>
         </div>
 
         <div class="tk-cat__results" id="catResults">

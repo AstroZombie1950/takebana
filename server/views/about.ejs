@@ -1,10 +1,7 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', {
-  title: 'О сервисе — Takebana',
-  description: 'Takebana — проект, который позволяет побывать в заведениях и на производствах по всему миру, не выходя из дома.'
-}) %>
+<%- include('partials/tkHead', { titleKey: 'page.about.title', descriptionKey: 'page.about.description' }) %>
 <link rel="stylesheet" href="/css/prose.css">
 </head>
 <body>
@@ -14,23 +11,23 @@
 
 <main class="tk-prose" data-bg="paper">
   <div class="tk-prose__inner">
-    <span class="tk-prose__kicker" data-i18n="about.kicker">О сервисе</span>
+    <span class="tk-prose__kicker" data-i18n="about.kicker"><%- t('about.kicker') %></span>
     <h1 class="tk-prose__title">Takebana</h1>
 
     <div class="tk-prose__body">
-      <p data-i18n="about.lede"><strong>Уникальный проект Takebana. Путешествуй по ресторанам мира, не выходя из дома.</strong></p>
-      <p data-i18n="about.p1"><strong>Takebana сокращает расстояния.</strong> Интернет – сколько полезного и доступного можно найти в сети. И это не только досуг или игры, но и рабочие моменты, учеба, общение онлайн и даже консультации специалистов. Понимая эти факты, пришла идея создать уникальный проект, где можно без выхода из дома или офиса посещать крутые локации.</p>
-      <p data-i18n="about.p2">Путешествия, не вставая с дивана, новые знакомства, общение с друзьями или родственниками. Все это и не только будет возможно с проектом Takebana. Просто берем ноутбук или смартфон, включаем вебку и попадаем в мир реальности, но на другом конце света.</p>
+      <p data-i18n="about.lede"><%- t('about.lede') %></p>
+      <p data-i18n="about.p1"><%- t('about.p1') %></p>
+      <p data-i18n="about.p2"><%- t('about.p2') %></p>
 
-      <h2 data-i18n="about.features">Особенности сервиса:</h2>
-      <p data-i18n="about.f1">1. <strong>Возможность лично оценить обстановку</strong> внутри ресторана, бара или кальянной. Любые заведения в режиме онлайн.</p>
-      <p data-i18n="about.f2">2. <strong>Лучшие места и локации стран мира</strong>, крутые заведения, необычная и чарующая обстановка. Многие рестораны люди не смогут посетить в реальности, но сервис позволят «прикоснуться» к реальности.</p>
-      <p data-i18n="about.f3">3. С помощью сайта Takebana можно <strong>поддерживать связь с посетителями из разных стран</strong> и локаций.</p>
-      <p data-i18n="about.f4">4. Сервис <strong>Takebana работает по принципу чат-рулетки</strong>, когда пользователь может подключиться к любому заведению на выбор. Такая возможность позволяет изучить обстановку, понять для себя, куда лучше отправиться в реальное путешествие.</p>
-      <p data-i18n="about.f5">5. Гастроблогеры, туристы и путешественники смогут <strong>оценить качество обслуживания, интерьер и меню заведения в режиме онлайн</strong>. Это шикарная возможно выбрать направления для отдых</p>
+      <h2 data-i18n="about.features"><%- t('about.features') %></h2>
+      <p data-i18n="about.f1"><%- t('about.f1') %></p>
+      <p data-i18n="about.f2"><%- t('about.f2') %></p>
+      <p data-i18n="about.f3"><%- t('about.f3') %></p>
+      <p data-i18n="about.f4"><%- t('about.f4') %></p>
+      <p data-i18n="about.f5"><%- t('about.f5') %></p>
     </div>
 
-    <p class="tk-prose__cta" data-i18n="auth.noAccount">Нет аккаунта <a href="/register">Зарегистрироваться</a></p>
+    <p class="tk-prose__cta" data-i18n="auth.noAccount"><%- t('auth.noAccount') %></p>
   </div>
 </main>
 
@@ -39,6 +36,7 @@
 
 <%- include('partials/tkMenu', { navActive: 'about' }) %>
 
+<script defer src="/tk-i18n-<%= lang %>.js"></script>
 <script defer src="/tk-i18n.js"></script>
 <script defer src="/tk.js"></script>
 </body>

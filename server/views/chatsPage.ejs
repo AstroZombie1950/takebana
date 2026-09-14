@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { title: 'Чаты — Takebana' }) %>
+<%- include('partials/tkHead', { titleKey: 'page.chats.title' }) %>
 <link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="/css/chats.css">
 </head>
@@ -18,8 +18,8 @@
       <!-- Список диалогов -->
       <section class="tk-chat__list">
         <div class="tk-chat__list-head">
-          <h1 class="tk-chat__h1" data-i18n="app.messages">Сообщения</h1>
-          <p class="tk-chat__sub" data-i18n="chats.pickHint">Выберите диалог для просмотра</p>
+          <h1 class="tk-chat__h1" data-i18n="app.messages"><%- t('app.messages') %></h1>
+          <p class="tk-chat__sub" data-i18n="chats.pickHint"><%- t('chats.pickHint') %></p>
         </div>
 
         <div class="tk-chat__scroll" id="conversationsList">
@@ -50,11 +50,10 @@
                     <span class="tk-dialog__name"><%= conversation.interlocutor.displayName %></span>
                     <span class="presence-dot <%= conversation.interlocutor.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
                   </span>
-                  <%# Серверный timeAgo отдаёт только английское «5 minutes ago».
-                      Отдаём саму дату, а подпись собирает chats.js на языке
-                      интерфейса; текст внутри — запасной вариант без JS. %>
+                  <%# Дата — для chats.js: он обновляет подпись со временем
+                      и при смене языка. %>
                   <span class="tk-dialog__when" data-time="<%= (conversation.lastMessage ? conversation.lastMessage.sentAt : conversation.createdAt).toISOString() %>">
-                    <%= conversation.lastMessage ? timeAgo(conversation.lastMessage.sentAt) : timeAgo(conversation.createdAt) %>
+                    <%= timeAgo(conversation.lastMessage ? conversation.lastMessage.sentAt : conversation.createdAt, lang) %>
                   </span>
                 </span>
 
@@ -64,14 +63,14 @@
                           ? conversation.lastMessage.content.substring(0, 40) + '…'
                           : conversation.lastMessage.content %>
                   <% } else { %>
-                    <span data-i18n="chats.empty">Нет сообщений</span>
+                    <span data-i18n="chats.empty"><%- t('chats.empty') %></span>
                   <% } %>
                 </span>
               </span>
             </button>
             <% }); %>
           <% } else { %>
-            <p class="tk-note tk-chat__empty-list" data-i18n="chats.empty">Нет сообщений</p>
+            <p class="tk-note tk-chat__empty-list" data-i18n="chats.empty"><%- t('chats.empty') %></p>
           <% } %>
         </div>
       </section>
@@ -79,7 +78,7 @@
       <!-- Переписка -->
       <section class="tk-chat__area">
         <div class="tk-chat__head">
-          <button type="button" class="tk-chat__back" id="backToList" aria-label="К списку диалогов" data-i18n-aria="chats.backToList">
+          <button type="button" class="tk-chat__back" id="backToList" aria-label="<%= ta('chats.backToList') %>" data-i18n-aria="chats.backToList">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
           </button>
 
@@ -89,10 +88,10 @@
 
           <div class="tk-chat__peer-wrap" id="peerLink">
             <div class="tk-chat__peer" id="chatHeaderPresence" data-presence-user="">
-              <h2 class="avatar__name" data-i18n="chats.pick">Выберите диалог</h2>
+              <h2 class="avatar__name" data-i18n="chats.pick"><%- t('chats.pick') %></h2>
               <span class="presence-dot presence-offline hidden"></span>
             </div>
-            <p class="tk-chat__peer-note" data-i18n="chats.startHint">для начала переписки</p>
+            <p class="tk-chat__peer-note" data-i18n="chats.startHint"><%- t('chats.startHint') %></p>
           </div>
         </div>
 
@@ -105,12 +104,12 @@
               id="messageInput"
               class="tk-field"
               data-id=""
-              placeholder="Введите сообщение..."
+              placeholder="<%= ta('chats.messagePh') %>"
               data-i18n-placeholder="chats.messagePh"
               autocomplete="off"
             >
             <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm tk-chat__send input__button-icons" data-id="">
-              <span data-i18n="chats.send">Отправить</span>
+              <span data-i18n="chats.send"><%- t('chats.send') %></span>
             </button>
           </form>
         </div>

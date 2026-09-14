@@ -18,20 +18,20 @@
         <a href="/userPage/<%= user._id %>" class="tk-live__author-name author-name"><%= user.displayName %></a>
 
         <% if (isStreamer) { %>
-          <span class="tk-live__role streamer-badge" data-i18n="stream.host">Ведущий</span>
+          <span class="tk-live__role streamer-badge" data-i18n="stream.host"><%- t('stream.host') %></span>
         <% } else { %>
           <div class="tk-live__author-acts subscribe-section">
             <% if (isSubscribed) { %>
-              <button type="button" class="tk-btn tk-btn--outline tk-btn--xs js-unsubscribe" data-i18n="stream.unsubscribe">Отписаться</button>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--xs js-unsubscribe" data-i18n="stream.unsubscribe"><%- t('stream.unsubscribe') %></button>
             <% } else { %>
-              <button type="button" class="tk-btn tk-btn--primary tk-btn--xs js-subscribe" data-i18n="stream.subscribe">Подписаться</button>
+              <button type="button" class="tk-btn tk-btn--primary tk-btn--xs js-subscribe" data-i18n="stream.subscribe"><%- t('stream.subscribe') %></button>
             <% } %>
 
             <%# Жалоба на эфир: окно живёт в общем партиале шапки. %>
             <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs"
                     data-report="stream"
                     data-report-id="<%= stream._id %>"
-                    data-report-name="<%= stream.title %>" data-i18n="common.report">Пожаловаться</button>
+                    data-report-name="<%= stream.title %>" data-i18n="common.report"><%- t('common.report') %></button>
           </div>
         <% } %>
       </div>
@@ -40,7 +40,7 @@
     <div class="tk-live__stats stats-section">
       <span class="tk-live__stat live-indicator">
         <i class="stream-indicator"></i>
-        <span class="live-text" data-i18n="stream.onlineLabel">Онлайн</span>
+        <span class="live-text" data-i18n="stream.onlineLabel"><%- t('stream.onlineLabel') %></span>
         <span id="streamDuration" class="duration-text">00:00:00</span>
       </span>
 
@@ -53,9 +53,8 @@
               нужен, чтобы слово перевелось при смене языка. %>
           <% const _v = Number(stream.viewers) || 0, _d10 = _v % 10, _d100 = _v % 100;
              const _vk = (_d10 === 1 && _d100 !== 11) ? 'stream.viewerOne'
-                       : (_d10 >= 2 && _d10 <= 4 && (_d100 < 12 || _d100 > 14)) ? 'stream.viewerFew' : 'stream.viewerMany';
-             const _vw = { 'stream.viewerOne': 'зритель', 'stream.viewerFew': 'зрителя', 'stream.viewerMany': 'зрителей' }[_vk]; %>
-          <span class="viewers-text" data-i18n="<%= _vk %>"><%= _vw %></span>
+                       : (_d10 >= 2 && _d10 <= 4 && (_d100 < 12 || _d100 > 14)) ? 'stream.viewerFew' : 'stream.viewerMany'; %>
+          <span class="viewers-text" data-i18n="<%= _vk %>"><%- t(_vk) %></span>
         </span>
       </span>
     </div>

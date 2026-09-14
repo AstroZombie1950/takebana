@@ -8,24 +8,7 @@ asyncify(router); // ошибки async-обработчиков уходят в
 
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
-var session = require('express-session');
-var MongoDBStore = require('connect-mongodb-session')(session);
-
-
-
-
-// provider отличает вход по паролю (пустая строка) от входа через Google.
-// Раньше значение приходило из тела запроса, и аноним мог зарегистрировать
-// запись с provider: 'google' на чужой адрес. Когда владелец адреса впервые
-// входил через Google, app.js находил именно её и сажал человека в аккаунт,
-// пароль от которого знает посторонний. Здесь и в регистрации провайдер
-// зафиксирован: эти два маршрута обслуживают только вход по паролю.
-const PASSWORD_PROVIDER = '';
-
-// Длина пароля сверху: bcrypt всё равно учитывает первые 72 байта, а принимать
-// мегабайтную строку и считать по ней хеш — бесплатная нагрузка на процессор.
-const PASSWORD_MAX = 200;
-const PASSWORD_MIN = 6;
+const { PASSWORD_PROVIDER, PASSWORD_MIN, PASSWORD_MAX, hashPassword } = require('../utils/password');
 
 // Маршрут входа
 router.post('/login', authLimiter, validate({
@@ -39,12 +22,12 @@ router.post('/login', authLimiter, validate({
   try {
     const user = await User.findOne({ email: email, provider: provider });
     if (!user) {
-      return res.status(400).json({ message: 'Invalid email or password' });
+      return res.status(400).json({ message: 'Неверная почта или пароль' });
     }
     
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      return res.status(400).json({ message: 'Invalid email or password' });
+      return res.status(400).json({ message: 'Неверная почта или пароль' });
     }
 
     req.session.userId = user._id.toString();
@@ -63,10 +46,10 @@ router.post('/login', authLimiter, validate({
     }
 
     // Отправляем JSON-ответ с URL перенаправления
-    res.status(200).json({ message: 'User logged in successfully', redirectUrl });
+    res.status(200).json({ message: 'Вход выполнен', redirectUrl });
   } catch (error) {
     console.error('Ошибка при входе:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Ошибка сервера' });
   }
 });
 
@@ -81,11 +64,10 @@ router.post('/register', registerLimiter, validate({
   try {
     const existingUser = await User.findOne({ email: email, provider: provider });
     if (existingUser) {
-      return res.status(400).json({ message: 'User with this email or login already exists' });
+      return res.status(400).json({ message: 'Пользователь с такой почтой уже есть' });
     }
 
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    const hashedPassword = await hashPassword(password);
     const user = new User({ email: email, login: login, password: hashedPassword, provider: provider });
     await user.save();
 
@@ -105,10 +87,10 @@ router.post('/register', registerLimiter, validate({
     }
 
     // Отправляем JSON-ответ с URL перенаправления
-    res.status(200).json({ message: 'User registered successfully', redirectUrl });
+    res.status(200).json({ message: 'Регистрация прошла успешно', redirectUrl });
   } catch (error) {
     console.error('Ошибка при регистрации:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Ошибка сервера' });
   }
 });
 
@@ -126,16 +108,17 @@ router.post('/update-profile', validate({
     // Найти пользователя по ID
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(400).json({ message: 'User not found' });
+      return res.status(400).json({ message: 'Пользователь не найден' });
     }
     // Обновить логин пользователя
     user.login = login;
     // Сохранить обновленного пользователя
     await user.save();
 
-    res.status(200).json({ message: 'Profile updated successfully' });
+    res.status(200).json({ message: 'Профиль успешно обновлен' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Ошибка при обновлении профиля:', error);
+    res.status(500).json({ message: 'Ошибка сервера' });
   }
 });
 
@@ -153,18 +136,19 @@ router.post('/update-password', authLimiter, validate({
   try {
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(400).json({ message: 'User not found' });
+      return res.status(400).json({ message: 'Пользователь не найден' });
     }
     const match = await bcrypt.compare(oldPassword, user.password);
     if (!match) {
-      return res.status(400).json({ message: 'Invalid old password' });
+      return res.status(400).json({ message: 'Неверный старый пароль' });
     }
-    user.password = await bcrypt.hash(newPassword, 10);
+    user.password = await hashPassword(newPassword);
     await user.save();
 
-    res.status(200).json({ message: 'Password updated successfully' });
+    res.status(200).json({ message: 'Пароль успешно обновлен' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Ошибка при обновлении профиля:', error);
+    res.status(500).json({ message: 'Ошибка сервера' });
   }
 });
 

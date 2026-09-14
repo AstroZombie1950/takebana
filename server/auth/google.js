@@ -86,7 +86,7 @@ router.get('/auth/google/callback',
 
     if (!user) {
       // Если пользователя нет в базе данных, это ошибка, потому что мы уже зарегистрировали пользователя ранее
-      return res.status(400).json({ message: 'User not found' });
+      return res.status(400).json({ message: 'Пользователь не найден' });
     }
 
     // Установить сессию пользователя

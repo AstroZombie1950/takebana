@@ -532,7 +532,7 @@
       const div = document.createElement('div');
       div.className = 'tk-thumb';
       div.innerHTML = `<img src="${esc(p.url || p.preview)}" alt="">
-        <button type="button" class="tk-thumb__del" data-del="${i}" aria-label="Убрать фото">
+        <button type="button" class="tk-thumb__del" data-del="${i}" aria-label="${esc(t('venues.removePhoto'))}" data-i18n-aria="venues.removePhoto">
           <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
         </button>`;
       return div;

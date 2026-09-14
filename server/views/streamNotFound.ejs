@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { title: 'Эфир завершён — Takebana' }) %>
+<%- include('partials/tkHead', { titleKey: 'page.ended.title' }) %>
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="/css/status.css">
 </head>
@@ -11,9 +11,9 @@
 <%- include('partials/tkHeader') %>
 
 <main class="tk-status">
-  <span class="tk-status__kicker">Эфир</span>
-  <h1 class="tk-status__title">Стрим завершен</h1>
-  <p class="tk-status__text">Этот стрим закончился. Перейдите на <a href="/streaming">главную страницу</a>, чтобы посмотреть что-нибудь другое.</p>
+  <span class="tk-status__kicker" data-i18n="ended.kicker"><%- t('ended.kicker') %></span>
+  <h1 class="tk-status__title" data-i18n="ended.title"><%- t('ended.title') %></h1>
+  <p class="tk-status__text" data-i18n="ended.text"><%- t('ended.text') %></p>
 </main>
 
 <%- include('partials/tkFooter') %>
@@ -21,6 +21,7 @@
 
 <%- include('partials/tkMenu') %>
 
+<script defer src="/tk-i18n-<%= lang %>.js"></script>
 <script defer src="/tk-i18n.js"></script>
 <script defer src="/tk.js"></script>
 </body>

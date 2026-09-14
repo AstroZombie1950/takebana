@@ -38,14 +38,11 @@ router.get('/', (req, res) => {
   // Вошедшему главная не нужна — он идёт в кабинет.
   if (req.session.login) return res.redirect(nextUrl(req));
 
-  res.render('home', {
-    title: 'Takebana — платформа прямых эфиров для бизнеса',
-    description: 'Takebana — платформа, где производители, заведения, блогеры и эксперты выходят в прямой эфир: продают, показывают производство и отвечают на вопросы без посредников.',
-  });
+  res.render('home');
 });
 
 router.get('/about', async (req, res) => {
-  res.render('about', { title: 'О сервисе Takebana'});
+  res.render('about');
 });
 
 router.get('/panel', async (req, res) => {
@@ -84,8 +81,7 @@ router.get('/register', (req, res) => {
 });
 
 router.get('/company-register', (req, res) => {
-  let userLoggedIn = !!req.session.login;
-  res.render('newCompany.ejs', { title: 'Главная страница', userLoggedIn: userLoggedIn, catalog });
+  res.render('newCompany.ejs', { catalog });
 });
 
 

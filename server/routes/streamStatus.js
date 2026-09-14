@@ -33,8 +33,7 @@ router.get('/api/check-stream/:streamKey', (req, res) => {
   } catch (error) {
       console.error('Error checking stream status:', error);
       res.status(500).json({
-          error: 'Failed to check stream status',
-          message: error.message
+          message: 'Ошибка сервера'
       });
   }
 });

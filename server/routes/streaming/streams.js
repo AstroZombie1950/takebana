@@ -252,7 +252,7 @@ router.post('/upload-thumbnail', requireAuth, upload.single('thumbnail'), valida
   const userId = req.session.userId;
 
   if (!streamId || !userId) {
-      return res.status(400).json({ message: 'Недостаточно данных.' });
+      return res.status(400).json({ message: 'Недостаточно данных' });
   }
 
   try {
@@ -260,7 +260,7 @@ router.post('/upload-thumbnail', requireAuth, upload.single('thumbnail'), valida
       const stream = await Stream.findOne({ _id: streamId, userId: userId });
 
       if (!stream) {
-          return res.status(404).json({ message: 'Стрим не найден.' });
+          return res.status(404).json({ message: 'Стрим не найден' });
       }
 
       if (req.file) {
@@ -292,7 +292,7 @@ router.post('/upload-thumbnail', requireAuth, upload.single('thumbnail'), valida
       }
   } catch (error) {
       console.error('Ошибка при загрузке заглавной картинки:', error);
-      res.status(500).json({ message: 'Ошибка сервера.' });
+      res.status(500).json({ message: 'Ошибка сервера' });
   }
 });
 
@@ -308,7 +308,7 @@ router.post('/api/pause-stream', validate({
 
   if (!streamKey || !userId) {
       console.log('Недостаточно данных для постановки стрима на паузу');
-      return res.status(400).json({ message: 'Недостаточно данных.' });
+      return res.status(400).json({ message: 'Недостаточно данных' });
   }
 
   try {
@@ -328,7 +328,7 @@ router.post('/api/pause-stream', validate({
       res.json({ message: 'Стрим успешно поставлен на паузу.', stream: stream });
   } catch (error) {
       console.error('Ошибка при постановке стрима на паузу:', error);
-      res.status(500).json({ message: 'Ошибка сервера.' });
+      res.status(500).json({ message: 'Ошибка сервера' });
   }
 });
 
@@ -347,7 +347,7 @@ router.post('/terminate-stream', validate({
 
   if (!streamId || !userId) {
       console.log('Недостаточно данных для завершения стрима');
-      return res.status(400).json({ message: 'Недостаточно данных.' });
+      return res.status(400).json({ message: 'Недостаточно данных' });
   }
 
   try {
@@ -364,7 +364,7 @@ router.post('/terminate-stream', validate({
       res.json({ message: 'Стрим успешно завершен и удален.' });
   } catch (error) {
       console.error('Ошибка при завершении стрима:', error);
-      res.status(500).json({ message: 'Ошибка сервера.' });
+      res.status(500).json({ message: 'Ошибка сервера' });
   }
 });
 

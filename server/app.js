@@ -119,14 +119,21 @@ app.use(sessionMiddleware);
 // Google» на страницах входа и регистрации не показывается вовсе: нерабочая
 // кнопка хуже отсутствующей.
 app.locals.googleOAuthConfigured = googleOAuthConfigured;
+// То же со ссылкой «Забыли пароль?»: без почты письмо не уйдёт (utils/mail.js).
+app.locals.mailConfigured = require('./utils/mail').mailConfigured;
 // Категории и города: форма эфира живёт в шапке каждой страницы кабинета.
 app.locals.catalog = require('./config/catalog');
+// Страницы и сообщения в JSON-ответах — на языке интерфейса (cookie `lang`,
+// utils/i18n.js). До маршрутов: переводить нужно всё, что они ответят.
+const { localizeMessages, pageLocals } = require('./utils/i18n');
+app.use(localizeMessages, pageLocals);
 app.use(googleRouter);
 
 require('./db');
 
 app.use(express.json());
 app.use(require('./routes/userRoutes'));
+app.use(require('./routes/passwordReset'));
 app.use(require('./routes/establishmentsRouter'));
 app.use(require('./routes/adminRouter'));
 app.use(require('./routes/streaming'));

@@ -160,14 +160,14 @@ document.addEventListener('DOMContentLoaded', () => {
               }
 
         notificationsContent.innerHTML = notifications.map(notification => {
-          const senderName = notification.sender?.login || notification.sender?.email || "неизвестный пользователь";
+          const senderName = notification.sender?.login || notification.sender?.email || t('modal.notifications.unknown');
                 const message = notification.content || t('modal.notifications.fallback');
 
                 return `
             <article class="tk-notice">
               <div class="tk-notice__top">
                 <h4 class="tk-notice__from">${escapeHtml(t('modal.notifications.from'))} ${escapeHtml(senderName)}</h4>
-                <time class="tk-notice__when">${escapeHtml(new Date(notification.createdAt).toLocaleString())}</time>
+                <time class="tk-notice__when">${escapeHtml(tkDate(notification.createdAt))}</time>
               </div>
               <p class="tk-notice__text">${escapeHtml(message)}</p>
             </article>`;
@@ -207,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       terminateStreamButton.disabled = true;
       const prevHtml = terminateStreamButton.innerHTML;
-      terminateStreamButton.innerHTML = 'Завершаем...';
+      terminateStreamButton.textContent = t('stream.ending');
 
       try {
         const response = await fetch('/terminate-stream', {
@@ -293,8 +293,8 @@ document.addEventListener('DOMContentLoaded', function() {
             <a href="/userPage/${encodeURIComponent(user._id)}" class="search-result-item" data-user-id="${escapeHtml(user._id)}" data-presence-user="${escapeHtml(user._id)}">
               ${avatarHtml}
               <span class="tk-found__body">
-                <span class="tk-found__name">${escapeHtml(user.displayName || 'Безымянный')}</span>
-                <span class="tk-found__meta">${escapeHtml(String(user.followersCount || 0))} подписчиков</span>
+                <span class="tk-found__name">${escapeHtml(user.displayName || t('app.noName'))}</span>
+                <span class="tk-found__meta">${escapeHtml(String(user.followersCount || 0))} ${escapeHtml(t('user.subscribers'))}</span>
                 <span class="tk-found__meta">
                   <span class="presence-dot"></span>
                   <span data-presence-text></span>
@@ -328,8 +328,8 @@ document.addEventListener('DOMContentLoaded', function() {
         resultsContainer.classList.remove('hidden');
         resultsContainer.innerHTML = `
           <div class="tk-found__empty">
-            <p class="tk-found__name">Ничего не найдено</p>
-            <p class="tk-note">Попробуйте изменить поисковый запрос</p>
+            <p class="tk-found__name" data-i18n="app.searchEmpty">${escapeHtml(t('app.searchEmpty'))}</p>
+            <p class="tk-note" data-i18n="app.searchEmptyHint">${escapeHtml(t('app.searchEmptyHint'))}</p>
           </div>`;
       }
     } catch (error) {
@@ -713,7 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
       form.append('avatar', file);
       const res = await fetch('/profile/avatar', { method: 'POST', body: form });
       const data = await res.json();
-      if (!data.success) throw new Error(data.message || 'Ошибка загрузки');
+      if (!data.success) throw new Error(data.message || t('app.uploadFailed'));
       
       // Обновляем превью в модалке
       if (empty) empty.classList.add('hidden');
@@ -745,7 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 500);
     } catch (e) {
       console.error('Ошибка загрузки аватара:', e);
-    hint.textContent = ((localStorage.getItem('lang') === 'en') ? 'Error: ' : 'Ошибка: ') + (e.message || ((localStorage.getItem('lang') === 'en') ? 'Failed to upload photo' : 'Не удалось загрузить фото'));
+    hint.textContent = t('app.errorShort', { message: e.message });
       uploadBtn.disabled = false;
     }
   });
@@ -773,16 +773,14 @@ document.addEventListener('DOMContentLoaded', () => {
       item.className = 'tk-thumb';
       item.innerHTML = `
         <img src="${url}" alt="">
-        <button type="button" data-idx="${idx}" class="tk-thumb__del" aria-label="Убрать">
+        <button type="button" data-idx="${idx}" class="tk-thumb__del" aria-label="${escapeHtml(t('common.remove'))}" data-i18n-aria="common.remove">
           <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
         </button>`;
       previewGrid.appendChild(item);
     });
     countEl.textContent = String(files.length);
     uploadBtn.disabled = files.length === 0;
-    hint.textContent = files.length
-      ? ((localStorage.getItem('lang') === 'en') ? 'Ready to upload' : 'Готово к загрузке')
-      : ((localStorage.getItem('lang') === 'en') ? 'No files selected' : 'Файлы не выбраны');
+    tkText(hint, files.length ? 'modal.gallery.ready' : 'modal.gallery.noFiles');
   }
 
   function addFiles(fileList) {
@@ -816,7 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch('/profile/gallery', { method: 'POST', body: form })
       .then(r => r.json())
       .then(data => {
-        if (!data.success) throw new Error(data.message || 'Ошибка загрузки');
+        if (!data.success) throw new Error(data.message || t('app.uploadFailed'));
         // Очистим локальный список и обновим UI
         files = [];
         renderPreviews();
@@ -829,7 +827,7 @@ document.addEventListener('DOMContentLoaded', () => {
             div.className = 'tk-thumb';
             div.innerHTML = `
               <img src="${escapeHtml(url)}" alt="" loading="lazy">
-              <button type="button" data-name="${escapeHtml(name)}" class="tk-thumb__del" aria-label="Удалить">
+              <button type="button" data-name="${escapeHtml(name)}" class="tk-thumb__del" aria-label="${escapeHtml(t('common.delete'))}" data-i18n-aria="common.delete">
                 <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
               </button>`;
             persistedGrid.prepend(div);
@@ -852,8 +850,8 @@ document.addEventListener('DOMContentLoaded', () => {
       fetch('/profile/gallery/' + encodeURIComponent(name), { method: 'DELETE' })
         .then(r => r.json())
         .then(data => {
-          if (!data.success) throw new Error(data.message || 'Ошибка удаления');
-          const card = btn.closest('.group');
+          if (!data.success) throw new Error(data.message || t('app.deleteFailed'));
+          const card = btn.closest('.tk-thumb');
           if (card) card.remove();
         })
         .catch(err => { hint.textContent = t('app.deleteError', { message: err.message }); })
@@ -890,7 +888,7 @@ document.addEventListener('DOMContentLoaded', () => {
           // затирается, и без этого строка перестала бы переводиться
           // при следующем переключении языка.
           tkText(textEl, online ? 'common.online' : 'common.offline');
-          textEl.title = lastSeen ? new Date(lastSeen).toLocaleString() : '';
+          textEl.title = lastSeen ? tkDate(lastSeen) : '';
         }
         // Цвет точки — из дизайн-системы, классами. Раньше здесь инлайном
         // проставлялись зелёный и серый Tailwind, мимо токенов темы.
@@ -908,7 +906,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // переключение языка затёрло бы дату.
         const key = online ? 'common.now' : (lastSeen ? '' : 'common.dash');
         tkText(lsEl, key);
-        if (!key) lsEl.textContent = new Date(lastSeen).toLocaleString();
+        if (!key) lsEl.textContent = tkDate(lastSeen);
       });
     }
 
@@ -951,7 +949,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (!data.success) throw new Error(data.message || data.error || 'call_create_failed');
         window.currentCallId = data.callId;
-        window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Ожидание ответа…');
+        window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('call.waitingAnswer');
       } catch (e) {
         window.hideOutgoingCall && window.hideOutgoingCall();
         toast(t('call.startFailed', { message: e.message }), 'error');
@@ -1000,13 +998,13 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('call:declined', ({ callId }) => {
       if (callId !== window.currentCallId) return;
       window.currentCallId = null;
-      window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Отклонено');
+      window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('call.declined');
       setTimeout(() => window.hideOutgoingCall && window.hideOutgoingCall(), 1000);
     });
     socket.on('call:canceled', ({ callId }) => closeCall(callId));
     socket.on('call:ended', ({ callId }) => closeCall(callId));
     socket.on('call:timeout', ({ callId }) => {
-      if (callId === window.currentCallId) window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('Нет ответа');
+      if (callId === window.currentCallId) window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('call.noAnswer');
       setTimeout(() => closeCall(callId), 800);
     });
 
@@ -1071,8 +1069,6 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   const OUT = side('outgoing', 'out');
   const IN = side('incoming', 'in');
-
-  const NET_LABEL = { good: 'хорошая', low: 'слабая', bad: 'плохая' };
 
   function renderAvatar(el, url, name){
     if (!el) return;
@@ -1149,7 +1145,7 @@ document.addEventListener('DOMContentLoaded', function(){
       if (state === 'reconnecting') tkText(s.status, 'call.reconnecting');
       else if (state === 'connecting') tkText(s.status, 'call.connectingShort');
       else if (peers) tkText(s.status, 'call.connected');
-      else s.status.textContent = hadPeer ? 'Собеседник переподключается…' : 'Ждём собеседника…';
+      else tkText(s.status, hadPeer ? 'call.peerReconnecting' : 'call.waitingPeer');
     }
 
     goLive(s, isVideo);
@@ -1191,7 +1187,8 @@ document.addEventListener('DOMContentLoaded', function(){
       onMediaError: () => toast(t('call.mediaDenied'), 'error'),
       onNetwork: (n) => {
         s.net.dataset.net = n;
-        s.net.setAttribute('aria-label', 'Сеть: ' + (NET_LABEL[n] || n));
+        const level = t('call.net.' + n) || n;
+        s.net.setAttribute('aria-label', t('call.networkIs', { level }));
         s.net.title = s.net.getAttribute('aria-label');
         s.net.classList.remove('hidden');
       }
@@ -1214,7 +1211,7 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   window.showOutgoingCall = function(opts){
-    const displayName = opts && opts.displayName || 'Пользователь';
+    const displayName = opts && opts.displayName || t('call.user');
     const callType = opts && opts.callType || 'video';
     outName.textContent = displayName;
     tkText(outType, callType === 'audio' ? 'call.outgoingAudio' : 'call.outgoingVideo');
@@ -1227,7 +1224,7 @@ document.addEventListener('DOMContentLoaded', function(){
     outCancel.classList.add('tk-btn--danger');
     outgoing.classList.remove('hidden');
   };
-  window.updateOutgoingCallStatus = function(text){ OUT.status.textContent = text || ''; };
+  window.updateOutgoingCallStatus = function(key){ tkText(OUT.status, key); };
   window.hideOutgoingCall = function(){ outgoing.classList.add('hidden'); };
 
   function hideIncoming(){
@@ -1237,7 +1234,7 @@ document.addEventListener('DOMContentLoaded', function(){
   window.hideIncomingCall = hideIncoming;
 
   window.showIncomingCall = function(opts){
-    const displayName = opts && opts.displayName || 'Пользователь';
+    const displayName = opts && opts.displayName || t('call.user');
     const callType = opts && opts.callType || 'video';
     const onAccept = opts && opts.onAccept;
     const onDecline = opts && opts.onDecline;

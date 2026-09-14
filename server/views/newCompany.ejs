@@ -1,10 +1,7 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', {
-  title: 'Регистрация заведения — Takebana',
-  description: 'Заявка на подключение заведения или производства к Takebana: прямые эфиры для гостей и клиентов.'
-}) %>
+<%- include('partials/tkHead', { titleKey: 'page.company.title', descriptionKey: 'page.company.description' }) %>
 <link rel="stylesheet" href="/css/auth.css">
 <link rel="stylesheet" href="/css/company.css">
 <%# Карта нужна только блоку «Точка на карте» (partials/venuePoint). %>
@@ -18,39 +15,39 @@
 
 <main class="tk-auth">
   <div class="tk-auth__card tk-company">
-    <a href="/main" class="tk-auth__back" data-i18n="company.back">
+    <a href="/main" class="tk-auth__back">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5l-7 7 7 7M4 12h16"></path></svg>
-      Назад
+      <span data-i18n="company.back"><%- t('company.back') %></span>
     </a>
 
-    <span class="tk-auth__kicker" data-i18n="company.kicker">Заявка</span>
-    <h1 class="tk-auth__h1" data-i18n="company.h1">Регистрация заведения</h1>
+    <span class="tk-auth__kicker" data-i18n="company.kicker"><%- t('company.kicker') %></span>
+    <h1 class="tk-auth__h1" data-i18n="company.h1"><%- t('company.h1') %></h1>
 
     <%# Показывается вместо формы после успешной отправки. %>
-    <p class="tk-company__done" id="tkCompanyDone" hidden data-i18n="company.finish">Спасибо за заявку — мы рассмотрим её в ближайшее время и свяжемся с вами по почте или телефону.</p>
+    <p class="tk-company__done" id="tkCompanyDone" hidden data-i18n="company.finish"><%- t('company.finish') %></p>
 
     <form class="tk-auth__form" id="tkCompanyForm" novalidate>
       <%# Город и тип — закрытые списки config/catalog.js: по ним фильтрует карта. %>
       <div class="tk-company__pair">
-        <input class="tk-field" type="text" name="country" placeholder="Страна" data-i18n-placeholder="company.ph.country" autocomplete="country-name" required>
+        <input class="tk-field" type="text" name="country" placeholder="<%= ta('company.ph.country') %>" data-i18n-placeholder="company.ph.country" autocomplete="country-name" required>
         <select class="tk-field tk-select" name="city" required>
-          <option value="" data-i18n="company.ph.city">Город</option>
+          <option value="" data-i18n="company.ph.city"><%- t('company.ph.city') %></option>
           <% catalog.CITIES.forEach(function (city) { %>
-          <option value="<%= city.code %>" data-i18n="<%= city.i18n %>"><%= city.name %></option>
+          <option value="<%= city.code %>" data-i18n="<%= city.i18n %>"><%= ta(city.i18n, city.name) %></option>
           <% }); %>
         </select>
       </div>
 
-      <input class="tk-field" type="text" name="name" placeholder="Название заведения" data-i18n-placeholder="company.ph.name" required>
+      <input class="tk-field" type="text" name="name" placeholder="<%= ta('company.ph.name') %>" data-i18n-placeholder="company.ph.name" required>
       <select class="tk-field tk-select" name="type" required>
-        <option value="" data-i18n="company.ph.type">Тип заведения</option>
+        <option value="" data-i18n="company.ph.type"><%- t('company.ph.type') %></option>
         <% catalog.VENUE_TYPES.forEach(function (type) { %>
-        <option value="<%= type.code %>" data-i18n="venue.<%= type.code %>"><%= type.name %></option>
+        <option value="<%= type.code %>" data-i18n="venue.<%= type.code %>"><%= ta('venue.' + type.code, type.name) %></option>
         <% }); %>
       </select>
-      <input class="tk-field" type="text" name="address" placeholder="Адрес заведения" data-i18n-placeholder="company.ph.address" autocomplete="street-address" required>
-      <input class="tk-field" type="email" name="email" placeholder="Email" data-i18n-placeholder="company.ph.email" autocomplete="email" required>
-      <input class="tk-field" type="tel" name="phone" placeholder="Телефон для связи" data-i18n-placeholder="company.ph.phone" autocomplete="tel" required>
+      <input class="tk-field" type="text" name="address" placeholder="<%= ta('company.ph.address') %>" data-i18n-placeholder="company.ph.address" autocomplete="street-address" required>
+      <input class="tk-field" type="email" name="email" placeholder="<%= ta('company.ph.email') %>" data-i18n-placeholder="company.ph.email" autocomplete="email" required>
+      <input class="tk-field" type="tel" name="phone" placeholder="<%= ta('company.ph.phone') %>" data-i18n-placeholder="company.ph.phone" autocomplete="tel" required>
 
       <div class="tk-company__rule"></div>
 
@@ -59,30 +56,30 @@
       <div class="tk-company__rule"></div>
 
       <div class="tk-company__hours">
-        <span class="tk-company__label" data-i18n="company.weekdays">Время работы в будни</span>
+        <span class="tk-company__label" data-i18n="company.weekdays"><%- t('company.weekdays') %></span>
         <label class="tk-company__time">
-          <span data-i18n="company.from">с</span>
+          <span data-i18n="company.from"><%- t('company.from') %></span>
           <input class="tk-field" type="text" name="weekdayOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
         </label>
         <label class="tk-company__time">
-          <span data-i18n="company.to">до</span>
+          <span data-i18n="company.to"><%- t('company.to') %></span>
           <input class="tk-field" type="text" name="weekdayClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
         </label>
       </div>
 
       <div class="tk-company__hours">
-        <span class="tk-company__label" data-i18n="company.weekend">Время работы в выходные</span>
+        <span class="tk-company__label" data-i18n="company.weekend"><%- t('company.weekend') %></span>
         <label class="tk-company__time">
-          <span data-i18n="company.from">с</span>
+          <span data-i18n="company.from"><%- t('company.from') %></span>
           <input class="tk-field" type="text" name="weekendOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
         </label>
         <label class="tk-company__time">
-          <span data-i18n="company.to">до</span>
+          <span data-i18n="company.to"><%- t('company.to') %></span>
           <input class="tk-field" type="text" name="weekendClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
         </label>
       </div>
 
-      <button class="tk-btn tk-btn--primary tk-btn--block tk-auth__submit" type="submit" data-i18n="company.submit">Отправить заявку</button>
+      <button class="tk-btn tk-btn--primary tk-btn--block tk-auth__submit" type="submit" data-i18n="company.submit"><%- t('company.submit') %></button>
     </form>
   </div>
 </main>
@@ -96,6 +93,7 @@
     Сама карта (MapLibre, ~290 КБ) грузится не здесь, а когда до блока
     доскроллили: до заявки доходят не все, кто открыл страницу. %>
 <script>window.TKCityCenter = <%- JSON.stringify(catalog.CITY_CENTER) %>;</script>
+<script defer src="/tk-i18n-<%= lang %>.js"></script>
 <script defer src="/tk-i18n.js"></script>
 <script defer src="/tk.js"></script>
 <script defer src="/toast.js"></script>

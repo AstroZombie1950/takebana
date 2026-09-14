@@ -8,6 +8,7 @@ const { validate } = require('../middleware/validate');
 const Establishments = require('../models/Establishments');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
+const { PASSWORD_MAX, hashPassword } = require('../utils/password');
 // multer здесь был объявлен, но ни один маршрут админки файлы не принимает —
 // убран вместе с path, который нужен был только ему.
 // Схемы полей заведения — общие с заявкой и настройками владельца:
@@ -32,8 +33,8 @@ async function isAdmin(req, res, next) {
 
 // Минимум в 8 символов требует и форма админки (views/admin.ejs).
 router.post('/admin/updatePassword', isAdmin, authLimiter, validate({
-    oldPassword: { type: 'string', required: true, max: 200, trim: false, label: 'Текущий пароль' },
-    newPassword: { type: 'string', required: true, min: 8, max: 200, trim: false, label: 'Новый пароль' },
+    oldPassword: { type: 'string', required: true, max: PASSWORD_MAX, trim: false, label: 'Текущий пароль' },
+    newPassword: { type: 'string', required: true, min: 8, max: PASSWORD_MAX, trim: false, label: 'Новый пароль' },
 }), async (req, res) => {
     const { oldPassword, newPassword } = req.body;
 
@@ -52,12 +53,13 @@ router.post('/admin/updatePassword', isAdmin, authLimiter, validate({
             return res.status(401).json({ message: 'Неверный текущий пароль' });
         }
 
-        user.password = await bcrypt.hash(newPassword, 10);
+        user.password = await hashPassword(newPassword);
         await user.save();
 
         res.json({ message: 'Пароль успешно обновлен' });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error('[admin]', err);
+        res.status(500).json({ message: 'Ошибка сервера' });
     }
 });
 
@@ -87,7 +89,8 @@ router.post('/admin/establishments', isAdmin, async (req, res) => {
             .limit(perPage);
         res.json(establishments);
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error('[admin]', err);
+        res.status(500).json({ message: 'Ошибка сервера' });
     }
 });
 
@@ -131,7 +134,8 @@ router.put('/admin/updEstablishment/:id', isAdmin, validate({
         }
         res.json(updatedEstablishment);
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error('[admin]', err);
+        res.status(500).json({ message: 'Ошибка сервера' });
     }
 });
 

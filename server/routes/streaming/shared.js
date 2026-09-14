@@ -11,19 +11,8 @@ const Stream = require('../../models/Stream');
 const Notification = require('../../models/Notification');
 const Conversation = require('../../models/Conversation');
 const Message = require('../../models/Message');
+const userView = require('../../utils/userView');
 
-const getRandomGradient = () => {
-  const gradients = [
-    'linear-gradient(to right, #ff7e5f, #feb47b)',
-    'linear-gradient(to right, #6a11cb, #2575fc)',
-    'linear-gradient(to right, #ff9966, #ff5e62)',
-    'linear-gradient(to right, #00c6ff, #0072ff)',
-    'linear-gradient(to right, #f7971e, #ffd200)',
-    'linear-gradient(to right, #7F00FF, #E100FF)',
-    'linear-gradient(to right, #fc00ff, #00dbde)',
-  ];
-  return gradients[Math.floor(Math.random() * gradients.length)];
-};
 /**
  * Функция для получения и обработки случайных пользователей
  * @returns {Array} - Массив модифицированных пользователей с количеством подписчиков
@@ -49,10 +38,8 @@ const getStreamUsers = async () => {
 
   // Модификация данных пользователей для шаблона
   const modifiedUsers = randomUsers.map(user => {
-    const displayName = user.login || (user.email ? user.email.split('@')[0] : 'Неизвестный пользователь');
-    const avatarStyle = user.avatar
-      ? { url: user.avatar }
-      : { gradient: getRandomGradient(), initial: displayName.charAt(0).toUpperCase() };
+    const displayName = userView.displayName(user);
+    const avatarStyle = userView.avatarStyle(user, displayName);
     const followersCount = subscribersMap[user._id.toString()] || 0; // Количество подписчиков для каждого пользователя
 
     return { ...user, displayName, avatarStyle, followersCount };
@@ -78,10 +65,8 @@ const commonDataMiddleware = async (req, res, next) => {
       if (!currentUser) throw new Error('Пользователь не найден');
 
       // Определение отображаемой информации для текущего пользователя
-      const currentUserDisplayName = currentUser.login || (currentUser.email ? currentUser.email.split('@')[0] : 'Неизвестный пользователь');
-      const currentUserAvatarStyle = currentUser.avatar
-          ? { url: currentUser.avatar }
-          : { gradient: getRandomGradient(), initial: currentUserDisplayName.charAt(0).toUpperCase() };
+      const currentUserDisplayName = userView.displayName(currentUser);
+      const currentUserAvatarStyle = userView.avatarStyle(currentUser, currentUserDisplayName);
 
       // Получение подписок текущего пользователя (ограничиваем 4) + непрочитанные уведомления (параллельно)
       const [userSubscriptions, unreadNotificationsCount] = await Promise.all([
@@ -102,10 +87,8 @@ const commonDataMiddleware = async (req, res, next) => {
 
       // Модификация данных о подписках для шаблона
       const subscriptions = subscribedUsers.map(user => {
-          const displayName = user.login || (user.email ? user.email.split('@')[0] : 'Неизвестный пользователь');
-          const avatarStyle = user.avatar
-              ? { url: user.avatar }
-              : { gradient: getRandomGradient(), initial: displayName.charAt(0).toUpperCase() };
+          const displayName = userView.displayName(user);
+          const avatarStyle = userView.avatarStyle(user, displayName);
 
           const status = user.isStreaming ? 'online' : 'offline';
 
@@ -167,4 +150,4 @@ async function getActiveStreamsCount() {
   return await Stream.countDocuments({ isActive: true });
 }
 
-module.exports = { getRandomGradient, getStreamUsers, commonDataMiddleware, getActiveStreamsCount };
+module.exports = { getStreamUsers, commonDataMiddleware, getActiveStreamsCount };

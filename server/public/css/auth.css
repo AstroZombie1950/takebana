@@ -142,6 +142,24 @@
   color: var(--tk-label);
 }
 
+.tk-auth__lede {
+  margin-top: 18px;
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--tk-label);
+}
+
+/* Восстановление пароля: вводный абзац под заголовком ведёт к форме,
+ * «ссылка устарела» — к кнопке. */
+.tk-auth__lede + .tk-auth__form {
+  margin-top: 24px;
+}
+
+.tk-auth__lede + .tk-btn {
+  margin-top: 24px;
+}
+
 .tk-auth__forgot {
   align-self: flex-end;
   font-family: Oswald, sans-serif;

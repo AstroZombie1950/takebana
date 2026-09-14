@@ -5,7 +5,7 @@
   partials/streamChat и /tk-stream.js.
 %>
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { title: stream.title + ' — Takebana' }) %>
 <meta name="robots" content="noindex">
@@ -31,23 +31,23 @@
       <!-- Режим трансляции -->
       <section class="tk-live__modes">
         <div class="tk-live__modes-top">
-          <span class="tk-kicker" data-i18n="stream.mode">Режим трансляции</span>
-          <span class="tk-live__id"><span data-i18n="stream.modeLabel">Стрим:</span> <code><%= stream._id %></code></span>
+          <span class="tk-kicker" data-i18n="stream.mode"><%- t('stream.mode') %></span>
+          <span class="tk-live__id"><span data-i18n="stream.modeLabel"><%- t('stream.modeLabel') %></span> <code><%= stream._id %></code></span>
         </div>
 
         <%# Режим — это страница: вторая кнопка ведёт на пульт другого режима. %>
         <div class="tk-seg">
           <button type="button" class="tk-seg__btn web_stream<%= obsOnly ? '' : ' is-on' %>">
-            <span data-i18n="stream.modeWeb">WEB (браузер)</span>
+            <span data-i18n="stream.modeWeb"><%- t('stream.modeWeb') %></span>
           </button>
           <button type="button" class="tk-seg__btn obs_stream<%= obsOnly ? ' is-on' : '' %>">
-            <span data-i18n="stream.modeObs">OBS</span>
+            <span data-i18n="stream.modeObs"><%- t('stream.modeObs') %></span>
           </button>
         </div>
 
         <p class="tk-live__warn">
-          <b data-i18n="stream.important">Важно</b>
-          <span data-i18n="stream.importantText">Не закрывайте эту страницу и не уходите с неё во время трансляции — иначе стрим может считаться неактивным и отключиться. Обновлять страницу можно.</span>
+          <b data-i18n="stream.important"><%- t('stream.important') %></b>
+          <span data-i18n="stream.importantText"><%- t('stream.importantText') %></span>
         </p>
       </section>
 
@@ -60,26 +60,26 @@
               <%# Предпросмотр — тот же HLS, что у зрителя; видео показывается с первым кадром. %>
               <video id="video" class="video-fit-cover tk-live__video--obs" autoplay muted playsinline style="display: none;"></video>
               <div class="tk-live__hint" id="obsPreviewHint">
-                <p class="tk-live__hint-title" data-i18n="stream.obsPreview">Предпросмотр OBS</p>
-                <p data-i18n="stream.obsPreviewHint">Запустите трансляцию в OBS — здесь появится видео.</p>
+                <p class="tk-live__hint-title" data-i18n="stream.obsPreview"><%- t('stream.obsPreview') %></p>
+                <p data-i18n="stream.obsPreviewHint"><%- t('stream.obsPreviewHint') %></p>
               </div>
             <% } else { %>
               <%# Картинку своей камеры Daily отдаёт сюда после выхода в эфир. %>
               <video id="localVideo" class="video-fit-cover" autoplay muted playsinline style="display: none;"></video>
               <div class="tk-live__hint" id="videoPlaceholder">
                 <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M9 7.5l8 4.5-8 4.5V7.5Z"></path><rect x="3" y="4" width="18" height="16" rx="1"></rect></svg>
-                <p><span data-i18n="stream.pressHint1">Нажмите</span> <b data-i18n="stream.pressHint2">«Начать стрим»</b> <span data-i18n="stream.pressHint3">для запуска</span></p>
+                <p><span data-i18n="stream.pressHint1"><%- t('stream.pressHint1') %></span> <b data-i18n="stream.pressHint2"><%- t('stream.pressHint2') %></b> <span data-i18n="stream.pressHint3"><%- t('stream.pressHint3') %></span></p>
               </div>
             <% } %>
 
             <div class="tk-live__badges">
-              <span class="tk-live__badge stream-paused-message<%= stream.isActive ? ' hidden' : '' %>" data-i18n="stream.hintPaused">Стрим на паузе или не начат</span>
+              <span class="tk-live__badge stream-paused-message<%= stream.isActive ? ' hidden' : '' %>" data-i18n="stream.hintPaused"><%- t('stream.hintPaused') %></span>
               <span class="tk-live__badge tk-live__badge--live stream-active-message<%= stream.isActive ? '' : ' hidden' %>">
-                <i class="stream-indicator"></i><span data-i18n="stream.hintLive">В эфире</span>
+                <i class="stream-indicator"></i><span data-i18n="stream.hintLive"><%- t('stream.hintLive') %></span>
               </span>
             </div>
 
-            <button type="button" class="tk-live__fs" id="streamerFsButton" title="На весь экран" aria-label="На весь экран" data-i18n-title="stream.fullscreen" data-i18n-aria="stream.fullscreen">
+            <button type="button" class="tk-live__fs" id="streamerFsButton" title="<%= ta('stream.fullscreen') %>" aria-label="<%= ta('stream.fullscreen') %>" data-i18n-title="stream.fullscreen" data-i18n-aria="stream.fullscreen">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M4.5 15v4.5H9M15 19.5h4.5V15"></path></svg>
             </button>
           </div>
@@ -91,41 +91,41 @@
             <% if (obsOnly) { %>
               <div class="obs_tab">
                 <p class="tk-live__lead">
-                  <span data-i18n="stream.obs.step1">Скачайте и запустите OBS:</span>
-                  <a href="https://obsproject.com/ru/download" target="_blank" rel="noopener" data-i18n="stream.obs.download">Скачать OBS Studio</a>
+                  <span data-i18n="stream.obs.step1"><%- t('stream.obs.step1') %></span>
+                  <a href="https://obsproject.com/ru/download" target="_blank" rel="noopener" data-i18n="stream.obs.download"><%- t('stream.obs.download') %></a>
                 </p>
 
                 <ol class="tk-live__steps">
-                  <li data-i18n="stream.obs.step2">Настройте сцену: камера, рабочий стол, игра.</li>
-                  <li data-i18n="stream.obs.step3">Перейдите в настройки → трансляция.</li>
+                  <li data-i18n="stream.obs.step2"><%- t('stream.obs.step2') %></li>
+                  <li data-i18n="stream.obs.step3"><%- t('stream.obs.step3') %></li>
                   <li>
-                    <span data-i18n="stream.obs.step4">В поле «Сервер» вставьте:</span>
+                    <span data-i18n="stream.obs.step4"><%- t('stream.obs.step4') %></span>
                     <code class="tk-live__key"><%= rtmpUrl %></code>
                   </li>
                   <li>
-                    <span data-i18n="stream.obs.step5">В поле «Ключ потока» вставьте свой ключ — никому его не показывайте:</span>
+                    <span data-i18n="stream.obs.step5"><%- t('stream.obs.step5') %></span>
                     <code class="tk-live__key"><%= obsStreamKey %></code>
                     <% if (obsKeyExpiresAt) { %>
-                      <span class="tk-live__note"><span data-i18n="stream.keyValidUntil">Ключ действует до</span> <%= obsKeyExpiresAt.toLocaleDateString('ru-RU') %><span data-i18n="stream.keyRenew">. После этой даты откройте страницу заново — здесь будет новый.</span></span>
+                      <span class="tk-live__note"><span data-i18n="stream.keyValidUntil"><%- t('stream.keyValidUntil') %></span> <%= date(obsKeyExpiresAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %><span data-i18n="stream.keyRenew"><%- t('stream.keyRenew') %></span></span>
                     <% } %>
                   </li>
-                  <li data-i18n="stream.obs.step6">Нажмите «Применить» и начинайте трансляцию в программе.</li>
+                  <li data-i18n="stream.obs.step6"><%- t('stream.obs.step6') %></li>
                 </ol>
               </div>
             <% } else { %>
               <div class="web_tab">
-                <p class="tk-live__lead" data-i18n="stream.hintWeb">Выберите камеру и начните стрим из браузера, нажав «Начать стрим».</p>
+                <p class="tk-live__lead" data-i18n="stream.hintWeb"><%- t('stream.hintWeb') %></p>
                 <select id="cameraSelect" class="tk-field tk-select"></select>
 
                 <div class="tk-live__actions">
-                  <button type="button" class="tk-btn tk-btn--outline tk-btn--sm btn pause_stream<%= stream.isActive ? '' : ' hidden' %>" data-i18n="stream.pause">Поставить на паузу</button>
-                  <button type="button" class="tk-btn tk-btn--primary tk-btn--sm btn start_stream<%= stream.isActive ? ' hidden' : '' %>" id="startStream" data-i18n="stream.start">Начать стрим</button>
+                  <button type="button" class="tk-btn tk-btn--outline tk-btn--sm btn pause_stream<%= stream.isActive ? '' : ' hidden' %>" data-i18n="stream.pause"><%- t('stream.pause') %></button>
+                  <button type="button" class="tk-btn tk-btn--primary tk-btn--sm btn start_stream<%= stream.isActive ? ' hidden' : '' %>" id="startStream" data-i18n="stream.start"><%- t('stream.start') %></button>
                 </div>
               </div>
             <% } %>
 
             <div class="tk-live__danger">
-              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-btn--block btn stop_stream" data-i18n="stream.endFully">Полностью завершить и удалить стрим</button>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-btn--block btn stop_stream" data-i18n="stream.endFully"><%- t('stream.endFully') %></button>
             </div>
           </div>
         </section>
@@ -196,7 +196,7 @@
   stopBtn.addEventListener('click', async () => {
     const sure = await confirmDialog(
       t('stream.endConfirm'),
-      { okText: 'Завершить' });
+      { okText: t('app.endStreamOk') });
     if (!sure) return;
 
     stopBtn.disabled = true;
@@ -329,7 +329,7 @@
     // и микрофон Daily берёт сам при входе.
     async startStream() {
       startBtn.disabled = true;
-      startBtn.textContent = 'Подключение...';
+      tkText(startBtn, 'call.connectingShort');
       try {
         let first = await TKDaily.requestAccess('/api/create-room', { streamId });
         await new Promise((resolve, reject) => {
@@ -346,13 +346,13 @@
             onTrack: (track, p, on) => {
               if (p.local && track.kind === 'video') showLocalVideo(on ? track : null);
             },
-            onMediaError: () => toast('Нет доступа к камере или микрофону — разрешите его в настройках браузера или ведите эфир через OBS', 'error'),
+            onMediaError: () => toast(t('stream.mediaDeniedObs'), 'error'),
             onState: (state) => {
               if (state === 'live') resolve();
               if (state !== 'ended') return;
-              reject(new Error('нет связи с сервисом видео'));
+              reject(new Error(t('stream.serviceDown')));
               if (this.isConnected) {
-                toast('Связь с сервисом видео потеряна, эфир остановлен', 'error');
+                toast(t('stream.serviceLost'), 'error');
                 this.stopStream();
               }
             },
@@ -365,10 +365,10 @@
         setLive(true);
       } catch (error) {
         if (this.session) { this.session.leave(); this.session = null; }
-        toast('Ошибка: ' + error.message, 'error');
+        toast(t('app.errorShort', { message: error.message }), 'error');
       } finally {
         startBtn.disabled = false;
-        startBtn.textContent = t('119') || 'Начать стрим';
+        tkText(startBtn, 'stream.start');
       }
     }
 

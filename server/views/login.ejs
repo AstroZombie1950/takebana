@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { title: 'Вход — Takebana' }) %>
+<%- include('partials/tkHead', { titleKey: 'page.login.title' }) %>
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="/css/auth.css">
 </head>
@@ -12,40 +12,42 @@
 
 <main class="tk-auth">
   <div class="tk-auth__card">
-    <a href="/" class="tk-auth__back" data-i18n="auth.back">
+    <a href="/" class="tk-auth__back">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5l-7 7 7 7M4 12h16"></path></svg>
-      На главную
+      <span data-i18n="auth.back"><%- t('auth.back') %></span>
     </a>
 
-    <span class="tk-auth__kicker" data-i18n="auth.kicker">Личный кабинет</span>
-    <h1 class="tk-auth__h1" data-i18n="auth.login.h1">Вход в аккаунт</h1>
+    <span class="tk-auth__kicker" data-i18n="auth.kicker"><%- t('auth.kicker') %></span>
+    <h1 class="tk-auth__h1" data-i18n="auth.login.h1"><%- t('auth.login.h1') %></h1>
 
     <% if (googleOAuthConfigured) { %>
     <%# Кнопки без ключей нет: без ключей маршрут /auth/google отвечает 503,
         и нерабочая кнопка хуже отсутствующей. %>
     <a href="/auth/google" class="tk-btn tk-btn--ghost tk-btn--block tk-auth__google">
       <img src="/img/google.svg" alt="" aria-hidden="true" width="20" height="20">
-      <span data-i18n="auth.google">Продолжить с Google</span>
+      <span data-i18n="auth.google"><%- t('auth.google') %></span>
     </a>
-    <span class="tk-auth__or" data-i18n="auth.or">или</span>
+    <span class="tk-auth__or" data-i18n="auth.or"><%- t('auth.or') %></span>
     <% } %>
 
     <form class="tk-auth__form" id="tkLoginForm" novalidate>
-      <input class="tk-field" type="email" id="email" name="email" placeholder="Email" data-i18n-placeholder="auth.ph.email" autocomplete="email" required>
+      <input class="tk-field" type="email" id="email" name="email" placeholder="<%= ta('auth.ph.email') %>" data-i18n-placeholder="auth.ph.email" autocomplete="email" required>
 
       <div class="tk-field-wrap">
-        <input class="tk-field" type="password" id="password" name="password" placeholder="Пароль" data-i18n-placeholder="auth.ph.password" autocomplete="current-password" required>
-        <button type="button" class="tk-field-eye" data-eye aria-label="Показать пароль">
+        <input class="tk-field" type="password" id="password" name="password" placeholder="<%= ta('auth.ph.password') %>" data-i18n-placeholder="auth.ph.password" autocomplete="current-password" required>
+        <button type="button" class="tk-field-eye" data-eye aria-label="<%= ta('auth.showPassword') %>" data-i18n-aria="auth.showPassword">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
         </button>
       </div>
 
-      <a href="/" class="tk-auth__forgot" data-i18n="auth.forgot">Забыли пароль?</a>
+      <% if (mailConfigured) { %>
+      <a href="/forgot-password" class="tk-auth__forgot" data-i18n="auth.forgot"><%- t('auth.forgot') %></a>
+      <% } %>
 
-      <button class="tk-btn tk-btn--primary tk-btn--block tk-auth__submit" type="submit" data-i18n="auth.submit.login">Войти</button>
+      <button class="tk-btn tk-btn--primary tk-btn--block tk-auth__submit" type="submit" data-i18n="auth.submit.login"><%- t('auth.submit.login') %></button>
     </form>
 
-    <p class="tk-auth__row" data-i18n="auth.noAccount">Нет аккаунта <a href="/register">Зарегистрироваться</a></p>
+    <p class="tk-auth__row" data-i18n="auth.noAccount"><%- t('auth.noAccount') %></p>
   </div>
 </main>
 
@@ -54,6 +56,7 @@
 
 <%- include('partials/tkMenu') %>
 
+<script defer src="/tk-i18n-<%= lang %>.js"></script>
 <script defer src="/tk-i18n.js"></script>
 <script defer src="/tk.js"></script>
 <script defer src="/toast.js"></script>

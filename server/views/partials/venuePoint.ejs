@@ -10,17 +10,17 @@
 %>
 <div class="tk-pick" data-point>
   <div class="tk-pick__head">
-    <span class="tk-form__label" data-i18n="venue.point.label">Точка на карте</span>
-    <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-point-find data-i18n="venue.point.find">Найти по адресу</button>
+    <span class="tk-form__label" data-i18n="venue.point.label"><%- t('venue.point.label') %></span>
+    <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-point-find data-i18n="venue.point.find"><%- t('venue.point.find') %></button>
   </div>
 
   <div class="tk-pick__map" data-point-map></div>
 
-  <p class="tk-pick__note" data-point-note data-i18n="venue.point.hint">Нажмите на карту, где стоит заведение, — метку потом можно перетащить.</p>
+  <p class="tk-pick__note" data-point-note data-i18n="venue.point.hint"><%- t('venue.point.hint') %></p>
 
   <div class="tk-pick__found" data-point-found hidden>
     <span class="tk-pick__address" data-point-address></span>
-    <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs" data-point-apply data-i18n="venue.point.apply">Подставить в адрес</button>
+    <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs" data-point-apply data-i18n="venue.point.apply"><%- t('venue.point.apply') %></button>
   </div>
 
   <%# Скрытые поля, а не отдельная переменная в скрипте: обе формы собирают

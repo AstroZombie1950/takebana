@@ -11,32 +11,16 @@ const Conversation = require('../../models/Conversation');
 const Message = require('../../models/Message');
 const Notification = require('../../models/Notification');
 const { validate } = require('../../middleware/validate');
-const { commonDataMiddleware, getRandomGradient } = require('./shared');
+const { commonDataMiddleware } = require('./shared');
+const userView = require('../../utils/userView');
 
-function timeAgo(date) {
-  const seconds = Math.floor((new Date() - date) / 1000);
-  let interval = seconds / 31536000;
-
-  if (interval > 1) {
-    return Math.floor(interval) + ' years ago';
-  }
-  interval = seconds / 2592000;
-  if (interval > 1) {
-    return Math.floor(interval) + ' months ago';
-  }
-  interval = seconds / 86400;
-  if (interval > 1) {
-    return Math.floor(interval) + ' days ago';
-  }
-  interval = seconds / 3600;
-  if (interval > 1) {
-    return Math.floor(interval) + ' hours ago';
-  }
-  interval = seconds / 60;
-  if (interval > 1) {
-    return Math.floor(interval) + ' minutes ago';
-  }
-  return Math.floor(seconds) + ' seconds ago';
+// «5 минут назад» на языке страницы. То же считает public/chats.js, когда
+// обновляет подписи и переключает язык.
+const AGO_STEPS = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60], ['second', 1]];
+function timeAgo(date, lang) {
+  const sec = Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 1000));
+  const [unit, size] = AGO_STEPS.find(([, s]) => sec >= s) || AGO_STEPS[AGO_STEPS.length - 1];
+  return new Intl.RelativeTimeFormat(lang).format(-Math.floor(sec / size), unit);
 }
 
 router.get('/chatsPage', commonDataMiddleware, async (req, res) => {
@@ -72,11 +56,8 @@ router.get('/chatsPage', commonDataMiddleware, async (req, res) => {
         ? conversation.userTwo 
         : conversation.userOne;
 
-      const displayName = interlocutor.login || 
-        (interlocutor.email ? interlocutor.email.split('@')[0] : 'Неизвестный пользователь');
-      const avatarStyle = interlocutor.avatar
-        ? { url: interlocutor.avatar }
-        : { gradient: getRandomGradient(), initial: displayName.charAt(0).toUpperCase() };
+      const displayName = userView.displayName(interlocutor);
+      const avatarStyle = userView.avatarStyle(interlocutor, displayName);
 
       // Добавляем интерлокутора и последнюю активность
       conversation.interlocutor = {
@@ -103,7 +84,6 @@ router.get('/chatsPage', commonDataMiddleware, async (req, res) => {
 
     // Передача данных в шаблон
     res.render('chatsPage', {
-      title: 'Личные сообщения',
       conversations, // Передаём отсортированный список диалогов
       timeAgo // Передаем функцию в шаблон
     });
@@ -168,7 +148,7 @@ router.get('/getMessages', async (req, res) => {
     });
 
     if (!conversation) {
-      return res.status(404).send('Диалог не найден.');
+      return res.status(404).send('Диалог не найден');
     }
 
     // Получение сообщений с учетом смещения и лимита
@@ -180,7 +160,7 @@ router.get('/getMessages', async (req, res) => {
     res.json(messages.reverse()); // Отправляем сообщения клиенту в формате JSON, меняем порядок на прямой
   } catch (error) {
     console.error('Ошибка при получении сообщений:', error);
-    res.status(500).send('Ошибка сервера.');
+    res.status(500).send('Ошибка сервера');
   }
 });
 
@@ -201,7 +181,7 @@ router.get('/getNewMessages', async (req, res) => {
     });
 
     if (!conversation) {
-      return res.status(404).send('Диалог не найден.');
+      return res.status(404).send('Диалог не найден');
     }
 
     let query = { conversationId: conversation._id };
@@ -216,7 +196,7 @@ router.get('/getNewMessages', async (req, res) => {
     res.json(newMessages);
   } catch (error) {
     console.error('Ошибка при получении новых сообщений:', error);
-    res.status(500).send('Ошибка сервера.');
+    res.status(500).send('Ошибка сервера');
   }
 });
 
@@ -241,7 +221,7 @@ router.post('/sendMessage', requireNotBanned, validate({
     });
 
     if (!conversation) {
-      return res.status(404).send('Диалог не найден.');
+      return res.status(404).send('Диалог не найден');
     }
 
     // Создание нового сообщения
@@ -288,7 +268,7 @@ router.post('/sendMessage', requireNotBanned, validate({
     res.json(newMessage);
   } catch (error) {
     console.error('Ошибка при отправке сообщения:', error);
-    res.status(500).send('Ошибка сервера.');
+    res.status(500).send('Ошибка сервера');
   }
 });
 

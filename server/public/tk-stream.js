@@ -30,7 +30,7 @@
         '<span class="chat-message__text">' + escapeHtml(m.message) + '</span>' +
       '</p>' +
       '<time class="chat-message__time">' +
-        new Date(m.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) +
+        tkDate(m.createdAt, { hour: '2-digit', minute: '2-digit' }) +
       '</time>';
     box.appendChild(el);
     box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
