@@ -1,4 +1,5 @@
-// Daily для веб-эфира: комната под эфир и токены входа в неё.
+// Daily для веб-эфира: комната под эфир и токен ведущего. Зрители в комнату
+// не входят — они смотрят HLS, в который комнату отдаёт utils/webLive.js.
 // Запросы к Daily и подпись токенов — в utils/daily.js.
 
 const express = require('express');
@@ -9,13 +10,10 @@ const { requireAuth, requireOwner, requireNotBanned } = require('../middleware/a
 const { validate } = require('../middleware/validate');
 const daily = require('../utils/daily');
 const Stream = require('../models/Stream');
-const User = require('../models/User');
 
-// Потолок задаёт тариф Daily, а не мы: на текущем плане запрос комнаты больше
-// чем на 20 участников отбивается с 'cannot be set to that value with your
-// current plan', и комната не создаётся вовсе. Держим значение в окружении,
-// чтобы смена тарифа была правкой .env, а не кода.
-const DAILY_MAX_PARTICIPANTS = Number(process.env.DAILY_MAX_PARTICIPANTS) || 20;
+// В комнате эфира только ведущий. Второе место — на повторный вход после
+// обрыва, пока Daily ещё держит прежнее подключение.
+const STREAM_ROOM_PARTICIPANTS = 2;
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 const streamIdSchema = { streamId: { type: 'objectId', required: true, label: 'Эфир' } };
@@ -53,7 +51,7 @@ router.post('/create-room', requireAuth, requireNotBanned, validate(streamIdSche
     try {
         if (stream.dailyRoomName) await daily.deleteRoom(stream.dailyRoomName);
         room = await daily.createRoom(`stream_${stream._id}_${Date.now()}`, {
-            max_participants: DAILY_MAX_PARTICIPANTS,
+            max_participants: STREAM_ROOM_PARTICIPANTS,
         });
         token = await daily.meetingToken({
             room: room.name, userId: req.session.userId, owner: true, canSend: true,
@@ -71,7 +69,7 @@ router.post('/create-room', requireAuth, requireNotBanned, validate(streamIdSche
         },
     });
 
-    // Зрители переподключаются к новой комнате по этому событию.
+    // Зрители перезагружают плеер, если эфир был другого типа.
     const io = req.app.get('io');
     if (io && stream.streamKey) {
         io.to(`stream:${stream.streamKey}`).emit('stream:update', {
@@ -79,52 +77,36 @@ router.post('/create-room', requireAuth, requireNotBanned, validate(streamIdSche
             streamType: 'daily-stream',
             streamProvider: 'web-stream',
             isActive: !!stream.isActive,
-            dailyRoomName: room.name,
         });
     }
 
     res.json({ success: true, url: room.url, token });
 });
 
-// Токен входа в комнату эфира. Роль выводится из базы, а не из запроса:
-// раньше роль приходила в теле, и любой вошедший просил 'streamer'. Имя
-// комнаты клиент не называет — сервер берёт текущую комнату эфира, так что
-// токен в чужую или посторонюю комнату не выписать.
-// Зритель только смотрит, и в списке участников его нет (hp: false): сотне
-// зрителей незачем рассылать друг другу события о входе и выходе.
+// Свежий токен ведущего для повторного входа после обрыва. Роль выводится
+// из базы, а не из запроса, имя комнаты клиент не называет: сервер берёт
+// текущую комнату эфира. Зрителю токена нет — он смотрит HLS, а место в
+// комнате Daily стоило бы $0,004 за каждую его минуту.
 router.post('/get-token', requireAuth, validate(streamIdSchema), async (req, res) => {
-    const stream = await Stream.findById(req.body.streamId)
-        .select('userId isActive isAdult stoppedByModeration dailyRoomName').lean();
+    const stream = await Stream.findById(req.body.streamId).select('userId dailyRoomName').lean();
     if (!stream || !stream.dailyRoomName) {
         return res.status(404).json({ success: false, message: 'Комната эфира не найдена' });
     }
 
     const userId = String(req.session.userId);
-    const isOwner = String(stream.userId) === userId;
-    if (!isOwner) {
-        if (!stream.isActive || stream.stoppedByModeration) {
-            return res.status(409).json({ success: false, message: 'Эфир не идёт' });
-        }
-        // Гейт 18+ стоит на странице, но токен — отдельная дверь в ту же комнату.
-        if (stream.isAdult) {
-            const user = await User.findById(userId).select('adultConfirmedAt').lean();
-            if (!user || !user.adultConfirmedAt) {
-                return res.status(403).json({ success: false, message: 'Нужно подтвердить возраст' });
-            }
-        }
+    if (String(stream.userId) !== userId) {
+        return res.status(403).json({ success: false, message: 'Комната эфира — только для ведущего' });
     }
 
     try {
-        const token = await daily.meetingToken(isOwner
-            ? { room: stream.dailyRoomName, userId, owner: true, canSend: true }
-            : { room: stream.dailyRoomName, userId, presence: false });
+        const token = await daily.meetingToken({ room: stream.dailyRoomName, userId, owner: true, canSend: true });
         res.json({ success: true, url: daily.roomUrl(stream.dailyRoomName), token });
     } catch (err) {
         dailyFailure(res, err);
     }
 });
 
-// Удаление комнаты выгоняет из неё всех: и вещателя, и зрителей.
+// Удаление комнаты выгоняет ведущего и гасит RTMP-выход, а с ним HLS зрителей.
 router.delete('/delete-room/:streamId', requireAuth,
     requireOwner(Stream, { param: 'streamId', field: 'userId' }), async (req, res) => {
     const stream = await Stream.findById(req.params.streamId).select('dailyRoomName').lean();

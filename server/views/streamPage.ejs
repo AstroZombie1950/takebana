@@ -152,8 +152,10 @@
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }).then((r) => {
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+  }).then(async (r) => {
+    // Текст сервера — на языке интерфейса: «сервис видео не запустил
+    // трансляцию» ведущему понятнее, чем HTTP 502.
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || 'HTTP ' + r.status);
     return r;
   });
 

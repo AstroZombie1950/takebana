@@ -1,4 +1,9 @@
-// Личная переписка: список диалогов, история, отправка, дозагрузка новых.
+// Личная переписка: список диалогов, история, отправка, пересылка, удаление,
+// статусы «доставлено» и «прочитано».
+//
+// Новые сообщения и статусы приходят в браузер сокетом — в комнату
+// `user:<id>`, куда входит каждая вкладка вошедшего (sockets/index.js).
+// Раньше открытый диалог опрашивал сервер раз в три секунды.
 
 const express = require('express');
 const router = express.Router();
@@ -6,7 +11,7 @@ const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const mongoose = require('mongoose');
 const User = require('../../models/User');
-const { requireNotBanned } = require('../../middleware/auth');
+const { requireAuthApi, requireNotBanned } = require('../../middleware/auth');
 const Conversation = require('../../models/Conversation');
 const Message = require('../../models/Message');
 const Notification = require('../../models/Notification');
@@ -14,265 +19,354 @@ const { validate } = require('../../middleware/validate');
 const { commonDataMiddleware } = require('./shared');
 const userView = require('../../utils/userView');
 
+const PAGE = 15;
+const { ObjectId } = mongoose.Types;
+
 // «5 минут назад» на языке страницы. То же считает public/chats.js, когда
 // обновляет подписи и переключает язык.
 const AGO_STEPS = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60], ['second', 1]];
 function timeAgo(date, lang) {
   const sec = Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 1000));
   const [unit, size] = AGO_STEPS.find(([, s]) => sec >= s) || AGO_STEPS[AGO_STEPS.length - 1];
-  return new Intl.RelativeTimeFormat(lang).format(-Math.floor(sec / size), unit);
+  return new Intl.RelativeTimeFormat(lang, { numeric: 'auto' }).format(-Math.floor(sec / size), unit);
+}
+
+function findConversation(a, b) {
+  return Conversation.findOne({
+    $or: [{ userOne: a, userTwo: b }, { userOne: b, userTwo: a }],
+  });
+}
+
+// Сообщение в том виде, в каком его получает браузер.
+function view(m) {
+  return {
+    _id: String(m._id),
+    sender: String(m.sender),
+    recipient: String(m.recipient),
+    content: m.content,
+    sentAt: m.sentAt,
+    deliveredAt: m.deliveredAt || null,
+    readAt: m.readAt || null,
+    forwardedFrom: m.forwardedFrom && m.forwardedFrom.name ? { name: m.forwardedFrom.name } : null,
+  };
+}
+
+function person(user) {
+  const displayName = userView.displayName(user);
+  return { id: String(user._id), displayName, avatarStyle: userView.avatarStyle(user, displayName) };
+}
+
+const io = (req) => req.app.get('io');
+const isOnline = (req, userId) => {
+  const rooms = req.app.get('userRooms');
+  return !!(rooms && rooms.has(String(userId)));
+};
+
+// Сохранить сообщение и разослать: получателю и остальным вкладкам
+// отправителя. Общее у отправки и пересылки.
+async function deliver(req, { conversation, sender, recipient, content, forwardedFrom }) {
+  const now = new Date();
+  const message = await Message.create({
+    conversationId: conversation._id,
+    sender: sender._id,
+    recipient: recipient._id,
+    content,
+    sentAt: now,
+    // Получатель на связи — сообщение дошло до его браузера сразу.
+    deliveredAt: isOnline(req, recipient._id) ? now : null,
+    forwardedFrom,
+  });
+
+  conversation.lastMessage = message._id;
+  conversation.lastUpdated = now;
+  conversation.hiddenFor = []; // удалённая переписка возвращается с новым сообщением
+  await conversation.save();
+
+  // Одно непрочитанное уведомление на отправителя: новое сообщение освежает его.
+  await Notification.findOneAndUpdate(
+    { recipient: recipient._id, sender: sender._id, type: 'message', isRead: false },
+    { $set: { content, createdAt: now } },
+    { upsert: true }
+  );
+
+  const out = view(message);
+  const socket = io(req);
+  if (socket) {
+    socket.to(`user:${recipient._id}`).emit('message:new', { message: out, peer: person(sender) });
+    socket.to(`user:${recipient._id}`).emit('notification:new');
+    socket.to(`user:${sender._id}`).emit('message:new', { message: out, peer: person(recipient) });
+  }
+  return out;
 }
 
 router.get('/chatsPage', commonDataMiddleware, async (req, res) => {
-  if (!req.session.userId) { // Проверка авторизации
+  if (!req.session.userId || !res.locals.currentUser) {
     return res.redirect('/');
   }
+  const me = new ObjectId(String(res.locals.currentUser._id));
 
-  try {
-    // Проверяем, авторизован ли пользователь
-    const currentUserId = res.locals.currentUser ? res.locals.currentUser._id : null;
+  const conversations = await Conversation.find({
+    $or: [{ userOne: me }, { userTwo: me }],
+    hiddenFor: { $ne: me },
+  })
+    .populate('userOne userTwo', 'login email avatar isOnline lastSeen')
+    .lean();
 
-    if (!currentUserId) {
-      return res.status(401).send('Необходима авторизация');
-    }
+  const ids = conversations.map((c) => c._id);
 
-    // Получение всех диалогов текущего пользователя
-    const conversations = await Conversation.find({
-      $or: [{ userOne: currentUserId }, { userTwo: currentUserId }]
-    })
-      .populate('userOne userTwo lastMessage') // Подгружаем участников и последнее сообщение
-      .lean(); // Используем lean() для облегчения работы с объектами
+  // Последнее видимое мне сообщение и число непрочитанных — по каждому диалогу
+  // одним запросом, а не по запросу на диалог.
+  const [lastRows, unreadRows] = await Promise.all([
+    Message.aggregate([
+      { $match: { conversationId: { $in: ids }, deletedFor: { $ne: me } } },
+      { $sort: { sentAt: -1 } },
+      { $group: { _id: '$conversationId', last: { $first: '$$ROOT' } } },
+    ]),
+    Message.aggregate([
+      { $match: { conversationId: { $in: ids }, recipient: me, readAt: null, deletedFor: { $ne: me } } },
+      { $group: { _id: '$conversationId', n: { $sum: 1 } } },
+    ]),
+  ]);
+  const lastBy = new Map(lastRows.map((r) => [String(r._id), r.last]));
+  const unreadBy = new Map(unreadRows.map((r) => [String(r._id), r.n]));
 
-    // Получаем все непрочитанные уведомления для текущего пользователя
-    const unreadNotifications = await Notification.find({
-      recipient: currentUserId, // Уведомления для текущего пользователя
-      isRead: false, // Только непрочитанные
-      type: 'message' // Только уведомления о сообщениях
-    }).lean();
-
-    // Добавляем свойство `hasUnreadMessages` в диалоги на основе уведомлений
-    conversations.forEach(conversation => {
-      const interlocutor = conversation.userOne._id.toString() === currentUserId.toString() 
-        ? conversation.userTwo 
-        : conversation.userOne;
-
-      const displayName = userView.displayName(interlocutor);
-      const avatarStyle = userView.avatarStyle(interlocutor, displayName);
-
-      // Добавляем интерлокутора и последнюю активность
-      conversation.interlocutor = {
-        _id: interlocutor._id,
-        displayName,
-        avatarStyle,
-        isOnline: !!interlocutor.isOnline,
-        lastSeen: interlocutor.lastSeen || null
+  const list = conversations
+    // Собеседник мог удалить аккаунт — такой диалог не показать.
+    .filter((c) => c.userOne && c.userTwo)
+    .map((c) => {
+      const peer = String(c.userOne._id) === String(me) ? c.userTwo : c.userOne;
+      const last = lastBy.get(String(c._id)) || null;
+      return {
+        interlocutor: {
+          ...person(peer),
+          _id: peer._id,
+          isOnline: !!peer.isOnline,
+        },
+        last: last && { content: last.content, mine: String(last.sender) === String(me) },
+        unread: unreadBy.get(String(c._id)) || 0,
+        lastActivity: last ? last.sentAt : c.createdAt,
       };
+    })
+    .sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
 
-      // Проверяем, есть ли непрочитанные уведомления от собеседника
-      conversation.hasUnreadMessages = unreadNotifications.some(
-        (notification) => notification.sender.toString() === interlocutor._id.toString()
-      );
-
-      // Определяем последнюю активность для сортировки
-      conversation.lastActivity = conversation.lastMessage 
-        ? new Date(conversation.lastMessage.sentAt) 
-        : new Date(conversation.createdAt);
-    });
-
-    // Сортируем диалоги по времени последней активности (от свежих к старым)
-    conversations.sort((a, b) => b.lastActivity - a.lastActivity);
-
-    // Передача данных в шаблон
-    res.render('chatsPage', {
-      conversations, // Передаём отсортированный список диалогов
-      timeAgo // Передаем функцию в шаблон
-    });
-  } catch (error) {
-    console.error('Ошибка получения данных для страницы чатов:', error);
-    res.status(500).send('Ошибка сервера');
-  }
+  res.render('chatsPage', { conversations: list, timeAgo });
 });
 
 
-router.post('/start-conversation', requireNotBanned, validate({
+router.post('/start-conversation', requireAuthApi, requireNotBanned, validate({
   recipientId: { type: 'objectId', required: true, label: 'Собеседник' },
 }), async (req, res) => {
-  const currentUserId = req.session.userId; // Получаем ID текущего пользователя из сессии
-  const { recipientId } = req.body; // ID получателя передается в теле запроса
-
-  if (!currentUserId) {
-    return res.status(401).json({ success: false, message: 'Пользователь не аутентифицирован' });
+  const me = req.session.userId;
+  const { recipientId } = req.body;
+  if (recipientId === String(me)) {
+    return res.status(400).json({ success: false, message: 'Нельзя написать самому себе' });
   }
 
-  try {
-    // Проверка существования конверсации
-    let conversation = await Conversation.findOne({
-      $or: [
-        { userOne: currentUserId, userTwo: recipientId },
-        { userOne: recipientId, userTwo: currentUserId }
-      ]
-    });
-
-    if (!conversation) {
-      // Если конверсации нет, создаем новую
-      conversation = new Conversation({
-        userOne: currentUserId,
-        userTwo: recipientId
-      });
-      await conversation.save();
-    }
-
-    // Возвращаем JSON с успехом
-    res.json({ success: true, conversationId: conversation._id });
-  } catch (error) {
-    console.error('Ошибка при создании или получении конверсации:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  let conversation = await findConversation(me, recipientId);
+  if (!conversation) {
+    conversation = await Conversation.create({ userOne: me, userTwo: recipientId });
+  } else if (conversation.hiddenFor.some((id) => String(id) === String(me))) {
+    // Написать тому, с кем переписку удалили, — значит вернуть диалог в список.
+    conversation.hiddenFor.pull(me);
+    await conversation.save();
   }
+
+  res.json({ success: true, conversationId: conversation._id });
 });
 
 
-router.get('/getMessages', async (req, res) => {
-  const { recipientId, offset = 0 } = req.query; // Смещение для пагинации
-  const currentUserId = req.session.userId;
+// История: страница по 15 от конца, offset — сколько уже загружено.
+router.get('/getMessages', requireAuthApi, async (req, res) => {
+  const { recipientId } = req.query;
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+  const me = req.session.userId;
 
-  if (!recipientId) {
-    return res.status(400).send('Не указан ID получателя.');
+  if (typeof recipientId !== 'string' || !ObjectId.isValid(recipientId)) {
+    return res.status(400).json({ message: 'Не указан ID получателя' });
   }
 
-  try {
-    const conversation = await Conversation.findOne({
-      $or: [
-        { userOne: currentUserId, userTwo: recipientId },
-        { userOne: recipientId, userTwo: currentUserId }
-      ]
-    });
-
-    if (!conversation) {
-      return res.status(404).send('Диалог не найден');
-    }
-
-    // Получение сообщений с учетом смещения и лимита
-    const messages = await Message.find({ conversationId: conversation._id })
-      .sort({ sentAt: -1 }) // Сортируем по времени отправки в обратном порядке
-      .skip(parseInt(offset)) // Пропустить сообщения согласно смещению
-      .limit(15); // Ограничиваем количество сообщений
-
-    res.json(messages.reverse()); // Отправляем сообщения клиенту в формате JSON, меняем порядок на прямой
-  } catch (error) {
-    console.error('Ошибка при получении сообщений:', error);
-    res.status(500).send('Ошибка сервера');
-  }
-});
-
-router.get('/getNewMessages', async (req, res) => {
-  const { recipientId, after } = req.query;
-  const currentUserId = req.session.userId;
-
-  if (!recipientId) {
-    return res.status(400).send('Не указан ID получателя.');
+  const conversation = await findConversation(me, recipientId);
+  if (!conversation) {
+    return res.status(404).json({ message: 'Диалог не найден' });
   }
 
-  try {
-    const conversation = await Conversation.findOne({
-      $or: [
-        { userOne: currentUserId, userTwo: recipientId },
-        { userOne: recipientId, userTwo: currentUserId }
-      ]
-    });
+  const messages = await Message.find({ conversationId: conversation._id, deletedFor: { $ne: me } })
+    .sort({ sentAt: -1 })
+    .skip(offset)
+    .limit(PAGE)
+    .lean();
 
-    if (!conversation) {
-      return res.status(404).send('Диалог не найден');
-    }
-
-    let query = { conversationId: conversation._id };
-
-    if (after) {
-      query.sentAt = { $gt: new Date(after) };
-    }
-
-    const newMessages = await Message.find(query)
-      .sort({ sentAt: 1 }); // Сортируем по времени отправки
-
-    res.json(newMessages);
-  } catch (error) {
-    console.error('Ошибка при получении новых сообщений:', error);
-    res.status(500).send('Ошибка сервера');
-  }
+  res.json(messages.reverse().map(view));
 });
 
 
-// Единственный маршрут, где не было ни одной проверки: recipientId уходил прямо
-// в условие $or поиска диалога, а длина сообщения ничем не ограничивалась.
-router.post('/sendMessage', requireNotBanned, validate({
+router.post('/sendMessage', requireAuthApi, requireNotBanned, validate({
   recipientId: { type: 'objectId', required: true, label: 'Собеседник' },
   content: { type: 'string', required: true, min: 1, max: 5000, label: 'Сообщение' },
 }), async (req, res) => {
   const { recipientId, content } = req.body;
-  const senderId = req.session.userId;
+  const me = req.session.userId;
 
-
-  try {
-    // Найдем соответствующую конверсацию
-    const conversation = await Conversation.findOne({
-      $or: [
-        { userOne: senderId, userTwo: recipientId },
-        { userOne: recipientId, userTwo: senderId }
-      ]
-    });
-
-    if (!conversation) {
-      return res.status(404).send('Диалог не найден');
-    }
-
-    // Создание нового сообщения
-    const newMessage = await Message.create({
-      conversationId: conversation._id,
-      sender: senderId,
-      recipient: recipientId,
-      content: content,
-      sentAt: new Date()
-    });
-
-    // Обновляем поле последнего сообщения в разговоре
-    conversation.lastMessage = newMessage._id;
-    await conversation.save();
-
-    
-    // Проверяем наличие существующего непрочитанного уведомления
-    const existingNotification = await Notification.findOne({
-      recipient: recipientId,
-      sender: senderId,
-      type: 'message',
-      isRead: false
-    });
-
-    if (existingNotification) {
-      // Обновляем уведомление, если оно уже существует
-      await Notification.findByIdAndUpdate(existingNotification._id, {
-        $set: {
-          content: content, // Обновляем текст сообщения
-          createdAt: new Date() // Обновляем время
-        }
-      });
-    } else {
-      // Создаём новое уведомление
-      await Notification.create({
-        recipient: recipientId,
-        sender: senderId,
-        type: 'message',
-        content: content
-      });
-    }
-
-    // Отправляем только что созданное сообщение клиенту
-    res.json(newMessage);
-  } catch (error) {
-    console.error('Ошибка при отправке сообщения:', error);
-    res.status(500).send('Ошибка сервера');
+  const [conversation, sender, recipient] = await Promise.all([
+    findConversation(me, recipientId),
+    User.findById(me).select('login email avatar').lean(),
+    User.findById(recipientId).select('login email avatar').lean(),
+  ]);
+  if (!conversation || !sender || !recipient) {
+    return res.status(404).json({ message: 'Диалог не найден' });
   }
+
+  res.json(await deliver(req, { conversation, sender, recipient, content }));
 });
 
 
-// Маршрут для проверки статуса стрима
+// Пересылка одного сообщения одному или нескольким собеседникам. Подпись
+// «переслано от» — изначальный автор, даже если пересылают пересланное.
+router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
+  messageId: { type: 'objectId', required: true, label: 'Сообщение' },
+  recipientIds: { type: 'array', required: true, max: 20, of: { type: 'objectId' }, label: 'Кому' },
+}), async (req, res) => {
+  const me = String(req.session.userId);
+  const { messageId } = req.body;
+  const recipientIds = [...new Set(req.body.recipientIds)].filter((id) => id !== me);
+  if (!recipientIds.length) {
+    return res.status(400).json({ message: 'Выберите, кому переслать' });
+  }
+
+  const original = await Message.findOne({
+    _id: messageId,
+    $or: [{ sender: me }, { recipient: me }],
+    deletedFor: { $ne: me },
+  }).lean();
+  if (!original) {
+    return res.status(404).json({ message: 'Сообщение не найдено' });
+  }
+
+  const [sender, recipients] = await Promise.all([
+    User.findById(me).select('login email avatar').lean(),
+    User.find({ _id: { $in: recipientIds } }).select('login email avatar').lean(),
+  ]);
+
+  let forwardedFrom = original.forwardedFrom && original.forwardedFrom.name ? original.forwardedFrom : null;
+  if (!forwardedFrom) {
+    const author = String(original.sender) === me
+      ? sender
+      : await User.findById(original.sender).select('login email').lean();
+    forwardedFrom = author
+      ? { user: author._id, name: userView.displayName(author) }
+      : { user: original.sender, name: '#' + String(original.sender).slice(-6) };
+  }
+
+  const sent = [];
+  for (const recipient of recipients) {
+    let conversation = await findConversation(me, recipient._id);
+    if (!conversation) conversation = await Conversation.create({ userOne: me, userTwo: recipient._id });
+    sent.push(await deliver(req, { conversation, sender, recipient, content: original.content, forwardedFrom }));
+  }
+
+  res.json({ success: true, messages: sent });
+});
+
+
+// Диалог открыт — входящие в нём прочитаны. Отправителю уходит «прочитано»,
+// уведомления об этом диалоге снимаются. В ответе — остались ли другие
+// непрочитанные уведомления: от этого зависит точка на колокольчике.
+router.post('/messages/read', requireAuthApi, validate({
+  peerId: { type: 'objectId', required: true, label: 'Собеседник' },
+}), async (req, res) => {
+  const me = req.session.userId;
+  const { peerId } = req.body;
+
+  const conversation = await findConversation(me, peerId);
+  if (conversation) {
+    const now = new Date();
+    const result = await Message.updateMany(
+      { conversationId: conversation._id, recipient: me, readAt: null },
+      [{ $set: { readAt: now, deliveredAt: { $ifNull: ['$deliveredAt', now] } } }]
+    );
+    if (result.modifiedCount && io(req)) {
+      io(req).to(`user:${peerId}`).emit('message:read', { readerId: String(me), at: now });
+    }
+    await Notification.deleteMany({ recipient: me, sender: peerId, type: 'message' });
+  }
+
+  const unread = await Notification.countDocuments({ recipient: me, isRead: false });
+  res.json({ success: true, unread });
+});
+
+
+// Удаление сообщений. «У всех» — только своих: документ стирается, и у
+// собеседника сообщение пропадает сразу. «У меня» — остаётся у собеседника;
+// когда удалили оба, стирается совсем.
+router.post('/messages/delete', requireAuthApi, validate({
+  ids: { type: 'array', required: true, max: 100, of: { type: 'objectId' }, label: 'Сообщения' },
+  forAll: { type: 'bool', default: false, label: 'У всех' },
+}), async (req, res) => {
+  const me = String(req.session.userId);
+  const { ids, forAll } = req.body;
+
+  const messages = await Message.find({ _id: { $in: ids }, $or: [{ sender: me }, { recipient: me }] })
+    .select('sender recipient')
+    .lean();
+  const mine = forAll ? messages.filter((m) => String(m.sender) === me) : [];
+  const mineIds = new Set(mine.map((m) => String(m._id)));
+  const rest = messages.filter((m) => !mineIds.has(String(m._id)));
+
+  if (mine.length) {
+    await Message.deleteMany({ _id: { $in: [...mineIds] } });
+    const peers = new Set(mine.map((m) => String(m.recipient)));
+    if (io(req)) {
+      let room = io(req).to(`user:${me}`);
+      peers.forEach((p) => { room = room.to(`user:${p}`); });
+      room.emit('message:deleted', { ids: [...mineIds] });
+    }
+  }
+
+  if (rest.length) {
+    const restIds = rest.map((m) => m._id);
+    await Message.updateMany({ _id: { $in: restIds } }, { $addToSet: { deletedFor: me } });
+    await Message.deleteMany({ _id: { $in: restIds }, 'deletedFor.1': { $exists: true } });
+    if (io(req)) io(req).to(`user:${me}`).emit('message:deleted', { ids: restIds.map(String) });
+  }
+
+  res.json({ success: true, deleted: messages.length });
+});
+
+
+// Удаление переписки целиком. «У меня» — диалог уходит из моего списка
+// и вернётся с новым сообщением; «у обоих» — стирается у двоих.
+router.post('/conversations/delete', requireAuthApi, validate({
+  peerId: { type: 'objectId', required: true, label: 'Собеседник' },
+  forAll: { type: 'bool', default: false, label: 'У всех' },
+}), async (req, res) => {
+  const me = String(req.session.userId);
+  const { peerId, forAll } = req.body;
+
+  const conversation = await findConversation(me, peerId);
+  if (!conversation) {
+    return res.status(404).json({ message: 'Диалог не найден' });
+  }
+
+  if (forAll) {
+    await Promise.all([
+      Message.deleteMany({ conversationId: conversation._id }),
+      Notification.deleteMany({ type: 'message', $or: [{ recipient: me, sender: peerId }, { recipient: peerId, sender: me }] }),
+    ]);
+    await conversation.deleteOne();
+    if (io(req)) {
+      io(req).to(`user:${me}`).emit('conversation:deleted', { peerId });
+      io(req).to(`user:${peerId}`).emit('conversation:deleted', { peerId: me });
+    }
+  } else {
+    await Message.updateMany({ conversationId: conversation._id }, { $addToSet: { deletedFor: me } });
+    await Message.deleteMany({ conversationId: conversation._id, 'deletedFor.1': { $exists: true } });
+    conversation.hiddenFor.addToSet(me);
+    await conversation.save();
+    await Notification.deleteMany({ recipient: me, sender: peerId, type: 'message' });
+    if (io(req)) io(req).to(`user:${me}`).emit('conversation:deleted', { peerId });
+  }
+
+  res.json({ success: true });
+});
 
 module.exports = router;

@@ -8,10 +8,11 @@
  * !important на размеры аватаров, шрифтов и отступов.
  */
 
-/* Высота = экран минус шапка. Раньше здесь стояло 100vh - 80px, хотя шапка
- * 64px: полоса в 16px уезжала под нижний край. */
+/* Высота = экран минус шапка. dvh — видимая часть экрана: на айфоне 100vh
+ * выше неё на панель Safari, и поле ввода пряталось под адресной строкой. */
 .tk-chat {
   height: calc(100vh - 64px);
+  height: calc(100dvh - 64px);
   display: flex;
   overflow: hidden;
 }
@@ -52,6 +53,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* ── Диалог в списке ── */
@@ -100,18 +102,6 @@
   display: block;
 }
 
-/* Метка непрочитанного. Класс unread-indicator оставлен: по нему скрипт
- * гасит метку и пересчитывает точку в шапке. */
-.unread-indicator {
-  position: absolute;
-  top: -3px;
-  right: -3px;
-  width: 10px;
-  height: 10px;
-  background: var(--tk-accent);
-  border: 2px solid var(--tk-ink);
-}
-
 .tk-dialog__body { flex: 1; min-width: 0; }
 
 .tk-dialog__top {
@@ -145,8 +135,29 @@
   color: var(--tk-muted);
 }
 
+.tk-dialog__bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+/* Число непрочитанных в диалоге. */
+.tk-dialog__unread {
+  flex: none;
+  min-width: 20px;
+  margin-left: auto;
+  padding: 1px 6px;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+}
+
 .tk-dialog__last {
-  margin: 3px 0 0;
+  min-width: 0;
   font-family: Oswald, sans-serif;
   font-size: 13px;
   color: var(--tk-muted);
@@ -209,7 +220,25 @@
 .tk-chat__ava-big img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tk-chat__ava-big svg { color: var(--tk-muted); }
 
-.tk-chat__peer-wrap { min-width: 0; cursor: pointer; }
+.tk-chat__peer-wrap { flex: 1; min-width: 0; cursor: pointer; }
+
+/* Кнопка в шапке диалога: удалить переписку. */
+.tk-chat__tool:not(.hidden) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  background: none;
+  border: 1px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  color: var(--tk-muted);
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.tk-chat__tool:hover { color: var(--tk-accent); border-color: var(--tk-rule); }
 
 .tk-chat__peer {
   display: flex;
@@ -240,6 +269,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -273,31 +303,55 @@
 
 .tk-msg__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-.tk-msg__text {
-  margin: 0;
+/* Пузырь сообщения — он же кнопка действий: переслать, копировать, удалить. */
+.tk-msg__bubble {
+  min-width: 0;
   padding: 10px 14px;
-  font-size: 14px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
+  cursor: pointer;
+  outline-offset: 2px;
 }
 
-.tk-msg--in .tk-msg__text {
+.tk-msg--in .tk-msg__bubble {
   border: 1px solid var(--tk-rule);
   color: var(--tk-paper);
 }
 
-.tk-msg--out .tk-msg__text {
+.tk-msg--out .tk-msg__bubble {
   background: var(--tk-accent);
   color: var(--tk-ink);
   font-weight: 500;
 }
 
+.tk-msg__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tk-msg__fwd {
+  display: block;
+  margin-bottom: 4px;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  opacity: .75;
+}
+
 .tk-msg__when {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin: 5px 0 0;
   font-family: Oswald, sans-serif;
   font-size: 11px;
   color: var(--tk-muted);
 }
+
+/* Галочки: одна — отправлено, две — доставлено, две зелёные — прочитано. */
+.tk-msg__tick { flex: none; }
+.tk-msg__tick.is-read { color: var(--tk-green); }
 
 .tk-msg--in .tk-msg__when { margin-left: 40px; }
 
@@ -320,6 +374,99 @@
 }
 
 .tk-chat__send { flex: none; }
+
+/* ── Меню сообщения ── */
+.tk-msgmenu {
+  position: fixed;
+  z-index: 80;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  background: var(--tk-ink);
+  border: 1px solid var(--tk-rule);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .5);
+}
+
+.tk-msgmenu[hidden] { display: none; }
+
+.tk-msgmenu button {
+  background: none;
+  border: none;
+  padding: 11px 16px;
+  text-align: left;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  color: var(--tk-beige);
+}
+
+.tk-msgmenu button:hover,
+.tk-msgmenu button:focus-visible { background: rgba(227, 66, 52, .12); color: var(--tk-paper); outline: none; }
+.tk-msgmenu .tk-msgmenu__danger { color: var(--tk-accent); }
+
+/* ── Пересылка ── */
+.tk-fwd__quote {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--tk-green);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--tk-beige);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tk-fwd__list {
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 -22px;
+}
+
+.tk-fwd__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 22px;
+  cursor: pointer;
+  transition: background-color .18s ease;
+}
+
+.tk-fwd__row:hover { background: rgba(227, 66, 52, .08); }
+
+.tk-fwd__row input {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  accent-color: var(--tk-accent);
+}
+
+.tk-fwd__ava {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-fwd__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-fwd__name {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ── Узкие экраны: одна панель за раз ─────────────────────────────────── */
 @media (max-width: 1023px) {
@@ -357,4 +504,6 @@
   .tk-chat__compose { padding: 12px 16px; }
   .tk-chat__h1 { font-size: 19px; }
   .tk-msg { max-width: 92%; }
+  .tk-fwd__list { margin: 0 -16px; }
+  .tk-fwd__row { padding-left: 16px; padding-right: 16px; }
 }

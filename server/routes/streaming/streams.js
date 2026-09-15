@@ -15,6 +15,7 @@ const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
 const { CATEGORIES, SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
 const { upload } = require('./uploads');
 const daily = require('../../utils/daily');
+const webLive = require('../../utils/webLive');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
 const { randomUUID: uuidv4 } = require('crypto');
 
@@ -150,10 +151,31 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
   }
 
   try {
-    // Находим стрим по streamKey и обновляем isActive на true, устанавливаем время начала.
     // userId в фильтре обязателен: streamKey знают и зрители (по нему идёт
     // подписка на комнату сокета), поэтому без него любой вошедший мог
     // включать и гасить чужой эфир. Чужой стрим просто не найдётся — 404.
+    const current = await Stream.findOne({ streamKey, userId: req.session.userId })
+      .select('streamKey streamType dailyRoomName').lean();
+    if (!current) {
+      return res.status(404).json({ message: 'Стрим не найден' });
+    }
+
+    // Веб-эфир зрители смотрят в HLS: до отметки «в эфире» комната должна
+    // пойти на наш приём (utils/webLive.js). Не пошла — эфира для зрителей
+    // нет, и ведущему об этом говорим сразу, а не молчаливым чёрным экраном.
+    if (current.streamType === 'daily-stream') {
+      if (!current.dailyRoomName) {
+        return res.status(409).json({ message: 'Комната эфира не создана' });
+      }
+      try {
+        await webLive.start(current, req.hostname);
+      } catch (err) {
+        console.error('[webLive] выход Daily не запустился:', err.message);
+        return res.status(502).json({ message: 'Сервис видео не запустил трансляцию, попробуйте ещё раз' });
+      }
+    }
+
+    // Обновляем isActive на true, устанавливаем время начала.
     const stream = await Stream.findOneAndUpdate(
       { streamKey, userId: req.session.userId },
       { 
@@ -216,6 +238,10 @@ router.post('/set-inactive', requireAuth, validate({
 
     if (!stream) {
       return res.status(404).json({ message: 'Стрим не найден' });
+    }
+
+    if (stream.streamType === 'daily-stream') {
+      await webLive.stop(stream).catch((err) => console.error('[webLive] выход Daily не остановлен:', err.message));
     }
 
     // notify viewers
@@ -360,6 +386,15 @@ router.post('/terminate-stream', validate({
       }
 
       console.log('Стрим завершён и удалён:', stream._id);
+
+      // Завершить можно и из шапки, с другой вкладки, пока пульт в эфире:
+      // комната Daily и её RTMP-выход пережили бы запись, а HLS писался бы
+      // для эфира, которого нет.
+      if (stream.dailyRoomName) {
+        webLive.stop(stream).catch(() => {});
+        daily.deleteRoom(stream.dailyRoomName).catch((err) => console.error('[daily] комната завершённого эфира', err.message));
+      }
+      require('../../mediaServer').dropPublisher(stream.streamKey);
 
       res.json({ message: 'Стрим успешно завершен и удален.' });
   } catch (error) {

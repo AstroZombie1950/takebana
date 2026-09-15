@@ -9,9 +9,8 @@ const User = require('../../models/User');
 const Subscription = require('../../models/Subscription');
 const Stream = require('../../models/Stream');
 const Notification = require('../../models/Notification');
-const Conversation = require('../../models/Conversation');
-const Message = require('../../models/Message');
 const userView = require('../../utils/userView');
+const callLog = require('../../utils/callLog');
 
 /**
  * Функция для получения и обработки случайных пользователей
@@ -69,12 +68,13 @@ const commonDataMiddleware = async (req, res, next) => {
       const currentUserAvatarStyle = userView.avatarStyle(currentUser, currentUserDisplayName);
 
       // Получение подписок текущего пользователя (ограничиваем 4) + непрочитанные уведомления (параллельно)
-      const [userSubscriptions, unreadNotificationsCount] = await Promise.all([
+      const [userSubscriptions, unreadNotificationsCount, missedCalls] = await Promise.all([
         Subscription.find({ subscriberId: new mongoose.Types.ObjectId(currentUserId) })
           .select('subscribedToId')
           .limit(4)
           .lean(),
-        Notification.countDocuments({ recipient: currentUserId, isRead: false })
+        Notification.countDocuments({ recipient: currentUserId, isRead: false }),
+        callLog.missedCount(currentUserId)
       ]);
 
       // Получение данных о подписанных пользователях
@@ -117,6 +117,7 @@ const commonDataMiddleware = async (req, res, next) => {
       res.locals.currentUser = {
           _id: currentUser._id,
           displayName: currentUserDisplayName,
+          email: currentUser.email || '',
           avatarStyle: currentUserAvatarStyle,
           gallery: Array.isArray(currentUser.gallery) ? currentUser.gallery : [],
           // Модерация: гейт 18+ и ограничение аккаунта
@@ -135,9 +136,9 @@ const commonDataMiddleware = async (req, res, next) => {
         hasUnread: unreadNotificationsCount > 0,
       };
 
-      console.log('currentUser.hasActiveStream:', res.locals.currentUser.hasActiveStream);
-      console.log('currentUser.isPaused:', res.locals.currentUser.isPaused);
-      console.log('currentUser.activeStreamId:', res.locals.currentUser.activeStreamId);
+      // Левой панели: какая личная ссылка подсвечена и сколько пропущенных звонков.
+      res.locals.path = req.path;
+      res.locals.missedCalls = missedCalls;
 
       next(); // Передаем управление следующему middleware или маршруту
   } catch (error) {

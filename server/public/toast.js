@@ -5,13 +5,17 @@
 // вещателя это особенно заметно — там их было десять.
 //
 // Здесь нет зависимостей и нет фреймворка: стили свои, вставляются один раз.
-// Наружу выходят две функции:
+// Наружу выходят три функции:
 //   toast('текст')                — уведомление, гаснет само
 //   toast('текст', 'error' | 'ok')
 //   await confirmDialog('текст')  — подтверждение, возвращает true или false
+//   await chooseDialog('текст', [{ value, text, danger }]) — выбор действия, value или null
 (function () {
   if (window.toast) return; // файл подключён дважды — второй раз ничего не делаем
 
+  // Оформление — дизайн-системы (public/css/tk.css): тёмная карточка, прямые
+  // углы, Golos Text, кнопки как .tk-btn--sm. Значения здесь, а не токенами:
+  // файл подключается и там, где tk.css может не быть.
   const CSS = `
 .tb-toasts {
   position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
@@ -20,48 +24,56 @@
 }
 .tb-toast {
   pointer-events: auto; cursor: pointer;
-  display: flex; align-items: flex-start; gap: 10px;
-  padding: 12px 14px; border-radius: 12px;
-  background: #fff; color: #1f2328;
-  border: 1px solid #e3e5e8;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, .12);
-  font: 500 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px;
+  background: #0A0A0A; color: #F5F1EA;
+  border: 1px solid rgba(144, 113, 99, .5);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .5);
+  font: 500 14px/1.45 'Golos Text', Helvetica, sans-serif;
   opacity: 0; transform: translateY(-8px);
   transition: opacity .18s ease, transform .18s ease;
   word-break: break-word;
 }
 .tb-toast.tb-in { opacity: 1; transform: translateY(0); }
 .tb-toast::before {
-  content: ""; flex: none; width: 4px; align-self: stretch;
-  border-radius: 2px; background: #9aa1a9;
+  content: ""; flex: none; width: 3px; align-self: stretch;
+  background: #8A827C;
 }
-.tb-toast.tb-error::before { background: #d64545; }
-.tb-toast.tb-ok::before { background: #2f9e5f; }
+.tb-toast.tb-error::before { background: #E34234; }
+.tb-toast.tb-ok::before { background: #679267; }
 
 .tb-backdrop {
   position: fixed; inset: 0; z-index: 10001;
-  background: rgba(17, 19, 22, .45);
+  background: rgba(10, 10, 10, .78);
   display: flex; align-items: center; justify-content: center; padding: 16px;
   opacity: 0; transition: opacity .15s ease;
 }
 .tb-backdrop.tb-in { opacity: 1; }
 .tb-dialog {
-  width: min(420px, 100%); background: #fff; border-radius: 16px;
-  padding: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, .28);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color: #1f2328;
+  width: min(440px, 100%); background: #0A0A0A;
+  border: 1px solid rgba(144, 113, 99, .5);
+  padding: 22px; box-shadow: 0 20px 60px rgba(0, 0, 0, .6);
+  font: 14px/1.5 'Golos Text', Helvetica, sans-serif;
+  color: #F5F1EA;
 }
-.tb-dialog p { margin: 0 0 18px; font-size: 15px; }
-.tb-dialog-buttons { display: flex; gap: 10px; justify-content: flex-end; }
+.tb-dialog p { margin: 0 0 20px; font-size: 16px; font-weight: 700; }
+.tb-dialog-buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
 .tb-dialog button {
-  font: 600 14px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  padding: 10px 16px; border-radius: 10px; cursor: pointer; border: 1px solid transparent;
+  font: 700 12px/1 'Golos Text', Helvetica, sans-serif;
+  letter-spacing: .1em; text-transform: uppercase;
+  padding: 12px 16px; cursor: pointer; border: 1px solid transparent;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease;
 }
-.tb-dialog .tb-cancel { background: #f2f3f5; color: #1f2328; border-color: #e3e5e8; }
-.tb-dialog .tb-cancel:hover { background: #e8eaed; }
-.tb-dialog .tb-ok-btn { background: #d64545; color: #fff; }
-.tb-dialog .tb-ok-btn:hover { background: #c03a3a; }
-.tb-dialog button:focus-visible { outline: 2px solid #1f2328; outline-offset: 2px; }
+.tb-dialog .tb-cancel { background: transparent; color: #C9C2B7; border-color: rgba(144, 113, 99, .7); }
+.tb-dialog .tb-cancel:hover { border-color: #F5F1EA; color: #F5F1EA; }
+.tb-dialog .tb-ok-btn { background: #E34234; border-color: #E34234; color: #0A0A0A; }
+.tb-dialog .tb-ok-btn:hover { background: #F5F1EA; border-color: #F5F1EA; }
+.tb-dialog button:focus-visible { outline: 2px solid #E34234; outline-offset: 3px; }
+
+@media (max-width: 480px) {
+  .tb-dialog-buttons { flex-direction: column-reverse; }
+  .tb-dialog button { width: 100%; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .tb-toast, .tb-backdrop { transition: none; }
@@ -115,7 +127,9 @@
     return hide;
   };
 
-  window.confirmDialog = function (message, options) {
+  // Выбор из нескольких действий: «Удалить у меня», «Удалить у всех», «Отмена».
+  // Возвращает value выбранного действия или null — отмена, Esc, клик мимо.
+  window.chooseDialog = function (message, choices, options) {
     const opts = options || {};
     return new Promise((resolve) => {
       const previouslyFocused = document.activeElement;
@@ -139,40 +153,51 @@
       cancel.className = 'tb-cancel';
       cancel.textContent = opts.cancelText || (window.t ? window.t('common.cancel') : 'Отмена');
 
-      const ok = document.createElement('button');
-      ok.type = 'button';
-      ok.className = 'tb-ok-btn';
-      ok.textContent = opts.okText || (window.t ? window.t('common.confirm') : 'Подтвердить');
+      const actions = choices.map((c) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = c.danger === false ? 'tb-cancel' : 'tb-ok-btn';
+        b.textContent = c.text;
+        b.addEventListener('click', () => close(c.value));
+        return b;
+      });
 
-      buttons.append(cancel, ok);
+      buttons.append(cancel, ...actions);
       dialog.append(text, buttons);
       backdrop.appendChild(dialog);
       document.body.appendChild(backdrop);
       requestAnimationFrame(() => backdrop.classList.add('tb-in'));
-      ok.focus();
+      actions[actions.length - 1].focus();
 
-      const close = (result) => {
+      const all = [cancel, ...actions];
+      function close(result) {
         document.removeEventListener('keydown', onKey, true);
         backdrop.classList.remove('tb-in');
         setTimeout(() => backdrop.remove(), 160);
         if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
         resolve(result);
-      };
+      }
 
-      // Клавиатура: Esc — отмена, Tab не выпускает фокус из двух кнопок.
+      // Клавиатура: Esc — отмена, Tab ходит по кнопкам окна и не выпускает фокус.
       function onKey(e) {
-        if (e.key === 'Escape') { e.preventDefault(); close(false); }
+        if (e.key === 'Escape') { e.preventDefault(); close(null); }
         else if (e.key === 'Tab') {
           e.preventDefault();
-          (document.activeElement === ok ? cancel : ok).focus();
+          const i = all.indexOf(document.activeElement);
+          all[(i + (e.shiftKey ? all.length - 1 : 1)) % all.length].focus();
         }
       }
 
       document.addEventListener('keydown', onKey, true);
-      cancel.addEventListener('click', () => close(false));
-      ok.addEventListener('click', () => close(true));
+      cancel.addEventListener('click', () => close(null));
       // Клик мимо окна равнозначен отмене: действие деструктивное, по умолчанию «нет».
-      backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(false); });
+      backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(null); });
     });
+  };
+
+  window.confirmDialog = function (message, options) {
+    const opts = options || {};
+    const okText = opts.okText || (window.t ? window.t('common.confirm') : 'Подтвердить');
+    return window.chooseDialog(message, [{ value: true, text: okText }], opts).then((v) => v === true);
   };
 })();

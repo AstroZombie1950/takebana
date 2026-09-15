@@ -1,6 +1,7 @@
 <%#
-  Страница зрителя. Плеер — по типу эфира: OBS смотрят через HLS
-  (/tk-hls.js), веб-эфир — участником комнаты Daily (/tk-daily.js). Общее
+  Страница зрителя. Оба типа эфира зритель смотрит через HLS (/tk-hls.js):
+  OBS шлёт RTMP на наш приём сам, веб-эфир туда отдаёт комната Daily
+  (utils/webLive.js) — в комнату зритель не входит. Общее
   с пультом ведущего — шапка эфира, чат, счётчик и таймер — в
   partials/streamInfo, partials/streamChat и /tk-stream.js.
 %>
@@ -15,6 +16,7 @@
 <body class="tk-app"
       data-stream-id="<%= stream._id %>"
       data-stream-key="<%= streamKey %>"
+      data-hls-base="<%= hlsBase %>"
       data-user-id="<%= currentUser._id %>"
       data-streamer-id="<%= user._id %>"
       data-stream-type="<%= stream.streamType %>"
@@ -32,34 +34,14 @@
 
         <section class="tk-live__col">
           <div class="tk-live__player video-player-area" id="viewerPlayerContainer">
-            <%# Плеер выбирается по типу эфира, а не по isActive: флаг успевает
-                обновиться уже после того, как поток пошёл. %>
-            <% if (stream.streamType === 'obs-stream') { %>
+            <%# Идущему эфиру — плеер, неидущему — карточка паузы. Плеер под
+                карточкой не ждём: после остановки он доигрывал бы хвост
+                плейлиста и прятал карточку. О старте придёт stream:update. %>
+            <% const playable = stream.isActive && (stream.streamType === 'obs-stream' || stream.streamType === 'daily-stream'); %>
+            <% if (playable) { %>
               <video id="video" class="video-fit-contain" controls autoplay muted playsinline></video>
-
-            <% } else if (stream.streamType === 'daily-stream') { %>
-              <div class="tk-live__daily">
-                <%# Картинка и звук — разными элементами: видео без звука автозапуск
-                    пропускает всегда, звук браузер может придержать до нажатия. %>
-                <video id="remoteVideo" class="video-fit-cover" autoplay muted playsinline style="display: none;"></video>
-                <audio id="remoteAudio" autoplay></audio>
-
-                <div class="tk-live__volume" id="volumeControl" style="display: none;">
-                  <button type="button" id="muteButton" aria-label="<%= ta('viewer.sound') %>" data-i18n-aria="viewer.sound" aria-pressed="false">
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5Z"></path><path d="M16 9.5a3.5 3.5 0 010 5"></path></svg>
-                  </button>
-                  <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="100" aria-label="<%= ta('viewer.volume') %>" data-i18n-aria="viewer.volume">
-                  <span id="volumeValue">100</span>
-                  <button type="button" id="fullscreenButton" title="<%= ta('stream.fullscreen') %>" aria-label="<%= ta('stream.fullscreen') %>" data-i18n-title="stream.fullscreen" data-i18n-aria="stream.fullscreen">
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M4.5 15v4.5H9M15 19.5h4.5V15"></path></svg>
-                  </button>
-                </div>
-
-                <div class="tk-live__daily-status" id="dailyStatus" data-i18n="viewer.connecting"><%- t('viewer.connecting') %></div>
-              </div>
-
             <% } else { %>
-              <div class="tk-live__hint tk-live__hint--paused">
+              <div class="tk-live__hint tk-live__hint--paused" id="viewerIdle">
                 <% if (stream.thumbnail) { %>
                   <img class="tk-live__thumb" src="<%= stream.thumbnail %>" alt="">
                 <% } %>
@@ -80,15 +62,14 @@
   </main>
 </div>
 
-<%# socket.io и tk-daily.js грузит шапка. Плеер HLS нужен только OBS-эфиру. %>
-<% if (stream.streamType === 'obs-stream') { %>
+<%# socket.io грузит шапка. Плеер HLS — только идущему эфиру. %>
+<% if (playable) { %>
 <script src="/tk-hls.js"></script>
 <% } %>
 <script src="/tk-stream.js"></script>
 <script>
 (function () {
   const data = document.body.dataset;
-  const player = document.getElementById('viewerPlayerContainer');
   const active = data.streamActive === '1';
 
   // Тип эфира, его старт и остановка меняют сам плеер — на месте он не
@@ -110,11 +91,13 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: data.streamerId }),
       });
+      const b = await r.json().catch(() => ({}));
       if (!r.ok) {
-        const b = await r.json().catch(() => ({}));
         toast(t('app.errorShort', { message: b.message || 'HTTP ' + r.status }), 'error');
         return;
       }
+      if (subscribe) window.tkSubscriptions.add(b.user);
+      else window.tkSubscriptions.remove(data.streamerId);
     } catch (_) {
       toast(t('common.noNetwork'), 'error');
       return;
@@ -127,93 +110,27 @@
     tkText(subBtn, subscribe ? 'stream.unsubscribe' : 'stream.subscribe');
   });
 
-  if (data.streamType === 'obs-stream') {
-    // OBS-эфир — HLS, тот же плеер, что у предпросмотра ведущего.
-    const hlsUrl = `/live/${data.streamKey}/index.m3u8`;
-    TKHls.play(document.getElementById('video'), hlsUrl, {
-      attempts: 30,
-      onGiveUp: () => console.error('[hls] плейлист не появился за минуту:', hlsUrl),
-    });
-    return;
-  }
-  if (data.streamType !== 'daily-stream') return;
-
-  // ── Веб-эфир: зритель — участник комнаты Daily, только на приём ──
-  const video = document.getElementById('remoteVideo');
-  const audio = document.getElementById('remoteAudio');
-  const t = (key, arg) => (window.t ? window.t(key, arg) : '');
-  const status = document.getElementById('dailyStatus');
-  const volume = document.getElementById('volumeControl');
-  const slider = document.getElementById('volumeSlider');
-  const level = document.getElementById('volumeValue');
-  const muteBtn = document.getElementById('muteButton');
-
-  // Строку статуса пишет скрипт, поэтому ключ переезжает на сам элемент:
-  // общий переключатель языка перерисовывает всё с data-i18n, и статичный
-  // ключ в разметке затирал бы то, что здесь поставлено.
-  const say = (key) => {
-    if (key) status.setAttribute('data-i18n', key);
-    else status.removeAttribute('data-i18n');
-    status.textContent = key ? t(key) : '';
-    status.style.display = key ? '' : 'none';
-  };
-
-  // Автозапуск придержан браузером — ждём первого нажатия по плееру.
-  let waitingTap = false;
-  function resumeOnTap() {
-    if (waitingTap) return;
-    waitingTap = true;
-    say('viewer.tapForSound');
-    player.addEventListener('click', () => {
-      waitingTap = false;
-      say('');
-      video.play().catch(() => {});
-      audio.play().catch(() => {});
-    }, { once: true });
-  }
-
-  slider.addEventListener('input', () => {
-    audio.volume = slider.value / 100;
-    audio.muted = slider.value === '0';
-    level.textContent = slider.value;
-  });
-  muteBtn.addEventListener('click', () => {
-    audio.muted = !audio.muted;
-    if (!audio.muted && audio.volume === 0) audio.volume = 1;
-    const v = audio.muted ? 0 : Math.round(audio.volume * 100);
-    slider.value = v;
-    level.textContent = v;
-    muteBtn.setAttribute('aria-pressed', String(audio.muted));
-  });
-  document.getElementById('fullscreenButton').addEventListener('click', () => TKStream.fullscreen(player, video));
-
-  // У неидущего эфира комнаты нет, и токен вернул бы отказ. Не ходим:
-  // о старте придёт stream:update, и страница перезагрузится.
-  if (!active) {
-    say('viewer.idle');
+  if (!document.getElementById('video')) {
+    // Старт эфира пришлёт stream:update, и страница перезагрузится. Событие
+    // могло проскочить между отрисовкой страницы и входом в комнату сокета —
+    // одна сверка вдогонку.
+    if (!active) {
+      setTimeout(() => fetch(`/stream-status/${data.streamId}`)
+        .then((r) => r.json())
+        .then((b) => { if (b.isActive) location.reload(); })
+        .catch(() => {}), 3000);
+    }
     return;
   }
 
-  const STATUS = {
-    connecting: 'viewer.connecting',
-    live: '',
-    reconnecting: 'viewer.reconnecting',
-    ended: 'viewer.ended',
-  };
-  TKDaily.connect({
-    send: false,
-    access: () => TKDaily.requestAccess('/api/get-token', { streamId: data.streamId }),
-    onTrack: (track, p, on) => {
-      if (p.local) return;
-      const el = track.kind === 'video' ? video : audio;
-      TKDaily.attach(el, on ? track : null);
-      if (el === video) video.style.display = on ? 'block' : 'none';
-      else volume.style.display = on ? '' : 'none';
-      if (on) el.play().catch(resumeOnTap);
-    },
-    onState: (state) => {
-      if (state in STATUS) say(STATUS[state]);
-    },
+  // HLS — тот же плеер, что у предпросмотра ведущего. Зритель берёт поток
+  // с CDN, если он задан (HLS_BASE_URL); ведущий — всегда со своего домена:
+  // ему не нужен кэш CDN, и трафик пульта не оплачивается. У веб-эфира
+  // плейлист появляется не сразу: Daily сначала поднимает RTMP-выход.
+  const hlsUrl = `${data.hlsBase}/live/${data.streamKey}/index.m3u8`;
+  TKHls.play(document.getElementById('video'), hlsUrl, {
+    attempts: 30,
+    onGiveUp: () => console.error('[hls] плейлист не появился за минуту:', hlsUrl),
   });
 })();
 </script>

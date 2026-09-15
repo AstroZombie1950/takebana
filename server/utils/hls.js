@@ -22,14 +22,31 @@ const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 // забирает /live/<streamKey>/index.m3u8.
 const HLS_ROOT = path.join(__dirname, '..', 'media', 'live');
 
+// Адрес CDN перед /live/ — HLS_BASE_URL, например https://live.takebana.com.
+// Пусто — зритель берёт поток со своего домена. Кривое значение не должно
+// оставить зрителей без видео: предупреждаем и отдаём со своего домена.
+function readHlsBase(value) {
+    if (!value) return '';
+    try {
+        const url = new URL(value);
+        if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('не http(s)');
+        return url.origin + url.pathname.replace(/\/+$/, '');
+    } catch (e) {
+        console.error(`[hls] HLS_BASE_URL не разобран (${e.message}), поток отдаётся со своего домена: ${value}`);
+        return '';
+    }
+}
+const hlsBase = readHlsBase(process.env.HLS_BASE_URL);
+
 const SEGMENT_SECONDS = 2;
 const PLAYLIST_SEGMENTS = 6;   // ~12 секунд в плейлисте: меньше — старт рвётся
 const RESTART_DELAY_MS = 2000;
 const MAX_RESTARTS = 5;        // дальше молчим: чинить надо не перезапуском
 
-// Транскод 720p30 стоит ~0,25 ядра M2 на эфир (вход 1080p или 60 fps —
-// до 0,4), на vCPU сервера — примерно вдвое больше. Три эфира оставляют
-// Node и Mongo минимум ядро из четырёх. Сверх лимита видео копируется.
+// Транскод 1080p60 → 720p30 на vCPU сервера (KVM 4) — 0,78 ядра на один эфир,
+// три одновременно — 2,04 ядра, все в реальном времени (замер 15.09.2026).
+// Три эфира оставляют Node, Mongo и nginx два ядра из четырёх. Сверх лимита
+// видео копируется.
 const MAX_TRANSCODES = 3;
 
 // streamKey -> { proc, restarts, stopping, timer, transcode }
@@ -86,6 +103,11 @@ function ffmpegArgs(streamKey, dir, transcode) {
         // omit_endlist — плейлист остаётся «живым»; delete_segments — диск не растёт;
         // independent_segments — обязательное условие проигрывания на iOS.
         '-hls_flags', 'delete_segments+omit_endlist+independent_segments',
+        // Номера сегментов — от секунд эпохи, а не с нуля. Сегмент кэшируется
+        // на час (браузер, CDN), и с нуля новый эфир или перезапуск ffmpeg
+        // писали бы seg00000.ts под тем же адресом — зритель получал бы кусок
+        // прошлого эфира. Номер в плейлисте заодно только растёт.
+        '-hls_start_number_source', 'epoch',
         '-hls_segment_type', 'mpegts',
         '-hls_segment_filename', path.join(dir, 'seg%05d.ts'),
         path.join(dir, 'index.m3u8'),
@@ -181,4 +203,4 @@ function isRunning(streamKey) {
     return jobs.has(streamKey);
 }
 
-module.exports = { start, stop, isRunning, HLS_ROOT };
+module.exports = { start, stop, isRunning, HLS_ROOT, hlsBase };

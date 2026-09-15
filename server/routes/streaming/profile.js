@@ -141,19 +141,23 @@ router.delete('/profile/gallery/:name', requireAuth, async (req, res) => {
 });
 
 router.get('/search-users', requireAuth, async (req, res) => {
-  const query = req.query.q;
+  const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
 
   // Если нет запроса, возвращаем пустой массив
   if (!query) {
       return res.json([]);
   }
 
+  // Строка поиска — текст, а не регулярное выражение: без экранирования
+  // «(a+)+$» подвешивал бы процесс, а «.*» находил бы всех.
+  const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
   try {
       // Ищем пользователей по имени или email (ограничиваем 7 результатами)
       const users = await User.find({
           $or: [
-              { login: new RegExp(query, 'i') }, // Поиск по имени
-              { email: new RegExp(query, 'i') }  // Поиск по email
+              { login: pattern }, // Поиск по имени
+              { email: pattern }  // Поиск по email
           ]
       }).limit(7);
 

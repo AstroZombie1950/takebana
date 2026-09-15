@@ -14,7 +14,8 @@ const NotificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['message'],
+    // message — новое сообщение, call — пропущенный звонок
+    enum: ['message', 'call'],
     required: true
   },
   content: {

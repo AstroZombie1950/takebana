@@ -26,11 +26,12 @@
   border-bottom: 1px solid var(--tk-rule);
 }
 
+/* 44, а не 68: на десктопе заголовок в три строки давил на всю страницу. */
 .tk-cat__h1 {
   margin: 0;
-  font-size: 68px;
-  line-height: .9;
-  letter-spacing: -.035em;
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: -.02em;
   font-weight: 900;
   text-transform: uppercase;
   color: var(--tk-paper);
@@ -462,12 +463,12 @@
     gap: 40px;
   }
 
-  .tk-cat__h1 { font-size: 54px; }
+  .tk-cat__h1 { font-size: 38px; }
 }
 
 @media (max-width: 767px) {
   .tk-cat { padding: 28px 20px 40px; }
-  .tk-cat__h1 { font-size: 38px; }
+  .tk-cat__h1 { font-size: 30px; }
   .tk-cat__lede { font-size: 15px; }
   .tk-cat__h2 { font-size: 24px; }
   .tk-cat__sec { padding-top: 36px; }
@@ -478,5 +479,5 @@
 }
 
 @media (max-width: 374px) {
-  .tk-cat__h1 { font-size: 30px; }
+  .tk-cat__h1 { font-size: 26px; }
 }

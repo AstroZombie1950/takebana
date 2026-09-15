@@ -90,8 +90,19 @@
   box-sizing: border-box;
 }
 
+/* Фон — тёмный на всём сайте, а прокрутка не тянется за край страницы.
+ * Без этого Safari и Chrome на тачпаде оттягивали страницу за шапку и подвал,
+ * и под ними открывалась белая пустота, а липкая шапка дёргалась вместе
+ * с ней. Тёмный фон на html, а не только на body: при оттяжке виден именно он. */
+html {
+  background: var(--tk-ink);
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
+  background: var(--tk-ink);
+  overscroll-behavior: none;
   font-family: 'Golos Text', Helvetica, sans-serif;
 }
 
@@ -303,7 +314,7 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 }
 
 /* ── Рубрика ───────────────────────────────────────────────
- * Зелёная строка с линейкой до правого края — приём с главной («ВЫПУСК 01»).
+ * Зелёная строка с линейкой до правого края — приём с главной.
  * Ею размечены разделы каталога и профиля, поэтому живёт в системе.
  */
 .tk-kicker {
@@ -459,15 +470,6 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   stroke:#0A0A0A;
 }
 
-.tk-pin {
-  cursor:pointer;
-  transition:transform .18s ease;
-}
-
-.tk-pin:hover {
-  transform:translateY(-2px);
-}
-
 @media (prefers-reduced-motion:reduce) {
   *{animation-duration:.01ms!important;
   animation-iteration-count:1!important;
@@ -482,14 +484,23 @@ a:focus-visible, button:focus-visible, input:focus-visible {
  * один в один.
  */
 
-/* Полоса контента. Шире 1440 страница не растягивается — за её краями видно
- * фон body. */
+/* Полоса контента. Шире 1440 страница не растягивается — за её краями
+ * тёмный фон body, в цвет шапки и подвала. */
 .tk-shell {
   width: 100%;
   max-width: 1440px;
   margin: 0 auto;
   background: var(--tk-ink);
   color: var(--tk-paper);
+}
+
+/* Светлая секция продолжает свой фон до краёв окна, а не обрывается на 1440:
+ * иначе на широком мониторе по бокам бумаги шли тёмные полосы. Рамка-картинка
+ * рисуется за пределами блока, но прокрутку не создаёт. Цвет другой секции —
+ * через --tk-bleed. */
+.tk-shell [data-bg="paper"],
+.tk-shell [data-bleed] {
+  border-image: conic-gradient(var(--tk-bleed, var(--tk-paper)) 0 0) fill 0 / / 0 100vmax;
 }
 
 /* ── Шапка ── */
@@ -504,11 +515,18 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   gap: 48px;
   background: var(--tk-ink);
   border-bottom: 1px solid var(--tk-rule);
+  /* Линейка под шапкой — до краёв окна, а не обрывом на ширине 1440. */
+  border-image: linear-gradient(var(--tk-rule), var(--tk-rule)) 0 0 1 / 0 0 1px / 0 100vmax;
+}
+
+/* Логотип — ссылка на главную. */
+.tk-header__brand {
+  display: block;
+  flex: none;
 }
 
 .tk-header__logo {
   display: block;
-  flex: none;
   height: 52px;
   width: auto;
 }
@@ -638,6 +656,7 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 .tk-copy {
   padding: 22px 56px 26px;
   border-top: 1px solid var(--tk-rule);
+  border-image: linear-gradient(var(--tk-rule), var(--tk-rule)) 1 0 0 / 1px 0 0 / 0 100vmax;
   display: flex;
   align-items: center;
   gap: 20px;

@@ -103,11 +103,12 @@ const options = readTlsOptions();
 
 // HLS, который пишет ffmpeg (utils/hls.js). На проде его отдаёт nginx с диска
 // и сюда запросы не доходят; здесь — для локального запуска, с теми же
-// заголовками кэша, что в ops/nginx/takebana.conf.
+// заголовками кэша и CORS, что в ops/nginx/takebana.conf.
 app.use('/live', express.static(HLS_ROOT, {
   index: false,
   setHeaders(res, file) {
-    res.setHeader('Cache-Control', file.endsWith('.m3u8') ? 'no-cache' : 'public, max-age=3600');
+    res.setHeader('Cache-Control', file.endsWith('.m3u8') ? 'public, max-age=1' : 'public, max-age=3600');
+    res.setHeader('Access-Control-Allow-Origin', '*');
   },
 }));
 // Подложка карты заведений — плитки, шрифты, значки (ops/basemap/fetch.sh).
@@ -121,6 +122,8 @@ app.use(sessionMiddleware);
 app.locals.googleOAuthConfigured = googleOAuthConfigured;
 // То же со ссылкой «Забыли пароль?»: без почты письмо не уйдёт (utils/mail.js).
 app.locals.mailConfigured = require('./utils/mail').mailConfigured;
+// Откуда зритель берёт HLS: пусто — со своего домена, иначе — адрес CDN.
+app.locals.hlsBase = require('./utils/hls').hlsBase;
 // Категории и города: форма эфира живёт в шапке каждой страницы кабинета.
 app.locals.catalog = require('./config/catalog');
 // Страницы и сообщения в JSON-ответах — на языке интерфейса (cookie `lang`,

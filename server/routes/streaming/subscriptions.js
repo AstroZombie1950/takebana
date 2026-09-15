@@ -5,6 +5,8 @@ const router = express.Router();
 const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const Subscription = require('../../models/Subscription');
+const User = require('../../models/User');
+const userView = require('../../utils/userView');
 const { validate } = require('../../middleware/validate');
 
 router.post('/subscribe', validate({
@@ -25,11 +27,26 @@ router.post('/subscribe', validate({
       return res.status(400).json({ message: 'Вы уже подписаны на этого пользователя' });
     }
 
-    // Создание новой подписки
-    const subscription = new Subscription({ subscriberId, subscribedToId: userId });
-    await subscription.save();
+    const target = await User.findById(userId).select('login email avatar isStreaming').lean();
+    if (!target) {
+      return res.status(404).json({ message: 'Пользователь не найден' });
+    }
 
-    res.status(200).json({ message: 'Подписка успешно оформлена' });
+    await Subscription.create({ subscriberId, subscribedToId: userId });
+
+    // Строка для левой панели: страница дорисовывает подписку без перезагрузки
+    // (window.tkSubscriptions в public/tk-app.js). Поля — те же, что готовит
+    // для панели commonDataMiddleware.
+    const displayName = userView.displayName(target);
+    res.status(200).json({
+      message: 'Подписка успешно оформлена',
+      user: {
+        id: String(target._id),
+        displayName,
+        avatarStyle: userView.avatarStyle(target, displayName),
+        status: target.isStreaming ? 'online' : 'offline',
+      },
+    });
   } catch (error) {
     console.error('Ошибка при подписке:', error);
     res.status(500).json({ message: 'Ошибка сервера при попытке подписаться' });

@@ -1,4 +1,4 @@
-// Socket.IO: присутствие, комнаты эфиров, звонки.
+// Socket.IO: присутствие, комнаты эфиров, звонки, доставка сообщений.
 //
 // Состояние держится в памяти процесса, поэтому pm2 запускает приложение
 // в одном экземпляре (ops/ecosystem.config.js). Второй процесс не увидит ни
@@ -6,7 +6,9 @@
 // работ за рамками текущего объёма.
 
 const User = require('../models/User');
+const Message = require('../models/Message');
 const daily = require('../utils/daily');
+const callLog = require('../utils/callLog');
 
 // Список подписок приходит от клиента, поэтому и формат, и длина проверяются.
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -48,6 +50,8 @@ function registerSockets(io) {
   function finishCall(callId, event = 'call:ended') {
     const call = pendingCalls.get(callId) || activeCalls.get(callId);
     if (!call) return;
+    // До ответа — отмена (у получателя это пропущенный), после — конец разговора.
+    callLog.ended(io, callId, event === 'call:failed' ? 'failed' : 'canceled');
     pendingCalls.delete(callId);
     activeCalls.delete(callId);
     bothSides(call).emit(event, { callId });
@@ -59,6 +63,22 @@ function registerSockets(io) {
   function finishCallsOf(userId) {
     for (const [id, c] of pendingCalls) if (isParty(c, userId)) finishCall(id);
     for (const [id, c] of activeCalls) if (isParty(c, userId)) finishCall(id);
+  }
+
+  // Человек вышел на связь: всё, что ему написали, пока его не было, дошло.
+  // Отправители получают вторую галочку.
+  async function markDelivered(userId) {
+    const pending = await Message.find({ recipient: userId, deliveredAt: null }).select('_id sender').lean();
+    if (!pending.length) return;
+    const at = new Date();
+    await Message.updateMany({ _id: { $in: pending.map((m) => m._id) } }, { $set: { deliveredAt: at } });
+    const bySender = new Map();
+    for (const m of pending) {
+      const key = String(m.sender);
+      if (!bySender.has(key)) bySender.set(key, []);
+      bySender.get(key).push(String(m._id));
+    }
+    for (const [sender, ids] of bySender) io.to(`user:${sender}`).emit('message:delivered', { ids, at });
   }
 
   io.on('connection', (socket) => {
@@ -86,6 +106,7 @@ function registerSockets(io) {
               console.log('[presence] user online', userId);
             })
             .catch((e) => console.error('presence connect error:', e));
+          markDelivered(userId).catch((e) => console.error('[messages] delivered', e.message));
         }
       }
     } catch (e) {
@@ -199,6 +220,7 @@ function registerSockets(io) {
       const roomName = `call_${callId}`;
       const active = { ...call, roomName, startedAt: Date.now() };
       activeCalls.set(callId, active);
+      callLog.answered(callId);
 
       // Остальные вкладки того, кому звонят, перестают звонить: разговор
       // идёт в той, где приняли. Иначе в комнату на двоих ломились бы все.
@@ -228,6 +250,7 @@ function registerSockets(io) {
       const call = pendingCalls.get(callId);
       if (!call || call.calleeId !== socket.data.userId) return;
       pendingCalls.delete(callId);
+      callLog.ended(io, callId, 'declined');
       io.to(`user:${call.callerId}`).emit('call:declined', { callId });
       socket.to(`user:${call.calleeId}`).emit('call:canceled', { callId });
     });
@@ -236,6 +259,7 @@ function registerSockets(io) {
       const call = pendingCalls.get(callId);
       if (!call || call.callerId !== socket.data.userId) return;
       pendingCalls.delete(callId);
+      callLog.ended(io, callId, 'canceled');
       io.to(`user:${call.calleeId}`).emit('call:canceled', { callId });
     });
 

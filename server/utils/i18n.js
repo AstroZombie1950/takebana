@@ -69,8 +69,11 @@ const EN = {
     'Отписка успешно выполнена': 'Unsubscribed',
     'Ошибка сервера при попытке подписаться': 'Server error while subscribing',
     'Ошибка сервера при попытке отписаться': 'Server error while unsubscribing',
-    'Уведомления помечены как прочитанные': 'Notifications marked as read',
-    'Уведомления о чате удалены': 'Chat notifications removed',
+    'Нельзя написать самому себе': 'You cannot message yourself',
+    'Не указан ID получателя': 'No recipient given',
+    'Диалог не найден': 'Conversation not found',
+    'Выберите, кому переслать': 'Choose who to forward to',
+    'Сообщение не найдено': 'Message not found',
     'Сообщение успешно отправлено и сохранено': 'Message sent',
 
     // Эфиры
@@ -90,10 +93,11 @@ const EN = {
     'Стрим успешно завершен и удален.': 'Stream ended and deleted.',
     'Эфир остановлен модерацией': 'The stream has been stopped by moderators',
     'Комната эфира не найдена': 'Stream room not found',
-    'Эфир не идёт': 'The stream is not live',
-    'Нужно подтвердить возраст': 'Please confirm your age',
     'Сервис видео недоступен, попробуйте позже': 'The video service is unavailable, please try later',
     'Сервис видео перегружен запросами, попробуйте через несколько секунд': 'The video service is overloaded, try again in a few seconds',
+    'Сервис видео не запустил трансляцию, попробуйте ещё раз': 'The video service did not start the broadcast, please try again',
+    'Комната эфира не создана': 'The stream room has not been created',
+    'Комната эфира — только для ведущего': 'The stream room is for the host only',
 
     // Заведения и адреса
     'Заведение не найдено': 'Establishment not found',
@@ -130,7 +134,9 @@ const EN = {
     'Новый пароль': 'New password',
     'Объект': 'Target',
     'Описание': 'Description',
-    'Отправитель': 'Sender',
+    'Сообщения': 'Messages',
+    'Кому': 'Recipients',
+    'У всех': 'For everyone',
     'Оценка': 'Rating',
     'Пароль': 'Password',
     'Подкатегория': 'Subcategory',

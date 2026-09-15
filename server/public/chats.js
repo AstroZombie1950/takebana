@@ -1,420 +1,575 @@
-/* Переписка: список диалогов, лента сообщений, отправка.
+/* Переписка: список диалогов, лента, отправка, пересылка, удаление,
+ * статусы «доставлено» и «прочитано».
  *
- * Раньше жил инлайном в chatsPage.ejs — 722 строки. Ни одной вставки EJS
- * там не было, поэтому файл переехал целиком.
- *
- * Что убрано при переносе:
- *   — Первая из двух функций selectConversation. Их было две подряд, вторая
- *     перекрывала первую, и первая не выполнялась никогда.
- *   — Блок переменных от старой шапки: .profile__box, .AVATAR, .button__exit,
- *     .shodow, .serh-button и ещё дюжина. Этих элементов нет в разметке
- *     со дня переверстки шапки, все обработчики висели вхолостую.
- *   — Полтора десятка отладочных console.log.
+ * Новое приходит сокетом: tk-app.js пересылает события сервера в document
+ * как tk:message:new, tk:message:read и т. д. Раньше открытый диалог
+ * опрашивал сервер раз в три секунды, а о прочтении никто не узнавал.
  */
+(function () {
+  var t = window.t || function () { return ''; };
+  var tkText = window.tkText || function () {};
+  var ME = (window.TK && window.TK.userId) || '';
+  var PAGE = 15;
 
-var loadedMessages = [];
-var offset = 0;
-var lastMessageTimestamp = null;
-var loadingOldMessages = false;
-var currentRecipientId = null;
-var currentRecipientName = '';
-var currentRecipientAvatar = '';
-var messageCheckInterval = null;
-var feedScrollHandler = null;
+  var $ = function (id) { return document.getElementById(id); };
+  var feed = $('feed');
+  var list = $('conversationsList');
+  var input = $('messageInput');
 
-// Подписи и язык — из общего словаря (public/tk-i18n.js). Свой переводчик
-// с запасными строками здесь стоял, пока у кабинета был отдельный словарь.
-// Ссылка, а не обёртка: файл без обёртки, и объявление попадает в window —
-// обёртка вокруг window.t присвоилась бы в него же и вызывала бы себя.
-var t = window.t || function () { return ''; };
+  var peer = null;          // { id, name, url, bg, initial }
+  var messages = [];        // лента открытого диалога, от старых к новым
+  var loadingOld = false;
+  var allLoaded = false;
 
-function uiLang() { return window.tkLang ? window.tkLang() : 'ru'; }
+  function uiLang() { return window.tkLang ? window.tkLang() : 'ru'; }
 
-function feed() { return document.getElementById('feed'); }
-
-// «5 минут назад» на языке интерфейса — так же, как сервер
-// (routes/streaming/messages.js).
-var AGO_STEPS = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60], ['second', 1]];
-
-function timeAgo(value) {
-  var sec = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
-  var step = AGO_STEPS.find(function (x) { return sec >= x[1]; }) || AGO_STEPS[AGO_STEPS.length - 1];
-  return new Intl.RelativeTimeFormat(uiLang()).format(-Math.floor(sec / step[1]), step[0]);
-}
-
-function refreshTimes() {
-  document.querySelectorAll('[data-time]').forEach(function (el) {
-    el.textContent = timeAgo(el.getAttribute('data-time'));
-  });
-}
-
-// ── Загрузка и отрисовка ───────────────────────────────────────────────────
-
-function addMessagesToLoaded(newMessages) {
-  var fresh = newMessages.filter(function (m) {
-    return !loadedMessages.some(function (loaded) { return loaded._id === m._id; });
-  });
-  loadedMessages = loadedMessages.concat(fresh);
-}
-
-async function loadMessages(recipientId) {
-  try {
-    var response = await fetch('/getMessages?recipientId=' + encodeURIComponent(recipientId) + '&offset=' + offset);
-    if (!response.ok) {
-      console.error('getMessages:', response.statusText);
-      return;
-    }
-    var messages = await response.json();
-    addMessagesToLoaded(messages);
-    renderMessages();
-    scrollToBottom();
-    if (messages.length) lastMessageTimestamp = messages[messages.length - 1].sentAt;
-  } catch (e) {
-    console.error('getMessages:', e);
+  // «5 минут назад» на языке интерфейса — так же, как сервер
+  // (routes/streaming/messages.js).
+  var AGO_STEPS = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60], ['second', 1]];
+  function timeAgo(value) {
+    var sec = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+    var step = AGO_STEPS.find(function (x) { return sec >= x[1]; }) || AGO_STEPS[AGO_STEPS.length - 1];
+    return new Intl.RelativeTimeFormat(uiLang(), { numeric: 'auto' }).format(-Math.floor(sec / step[1]), step[0]);
   }
-}
 
-async function loadMoreMessages(recipientId) {
-  try {
-    offset += 15;
-    var response = await fetch('/getMessages?recipientId=' + encodeURIComponent(recipientId) + '&offset=' + offset);
-    if (!response.ok) {
-      console.error('getMessages (старые):', response.statusText);
-      loadingOldMessages = false;
-      return;
-    }
-    var messages = await response.json();
-    var fresh = messages.filter(function (m) {
-      return !loadedMessages.some(function (loaded) { return loaded._id === m._id; });
+  function refreshTimes() {
+    document.querySelectorAll('[data-time]').forEach(function (el) {
+      el.textContent = timeAgo(el.getAttribute('data-time'));
     });
-    // Высоту запоминаем до отрисовки: иначе лента прыгает к началу.
-    var box = feed();
-    var before = box.scrollHeight;
-    loadedMessages = fresh.concat(loadedMessages);
-    renderMessages();
-    box.scrollTop = box.scrollHeight - before;
-    loadingOldMessages = false;
-  } catch (e) {
-    console.error('getMessages (старые):', e);
-    loadingOldMessages = false;
-  }
-}
-
-function handleScroll(container, recipientId) {
-  if (container.scrollTop === 0 && !loadingOldMessages) {
-    loadingOldMessages = true;
-    loadMoreMessages(recipientId);
-  }
-}
-
-// Аватар собеседника: либо ссылка на файл, либо градиент с буквой.
-function peerAvatar(cls) {
-  var name = escapeHtml(currentRecipientName);
-  if (currentRecipientAvatar && currentRecipientAvatar.indexOf('http') === 0) {
-    return '<span class="' + cls + '" data-peer><img src="' + escapeHtml(currentRecipientAvatar) + '" alt="' + name + '"></span>';
-  }
-  var initial = currentRecipientName ? escapeHtml(currentRecipientName.charAt(0).toUpperCase()) : '?';
-  return '<span class="' + cls + '" data-peer style="background: ' + escapeHtml(currentRecipientAvatar || '') + '">' + initial + '</span>';
-}
-
-function renderMessages() {
-  var box = feed();
-  box.innerHTML = '';
-
-  if (!loadedMessages.length) {
-    box.innerHTML = '<p class="tk-note tk-note--center">' +
-      escapeHtml(t('chats.dialogEmpty')) + '</p>';
-    return;
   }
 
-  loadedMessages.forEach(function (message) {
-    var stamp = escapeHtml(tkDate(message.sentAt));
-    var text = escapeHtml(message.content);
-    var wrap = document.createElement('div');
-
-    if (message.sender === currentRecipientId) {
-      wrap.className = 'tk-msg tk-msg--in';
-      wrap.innerHTML =
-        '<div class="tk-msg__row">' +
-          peerAvatar('tk-msg__ava') +
-          '<p class="tk-msg__text">' + text + '</p>' +
-        '</div>' +
-        '<p class="tk-msg__when">' + stamp + '</p>';
-    } else {
-      wrap.className = 'tk-msg tk-msg--out';
-      wrap.innerHTML =
-        '<p class="tk-msg__text">' + text + '</p>' +
-        '<p class="tk-msg__when">' + stamp + '</p>';
-    }
-
-    box.appendChild(wrap);
-  });
-}
-
-function scrollToBottom() {
-  var box = feed();
-  box.scrollTop = box.scrollHeight;
-}
-
-// ── Отправка и добор новых ────────────────────────────────────────────────
-
-async function sendMessage() {
-  var input = document.getElementById('messageInput');
-  var recipientId = input.getAttribute('data-id');
-  var content = input.value.trim();
-
-  if (!recipientId || content === '') {
-    toast(t('chats.pickAndType'), 'error');
-    return;
-  }
-
-  try {
-    var response = await fetch('/sendMessage', {
+  function post(url, body) {
+    return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recipientId: recipientId, content: content })
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (data) {
+        if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+        return data;
+      });
     });
+  }
 
-    if (!response.ok) {
-      toast(t('chats.sendFailed'), 'error');
+  // ── Аватар ────────────────────────────────────────────────────────────
+  // Фото — картинкой, без фото — градиент с буквой. Раньше фото узнавали по
+  // началу адреса «http», а загруженные аватары лежат по /uploads/… — и вместо
+  // фото рисовался фон с адресом внутри.
+  function avatar(cls, p, attrs) {
+    if (p.url) return '<span class="' + cls + '"' + (attrs || '') + '><img src="' + escapeHtml(p.url) + '" alt=""></span>';
+    return '<span class="' + cls + '"' + (attrs || '') + ' style="background: ' + escapeHtml(p.bg || '') + '">' + escapeHtml(p.initial || '?') + '</span>';
+  }
+
+  function peerOf(el) {
+    return {
+      id: el.getAttribute('data-id'),
+      name: el.getAttribute('data-name'),
+      url: el.getAttribute('data-ava-url'),
+      bg: el.getAttribute('data-ava-bg'),
+      initial: el.getAttribute('data-ava-initial')
+    };
+  }
+
+  function dialogEl(id) {
+    return list.querySelector('.tk-dialog[data-id="' + CSS.escape(String(id)) + '"]');
+  }
+
+  // ── Лента ─────────────────────────────────────────────────────────────
+  var TICK = '<path d="M3 12.5l4.5 4.5L17 7.5"></path>';
+  var TICKS = '<path d="M1.5 12.5 6 17l9.5-9.5"></path><path d="M11 16.5l.5.5L21 7.5"></path>';
+
+  function status(m) {
+    if (m.readAt) return { key: 'chats.status.read', cls: 'is-read', icon: TICKS };
+    if (m.deliveredAt) return { key: 'chats.status.delivered', cls: '', icon: TICKS };
+    return { key: 'chats.status.sent', cls: '', icon: TICK };
+  }
+
+  function messageHtml(m) {
+    var out = m.sender === ME;
+    var fwd = m.forwardedFrom
+      ? '<span class="tk-msg__fwd">' + escapeHtml(t('chats.forwardedFrom', { name: m.forwardedFrom.name })) + '</span>'
+      : '';
+    var bubble = '<div class="tk-msg__bubble" tabindex="0" role="button" aria-haspopup="menu" aria-label="' + escapeHtml(t('chats.actions')) + '">' +
+      fwd + '<p class="tk-msg__text">' + escapeHtml(m.content) + '</p></div>';
+    var when = '<time>' + escapeHtml(tkDate(m.sentAt)) + '</time>';
+    if (out) {
+      var s = status(m);
+      when += ' <svg class="tk-msg__tick ' + s.cls + '" viewBox="0 0 22 24" width="17" height="16" fill="none" stroke="currentColor" stroke-width="2" role="img" aria-label="' +
+        escapeHtml(t(s.key)) + '"><title>' + escapeHtml(t(s.key)) + '</title>' + s.icon + '</svg>';
+    }
+    return '<div class="tk-msg ' + (out ? 'tk-msg--out' : 'tk-msg--in') + '" data-mid="' + escapeHtml(m._id) + '">' +
+      (out ? bubble : '<div class="tk-msg__row">' + avatar('tk-msg__ava', peer, ' data-peer') + bubble + '</div>') +
+      '<p class="tk-msg__when">' + when + '</p></div>';
+  }
+
+  function render() {
+    if (!messages.length) {
+      feed.innerHTML = '<p class="tk-note tk-note--center">' + escapeHtml(t('chats.dialogEmpty')) + '</p>';
       return;
     }
-
-    var message = await response.json();
-    loadedMessages.push(message);
-    renderMessages();
-    scrollToBottom();
-    input.value = '';
-    lastMessageTimestamp = message.sentAt;
-  } catch (e) {
-    console.error('sendMessage:', e);
-    toast(t('chats.sendFailed'), 'error');
+    feed.innerHTML = messages.map(messageHtml).join('');
   }
-}
 
-async function checkForNewMessages(recipientId) {
-  try {
-    var url = '/getNewMessages?recipientId=' + encodeURIComponent(recipientId);
-    if (lastMessageTimestamp) url += '&after=' + encodeURIComponent(lastMessageTimestamp);
-
-    var response = await fetch(url);
-    if (!response.ok) {
-      console.error('getNewMessages:', response.statusText);
-      return;
-    }
-
-    var messages = await response.json();
-    if (!messages.length) return;
-
-    addMessagesToLoaded(messages);
-    renderMessages();
-    scrollToBottom();
-    lastMessageTimestamp = messages[messages.length - 1].sentAt;
-  } catch (e) {
-    console.error('getNewMessages:', e);
+  function atBottom() {
+    return feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
   }
-}
 
-// ── Уведомления ───────────────────────────────────────────────────────────
-
-async function markNotificationsAsRead(senderId) {
-  try {
-    await fetch('/api/notifications/markAsRead', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ senderId: senderId })
-    });
-  } catch (e) {
-    console.error('markAsRead:', e);
+  function scrollToBottom() {
+    feed.scrollTop = feed.scrollHeight;
   }
-}
 
-async function removeChatNotifications(recipientId) {
-  try {
-    var response = await fetch('/removeChatNotifications', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recipientId: recipientId })
-    });
-    if (!response.ok) {
-      console.error('removeChatNotifications:', response.statusText);
-      return;
-    }
-
-    var dialog = document.querySelector('.tk-dialog[data-id="' + recipientId + '"]');
-    var mark = dialog && dialog.querySelector('.unread-indicator');
-    if (mark) mark.remove();
-
-    updateHeaderNotificationIndicator();
-  } catch (e) {
-    console.error('removeChatNotifications:', e);
+  function merge(fresh) {
+    var seen = {};
+    messages.forEach(function (m) { seen[m._id] = true; });
+    fresh.forEach(function (m) { if (!seen[m._id]) messages.push(m); });
+    messages.sort(function (a, b) { return new Date(a.sentAt) - new Date(b.sentAt); });
   }
-}
 
-// Точка непрочитанного в шапке. Прежняя версия искала `.notification-btn
-// .absolute` — селектор от старой шапки, которого в разметке нет; функция
-// не делала ничего. В новой шапке это .tk-ahead__dot.
-function updateHeaderNotificationIndicator() {
-  var dot = document.querySelector('.tk-ahead__dot');
-  if (!dot) return;
-  if (!document.querySelector('.unread-indicator')) dot.remove();
-}
+  function load(recipientId, offset) {
+    return fetch('/getMessages?recipientId=' + encodeURIComponent(recipientId) + '&offset=' + offset)
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  }
 
-// ── Выбор диалога ─────────────────────────────────────────────────────────
+  function openHistory() {
+    var id = peer.id;
+    load(id, 0).then(function (page) {
+      if (!peer || peer.id !== id) return;
+      messages = page;
+      allLoaded = page.length < PAGE;
+      render();
+      scrollToBottom();
+      markRead();
+    }).catch(function (e) { console.error('getMessages:', e); });
+  }
 
-function goToUserProfile() {
-  if (currentRecipientId) window.location.href = '/userPage/' + encodeURIComponent(currentRecipientId);
-}
-
-function selectConversation(element) {
-  var recipientId = element.getAttribute('data-id');
-  var recipientName = element.getAttribute('data-name');
-  var recipientAvatar = element.getAttribute('data-avatar');
-
-  currentRecipientId = recipientId;
-  currentRecipientName = recipientName;
-  currentRecipientAvatar = recipientAvatar;
-
-  removeChatNotifications(recipientId);
-  markNotificationsAsRead(recipientId);
-
-  document.querySelectorAll('.tk-dialog').forEach(function (d) {
-    d.classList.toggle('tk-dialog--on', d === element);
+  // Прокрутили к началу — дозагрузка старых. Высоту запоминаем до отрисовки,
+  // иначе лента прыгает.
+  feed.addEventListener('scroll', function () {
+    if (!peer || loadingOld || allLoaded || feed.scrollTop > 40) return;
+    loadingOld = true;
+    var id = peer.id;
+    load(id, messages.length).then(function (page) {
+      if (!peer || peer.id !== id) return;
+      allLoaded = page.length < PAGE;
+      var before = feed.scrollHeight;
+      merge(page);
+      render();
+      feed.scrollTop = feed.scrollHeight - before;
+    }).catch(function (e) { console.error('getMessages (старые):', e); })
+      .finally(function () { loadingOld = false; });
   });
 
-  var name = document.querySelector('.avatar__name');
-  if (name) {
-    name.textContent = recipientName;
-    // Ключ словаря снимаем: иначе applyLang вернёт «Выберите диалог».
-    name.removeAttribute('data-i18n');
+  // ── Прочтение ─────────────────────────────────────────────────────────
+  // Входящие открытого диалога читаются, только пока вкладку видно: иначе
+  // собеседник видел бы «прочитано» у сообщения, которого никто не видел.
+  function markRead() {
+    if (!peer || document.visibilityState !== 'visible') return;
+    var unread = messages.some(function (m) { return m.sender === peer.id && !m.readAt; });
+    var el = dialogEl(peer.id);
+    var badge = el && el.querySelector('.tk-dialog__unread');
+    if (!unread && !(badge && !badge.classList.contains('hidden'))) return;
+    var now = new Date().toISOString();
+    messages.forEach(function (m) { if (m.sender === peer.id && !m.readAt) m.readAt = now; });
+    if (badge) { badge.textContent = '0'; badge.classList.add('hidden'); }
+    post('/messages/read', { peerId: peer.id })
+      .then(function (r) { if (window.setNotificationDot) window.setNotificationDot(r.unread > 0); })
+      .catch(function (e) { console.error('read:', e); });
   }
 
-  var note = document.querySelector('.tk-chat__peer-note');
-  if (note) { note.textContent = ''; note.removeAttribute('data-i18n'); }
+  document.addEventListener('visibilitychange', markRead);
 
-  var avatar = document.getElementById('chatAvatar');
-  if (avatar) {
-    if (recipientAvatar && recipientAvatar.indexOf('http') === 0) {
-      avatar.removeAttribute('style');
-      avatar.innerHTML = '<img src="' + escapeHtml(recipientAvatar) + '" alt="' + escapeHtml(recipientName) + '">';
-    } else {
-      avatar.setAttribute('style', 'background: ' + recipientAvatar);
-      avatar.textContent = recipientName.charAt(0).toUpperCase();
-    }
+  // ── Список диалогов ───────────────────────────────────────────────────
+  function setLast(el, m) {
+    var last = el.querySelector('.tk-dialog__last');
+    last.innerHTML = (m.sender === ME ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : '') + escapeHtml(m.content);
+    var when = el.querySelector('.tk-dialog__when');
+    when.setAttribute('data-time', m.sentAt);
+    when.textContent = timeAgo(m.sentAt);
+    list.prepend(el);
   }
 
-  // Присутствие собеседника в шапке диалога
-  var presence = document.getElementById('chatHeaderPresence');
-  if (presence) {
-    presence.setAttribute('data-presence-user', recipientId);
-    if (window.subscribePresence) window.subscribePresence([recipientId]);
-    var dot = presence.querySelector('.presence-dot');
-    if (dot) dot.classList.remove('hidden');
-    fetch('/api/presence?ids=' + encodeURIComponent(recipientId))
+  function addDialog(p) {
+    var el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'tk-dialog';
+    el.setAttribute('data-id', p.id);
+    el.setAttribute('data-name', p.displayName);
+    el.setAttribute('data-ava-url', p.avatarStyle.url || '');
+    el.setAttribute('data-ava-bg', p.avatarStyle.gradient || '');
+    el.setAttribute('data-ava-initial', p.avatarStyle.initial || '');
+    el.setAttribute('data-presence-user', p.id);
+    el.innerHTML =
+      avatar('tk-dialog__ava', peerOf(el)) +
+      '<span class="tk-dialog__body">' +
+        '<span class="tk-dialog__top"><span class="tk-dialog__who"><span class="tk-dialog__name">' + escapeHtml(p.displayName) + '</span>' +
+        '<span class="presence-dot presence-offline"></span></span><span class="tk-dialog__when"></span></span>' +
+        '<span class="tk-dialog__bottom"><span class="tk-dialog__last"></span><span class="tk-dialog__unread hidden">0</span></span>' +
+      '</span>';
+    list.prepend(el);
+    $('conversationsEmpty').classList.add('hidden');
+    if (window.subscribePresence) window.subscribePresence([p.id]);
+    return el;
+  }
+
+  list.addEventListener('click', function (e) {
+    var el = e.target.closest('.tk-dialog');
+    if (el) select(el);
+  });
+
+  // ── Выбор диалога ─────────────────────────────────────────────────────
+  function select(el) {
+    peer = peerOf(el);
+    messages = [];
+    allLoaded = false;
+    feed.innerHTML = '';
+
+    list.querySelectorAll('.tk-dialog').forEach(function (d) {
+      d.classList.toggle('tk-dialog--on', d === el);
+    });
+
+    var name = $('peerName');
+    name.textContent = peer.name;
+    name.removeAttribute('data-i18n'); // иначе переключение языка вернёт «Выберите диалог»
+    tkText($('peerNote'), '');
+    $('chatAvatar').outerHTML = avatar('tk-chat__ava-big', peer, ' id="chatAvatar"');
+    $('deleteChat').classList.remove('hidden');
+
+    var presence = $('chatHeaderPresence');
+    presence.setAttribute('data-presence-user', peer.id);
+    presence.querySelector('.presence-dot').classList.remove('hidden');
+    if (window.subscribePresence) window.subscribePresence([peer.id]);
+    fetch('/api/presence?ids=' + encodeURIComponent(peer.id))
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var u = (data.users || [])[0];
         if (u) window.dispatchEvent(new CustomEvent('presence:init', { detail: u }));
       })
       .catch(function () {});
-  }
 
-  var input = document.getElementById('messageInput');
-  var send = document.querySelector('.input__button-icons');
-  if (input) {
-    input.setAttribute('data-id', recipientId);
     input.removeAttribute('data-i18n-placeholder');
-    input.placeholder = t('chats.messageTo') + ' ' + recipientName + '…';
+    input.placeholder = t('chats.messageTo') + ' ' + peer.name + '…';
+
+    history.replaceState(null, '', '/chatsPage?peer=' + encodeURIComponent(peer.id));
+    $('chat').classList.add('is-open');
+    openHistory();
   }
-  if (send) send.setAttribute('data-id', recipientId);
 
-  loadedMessages = [];
-  offset = 0;
-  lastMessageTimestamp = null;
-  loadingOldMessages = false;
-
-  // Подгрузка старых сообщений при прокрутке вверх. Обработчик вешала только
-  // первая, перекрытая функция выбора диалога, — то есть не вешал никто.
-  var box = feed();
-  if (feedScrollHandler) box.removeEventListener('scroll', feedScrollHandler);
-  feedScrollHandler = function () { handleScroll(box, recipientId); };
-  box.addEventListener('scroll', feedScrollHandler);
-
-  if (messageCheckInterval) clearInterval(messageCheckInterval);
-  messageCheckInterval = setInterval(function () { checkForNewMessages(recipientId); }, 3000);
-
-  loadMessages(recipientId);
-  showChatArea();
-}
-
-// ── Переключение панелей на узком экране ──────────────────────────────────
-
-function showChatArea() {
-  document.getElementById('chat').classList.add('is-open');
-}
-
-function showConversationsList() {
-  document.getElementById('chat').classList.remove('is-open');
-  if (messageCheckInterval) {
-    clearInterval(messageCheckInterval);
-    messageCheckInterval = null;
+  function closeDialog() {
+    peer = null;
+    messages = [];
+    feed.innerHTML = '';
+    tkText($('peerName'), 'chats.pick');
+    tkText($('peerNote'), 'chats.startHint');
+    $('deleteChat').classList.add('hidden');
+    $('chatHeaderPresence').querySelector('.presence-dot').classList.add('hidden');
+    list.querySelectorAll('.tk-dialog--on').forEach(function (d) { d.classList.remove('tk-dialog--on'); });
+    input.setAttribute('data-i18n-placeholder', 'chats.messagePh');
+    input.placeholder = t('chats.messagePh');
+    history.replaceState(null, '', '/chatsPage');
+    $('chat').classList.remove('is-open');
   }
-}
 
-// ── Запуск ────────────────────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', function () {
-  document.querySelectorAll('.tk-dialog').forEach(function (dialog) {
-    dialog.addEventListener('click', function () { selectConversation(dialog); });
+  $('backToList').addEventListener('click', function () {
+    $('chat').classList.remove('is-open');
   });
 
-  var back = document.getElementById('backToList');
-  if (back) back.addEventListener('click', showConversationsList);
+  function goToPeer() {
+    if (peer) location.href = '/userPage/' + encodeURIComponent(peer.id);
+  }
+  $('peerLink').addEventListener('click', goToPeer);
 
-  var peer = document.getElementById('peerLink');
-  if (peer) peer.addEventListener('click', goToUserProfile);
-
-  // Аватар собеседника в ленте ведёт на его страницу
-  feed().addEventListener('click', function (e) {
-    if (e.target.closest('[data-peer]')) goToUserProfile();
+  // ── Отправка ──────────────────────────────────────────────────────────
+  $('composeForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var content = input.value.trim();
+    if (!peer || !content) {
+      toast(t('chats.pickAndType'), 'error');
+      return;
+    }
+    input.value = '';
+    post('/sendMessage', { recipientId: peer.id, content: content })
+      .then(function (m) {
+        merge([m]);
+        render();
+        scrollToBottom();
+        var el = dialogEl(m.recipient);
+        if (el) setLast(el, m);
+      })
+      .catch(function (err) {
+        console.error('sendMessage:', err);
+        if (!input.value) input.value = content; // текст не теряем
+        toast(t('chats.sendFailed'), 'error');
+      });
   });
 
-  var form = document.getElementById('composeForm');
-  if (form) {
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      sendMessage();
+  // ── События сокета ────────────────────────────────────────────────────
+  document.addEventListener('tk:message:new', function (e) {
+    var m = e.detail.message;
+    var p = e.detail.peer;
+    var el = dialogEl(p.id) || addDialog(p);
+    setLast(el, m);
+
+    if (peer && peer.id === p.id) {
+      var stick = atBottom() || m.sender === ME;
+      merge([m]);
+      render();
+      if (stick) scrollToBottom();
+      markRead();
+    } else if (m.sender !== ME) {
+      var badge = el.querySelector('.tk-dialog__unread');
+      badge.textContent = String((parseInt(badge.textContent, 10) || 0) + 1);
+      badge.classList.remove('hidden');
+    }
+  });
+
+  document.addEventListener('tk:message:delivered', function (e) {
+    var ids = e.detail.ids || [];
+    var changed = false;
+    messages.forEach(function (m) {
+      if (ids.indexOf(m._id) !== -1 && !m.deliveredAt) { m.deliveredAt = e.detail.at; changed = true; }
     });
-  }
-
-  window.addEventListener('beforeunload', function () {
-    if (messageCheckInterval) clearInterval(messageCheckInterval);
+    if (changed) render();
   });
 
+  document.addEventListener('tk:message:read', function (e) {
+    if (!peer || peer.id !== e.detail.readerId) return;
+    var changed = false;
+    messages.forEach(function (m) {
+      if (m.sender === ME && !m.readAt && new Date(m.sentAt) <= new Date(e.detail.at)) {
+        m.readAt = e.detail.at;
+        m.deliveredAt = m.deliveredAt || e.detail.at;
+        changed = true;
+      }
+    });
+    if (changed) render();
+  });
+
+  document.addEventListener('tk:message:deleted', function (e) {
+    var ids = e.detail.ids || [];
+    var before = messages.length;
+    messages = messages.filter(function (m) { return ids.indexOf(m._id) === -1; });
+    if (messages.length === before) return;
+    var top = feed.scrollTop;
+    render();
+    feed.scrollTop = top;
+    var last = messages[messages.length - 1];
+    var el = peer && dialogEl(peer.id);
+    if (el && last) el.querySelector('.tk-dialog__last').innerHTML =
+      (last.sender === ME ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : '') + escapeHtml(last.content);
+  });
+
+  document.addEventListener('tk:conversation:deleted', function (e) {
+    var el = dialogEl(e.detail.peerId);
+    if (el) el.remove();
+    if (peer && peer.id === e.detail.peerId) closeDialog();
+    if (!list.querySelector('.tk-dialog')) $('conversationsEmpty').classList.remove('hidden');
+  });
+
+  // Пока сокета не было, что-то могло прийти или прочитаться — перечитываем
+  // открытый диалог целиком.
+  document.addEventListener('tk:reconnect', function () {
+    if (peer) openHistory();
+  });
+
+  // ── Действия с сообщением ─────────────────────────────────────────────
+  var menu = $('msgMenu');
+  var menuFor = null;
+
+  function openMenu(bubble) {
+    var row = bubble.closest('.tk-msg');
+    menuFor = messages.find(function (m) { return m._id === row.getAttribute('data-mid'); });
+    if (!menuFor) return;
+    menu.hidden = false;
+    var r = bubble.getBoundingClientRect();
+    var w = menu.offsetWidth;
+    var h = menu.offsetHeight;
+    var left = row.classList.contains('tk-msg--out') ? r.right - w : r.left;
+    var top = r.bottom + 6 + h > innerHeight ? r.top - h - 6 : r.bottom + 6;
+    menu.style.left = Math.max(8, Math.min(left, innerWidth - w - 8)) + 'px';
+    menu.style.top = Math.max(8, top) + 'px';
+    menu.querySelector('button').focus();
+  }
+
+  function closeMenu() {
+    menu.hidden = true;
+  }
+
+  feed.addEventListener('click', function (e) {
+    if (e.target.closest('[data-peer]')) return goToPeer();
+    var bubble = e.target.closest('.tk-msg__bubble');
+    // Выделяли текст мышью — это не нажатие.
+    if (!bubble || !window.getSelection().isCollapsed) return;
+    e.stopPropagation();
+    openMenu(bubble);
+  });
+
+  feed.addEventListener('keydown', function (e) {
+    var bubble = e.target.closest('.tk-msg__bubble');
+    if (bubble && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openMenu(bubble); }
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!menu.hidden && !menu.contains(e.target)) closeMenu();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !menu.hidden) closeMenu();
+  });
+  feed.addEventListener('scroll', closeMenu);
+
+  menu.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-act]');
+    if (!btn || !menuFor) return;
+    var m = menuFor;
+    closeMenu();
+    var act = btn.getAttribute('data-act');
+    if (act === 'copy') copy(m);
+    else if (act === 'delete') removeMessage(m);
+    else if (act === 'forward') openForward(m);
+  });
+
+  function copy(m) {
+    navigator.clipboard.writeText(m.content)
+      .then(function () { toast(t('chats.copied'), 'ok'); })
+      .catch(function () {});
+  }
+
+  function removeMessage(m) {
+    var mine = m.sender === ME;
+    var choices = mine
+      ? [{ value: 'me', text: t('chats.deleteForMe'), danger: false }, { value: 'all', text: t('chats.deleteForAll') }]
+      : [{ value: 'me', text: t('chats.delete') }];
+    chooseDialog(t('chats.deleteMsgQ'), choices).then(function (v) {
+      if (!v) return;
+      return post('/messages/delete', { ids: [m._id], forAll: v === 'all' });
+    }).catch(function (e) { toast(t('chats.deleteFailed') + ': ' + e.message, 'error'); });
+  }
+
+  $('deleteChat').addEventListener('click', function () {
+    if (!peer) return;
+    var p = peer;
+    chooseDialog(t('chats.deleteChatQ', { name: p.name }), [
+      { value: 'me', text: t('chats.deleteForMe'), danger: false },
+      { value: 'all', text: t('chats.deleteChatForAll') }
+    ]).then(function (v) {
+      if (!v) return;
+      return post('/conversations/delete', { peerId: p.id, forAll: v === 'all' });
+    }).catch(function (e) { toast(t('chats.deleteFailed') + ': ' + e.message, 'error'); });
+  });
+
+  // ── Пересылка ─────────────────────────────────────────────────────────
+  var fwd = $('forwardModal');
+  var fwdList = $('forwardList');
+  var fwdSearch = $('forwardSearch');
+  var fwdSend = $('forwardSend');
+  var fwdMessage = null;
+  var fwdPicked = {};      // id → true
+  var fwdTimer = null;
+
+  // Кандидаты — собеседники из списка слева; поиск добавляет остальных.
+  function known() {
+    return Array.prototype.map.call(list.querySelectorAll('.tk-dialog'), peerOf);
+  }
+
+  function fwdRender(people) {
+    if (!people.length) {
+      fwdList.innerHTML = '<p class="tk-note tk-note--center">' + escapeHtml(t('chats.forwardEmpty')) + '</p>';
+      return;
+    }
+    fwdList.innerHTML = people.map(function (p) {
+      return '<label class="tk-fwd__row">' +
+        '<input type="checkbox" value="' + escapeHtml(p.id) + '"' + (fwdPicked[p.id] ? ' checked' : '') + '>' +
+        avatar('tk-fwd__ava', p) +
+        '<span class="tk-fwd__name">' + escapeHtml(p.name) + '</span></label>';
+    }).join('');
+  }
+
+  function fwdCount() {
+    var n = Object.keys(fwdPicked).length;
+    fwdSend.disabled = !n;
+    $('forwardCount').textContent = n ? '\u00a0(' + n + ')' : '';
+  }
+
+  function openForward(m) {
+    fwdMessage = m;
+    fwdPicked = {};
+    fwdSearch.value = '';
+    $('forwardQuote').textContent = m.content;
+    fwdRender(known());
+    fwdCount();
+    fwd.classList.remove('hidden');
+    fwdSearch.focus();
+  }
+
+  function closeForward() {
+    fwd.classList.add('hidden');
+    fwdMessage = null;
+  }
+
+  $('forwardClose').addEventListener('click', closeForward);
+  fwd.addEventListener('click', function (e) { if (e.target === fwd) closeForward(); });
+
+  fwdList.addEventListener('change', function (e) {
+    var box = e.target;
+    if (box.checked) fwdPicked[box.value] = true;
+    else delete fwdPicked[box.value];
+    fwdCount();
+  });
+
+  fwdSearch.addEventListener('input', function () {
+    clearTimeout(fwdTimer);
+    var q = fwdSearch.value.trim();
+    var mine = known().filter(function (p) { return p.name.toLowerCase().indexOf(q.toLowerCase()) !== -1; });
+    fwdRender(mine);
+    if (q.length < 2) return;
+    fwdTimer = setTimeout(function () {
+      fetch('/search-users?q=' + encodeURIComponent(q))
+        .then(function (r) { return r.json(); })
+        .then(function (users) {
+          if (fwdSearch.value.trim() !== q) return;
+          var seen = {};
+          mine.forEach(function (p) { seen[p.id] = true; });
+          var more = users.filter(function (u) { return String(u._id) !== ME && !seen[u._id]; }).map(function (u) {
+            var a = u.avatarStyle || {};
+            return { id: String(u._id), name: u.displayName, url: a.url, bg: a.gradient, initial: a.initial };
+          });
+          fwdRender(mine.concat(more));
+        })
+        .catch(function () {});
+    }, 300);
+  });
+
+  fwdSend.addEventListener('click', function () {
+    if (!fwdMessage) return;
+    fwdSend.disabled = true;
+    post('/messages/forward', { messageId: fwdMessage._id, recipientIds: Object.keys(fwdPicked) })
+      .then(function () {
+        toast(t('chats.forwardDone'), 'ok');
+        closeForward();
+      })
+      .catch(function (e) {
+        toast(t('chats.forwardFailed') + ': ' + e.message, 'error');
+        fwdCount();
+      });
+  });
+
+  // ── Язык и время ──────────────────────────────────────────────────────
   // Лента, даты и подсказка поля собираются скриптом, а переключатель языка
   // переводит только разметку с ключами — поэтому пересобираем сами.
   document.addEventListener('tk:lang', function () {
     refreshTimes();
-    if (!currentRecipientId) return;
-    var box = feed();
-    var fromBottom = box.scrollHeight - box.scrollTop;
-    renderMessages();
-    box.scrollTop = box.scrollHeight - fromBottom;
-    var input = document.getElementById('messageInput');
-    if (input) input.placeholder = t('chats.messageTo') + ' ' + currentRecipientName + '…';
+    if (!peer) return;
+    var fromBottom = feed.scrollHeight - feed.scrollTop;
+    render();
+    feed.scrollTop = feed.scrollHeight - fromBottom;
+    input.placeholder = t('chats.messageTo') + ' ' + peer.name + '…';
   });
 
-  updateHeaderNotificationIndicator();
   refreshTimes();
   // Подписи «N минут назад» стареют, пока страница открыта.
   setInterval(refreshTimes, 60000);
 
-  // Переход с профиля по кнопке «Сообщение»: открыть нужный диалог сразу.
-  // Прежде страница получала ?conversationId=..., но его никто не читал —
-  // человек попадал в список и искал собеседника заново.
-  var peerId = new URLSearchParams(window.location.search).get('peer');
-  if (peerId) {
-    var target = document.querySelector('.tk-dialog[data-id="' + peerId + '"]');
-    if (target) selectConversation(target);
-  }
-});
+  // Переход с профиля («Сообщение») или из уведомления: открыть нужный диалог.
+  var peerId = new URLSearchParams(location.search).get('peer');
+  var target = peerId && dialogEl(peerId);
+  if (target) select(target);
+})();

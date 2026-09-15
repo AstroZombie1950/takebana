@@ -7,7 +7,7 @@
 // Страница подключает /vendor/pmtiles-4.5.0.js и этот файл; MapLibre (ES-модуль,
 // ~290 КБ сжатого) грузится здесь же при создании карты.
 //
-// TKMap.mount(container, { center: [lng, lat], zoom }) → Promise<карта>:
+// TKMap.mount(container, { center: [lng, lat], zoom, cooperative }) → Promise<карта>:
 //   карта.setPoints([{ id, lng, lat, name, photo, online }])
 //   карта.on('hover', fn(id, { x, y }) — наведение на заведение; fn(null) — ушли)
 //   карта.on('click', fn(id))
@@ -29,6 +29,10 @@
 
   function lang() {
     return window.tkLang ? window.tkLang() : 'ru';
+  }
+
+  function t(key) {
+    return window.t ? window.t(key) : '';
   }
 
   // Стиль в git без адресов (ops/basemap/style.mjs): MapLibre нужны
@@ -94,6 +98,14 @@
         center: opts.center || BELGRADE,
         zoom: opts.zoom || 11,
         attributionControl: { compact: true },
+        // Карта посреди длинной страницы (главная) не перехватывает прокрутку:
+        // масштаб — с Ctrl или ⌘, сдвиг на телефоне — двумя пальцами.
+        cooperativeGestures: !!opts.cooperative,
+        locale: opts.cooperative ? {
+          'CooperativeGesturesHandler.WindowsHelpText': t('map.gesturesWin'),
+          'CooperativeGesturesHandler.MacHelpText': t('map.gesturesMac'),
+          'CooperativeGesturesHandler.MobileHelpText': t('map.gesturesTouch'),
+        } : undefined,
         dragRotate: false,
         pitchWithRotate: false,
       });

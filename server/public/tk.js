@@ -1,4 +1,4 @@
-// Поведение каркаса: мобильное меню.
+// Поведение каркаса: мобильное меню и ссылки-заглушки.
 //
 // Подключается на каждой странице сайта, поэтому здесь только то, что есть
 // в шапке. Всё остальное — в скрипте своей страницы.
@@ -30,5 +30,17 @@
     });
   }
 
-  document.addEventListener("DOMContentLoaded", initMenu);
+  // Ссылки без адреса: «Блог», соцсети и телеграм в подвале — страниц
+  // и адресов пока нет. Гасим только прыжок наверх страницы.
+  function initPlaceholderLinks() {
+    document.addEventListener("click", function (e) {
+      var a = e.target.closest && e.target.closest('a[href="#"]');
+      if (a) e.preventDefault();
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    initMenu();
+    initPlaceholderLinks();
+  });
 })();

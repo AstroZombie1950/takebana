@@ -1,21 +1,20 @@
 <%
-  // Шапка сайта для страниц без входа. Локаль navActive: viewer | host |
-  // about | blog — подчёркивает текущий раздел. Пустая — ничего не активно.
+  // Шапка сайта для страниц без входа. Локаль navActive: about | blog —
+  // подчёркивает текущий раздел. Пустая — ничего не активно.
   var navActive = typeof navActive !== 'undefined' ? navActive : '';
 
-  // «Я ведущий» и «Блог» заданы по ТЗ главной, но страниц под них ещё нет.
-  // Адрес не выдумываем: заглушки гасит tk-landing.js, чтобы не прыгало наверх.
+  // «Блог» — по ТЗ главной, но страницы под него ещё нет. Адрес не выдумываем:
+  // заглушку гасит tk.js, чтобы не прыгало наверх.
   var navItems = [
-    { key: 'viewer', href: '/',      i18n: 'nav.viewer' },
-    { key: 'host',   href: '#',      i18n: 'nav.host' },
-    { key: 'about',  href: '/about', i18n: 'nav.about' },
-    { key: 'blog',   href: '#',      i18n: 'nav.blog' }
+    { key: 'about', href: '/about', i18n: 'nav.about' },
+    { key: 'blog',  href: '#',      i18n: 'nav.blog' }
   ];
 %>
-<%# Логотип намеренно не ссылка: на главной по ТЗ он не кликается. %>
 <header class="tk-header">
-  <img src="/img/logo.webp" alt="Takebana" class="tk-header__logo"
-       width="83" height="52" decoding="async" fetchpriority="high">
+  <a href="/" class="tk-header__brand" aria-label="Takebana">
+    <img src="/img/logo.svg" alt="Takebana" class="tk-header__logo"
+         width="101" height="52" decoding="async" fetchpriority="high">
+  </a>
 
   <nav class="tk-header__nav">
     <% navItems.forEach(function (item) { %>

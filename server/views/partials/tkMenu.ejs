@@ -3,16 +3,16 @@
   // где прячется горизонтальная навигация. Открытие и закрытие — в tk.js.
   var navActive = typeof navActive !== 'undefined' ? navActive : '';
   var navItems = [
-    { key: 'viewer', href: '/',      i18n: 'nav.viewer' },
-    { key: 'host',   href: '#',      i18n: 'nav.host' },
-    { key: 'about',  href: '/about', i18n: 'nav.about' },
-    { key: 'blog',   href: '#',      i18n: 'nav.blog' }
+    { key: 'about', href: '/about', i18n: 'nav.about' },
+    { key: 'blog',  href: '#',      i18n: 'nav.blog' }
   ];
 %>
 <div class="tk-menu" id="tkMobileMenu">
   <div class="tk-menu__top">
-    <img src="/img/logo.webp" alt="Takebana" class="tk-menu__logo"
-         width="64" height="40" decoding="async">
+    <a href="/" class="tk-header__brand" aria-label="Takebana">
+      <img src="/img/logo.svg" alt="Takebana" class="tk-menu__logo"
+           width="78" height="40" decoding="async">
+    </a>
     <div class="tk-menu__gap"></div>
     <div class="tk-menu__close" id="tkBurgerClose" role="button" tabindex="0" aria-label="<%= ta('app.menuClose') %>" data-i18n-aria="app.menuClose">
       <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#F5F1EA" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>

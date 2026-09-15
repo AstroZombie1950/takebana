@@ -19,16 +19,16 @@ const conversationSchema = new Schema({
   lastUpdated: {
     type: Date,
     default: Date.now
-  }
+  },
+  // Кто удалил переписку у себя: диалог пропадает из его списка и
+  // возвращается с первым новым сообщением.
+  hiddenFor: [{ type: Schema.Types.ObjectId, ref: 'User' }]
 }, {
   timestamps: true // Автоматически добавляет поля createdAt и updatedAt
 });
 
-const Conversation = mongoose.model('Conversation', conversationSchema);
-
-// Экспорт модели
 // Диалог ищется в обе стороны через $or, поэтому нужны оба порядка
 conversationSchema.index({ userOne: 1, userTwo: 1 });
 conversationSchema.index({ userTwo: 1, userOne: 1 });
 
-module.exports = Conversation;
+module.exports = mongoose.model('Conversation', conversationSchema);

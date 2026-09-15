@@ -81,6 +81,22 @@ async function roomExists(name) {
   }
 }
 
+// RTMP-выход комнаты: Daily сводит её в один поток и шлёт на rtmpUrl.
+// Запустить можно только в комнате, где идёт звонок, — иначе 404 «does not
+// seem to be hosting a call». Остановка в пустой комнате — тот же 404, это
+// не ошибка: выход уже погас вместе со звонком.
+function startLiveStreaming(name, options) {
+  return api('POST', `/rooms/${encodeURIComponent(name)}/live-streaming/start`, options);
+}
+
+async function stopLiveStreaming(name) {
+  try {
+    await api('POST', `/rooms/${encodeURIComponent(name)}/live-streaming/stop`);
+  } catch (err) {
+    if (err.status !== 404) throw err;
+  }
+}
+
 function roomUrl(name) {
   return `https://${process.env.DAILY_DOMAIN}.daily.co/${name}`;
 }
@@ -126,4 +142,7 @@ async function meetingToken({ room, userId, owner = false, canSend = false, pres
   });
 }
 
-module.exports = { configured, createRoom, deleteRoom, roomExists, roomUrl, meetingToken };
+module.exports = {
+  configured, createRoom, deleteRoom, roomExists, roomUrl, meetingToken,
+  startLiveStreaming, stopLiveStreaming,
+};

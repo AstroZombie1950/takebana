@@ -74,9 +74,13 @@ const requireGoogleOAuth = (req, res, next) => {
 router.get('/auth/google', requireGoogleOAuth,
   passport.authenticate('google', { scope: ['profile', 'email'] }));
 
+// session: false — сессию ставит обработчик ниже сам. По умолчанию passport
+// после успешного входа Google пытается записать пользователя в свою сессию,
+// а serializeUser у нас нет (см. выше): вход падал с «Failed to serialize user
+// into session», и человек возвращался на /login, так и не войдя.
 router.get('/auth/google/callback',
   requireGoogleOAuth,
-  passport.authenticate('google', { failureRedirect: '/login' }),
+  passport.authenticate('google', { failureRedirect: '/login', session: false }),
   async function(req, res) {
       const { emails, provider } = req.user;
       const email = emails[0].value;

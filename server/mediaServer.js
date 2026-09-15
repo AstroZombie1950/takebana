@@ -5,6 +5,7 @@ require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env', quiet
 const path = require('path');
 const { isPublishAuthEnabled, getSecret } = require('./utils/rtmpAuth');
 const hls = require('./utils/hls');
+const webLive = require('./utils/webLive');
 
 // Право публиковать проверяется подписью, а не знанием ключа: ключ трансляции
 // уходит каждому зрителю в исходнике страницы — по нему собирается адрес
@@ -174,13 +175,17 @@ function dropPublisher(streamKey) {
 // Сюда попадаем только после успешной проверки подписи.
 nms.on('postPublish', (id, streamPath, args) => {
     const streamKey = streamPath.split('/')[2];
+    // src=daily — RTMP-выход комнаты веб-эфира (utils/webLive.js). Он не
+    // переключает эфир на OBS: идёт ли веб-эфир, решает ведущий на пульте.
+    const fromDaily = !!args && args.src === 'daily';
     activeStreams.set(streamKey, {
         id,
         startTime: new Date(),
-        isLive: true
+        isLive: true,
+        fromDaily
     });
-    // OBS publish detected -> mark stream active in DB and notify viewers
-    markObsStreamStarted(streamKey);
+    if (fromDaily) webLive.published(streamKey);
+    else markObsStreamStarted(streamKey);
 
     // HLS: единственный формат, который играет на iPhone. HTTP-FLV там не
     // работает в принципе — flv.js собирает поток через MSE, а Media Source
@@ -191,9 +196,11 @@ nms.on('postPublish', (id, streamPath, args) => {
 nms.on('donePublish', (id, streamPath, args) => {
     console.log(`[INFO] Stream has ended: ${streamPath}`);
     const streamKey = streamPath.split('/')[2];
+    const live = activeStreams.get(streamKey);
     activeStreams.delete(streamKey);
-    markObsStreamEnded(streamKey);
     hls.stop(streamKey);
+    if (live && live.fromDaily) webLive.ended(streamKey);
+    else markObsStreamEnded(streamKey);
 });
 
 nms.on('error', (err) => {

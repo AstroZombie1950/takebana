@@ -7,14 +7,17 @@
 
 <%- include('appModals') %>
 
-<!-- Основной хедер -->
+<%# Шапка: бургер (ниже 1024 — открывает левую панель), логотип, поиск,
+    справа — язык, уведомления, переписка и запуск эфира. Профиль, выход
+    и остальные ссылки — в левой панели (leftBar.ejs): раньше то же самое
+    дублировалось выпадашкой у аватара и отдельным мобильным меню. %>
 <header class="tk-ahead">
-  <button class="tk-ahead__burger" id="mobileMenuButton" aria-label="<%= ta('app.menu') %>" data-i18n-aria="app.menu">
+  <button class="tk-ahead__burger" id="sidebarToggle" aria-label="<%= ta('app.menu') %>" data-i18n-aria="app.menu" aria-controls="sidebar" aria-expanded="false">
     <span></span><span></span>
   </button>
 
-  <a href="/" aria-label="Takebana" style="flex: none; display: block;">
-    <img src="/img/logo.webp" alt="Takebana" class="tk-ahead__logo" width="55" height="34" decoding="async">
+  <a href="/" class="tk-ahead__brand" aria-label="Takebana">
+    <img src="/img/logo.svg" alt="Takebana" class="tk-ahead__logo" width="66" height="34" decoding="async">
   </a>
 
   <div class="tk-ahead__search">
@@ -43,57 +46,14 @@
 
     <button class="tk-ahead__icon" id="notificationButton" aria-label="<%= ta('app.notifications') %>" data-i18n-aria="app.notifications">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 5-2 6-2 6h16s-2-1-2-6Z"></path><path d="M10 20h4"></path></svg>
-      <% if (notifications && notifications.hasUnread) { %><span class="tk-ahead__dot"></span><% } %>
+      <span class="tk-ahead__dot<%= notifications && notifications.hasUnread ? '' : ' hidden' %>" id="notificationDot"></span>
     </button>
 
-    <a href="/chatsPage" class="tk-ahead__icon tk-ahead__chat" aria-label="<%= ta('app.chats') %>" data-i18n-aria="app.chats">
+    <a href="/chatsPage" class="tk-ahead__icon" aria-label="<%= ta('app.chats') %>" data-i18n-aria="app.chats">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
     </a>
 
-    <div class="tk-ahead__avatar-wrap">
-      <button class="tk-ahead__avatar" id="avatarButton" aria-label="<%= ta('app.profile') %>" data-i18n-aria="app.profile">
-        <% if (currentUser.avatarStyle.url) { %>
-          <img src="<%= currentUser.avatarStyle.url %>" alt="<%= currentUser.displayName %>">
-        <% } else { %>
-          <%= currentUser.avatarStyle.initial %>
-        <% } %>
-      </button>
-
-      <div class="tk-drop hidden" id="profileDropdown">
-        <div class="tk-drop__head">
-          <div class="tk-drop__avatar">
-            <% if (currentUser.avatarStyle.url) { %>
-              <img src="<%= currentUser.avatarStyle.url %>" alt="<%= currentUser.displayName %>">
-            <% } else { %>
-              <%= currentUser.avatarStyle.initial %>
-            <% } %>
-          </div>
-          <div style="min-width: 0;">
-            <p class="tk-drop__name"><%= currentUser.displayName %></p>
-            <p class="tk-drop__sub"><%= currentUser.email %></p>
-          </div>
-        </div>
-
-        <button type="button" class="tk-drop__item" id="profileButton" data-i18n="modal.profile.title"><%- t('modal.profile.title') %></button>
-
-        <button type="button" class="tk-drop__item myChannelButton">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
-          <span data-i18n="app.myProfile"><%- t('app.myProfile') %></span>
-        </button>
-
-        <a href="/main" class="tk-drop__item goMap">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
-          <span data-i18n="app.venues"><%- t('app.venues') %></span>
-        </a>
-
-        <a href="/logout" class="tk-drop__item tk-drop__item--exit">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path><path d="M12 3H5v18h7"></path></svg>
-          <span data-i18n="app.exit"><%- t('app.exit') %></span>
-        </a>
-      </div>
-    </div>
-
-    <button class="tk-btn tk-btn--primary tk-btn--sm" id="startStreamButtonHeader">
+    <button class="tk-btn tk-btn--primary tk-btn--sm" id="startStreamButtonHeader" data-open-stream>
       <span data-i18n="app.startStream"><%- t('app.startStream') %></span>
     </button>
   </div>
@@ -118,37 +78,6 @@
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
     </button>
     <div class="tk-ahead__results hidden" id="mobileSearchFieldResults"></div>
-  </div>
-</div>
-
-<div class="tk-mmenu hidden" id="mobileMenu">
-  <div class="tk-mmenu__top">
-    <img src="/img/logo.webp" alt="Takebana" style="display: block; height: 34px; width: auto;" width="55" height="34">
-    <span style="flex: 1;"></span>
-    <button class="tk-ahead__icon" id="closeMobileMenu" aria-label="<%= ta('app.menuClose') %>" data-i18n-aria="app.menuClose">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-    </button>
-  </div>
-  <nav class="tk-mmenu__nav">
-    <a href="/chatsPage" class="tk-aside__item">
-      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
-      <span data-i18n="app.messages"><%- t('app.messages') %></span>
-    </a>
-    <a href="/terms_of_service" class="tk-aside__item" data-i18n="app.rules"><%- t('app.rules') %></a>
-    <a href="/user_agreement" class="tk-aside__item" data-i18n="app.agreement"><%- t('app.agreement') %></a>
-    <a href="/personal_data_processing" class="tk-aside__item" data-i18n="app.privacy"><%- t('app.privacy') %></a>
-  </nav>
-
-  <%# Язык и запуск эфира: в шапке их ниже 640px нет. %>
-  <div class="tk-mmenu__lang">
-    <button type="button" data-lang="ru" data-i18n="app.langRu"><%- t('app.langRu') %></button>
-    <button type="button" data-lang="en" data-i18n="app.langEn"><%- t('app.langEn') %></button>
-  </div>
-
-  <div class="tk-mmenu__cta">
-    <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-btn--block" id="startStreamButtonMenu">
-      <span data-i18n="app.startStream"><%- t('app.startStream') %></span>
-    </button>
   </div>
 </div>
 

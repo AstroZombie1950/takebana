@@ -33,16 +33,6 @@ body.tk-app {
   color: var(--tk-paper);
 }
 
-/* ── Остаток совместимости ──
- * Скрипт левой панели ещё переставляет эти классы. Уйдут вместе с ним;
- * содержимое страниц, которое пока на Tailwind, свои классы получает от него.
- */
-.invisible { visibility: hidden; }
-.visible { visibility: visible; }
-.opacity-0 { opacity: 0; }
-.translate-x-0 { transform: translateX(0); }
-.-translate-x-full { transform: translateX(-100%); }
-
 /* ──────────────────────────────────────────────────────────────────────────
  * Шапка
  */
@@ -81,9 +71,13 @@ body.tk-app {
   background: var(--tk-paper);
 }
 
-.tk-ahead__logo {
+.tk-ahead__brand {
   display: block;
   flex: none;
+}
+
+.tk-ahead__logo {
+  display: block;
   height: 34px;
   width: auto;
 }
@@ -145,11 +139,13 @@ body.tk-app {
 .search-result-item:last-child { border-bottom: none; }
 .search-result-item:hover { background: rgba(227, 66, 52, .12); }
 
+/* Правая группа прижата к краю шапки, как бы ни был широк экран. */
 .tk-ahead__right {
   display: flex;
   align-items: center;
   gap: 16px;
   flex: none;
+  margin-left: auto;
 }
 
 .tk-ahead__icon {
@@ -228,99 +224,6 @@ body.tk-app {
   color: var(--tk-paper);
 }
 
-/* Аватар и меню профиля. */
-.tk-ahead__avatar-wrap { position: relative; }
-
-.tk-ahead__avatar {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--tk-accent);
-  color: var(--tk-ink);
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 900;
-  overflow: hidden;
-}
-
-.tk-ahead__avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.tk-drop {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 280px;
-  background: var(--tk-ink);
-  border: 1px solid var(--tk-rule);
-  z-index: 50;
-}
-
-.tk-drop__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  border-bottom: 1px solid var(--tk-rule);
-}
-
-.tk-drop__avatar {
-  width: 40px;
-  height: 40px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--tk-accent);
-  color: var(--tk-ink);
-  font-size: 15px;
-  font-weight: 900;
-  overflow: hidden;
-}
-
-.tk-drop__avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-.tk-drop__name {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--tk-paper);
-}
-
-.tk-drop__sub {
-  margin: 2px 0 0;
-  font-family: Oswald, sans-serif;
-  font-size: 12px;
-  color: var(--tk-muted);
-}
-
-.tk-drop__item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  padding: 12px 16px;
-  cursor: pointer;
-  font-family: Oswald, sans-serif;
-  font-size: 14px;
-  color: var(--tk-beige);
-}
-
-.tk-drop__item:hover { background: rgba(227, 66, 52, .12); color: var(--tk-paper); }
-.tk-drop__item svg { flex: none; }
-.tk-drop__item--exit { color: var(--tk-accent); border-top: 1px solid var(--tk-rule); }
-
 /* ──────────────────────────────────────────────────────────────────────────
  * Левая панель
  */
@@ -339,7 +242,60 @@ body.tk-app {
   color: var(--tk-paper);
   border-right: 1px solid var(--tk-rule);
   overflow-y: auto;
+  /* Докрутили панель до края — страница под ней не едет. */
+  overscroll-behavior: contain;
   transition: transform .25s ease;
+}
+
+/* Профиль в начале панели: аватар, имя, почта — ссылка на свою страницу. */
+.tk-aside__me {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--tk-rule);
+  margin-bottom: 6px;
+  transition: background-color .18s ease;
+}
+
+.tk-aside__me:hover { background: rgba(227, 66, 52, .08); }
+
+.tk-aside__me-ava {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.tk-aside__me-ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-aside__me-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tk-aside__me-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-aside__me .tk-aside__sub-state {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Контент страницы уходит вправо на ширину панели. Тот же порог, что был
@@ -360,7 +316,7 @@ body.tk-app {
   gap: 10px;
 }
 
-.tk-aside__title span { flex: 1; }
+.tk-aside__title > span:first-child { flex: 1; }
 
 .tk-aside__count {
   font-family: Oswald, sans-serif;
@@ -376,12 +332,31 @@ body.tk-app {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   padding: 11px 18px;
+  background: none;
+  border: none;
   border-left: 3px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
   font-size: 14px;
   font-weight: 500;
   color: var(--tk-beige);
   transition: background-color .18s ease, color .18s ease;
+}
+
+/* Счётчик пропущенных звонков. */
+.tk-aside__badge {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 2px 6px;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
 }
 
 .tk-aside__item:hover { background: rgba(227, 66, 52, .08); color: var(--tk-paper); }
@@ -477,32 +452,68 @@ body.tk-app {
   padding: 16px 18px;
 }
 
-/* Кнопка открытия панели и затемнение — только для узких экранов. */
-.tk-aside__toggle {
-  position: fixed;
-  top: 50%;
-  left: 0;
-  z-index: 35;
-  transform: translateY(-50%);
-  width: 26px;
-  height: 64px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  background: var(--tk-accent);
-  border: none;
-  padding: 0;
-  cursor: pointer;
+.tk-aside__cta-title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  text-transform: uppercase;
+  line-height: 1.15;
 }
 
-.tk-aside__toggle span {
-  width: 12px;
-  height: 2px;
+/* Низ панели: язык (только на телефоне), документы, выход. Прилипает
+ * к низу: на невысоком экране середина панели прокручивается, а «Выход»
+ * остаётся на виду. */
+.tk-aside__foot {
+  position: sticky;
+  bottom: 0;
+  border-top: 1px solid var(--tk-rule);
+  padding: 10px 0 calc(6px + env(safe-area-inset-bottom));
   background: var(--tk-ink);
 }
 
+.tk-aside__lang {
+  display: none;
+  gap: 10px;
+  padding: 6px 18px 10px;
+}
+
+.tk-aside__lang button {
+  flex: 1;
+  background: none;
+  border: 1px solid var(--tk-rule);
+  padding: 9px 0;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  transition: border-color .18s ease, color .18s ease;
+}
+
+.tk-aside__lang button:hover,
+.tk-aside__lang button[aria-pressed="true"] {
+  border-color: var(--tk-accent);
+  color: var(--tk-paper);
+}
+
+.tk-aside__docs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 4px 18px 8px;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+}
+
+.tk-aside__docs a { color: var(--tk-muted); }
+.tk-aside__docs a:hover { color: var(--tk-paper); }
+
+.tk-aside__exit,
+.tk-aside__exit svg { color: var(--tk-accent); }
+
+/* Затемнение под выехавшей панелью — только на узких экранах. */
 .tk-aside__overlay {
   position: fixed;
   inset: 64px 0 0;
@@ -511,13 +522,12 @@ body.tk-app {
 }
 
 @media (min-width: 1024px) {
-  .tk-aside__toggle,
   .tk-aside__overlay { display: none; }
 }
 
 @media (max-width: 1023px) {
-  .tk-aside { transform: translateX(-100%); }
-  .tk-aside.translate-x-0 { transform: translateX(0); }
+  .tk-aside { transform: translateX(-100%); visibility: hidden; transition: transform .25s ease, visibility 0s .25s; }
+  .tk-aside.is-open { transform: none; visibility: visible; transition: transform .25s ease; }
   .tk-ahead__burger { display: flex; }
 }
 
@@ -530,34 +540,6 @@ body.tk-app {
   border-bottom: 1px solid var(--tk-rule);
   position: relative;
   z-index: 39;
-}
-
-.tk-mmenu {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  background: var(--tk-ink);
-  flex-direction: column;
-}
-
-/* display задаётся отдельно, иначе перебьёт .hidden — см. «Служебные классы».
- * До этой правки flex-direction висел вхолостую: меню было блоком. */
-.tk-mmenu:not(.hidden) { display: flex; }
-
-.tk-mmenu__top {
-  height: 64px;
-  flex: none;
-  padding: 0 20px;
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid var(--tk-rule);
-}
-
-.tk-mmenu__nav {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 20px 0;
 }
 
 @media (min-width: 640px) {
@@ -575,51 +557,18 @@ body.tk-app {
     gap: 10px;
   }
 
-  .tk-ahead__search,
+  /* Поиск прячется только в шапке: выдвижная строка поиска под ней —
+   * тот же .tk-ahead__search, и без уточнения пряталась вместе с ним
+   * (кнопка лупы на телефоне открывала пустую полосу). */
+  .tk-ahead > .tk-ahead__search,
   .tk-ahead__lang,
-  .tk-ahead__chat,
+  .tk-ahead__brand,
   #startStreamButtonHeader { display: none; }
 
   .tk-ahead__right { gap: 8px; }
 
-  /* Логотип не должен растягивать строку: место нужно кнопкам справа. */
-  .tk-ahead__logo { width: auto; height: 28px; }
-}
-
-/* Мобильное меню: разделы, язык и действие. */
-.tk-mmenu__lang {
-  display: flex;
-  gap: 10px;
-  padding: 16px 20px 0;
-}
-
-.tk-mmenu__lang button {
-  flex: 1;
-  background: none;
-  border: 1px solid var(--tk-rule);
-  padding: 10px 0;
-  cursor: pointer;
-  font-family: Oswald, sans-serif;
-  font-size: 13px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--tk-beige);
-  transition: border-color .18s ease, color .18s ease;
-}
-
-.tk-mmenu__lang button:hover,
-.tk-mmenu__lang button[aria-pressed="true"] {
-  border-color: var(--tk-accent);
-  color: var(--tk-paper);
-}
-
-.tk-mmenu__cta { padding: 20px; }
-
-/* Скрипт панели переставляет классы сдвига только на узких экранах, но если
- * окно растянули с открытой панелью, класс остаётся. На десктопе панель
- * видна всегда — это важнее любого класса. */
-@media (min-width: 1024px) {
-  .tk-aside { transform: none !important; }
+  /* Язык из шапки уехал в панель. */
+  .tk-aside__lang { display: flex; }
 }
 
 /* Скрипт Tailwind подгружается в рантайме и вставляет свой preflight в конец
@@ -630,8 +579,6 @@ body.tk-app {
  */
 .tk-ahead,
 .tk-aside,
-.tk-drop,
-.tk-mmenu,
 .tk-msearch,
 .tk-modal {
   font-family: 'Golos Text', Helvetica, sans-serif;
@@ -1074,12 +1021,20 @@ body.tk-app {
 }
 
 /* ── Уведомления ── */
+/* Строка — ссылка туда, о чём уведомление. Непрочитанная — с киноварной
+ * планкой слева. */
 .tk-notice {
-  padding: 14px 0;
+  display: block;
+  margin: 0 -22px;
+  padding: 14px 22px 14px 19px;
+  border-left: 3px solid transparent;
   border-bottom: 1px solid rgba(144, 113, 99, .25);
+  transition: background-color .18s ease;
 }
 
 .tk-notice:last-child { border-bottom: none; }
+.tk-notice:hover { background: rgba(227, 66, 52, .08); }
+.tk-notice--new { border-left-color: var(--tk-accent); background: rgba(227, 66, 52, .05); }
 
 .tk-notice__top {
   display: flex;
@@ -1090,7 +1045,7 @@ body.tk-app {
 }
 
 .tk-notice__from {
-  margin: 0;
+  min-width: 0;
   font-size: 14px;
   font-weight: 700;
   color: var(--tk-paper);
@@ -1104,7 +1059,7 @@ body.tk-app {
 }
 
 .tk-notice__text {
-  margin: 0;
+  display: block;
   font-size: 14px;
   line-height: 1.5;
   color: var(--tk-beige);
@@ -1367,46 +1322,87 @@ body.tk-app {
 @media (max-width: 640px) {
   .tk-modal { padding: 0; }
 
+  /* Окно — на весь экран. Высота — от самого окна (оно fixed во весь
+   * видимый экран), а не 100vh: на айфоне 100vh выше видимой части на панель
+   * Safari, и нижние кнопки — «Принять», «Отклонить», «Завершить» — уходили
+   * под адресную строку. */
   .tk-modal__card,
   .tk-modal__card--call,
   .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) {
     max-width: none;
-    height: 100vh;
-    max-height: 100vh;
+    height: 100%;
+    max-height: none;
+    margin: 0;
     border: none;
   }
-
-  /* Окно звонка без видео — дозвон, аудиозвонок, «только голос» — занимает
-   * весь экран: статус встаёт посередине, а не прижимается к шапке над
-   * пустотой. Правило :has выше перебивало высоту на телефоне, и из-под окна
-   * видеозвонка торчали шапка сайта и язычок панели. */
-  .tk-modal__card--call:not(:has(.tk-call__stage:not(.hidden))) .tk-call__status { margin-top: auto; }
 
   .tk-modal__head { padding: 14px 16px; }
   .tk-modal__body { padding: 16px; }
   .tk-modal__body--list { padding: 0 16px; }
-  .tk-modal__foot { padding: 14px 16px; }
-  .tk-call__body { padding: 14px 16px 16px; }
+  .tk-modal__foot { padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
+  .tk-notice { margin: 0 -16px; padding-left: 13px; padding-right: 16px; }
   .tk-avatar-row { flex-direction: column; }
+
+  /* Звонок без видео — дозвон, аудиозвонок, «только голос»: статус и кнопки
+   * одной группой посередине экрана, а не кнопки у нижнего края под пустотой. */
+  .tk-call__body {
+    justify-content: center;
+    padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  .tk-call__actions { margin-top: 32px; }
+
+  /* Видеозвонок: картинка собеседника — на весь экран, имя, статус и кнопки
+   * лежат поверх неё. */
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) {
+    position: relative;
+    background: #000;
+  }
+
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-modal__head {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    border: none;
+    padding-bottom: 36px;
+    background: linear-gradient(rgba(10, 10, 10, .8), rgba(10, 10, 10, 0));
+  }
+
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__status,
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__timer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, .8);
+  }
+
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__status { top: 76px; }
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__timer { top: 100px; margin: 0; }
+
+  .tk-call__stage:not(.hidden) {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+  }
+
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__actions {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: calc(24px + env(safe-area-inset-bottom));
+    z-index: 2;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Своя картинка — над кнопками, а не под ними. */
+  .pip-local { bottom: calc(96px + env(safe-area-inset-bottom)); right: 12px; }
 }
 
-/* Бургер, язык, логотип и язычок боковой панели: по одной из сторон они уже
- * пальца. Увеличиваем зону нажатия, не трогая рисунок. */
+/* Бургер и язык: по одной из сторон они уже пальца. Увеличиваем зону нажатия, не трогая рисунок. */
 @media (max-width: 1024px) {
   .tk-ahead__burger { width: 40px; height: 40px; }
   .tk-ahead__lang-btn { min-height: 36px; padding: 6px 8px; }
-  .tk-ahead__logo { height: 34px; padding: 3px 0; }
-  .tk-aside__toggle { width: 34px; }
 }
-
-/* На узком экране язычок панели висел посреди левого края и наезжал на контент:
- * на каталоге он срезал первый знак у счётчика стримеров. Уводим его вниз —
- * там пусто, а на странице эфира ярлычок чата стоит справа и не сталкивается. */
-@media (max-width: 640px) {
-  .tk-aside__toggle {
-    top: auto;
-    bottom: 16px;
-    transform: none;
-  }
-}
-

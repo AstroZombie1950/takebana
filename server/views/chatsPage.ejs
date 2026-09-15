@@ -23,55 +23,42 @@
         </div>
 
         <div class="tk-chat__scroll" id="conversationsList">
-          <% if (conversations && conversations.length) { %>
-            <% conversations.forEach(function (conversation) { %>
-            <button
-              type="button"
-              class="tk-dialog chat__profile"
-              data-id="<%= conversation.interlocutor._id %>"
-              data-avatar="<%= conversation.interlocutor.avatarStyle.url || conversation.interlocutor.avatarStyle.gradient %>"
-              data-name="<%= conversation.interlocutor.displayName %>"
-              data-presence-user="<%= conversation.interlocutor._id %>"
-            >
-              <span class="tk-dialog__ava"<% if (!conversation.interlocutor.avatarStyle.url) { %> data-bg="<%= conversation.interlocutor.avatarStyle.gradient %>"<% } %>>
-                <% if (conversation.interlocutor.avatarStyle.url) { %>
-                  <img src="<%= conversation.interlocutor.avatarStyle.url %>" alt="" loading="lazy">
-                <% } else { %>
-                  <%= conversation.interlocutor.avatarStyle.initial %>
-                <% } %>
-                <% if (conversation.hasUnreadMessages) { %>
-                  <span class="unread-indicator"></span>
-                <% } %>
+          <% conversations.forEach(function (c) { var p = c.interlocutor; %>
+          <button
+            type="button"
+            class="tk-dialog"
+            data-id="<%= p.id %>"
+            data-name="<%= p.displayName %>"
+            data-ava-url="<%= p.avatarStyle.url || '' %>"
+            data-ava-bg="<%= p.avatarStyle.gradient || '' %>"
+            data-ava-initial="<%= p.avatarStyle.initial || '' %>"
+            data-presence-user="<%= p.id %>"
+          >
+            <span class="tk-dialog__ava"<% if (!p.avatarStyle.url) { %> data-bg="<%= p.avatarStyle.gradient %>"<% } %>>
+              <% if (p.avatarStyle.url) { %><img src="<%= p.avatarStyle.url %>" alt="" loading="lazy"><% } else { %><%= p.avatarStyle.initial %><% } %>
+            </span>
+
+            <span class="tk-dialog__body">
+              <span class="tk-dialog__top">
+                <span class="tk-dialog__who">
+                  <span class="tk-dialog__name"><%= p.displayName %></span>
+                  <span class="presence-dot <%= p.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
+                </span>
+                <%# Дата — для chats.js: он обновляет подпись со временем
+                    и при смене языка. %>
+                <span class="tk-dialog__when" data-time="<%= new Date(c.lastActivity).toISOString() %>"><%= timeAgo(c.lastActivity, lang) %></span>
               </span>
 
-              <span class="tk-dialog__body">
-                <span class="tk-dialog__top">
-                  <span class="tk-dialog__who">
-                    <span class="tk-dialog__name"><%= conversation.interlocutor.displayName %></span>
-                    <span class="presence-dot <%= conversation.interlocutor.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
-                  </span>
-                  <%# Дата — для chats.js: он обновляет подпись со временем
-                      и при смене языка. %>
-                  <span class="tk-dialog__when" data-time="<%= (conversation.lastMessage ? conversation.lastMessage.sentAt : conversation.createdAt).toISOString() %>">
-                    <%= timeAgo(conversation.lastMessage ? conversation.lastMessage.sentAt : conversation.createdAt, lang) %>
-                  </span>
-                </span>
-
+              <span class="tk-dialog__bottom">
                 <span class="tk-dialog__last">
-                  <% if (conversation.lastMessage) { %>
-                    <%= conversation.lastMessage.content.length > 40
-                          ? conversation.lastMessage.content.substring(0, 40) + '…'
-                          : conversation.lastMessage.content %>
-                  <% } else { %>
-                    <span data-i18n="chats.empty"><%- t('chats.empty') %></span>
-                  <% } %>
+                  <% if (c.last) { %><% if (c.last.mine) { %><span data-i18n="chats.you"><%- t('chats.you') %></span> <% } %><%= c.last.content %><% } else { %><span data-i18n="chats.empty"><%- t('chats.empty') %></span><% } %>
                 </span>
+                <span class="tk-dialog__unread<%= c.unread ? '' : ' hidden' %>"><%= c.unread %></span>
               </span>
-            </button>
-            <% }); %>
-          <% } else { %>
-            <p class="tk-note tk-chat__empty-list" data-i18n="chats.empty"><%- t('chats.empty') %></p>
-          <% } %>
+            </span>
+          </button>
+          <% }); %>
+          <p class="tk-note tk-chat__empty-list<%= conversations.length ? ' hidden' : '' %>" id="conversationsEmpty" data-i18n="chats.empty"><%- t('chats.empty') %></p>
         </div>
       </section>
 
@@ -88,27 +75,23 @@
 
           <div class="tk-chat__peer-wrap" id="peerLink">
             <div class="tk-chat__peer" id="chatHeaderPresence" data-presence-user="">
-              <h2 class="avatar__name" data-i18n="chats.pick"><%- t('chats.pick') %></h2>
+              <h2 id="peerName" data-i18n="chats.pick"><%- t('chats.pick') %></h2>
               <span class="presence-dot presence-offline hidden"></span>
             </div>
-            <p class="tk-chat__peer-note" data-i18n="chats.startHint"><%- t('chats.startHint') %></p>
+            <p class="tk-chat__peer-note" id="peerNote" data-i18n="chats.startHint"><%- t('chats.startHint') %></p>
           </div>
+
+          <button type="button" class="tk-chat__tool hidden" id="deleteChat" aria-label="<%= ta('chats.deleteChat') %>" data-i18n-aria="chats.deleteChat" title="<%= ta('chats.deleteChat') %>" data-i18n-title="chats.deleteChat">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>
+          </button>
         </div>
 
-        <div class="tk-chat__feed chat__messeg-box" id="feed"></div>
+        <div class="tk-chat__feed" id="feed"></div>
 
         <div class="tk-chat__compose">
           <form id="composeForm">
-            <input
-              type="text"
-              id="messageInput"
-              class="tk-field"
-              data-id=""
-              placeholder="<%= ta('chats.messagePh') %>"
-              data-i18n-placeholder="chats.messagePh"
-              autocomplete="off"
-            >
-            <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm tk-chat__send input__button-icons" data-id="">
+            <input type="text" id="messageInput" class="tk-field" placeholder="<%= ta('chats.messagePh') %>" data-i18n-placeholder="chats.messagePh" autocomplete="off" maxlength="5000">
+            <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm tk-chat__send">
               <span data-i18n="chats.send"><%- t('chats.send') %></span>
             </button>
           </form>
@@ -117,6 +100,35 @@
 
     </div>
   </main>
+</div>
+
+<%# Действия с сообщением: открываются нажатием на сообщение. %>
+<div class="tk-msgmenu" id="msgMenu" role="menu" hidden>
+  <button type="button" role="menuitem" data-act="forward" data-i18n="chats.forward"><%- t('chats.forward') %></button>
+  <button type="button" role="menuitem" data-act="copy" data-i18n="chats.copy"><%- t('chats.copy') %></button>
+  <button type="button" role="menuitem" data-act="delete" class="tk-msgmenu__danger" data-i18n="chats.delete"><%- t('chats.delete') %></button>
+</div>
+
+<!-- Пересылка -->
+<div class="tk-modal hidden" id="forwardModal">
+  <div class="tk-modal__card">
+    <div class="tk-modal__head">
+      <h3 class="tk-modal__title" data-i18n="chats.forwardTitle"><%- t('chats.forwardTitle') %></h3>
+      <button type="button" class="tk-modal__close" id="forwardClose" aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+    </div>
+    <div class="tk-modal__body">
+      <p class="tk-fwd__quote" id="forwardQuote"></p>
+      <input type="text" class="tk-field" id="forwardSearch" placeholder="<%= ta('chats.forwardSearch') %>" data-i18n-placeholder="chats.forwardSearch" autocomplete="off">
+      <div class="tk-fwd__list" id="forwardList"></div>
+    </div>
+    <div class="tk-modal__foot">
+      <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-btn--block" id="forwardSend" disabled>
+        <span data-i18n="chats.forwardSend"><%- t('chats.forwardSend') %></span><span id="forwardCount"></span>
+      </button>
+    </div>
+  </div>
 </div>
 
 <script src="/chats.js"></script>

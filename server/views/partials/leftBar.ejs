@@ -1,21 +1,56 @@
 <%
-  // Активный раздел: страницу каталога рендерит catalog.js и передаёт category,
-  // на остальных страницах её нет — тогда не подсвечиваем ничего.
+  // Левая панель кабинета — единственное меню: на десктопе стоит слева всегда,
+  // ниже 1024 выезжает по бургеру из шапки. Сверху профиль и личные ссылки,
+  // затем разделы каталога и подписки, внизу язык (на телефоне его нет
+  // в шапке), документы и выход. Поведение — tk-app.js.
+  //
+  // Активный раздел каталога: страницу рендерит catalog.js и передаёт category.
+  // Активная личная ссылка — по адресу страницы (commonDataMiddleware).
   var cat = typeof category !== 'undefined' ? category : '';
+  var here = typeof path !== 'undefined' ? path : '';
   var sections = [
     { key: 'popular',       href: '/streaming',               i18n: 'cat.popular',       noteI18n: 'cat.popularNote' },
     { key: 'entertainment', href: '/streaming/entertainment', i18n: 'cat.entertainment', noteI18n: 'cat.entertainmentNote' },
     { key: 'business',      href: '/streaming/business',      i18n: 'cat.business',      noteI18n: 'cat.businessNote' }
   ];
+  var myPage = '/userPage/' + currentUser._id;
+  var links = [
+    { href: myPage,       i18n: 'app.myProfile', icon: '<circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path>' },
+    { href: '/chatsPage', i18n: 'app.messages',  icon: '<path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path>', badge: 'messages' },
+    { href: '/calls',     i18n: 'side.calls',    icon: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2Z"></path>', badge: 'calls' },
+    { href: '/main',      i18n: 'app.venues',    icon: '<path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle>' }
+  ];
   var online = (subscriptions || []).filter(function (x) { return x.status === 'online'; }).length;
+  var missed = typeof missedCalls !== 'undefined' ? missedCalls : 0;
 %>
-<%# Видимый край панели на узких экранах: кнопка и затемнение под ней. %>
-<button class="tk-aside__toggle" id="sidebarToggle" aria-label="<%= ta('app.menu') %>" data-i18n-aria="app.menu" aria-controls="sidebar">
-  <span></span><span></span><span></span>
-</button>
-<div class="tk-aside__overlay invisible opacity-0" id="sidebarOverlay"></div>
+<div class="tk-aside__overlay" id="sidebarOverlay" hidden></div>
 
 <aside class="tk-aside" id="sidebar">
+  <a href="<%= myPage %>" class="tk-aside__me">
+    <span class="tk-aside__me-ava" data-my-avatar<% if (!currentUser.avatarStyle.url) { %> data-bg="<%= currentUser.avatarStyle.gradient %>"<% } %>>
+      <% if (currentUser.avatarStyle.url) { %><img src="<%= currentUser.avatarStyle.url %>" alt=""><% } else { %><%= currentUser.avatarStyle.initial %><% } %>
+    </span>
+    <span class="tk-aside__me-body">
+      <span class="tk-aside__me-name"><%= currentUser.displayName %></span>
+      <span class="tk-aside__sub-state"><%= currentUser.email %></span>
+    </span>
+  </a>
+
+  <button type="button" class="tk-aside__item" data-open-profile>
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg>
+    <span data-i18n="side.settings"><%- t('side.settings') %></span>
+  </button>
+
+  <% links.forEach(function (item) { %>
+  <a href="<%= item.href %>" class="tk-aside__item<%= here === item.href ? ' tk-aside__item--on' : '' %>">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><%- item.icon %></svg>
+    <span data-i18n="<%= item.i18n %>"><%- t(item.i18n) %></span>
+    <% if (item.badge === 'calls') { %><span class="tk-aside__badge<%= missed ? '' : ' hidden' %>" id="missedCallsBadge"><%= missed %></span><% } %>
+  </a>
+  <% }); %>
+
+  <div class="tk-aside__rule"></div>
+
   <div class="tk-aside__title"><span data-i18n="side.sections"><%- t('side.sections') %></span></div>
 
   <% sections.forEach(function (item) { %>
@@ -36,12 +71,14 @@
 
   <div class="tk-aside__title">
     <span data-i18n="side.subscriptions"><%- t('side.subscriptions') %></span>
-    <% if (online) { %><span class="tk-aside__count"><%= online %> <span data-i18n="side.live"><%- t('side.live') %></span></span><% } %>
+    <span class="tk-aside__count<%= online ? '' : ' hidden' %>" id="subsOnline"><b><%= online %></b> <span data-i18n="side.live"><%- t('side.live') %></span></span>
   </div>
 
-  <% if (subscriptions && subscriptions.length > 0) { %>
-    <% subscriptions.forEach(function (sub) { %>
-    <a href="/userPage/<%= sub.id %>" class="tk-aside__sub" data-presence-user="<%= sub.id %>">
+  <%# Подписку и отписку без перезагрузки дорисовывает tk-app.js
+      (window.tkSubscriptions): строка ниже — образец для новой. %>
+  <div id="subsList">
+    <% (subscriptions || []).forEach(function (sub) { %>
+    <a href="/userPage/<%= sub.id %>" class="tk-aside__sub" data-sub-id="<%= sub.id %>" data-presence-user="<%= sub.id %>" data-live="<%= sub.status === 'online' ? 1 : 0 %>">
       <div class="tk-aside__ava"<% if (!sub.avatarStyle.url) { %> data-bg="<%= sub.avatarStyle.gradient %>"<% } %>>
         <% if (sub.avatarStyle.url) { %><img src="<%= sub.avatarStyle.url %>" alt=""><% } else { %><%= sub.avatarStyle.initial %><% } %>
         <span class="presence-dot <%= sub.status === 'online' ? 'presence-online' : 'presence-offline' %>"></span>
@@ -54,123 +91,34 @@
       </div>
     </a>
     <% }); %>
-  <% } else { %>
-    <div class="tk-aside__empty">
-      <span data-i18n="side.noSubs"><%- t('side.noSubs') %></span><br>
-      <span data-i18n="side.noSubsHint"><%- t('side.noSubsHint') %></span>
-    </div>
-  <% } %>
+  </div>
+
+  <div class="tk-aside__empty<%= subscriptions && subscriptions.length ? ' hidden' : '' %>" id="subsEmpty">
+    <span data-i18n="side.noSubs"><%- t('side.noSubs') %></span><br>
+    <span data-i18n="side.noSubsHint"><%- t('side.noSubsHint') %></span>
+  </div>
 
   <div class="tk-aside__cta">
-    <p style="margin: 0 0 4px; font-size: 15px; font-weight: 900; letter-spacing: -.01em; text-transform: uppercase; line-height: 1.15;" data-i18n="side.ctaTitle"><%- t('side.ctaTitle') %></p>
+    <p class="tk-aside__cta-title" data-i18n="side.ctaTitle"><%- t('side.ctaTitle') %></p>
     <p class="tk-aside__sub-state" style="margin: 0 0 14px;" data-i18n="side.ctaHint"><%- t('side.ctaHint') %></p>
-    <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-btn--block" id="startStreamButtonMain" data-i18n="side.ctaButton"><%- t('side.ctaButton') %></button>
+    <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-btn--block" data-open-stream data-i18n="side.ctaButton"><%- t('side.ctaButton') %></button>
+  </div>
+
+  <div class="tk-aside__foot">
+    <div class="tk-aside__lang">
+      <button type="button" data-lang="ru" data-i18n="app.langRu"><%- t('app.langRu') %></button>
+      <button type="button" data-lang="en" data-i18n="app.langEn"><%- t('app.langEn') %></button>
+    </div>
+
+    <nav class="tk-aside__docs" aria-label="<%= ta('side.docs') %>" data-i18n-aria="side.docs">
+      <a href="/terms_of_service" data-i18n="app.rules"><%- t('app.rules') %></a>
+      <a href="/user_agreement" data-i18n="app.agreement"><%- t('app.agreement') %></a>
+      <a href="/personal_data_processing" data-i18n="app.privacy"><%- t('app.privacy') %></a>
+    </nav>
+
+    <a href="/logout" class="tk-aside__item tk-aside__exit">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path><path d="M12 3H5v18h7"></path></svg>
+      <span data-i18n="app.exit"><%- t('app.exit') %></span>
+    </a>
   </div>
 </aside>
-
-<script>
-// КНОПКА В БАНЕРЕ ОТКРЫТИЯ МОДАЛКИ ЗАПУСКА СТРИМА 
-// Получаем элементы
-let startStreamButtonMain = document.getElementById('startStreamButtonMain');
-
-// Функция для открытия модалки настроек трансляции
-function openStreamSettingsModal() {
-    const streamSettingsModal = document.getElementById('streamSettingsModal');
-    if (streamSettingsModal) {
-        streamSettingsModal.classList.remove('hidden');
-    }
-}
-
-// Добавляем обработчик события на кнопку "Начать" в блоке призыва к действию
-if (startStreamButtonMain) {
-    startStreamButtonMain.addEventListener('click', (event) => {
-        event.preventDefault();
-        openStreamSettingsModal();
-    });
-}
-
-// УПРАВЛЕНИЕ САЙДБАРОМ
-document.addEventListener('DOMContentLoaded', function() {
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    const sidebar = document.getElementById('sidebar');
-    const sidebarOverlay = document.getElementById('sidebarOverlay');
-    
-    let isOpen = false;
-    
-    // Функция для открытия сайдбара
-    function openSidebar() {
-        if (window.innerWidth >= 1024) return; // Не работает на desktop
-        
-        isOpen = true;
-        sidebar.classList.remove('-translate-x-full');
-        sidebar.classList.add('translate-x-0');
-        
-        sidebarOverlay.classList.remove('invisible', 'opacity-0');
-        sidebarOverlay.classList.add('visible', 'opacity-100');
-        
-        // Скрываем кнопку toggle
-        sidebarToggle.style.transform = 'translateY(-50%) translateX(-100%)';
-        sidebarToggle.style.opacity = '0';
-        
-        document.body.style.overflow = 'hidden'; // Предотвращаем скролл
-    }
-    
-    // Функция для закрытия сайдбара
-    function closeSidebar() {
-        if (window.innerWidth >= 1024) return; // Не работает на desktop
-        
-        isOpen = false;
-        sidebar.classList.remove('translate-x-0');
-        sidebar.classList.add('-translate-x-full');
-        
-        sidebarOverlay.classList.remove('visible', 'opacity-100');
-        sidebarOverlay.classList.add('invisible', 'opacity-0');
-        
-        // Показываем кнопку toggle
-        setTimeout(() => {
-            sidebarToggle.style.transform = 'translateY(-50%) translateX(0)';
-            sidebarToggle.style.opacity = '1';
-        }, 300);
-        
-        document.body.style.overflow = ''; // Восстанавливаем скролл
-    }
-    
-    // Обработчики событий
-    if (sidebarToggle) {
-        sidebarToggle.addEventListener('click', openSidebar);
-    }
-    
-    if (sidebarOverlay) {
-        sidebarOverlay.addEventListener('click', closeSidebar);
-    }
-    
-    // Закрытие по Escape
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && isOpen) {
-            closeSidebar();
-        }
-    });
-    
-    // Обработка изменения размера окна
-    window.addEventListener('resize', function() {
-        if (window.innerWidth >= 1024) {
-            // На desktop сбрасываем все мобильные стили
-            sidebar.classList.remove('-translate-x-full', 'translate-x-0');
-            sidebarOverlay.classList.add('invisible', 'opacity-0');
-            sidebarToggle.style.transform = 'translateY(-50%) translateX(0)';
-            sidebarToggle.style.opacity = '1';
-            document.body.style.overflow = '';
-            isOpen = false;
-        } else if (!isOpen) {
-            // На мобильных устройствах скрываем сайдбар если он не открыт
-            sidebar.classList.add('-translate-x-full');
-            sidebar.classList.remove('translate-x-0');
-        }
-    });
-    
-    // Инициализация при загрузке
-    if (window.innerWidth < 1024) {
-        sidebar.classList.add('-translate-x-full');
-    }
-});
-</script>

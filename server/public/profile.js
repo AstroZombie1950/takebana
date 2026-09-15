@@ -55,6 +55,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         if (response.ok) {
+          var body = await response.json().catch(function () { return {}; });
+          if (window.tkSubscriptions) {
+            if (off) window.tkSubscriptions.remove(P.userId);
+            else window.tkSubscriptions.add(body.user);
+          }
           subscribeButton.classList.toggle('unsubscribe', !off);
           // Ключ словаря меняем вместе с текстом: иначе следующее
           // переключение языка вернёт прежнюю подпись.

@@ -1,0 +1,70 @@
+<%#
+  Журнал звонков (/calls): входящие и исходящие, аудио и видео, чем
+  кончились и сколько длились. Из строки можно перезвонить. Маршрут —
+  routes/calls.js, поведение — public/calls.js.
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { titleKey: 'page.calls.title' }) %>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/calls.css">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-calls">
+      <p class="tk-kicker" data-i18n="calls.kicker"><%- t('calls.kicker') %></p>
+      <h1 class="tk-calls__h1" data-i18n="side.calls"><%- t('side.calls') %></h1>
+
+      <% if (!calls.length) { %>
+      <p class="tk-note tk-calls__empty" data-i18n="calls.empty"><%- t('calls.empty') %></p>
+      <% } else { %>
+      <ul class="tk-calls__list">
+        <% calls.forEach(function (c) {
+             var p = c.peer;
+             var kind = (c.outgoing ? 'calls.out.' : 'calls.in.') + c.type;
+             var outcome = c.missed ? 'calls.missed'
+               : c.status === 'declined' ? 'calls.declined'
+               : c.status === 'failed' ? 'calls.failed'
+               : c.outgoing && c.status === 'canceled' ? 'calls.canceled'
+               : c.outgoing && c.status === 'missed' ? 'calls.noAnswer'
+               : ''; %>
+        <li class="tk-callrow<%= c.missed ? ' is-missed' : '' %>">
+          <a href="/userPage/<%= p.id %>" class="tk-callrow__ava"<% if (!p.avatarStyle.url) { %> data-bg="<%= p.avatarStyle.gradient %>"<% } %>>
+            <% if (p.avatarStyle.url) { %><img src="<%= p.avatarStyle.url %>" alt="" loading="lazy"><% } else { %><%= p.avatarStyle.initial %><% } %>
+          </a>
+          <div class="tk-callrow__body">
+            <a href="/userPage/<%= p.id %>" class="tk-callrow__name"><%= p.displayName %></a>
+            <span class="tk-callrow__meta">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><% if (c.outgoing) { %><path d="M7 17L17 7M9 7h8v8"></path><% } else { %><path d="M17 7L7 17M15 17H7V9"></path><% } %></svg>
+              <span data-i18n="<%= kind %>"><%- t(kind) %></span>
+              <% if (outcome) { %>· <span data-i18n="<%= outcome %>"><%- t(outcome) %></span><% } %>
+              <% if (c.duration) { %>· <span><%= c.duration %></span><% } %>
+            </span>
+          </div>
+          <time class="tk-callrow__when"><%= date(c.startedAt, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) %></time>
+          <div class="tk-callrow__acts">
+            <button type="button" class="tk-callrow__btn" data-call="audio" data-user="<%= p.id %>" data-name="<%= p.displayName %>" data-ava="<%= p.avatarStyle.url || '' %>" aria-label="<%= ta('calls.audio') %>" data-i18n-aria="calls.audio" title="<%= ta('calls.audio') %>" data-i18n-title="calls.audio">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2Z"></path></svg>
+            </button>
+            <button type="button" class="tk-callrow__btn" data-call="video" data-user="<%= p.id %>" data-name="<%= p.displayName %>" data-ava="<%= p.avatarStyle.url || '' %>" aria-label="<%= ta('calls.video') %>" data-i18n-aria="calls.video" title="<%= ta('calls.video') %>" data-i18n-title="calls.video">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><rect x="3" y="6" width="12" height="12"></rect><path d="M15 10l6-3v10l-6-3"></path></svg>
+            </button>
+          </div>
+        </li>
+        <% }); %>
+      </ul>
+      <% } %>
+    </div>
+  </main>
+</div>
+
+<script src="/calls.js"></script>
+</body>
+</html>

@@ -17,44 +17,31 @@ var t = window.t || function () { return ''; };
 // Текст, который переживает переключение языка: ключ остаётся на элементе.
 var tkText = window.tkText || function () {};
 
-// Мобильное меню
-          document.addEventListener('DOMContentLoaded', () => {
-  const mobileMenuButton = document.getElementById('mobileMenuButton');
-  const mobileMenu = document.getElementById('mobileMenu');
-  const closeMobileMenu = document.getElementById('closeMobileMenu');
-
-  mobileMenuButton.addEventListener('click', () => {
-    mobileMenu.classList.remove('hidden');
-  });
-
-  closeMobileMenu.addEventListener('click', () => {
-    mobileMenu.classList.add('hidden');
-  });
-
-  mobileMenu.addEventListener('click', (e) => {
-    if (e.target === mobileMenu) {
-      mobileMenu.classList.add('hidden');
-    }
-  });
-});
-
-// Выпадающее меню профиля
+// Левая панель — единственное меню кабинета. На десктопе стоит всегда,
+// ниже 1024 выезжает по бургеру из шапки поверх страницы. Раньше рядом жили
+// ещё мобильное меню и выпадашка у аватара с теми же ссылками.
 document.addEventListener('DOMContentLoaded', () => {
-  const avatarButton = document.getElementById('avatarButton');
-  const profileDropdown = document.getElementById('profileDropdown');
+  const burger = document.getElementById('sidebarToggle');
+  const aside = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (!burger || !aside || !overlay) return;
 
-  if (avatarButton && profileDropdown) {
-    avatarButton.addEventListener('click', (e) => {
-      e.stopPropagation();
-      profileDropdown.classList.toggle('hidden');
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!profileDropdown.contains(e.target) && !avatarButton.contains(e.target)) {
-        profileDropdown.classList.add('hidden');
-      }
-    });
+  function setOpen(on) {
+    aside.classList.toggle('is-open', on);
+    overlay.hidden = !on;
+    burger.setAttribute('aria-expanded', String(on));
+    document.body.style.overflow = on ? 'hidden' : '';
   }
+  window.closeSidebar = () => setOpen(false);
+
+  burger.addEventListener('click', () => setOpen(!aside.classList.contains('is-open')));
+  overlay.addEventListener('click', () => setOpen(false));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && aside.classList.contains('is-open')) setOpen(false);
+  });
+  // Растянули окно с открытой панелью — на десктопе она не выезжает, а
+  // запрет прокрутки остался бы.
+  matchMedia('(min-width: 1024px)').addEventListener('change', (e) => { if (e.matches) setOpen(false); });
 });
 
 // Выпадашка языка: открыть и закрыть. Сам перевод, подсветку кнопок, ярлык
@@ -104,6 +91,60 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+// Точка непрочитанного на колокольчике. Зажигает её сокет (notification:new),
+// гасит открытие списка уведомлений.
+window.setNotificationDot = function (on) {
+  const dot = document.getElementById('notificationDot');
+  if (dot) dot.classList.toggle('hidden', !on);
+};
+
+// Подписки в левой панели. Кнопка «Подписаться» на странице человека
+// и в эфире сообщает сюда — строка появляется и пропадает сразу, а не
+// после перезагрузки страницы.
+window.tkSubscriptions = {
+  add(user) {
+    const list = document.getElementById('subsList');
+    if (!list || !user || list.querySelector(`[data-sub-id="${CSS.escape(user.id)}"]`)) return;
+    const live = user.status === 'online';
+    const ava = user.avatarStyle || {};
+    const row = document.createElement('a');
+    row.className = 'tk-aside__sub';
+    row.href = '/userPage/' + encodeURIComponent(user.id);
+    row.dataset.subId = user.id;
+    row.dataset.presenceUser = user.id;
+    row.dataset.live = live ? '1' : '0';
+    row.innerHTML = `
+      <div class="tk-aside__ava">
+        ${ava.url ? `<img src="${escapeHtml(ava.url)}" alt="">` : escapeHtml(ava.initial || '?')}
+        <span class="presence-dot ${live ? 'presence-online' : 'presence-offline'}"></span>
+      </div>
+      <div style="min-width: 0;">
+        <p class="tk-aside__sub-name">${escapeHtml(user.displayName || '')}</p>
+        <p class="tk-aside__sub-state" data-presence-text data-i18n="${live ? 'common.online' : 'common.offline'}">${escapeHtml(t(live ? 'common.online' : 'common.offline'))}</p>
+      </div>`;
+    if (!ava.url && ava.gradient) row.firstElementChild.style.background = ava.gradient;
+    list.prepend(row);
+    this.sync();
+  },
+  remove(id) {
+    const row = document.querySelector(`#subsList [data-sub-id="${CSS.escape(String(id))}"]`);
+    if (row) row.remove();
+    this.sync();
+  },
+  // «Пока нет подписок» и счётчик «N в эфире».
+  sync() {
+    const rows = document.querySelectorAll('#subsList [data-sub-id]');
+    const live = document.querySelectorAll('#subsList [data-live="1"]').length;
+    const empty = document.getElementById('subsEmpty');
+    const count = document.getElementById('subsOnline');
+    if (empty) empty.classList.toggle('hidden', rows.length > 0);
+    if (count) {
+      count.classList.toggle('hidden', !live);
+      count.querySelector('b').textContent = live;
+    }
+  }
+};
+
 // Модальные окна
 document.addEventListener('DOMContentLoaded', () => {
   const modals = {
@@ -138,57 +179,71 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Открытие модальных окон
-  const notificationButton = document.getElementById('notificationButton');
-  const startStreamButtonHeader = document.getElementById('startStreamButtonHeader');
+  const open = (modal) => {
+    if (window.closeSidebar) window.closeSidebar();
+    modal.classList.remove('hidden');
+  };
 
-  if (notificationButton) {
+  // Настройки эфира: кнопка в шапке и в конце левой панели.
+  document.querySelectorAll('[data-open-stream]').forEach((btn) => {
+    btn.addEventListener('click', () => open(modals.streamSettings));
+  });
+
+  // Настройки профиля — пункт левой панели.
+  document.querySelectorAll('[data-open-profile]').forEach((btn) => {
+    btn.addEventListener('click', () => open(modals.profileInfo));
+  });
+
+  // Уведомления. Открыли список — значит, прочитали: точка в шапке гаснет,
+  // а новые строки остаются подсвеченными до следующего открытия. Строка —
+  // ссылка туда, о чём уведомление: переписка с отправителем или звонки.
+  // Раньше уведомление читалось только входом в тот самый диалог, и точка
+  // горела, сколько список ни открывай.
+  const notificationButton = document.getElementById('notificationButton');
+  const notificationsContent = document.getElementById('notificationsContent');
+  const note = (key, bad) => `<p class="tk-note tk-note--center${bad ? ' tk-note--bad' : ''}" data-i18n="${key}">${escapeHtml(t(key))}</p>`;
+
+  if (notificationButton && notificationsContent) {
     notificationButton.addEventListener('click', async () => {
-      modals.notification.classList.remove('hidden');
-      const notificationsContent = document.getElementById('notificationsContent');
-      notificationsContent.innerHTML = `<p class="tk-note tk-note--center" data-i18n="modal.notifications.loading">${escapeHtml(t('modal.notifications.loading'))}</p>`;
+      open(modals.notification);
+      notificationsContent.innerHTML = note('modal.notifications.loading');
 
       try {
-              const response = await fetch("/api/notifications");
-        if (!response.ok) throw new Error(t('modal.notifications.error'));
+        const response = await fetch('/api/notifications');
+        if (!response.ok) throw new Error(response.status);
+        const notifications = await response.json();
 
-              const notifications = await response.json();
+        if (!notifications.length) {
+          notificationsContent.innerHTML = note('modal.notifications.empty');
+        } else {
+          notificationsContent.innerHTML = notifications.map((n) => {
+            const sender = n.sender || {};
+            const name = sender.login || sender.email || t('modal.notifications.unknown');
+            const isCall = n.type === 'call';
+            const href = isCall ? '/calls' : '/chatsPage?peer=' + encodeURIComponent(sender._id || '');
+            const title = isCall ? t('modal.notifications.missedCall', { name }) : t('modal.notifications.from') + ' ' + name;
+            const text = isCall ? '' : (n.content || t('modal.notifications.fallback'));
+            return `
+            <a class="tk-notice${n.isRead ? '' : ' tk-notice--new'}" href="${escapeHtml(href)}">
+              <span class="tk-notice__top">
+                <span class="tk-notice__from">${escapeHtml(title)}</span>
+                <time class="tk-notice__when">${escapeHtml(tkDate(n.createdAt))}</time>
+              </span>
+              ${text ? `<span class="tk-notice__text">${escapeHtml(text)}</span>` : ''}
+            </a>`;
+          }).join('');
+        }
 
-              if (notifications.length === 0) {
-          notificationsContent.innerHTML = `<p class="tk-note tk-note--center" data-i18n="modal.notifications.empty">${escapeHtml(t('modal.notifications.empty'))}</p>`;
-                return;
-              }
-
-        notificationsContent.innerHTML = notifications.map(notification => {
-          const senderName = notification.sender?.login || notification.sender?.email || t('modal.notifications.unknown');
-                const message = notification.content || t('modal.notifications.fallback');
-
-                return `
-            <article class="tk-notice">
-              <div class="tk-notice__top">
-                <h4 class="tk-notice__from">${escapeHtml(t('modal.notifications.from'))} ${escapeHtml(senderName)}</h4>
-                <time class="tk-notice__when">${escapeHtml(tkDate(notification.createdAt))}</time>
-              </div>
-              <p class="tk-notice__text">${escapeHtml(message)}</p>
-            </article>`;
-        }).join("");
-            } catch (error) {
-              console.error("Ошибка:", error);
-        notificationsContent.innerHTML = `<p class="tk-note tk-note--center tk-note--bad" data-i18n="modal.notifications.error">${escapeHtml(t('modal.notifications.error'))}</p>`;
+        if (notifications.some((n) => !n.isRead)) {
+          fetch('/api/notifications/read', { method: 'PUT' }).catch(() => {});
+        }
+        window.setNotificationDot(false);
+      } catch (error) {
+        console.error('Уведомления:', error);
+        notificationsContent.innerHTML = note('modal.notifications.error', true);
       }
     });
   }
-
-  // Открывашек настроек эфира две: кнопка в шапке и та же кнопка в мобильном
-  // меню, где шапочной нет. Третья — в баннере левой панели, у неё свой скрипт.
-  [startStreamButtonHeader, document.getElementById('startStreamButtonMenu')].forEach((btn) => {
-    if (!btn) return;
-    btn.addEventListener('click', () => {
-      const menu = document.getElementById('mobileMenu');
-      if (menu) menu.classList.add('hidden');
-      modals.streamSettings.classList.remove('hidden');
-    });
-  });
 
   // Завершение активного стрима из модалки (кнопка в header.ejs)
   const terminateStreamButton = document.getElementById('terminateStreamButton');
@@ -234,16 +289,6 @@ document.addEventListener('DOMContentLoaded', () => {
         terminateStreamButton.disabled = false;
         terminateStreamButton.innerHTML = prevHtml;
       }
-    });
-  }
-
-  // Кнопка профиля в выпадающем меню
-  const profileButton = document.getElementById('profileButton');
-  const profileDropdown = document.getElementById('profileDropdown');
-  if (profileButton && profileDropdown) {
-    profileButton.addEventListener('click', () => {
-      modals.profileInfo.classList.remove('hidden');
-      profileDropdown.classList.add('hidden');
     });
   }
 });
@@ -620,16 +665,6 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
-// Переход к сервису заведений
-document.addEventListener('DOMContentLoaded', function() {
-  const goMapButton = document.querySelector('.goMap');
-  if (goMapButton) {
-    goMapButton.addEventListener('click', function() {
-      localStorage.setItem('targetService', 'service1');
-    });
-  }
-});
-
 // Подкатегории для стрима. Список приходит из config/catalog.js атрибутом
 // data-subs: [[код, подпись], …] на каждую категорию. Подпись из атрибута —
 // русская; на английском её отдаёт словарь по ключу sub.<код>, а data-i18n
@@ -653,22 +688,6 @@ document.addEventListener('DOMContentLoaded', function() {
       return option;
     }));
   });
-});
-
-// Обработчик кнопки "Мой канал"
-document.addEventListener('DOMContentLoaded', function() {
-  const myChannelButton = document.querySelector('.myChannelButton');
-  const myUid = TK.userId;
-  if (myChannelButton) {
-    myChannelButton.addEventListener('click', function() {
-      if (myUid) {
-        window.location.href = '/userPage/' + myUid;
-      } else {
-        console.error('Current user ID not found');
-        toast(t('app.noUserId'), 'error');
-      }
-    });
-  }
 });
 
 // Аватар: выбор, предпросмотр и загрузка
@@ -722,22 +741,14 @@ document.addEventListener('DOMContentLoaded', () => {
         preview.classList.remove('hidden');
       }
       
-      // Обновляем все аватары в хедере
-      const headerAvatars = document.querySelectorAll('#avatarButton img, .avatar-tiny, [id*="avatar"] img');
+      // Аватар в левой панели
       const avatarUrl = data.url + '?t=' + Date.now();
-      headerAvatars.forEach(img => {
-        if (img) img.src = avatarUrl;
+      document.querySelectorAll('[data-my-avatar]').forEach((box) => {
+        box.removeAttribute('style');
+        box.innerHTML = '<img src="' + escapeHtml(avatarUrl) + '" alt="">';
       });
-      
-      // Обновляем аватары в выпадающем меню профиля
-      const dropdownAvatars = document.querySelectorAll('#profileDropdown img');
-      dropdownAvatars.forEach(img => {
-        if (img) img.src = avatarUrl;
-      });
-      
+
       tkText(hint, 'app.photoDone');
-      
-      console.log('Аватар обновлен:', data.url);
       
       // Перезагружаем страницу через небольшую задержку, чтобы пользователь увидел сообщение
       setTimeout(() => {
@@ -871,6 +882,27 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('connect', () => console.log('[client] socket connected id=', socket.id));
     socket.on('connect_error', (err) => console.error('[client] socket connect_error', err));
     socket.on('disconnect', (reason) => console.log('[client] socket disconnected', reason));
+
+    // Переписка: события сокета уходят в document как tk:<событие>, их слушает
+    // страница переписки (chats.js). Колокольчик зажигается на любой странице.
+    ['message:new', 'message:read', 'message:delivered', 'message:deleted', 'conversation:deleted'].forEach((name) => {
+      socket.on(name, (detail) => document.dispatchEvent(new CustomEvent('tk:' + name, { detail })));
+    });
+    socket.on('notification:new', () => window.setNotificationDot(true));
+    // Пропущенный звонок — счётчик у «Звонков» в левой панели.
+    socket.on('call:missed', () => {
+      const badge = document.getElementById('missedCallsBadge');
+      if (!badge || location.pathname === '/calls') return;
+      badge.textContent = String((parseInt(badge.textContent, 10) || 0) + 1);
+      badge.classList.remove('hidden');
+    });
+    // Связь вернулась после обрыва: за это время могло прийти что-то, чего
+    // сокет уже не доставит.
+    let connectedOnce = false;
+    socket.on('connect', () => {
+      if (connectedOnce) document.dispatchEvent(new CustomEvent('tk:reconnect'));
+      connectedOnce = true;
+    });
 
     function setPresence(userId, online, lastSeen) {
       const nodes = document.querySelectorAll(`[data-presence-user="${userId}"]`);
