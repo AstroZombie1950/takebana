@@ -1,5 +1,6 @@
-/* Переписка: список диалогов, лента, отправка, пересылка, удаление,
- * статусы «доставлено» и «прочитано».
+/* Переписка: вкладки «Сообщения» и «Звонки», лента со звонками между
+ * сообщениями, отправка, пересылка, удаление, статусы «доставлено»
+ * и «прочитано».
  *
  * Новое приходит сокетом: tk-app.js пересылает события сервера в document
  * как tk:message:new, tk:message:read и т. д. Раньше открытый диалог
@@ -7,7 +8,6 @@
  */
 (function () {
   var t = window.t || function () { return ''; };
-  var tkText = window.tkText || function () {};
   var ME = (window.TK && window.TK.userId) || '';
   var PAGE = 15;
 
@@ -18,6 +18,7 @@
 
   var peer = null;          // { id, name, url, bg, initial }
   var messages = [];        // лента открытого диалога, от старых к новым
+  var calls = [];           // звонки с собеседником за загруженный отрезок
   var loadingOld = false;
   var allLoaded = false;
 
@@ -102,12 +103,47 @@
       '<p class="tk-msg__when">' + when + '</p></div>';
   }
 
+  // ── Звонки ────────────────────────────────────────────────────────────
+  // Одна запись приходит обоим (utils/callLog.js): входящий он или исходящий,
+  // пропущенный или отменённый — решаем здесь. Те же подписи у вкладки
+  // «Звонки» и у строки звонка в ленте.
+  var PHONE = '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2Z"></path>';
+  var CAMERA = '<rect x="3" y="6" width="12" height="12"></rect><path d="M15 10l6-3v10l-6-3"></path>';
+  var CALL_TIME = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
+
+  function callInfo(c) {
+    var out = c.caller === ME;
+    var missed = !out && (c.status === 'missed' || c.status === 'canceled');
+    var outcome = missed ? 'calls.missed'
+      : c.status === 'declined' ? 'calls.declined'
+      : c.status === 'failed' ? 'calls.failed'
+      : out && c.status === 'canceled' ? 'calls.canceled'
+      : out && c.status === 'missed' ? 'calls.noAnswer'
+      : '';
+    var parts = [t((out ? 'calls.out.' : 'calls.in.') + c.type)];
+    if (outcome) parts.push(t(outcome));
+    if (c.duration) parts.push(Math.floor(c.duration / 60) + ':' + String(c.duration % 60).padStart(2, '0'));
+    return { out: out, missed: missed, text: parts.join(' · ') };
+  }
+
+  function callNoteHtml(c) {
+    var info = callInfo(c);
+    return '<div class="tk-callnote' + (info.missed ? ' is-missed' : '') + '">' +
+      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true">' +
+      (c.type === 'video' ? CAMERA : PHONE) + '</svg>' +
+      '<span>' + escapeHtml(info.text) + '</span>' +
+      '<time>' + escapeHtml(tkDate(c.startedAt, CALL_TIME)) + '</time></div>';
+  }
+
   function render() {
-    if (!messages.length) {
+    if (!messages.length && !calls.length) {
       feed.innerHTML = '<p class="tk-note tk-note--center">' + escapeHtml(t('chats.dialogEmpty')) + '</p>';
       return;
     }
-    feed.innerHTML = messages.map(messageHtml).join('');
+    var items = messages.map(function (m) { return { at: m.sentAt, html: messageHtml(m) }; })
+      .concat(calls.map(function (c) { return { at: c.startedAt, html: callNoteHtml(c) }; }));
+    items.sort(function (a, b) { return new Date(a.at) - new Date(b.at); });
+    feed.innerHTML = items.map(function (x) { return x.html; }).join('');
   }
 
   function atBottom() {
@@ -118,24 +154,30 @@
     feed.scrollTop = feed.scrollHeight;
   }
 
-  function merge(fresh) {
+  function merge(fresh, freshCalls) {
     var seen = {};
     messages.forEach(function (m) { seen[m._id] = true; });
     fresh.forEach(function (m) { if (!seen[m._id]) messages.push(m); });
     messages.sort(function (a, b) { return new Date(a.sentAt) - new Date(b.sentAt); });
+    (freshCalls || []).forEach(function (c) {
+      if (!calls.some(function (x) { return x.id === c.id; })) calls.push(c);
+    });
   }
 
-  function load(recipientId, offset) {
-    return fetch('/getMessages?recipientId=' + encodeURIComponent(recipientId) + '&offset=' + offset)
+  // Страница истории: сообщения старше before (без него — последние)
+  // и звонки за тот же отрезок.
+  function load(recipientId, before) {
+    return fetch('/getMessages?recipientId=' + encodeURIComponent(recipientId) + (before ? '&before=' + encodeURIComponent(before) : ''))
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
   }
 
   function openHistory() {
     var id = peer.id;
-    load(id, 0).then(function (page) {
+    load(id).then(function (page) {
       if (!peer || peer.id !== id) return;
-      messages = page;
-      allLoaded = page.length < PAGE;
+      messages = page.messages;
+      calls = page.calls;
+      allLoaded = page.messages.length < PAGE;
       render();
       scrollToBottom();
       markRead();
@@ -148,11 +190,11 @@
     if (!peer || loadingOld || allLoaded || feed.scrollTop > 40) return;
     loadingOld = true;
     var id = peer.id;
-    load(id, messages.length).then(function (page) {
+    load(id, messages[0].sentAt).then(function (page) {
       if (!peer || peer.id !== id) return;
-      allLoaded = page.length < PAGE;
+      allLoaded = page.messages.length < PAGE;
       var before = feed.scrollHeight;
-      merge(page);
+      merge(page.messages, page.calls);
       render();
       feed.scrollTop = feed.scrollHeight - before;
     }).catch(function (e) { console.error('getMessages (старые):', e); })
@@ -220,23 +262,20 @@
   function select(el) {
     peer = peerOf(el);
     messages = [];
+    calls = [];
     allLoaded = false;
     feed.innerHTML = '';
+    setTab('messages');
 
     list.querySelectorAll('.tk-dialog').forEach(function (d) {
       d.classList.toggle('tk-dialog--on', d === el);
     });
 
-    var name = $('peerName');
-    name.textContent = peer.name;
-    name.removeAttribute('data-i18n'); // иначе переключение языка вернёт «Выберите диалог»
-    tkText($('peerNote'), '');
+    $('peerName').textContent = peer.name;
     $('chatAvatar').outerHTML = avatar('tk-chat__ava-big', peer, ' id="chatAvatar"');
-    $('deleteChat').classList.remove('hidden');
 
     var presence = $('chatHeaderPresence');
     presence.setAttribute('data-presence-user', peer.id);
-    presence.querySelector('.presence-dot').classList.remove('hidden');
     if (window.subscribePresence) window.subscribePresence([peer.id]);
     fetch('/api/presence?ids=' + encodeURIComponent(peer.id))
       .then(function (r) { return r.json(); })
@@ -250,23 +289,22 @@
     input.placeholder = t('chats.messageTo') + ' ' + peer.name + '…';
 
     history.replaceState(null, '', '/chatsPage?peer=' + encodeURIComponent(peer.id));
-    $('chat').classList.add('is-open');
+    // has-peer — показать правую часть, is-open — на узком экране она
+    // вместо списка.
+    $('chat').classList.add('has-peer', 'is-open');
     openHistory();
   }
 
   function closeDialog() {
     peer = null;
     messages = [];
+    calls = [];
     feed.innerHTML = '';
-    tkText($('peerName'), 'chats.pick');
-    tkText($('peerNote'), 'chats.startHint');
-    $('deleteChat').classList.add('hidden');
-    $('chatHeaderPresence').querySelector('.presence-dot').classList.add('hidden');
     list.querySelectorAll('.tk-dialog--on').forEach(function (d) { d.classList.remove('tk-dialog--on'); });
     input.setAttribute('data-i18n-placeholder', 'chats.messagePh');
     input.placeholder = t('chats.messagePh');
     history.replaceState(null, '', '/chatsPage');
-    $('chat').classList.remove('is-open');
+    $('chat').classList.remove('has-peer', 'is-open');
   }
 
   $('backToList').addEventListener('click', function () {
@@ -282,10 +320,7 @@
   $('composeForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var content = input.value.trim();
-    if (!peer || !content) {
-      toast(t('chats.pickAndType'), 'error');
-      return;
-    }
+    if (!peer || !content) return;
     input.value = '';
     post('/sendMessage', { recipientId: peer.id, content: content })
       .then(function (m) {
@@ -365,11 +400,134 @@
     if (!list.querySelector('.tk-dialog')) $('conversationsEmpty').classList.remove('hidden');
   });
 
+  // Звонок кончился: строка в ленте открытого диалога с этим человеком
+  // и свежий журнал на вкладке «Звонки».
+  document.addEventListener('tk:call:logged', function (e) {
+    var c = e.detail.call;
+    if (peer && (c.caller === peer.id || c.callee === peer.id)) {
+      var stick = atBottom();
+      merge([], [c]);
+      render();
+      if (stick) scrollToBottom();
+    }
+    journalStale = true;
+    if (!callsList.hidden) loadJournal();
+  });
+
   // Пока сокета не было, что-то могло прийти или прочитаться — перечитываем
   // открытый диалог целиком.
   document.addEventListener('tk:reconnect', function () {
     if (peer) openHistory();
+    journalStale = true;
+    if (!callsList.hidden) loadJournal();
   });
+
+  // ── Вкладки ───────────────────────────────────────────────────────────
+  var callsList = $('callsList');
+  var journal = null;       // звонки вкладки, пока не загружены — null
+  var journalStale = true;
+
+  function setTab(name) {
+    var onCalls = name === 'calls';
+    $('tabMessages').setAttribute('aria-selected', String(!onCalls));
+    $('tabCalls').setAttribute('aria-selected', String(onCalls));
+    list.hidden = onCalls;
+    callsList.hidden = !onCalls;
+    var q = new URLSearchParams(location.search);
+    if (onCalls) q.set('tab', 'calls'); else q.delete('tab');
+    var qs = q.toString();
+    history.replaceState(null, '', '/chatsPage' + (qs ? '?' + qs : ''));
+    if (onCalls && journalStale) loadJournal();
+  }
+
+  document.querySelector('.tk-chat__tabs').addEventListener('click', function (e) {
+    var tab = e.target.closest('[data-tab]');
+    if (!tab) return;
+    e.preventDefault();
+    setTab(tab.getAttribute('data-tab'));
+  });
+
+  // ── Журнал звонков ────────────────────────────────────────────────────
+  // Открыли — пропущенные увидены: сервер гасит их у себя, здесь гаснут
+  // счётчики и, если больше нечего читать, колокольчик.
+  function loadJournal() {
+    journalStale = false;
+    fetch('/api/calls')
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (data) {
+        journal = data.calls;
+        renderJournal();
+        document.querySelectorAll('[data-missed-calls]').forEach(function (b) {
+          b.textContent = '0';
+          b.classList.add('hidden');
+        });
+        if (window.setNotificationDot) window.setNotificationDot(data.unread > 0);
+      })
+      .catch(function (e) { journalStale = true; console.error('calls:', e); });
+  }
+
+  function journalPeer(c) {
+    var a = c.peer.avatarStyle || {};
+    return { id: c.peer.id, name: c.peer.displayName, url: a.url, bg: a.gradient, initial: a.initial };
+  }
+
+  function renderJournal() {
+    if (!journal) return;
+    if (!journal.length) {
+      callsList.innerHTML = '<p class="tk-note tk-chat__empty-list">' + escapeHtml(t('calls.empty')) + '</p>';
+      return;
+    }
+    callsList.innerHTML = journal.map(function (c, i) {
+      var info = callInfo(c);
+      var p = journalPeer(c);
+      var arrow = info.out ? '<path d="M7 17L17 7M9 7h8v8"></path>' : '<path d="M17 7L7 17M15 17H7V9"></path>';
+      var button = function (type, icon, key) {
+        return '<button type="button" class="tk-callrow__btn" data-call="' + type + '" data-row="' + i + '" aria-label="' + escapeHtml(t(key)) + '" title="' + escapeHtml(t(key)) + '">' +
+          '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true">' + icon + '</svg></button>';
+      };
+      return '<div class="tk-callrow' + (info.missed ? ' is-missed' : '') + '">' +
+        '<button type="button" class="tk-callrow__main" data-open="' + i + '">' +
+          avatar('tk-callrow__ava', p) +
+          '<span class="tk-callrow__body">' +
+            '<span class="tk-callrow__name">' + escapeHtml(p.name) + '</span>' +
+            '<span class="tk-callrow__meta"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true">' + arrow + '</svg>' + escapeHtml(info.text) + '</span>' +
+            '<time class="tk-callrow__when">' + escapeHtml(tkDate(c.startedAt, CALL_TIME)) + '</time>' +
+          '</span>' +
+        '</button>' +
+        button('audio', PHONE, 'calls.audio') + button('video', CAMERA, 'calls.video') +
+      '</div>';
+    }).join('');
+  }
+
+  callsList.addEventListener('click', function (e) {
+    var call = e.target.closest('[data-call]');
+    var open = e.target.closest('[data-open]');
+    if (call && window.showOutgoingCall) {
+      var c = journal[Number(call.getAttribute('data-row'))];
+      var type = call.getAttribute('data-call');
+      window.showOutgoingCall({
+        userId: c.peer.id,
+        displayName: c.peer.displayName,
+        avatarUrl: (c.peer.avatarStyle || {}).url || '',
+        callType: type
+      });
+      if (type === 'audio') window.startAudioCall(c.peer.id);
+      else window.startVideoCall(c.peer.id);
+    } else if (open) {
+      openPeer(journal[Number(open.getAttribute('data-open'))].peer);
+    }
+  });
+
+  // Строка звонка открывает переписку с этим человеком. Её ещё нет —
+  // заводим, как кнопка «Сообщение» на его странице; не вышло (например,
+  // аккаунт ограничен) — ведём на страницу человека.
+  function openPeer(p) {
+    var el = dialogEl(p.id);
+    if (el) return select(el);
+    post('/start-conversation', { recipientId: p.id })
+      .then(function () { select(dialogEl(p.id) || addDialog(p)); })
+      .catch(function () { location.href = '/userPage/' + encodeURIComponent(p.id); });
+  }
 
   // ── Действия с сообщением ─────────────────────────────────────────────
   var menu = $('msgMenu');
@@ -557,6 +715,7 @@
   // переводит только разметку с ключами — поэтому пересобираем сами.
   document.addEventListener('tk:lang', function () {
     refreshTimes();
+    renderJournal();
     if (!peer) return;
     var fromBottom = feed.scrollHeight - feed.scrollTop;
     render();
@@ -568,8 +727,10 @@
   // Подписи «N минут назад» стареют, пока страница открыта.
   setInterval(refreshTimes, 60000);
 
-  // Переход с профиля («Сообщение») или из уведомления: открыть нужный диалог.
-  var peerId = new URLSearchParams(location.search).get('peer');
-  var target = peerId && dialogEl(peerId);
+  // Переход с профиля («Сообщение») или из уведомления: открыть нужный диалог
+  // или вкладку звонков.
+  var params = new URLSearchParams(location.search);
+  var target = params.get('peer') && dialogEl(params.get('peer'));
   if (target) select(target);
+  else if (params.get('tab') === 'calls') loadJournal();
 })();

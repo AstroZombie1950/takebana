@@ -5,6 +5,7 @@ const router = express.Router();
 const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const User = require('../../models/User');
+const Recording = require('../../models/Recording');
 const Stream = require('../../models/Stream');
 const Subscription = require('../../models/Subscription');
 const { requireAuthApi } = require('../../middleware/auth');
@@ -164,8 +165,17 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
       }
     }
 
+    // Записи эфиров: чужому — только готовые, автору — и те, что ещё
+    // сохраняются или не сохранились.
+    const isSelf = String(userId) === String(currentUserId);
+    const recordings = await Recording.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
+      .sort({ createdAt: -1 })
+      .select('title status duration thumb isAdult createdAt')
+      .lean();
+
     // Передача данных в шаблон
     res.render('userPage', {
+      recordings,
       user: {
         displayName,
         avatarStyle,

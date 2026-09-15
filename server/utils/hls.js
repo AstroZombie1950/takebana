@@ -14,6 +14,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { isPlainFileName } = require('./safePath');
+const recording = require('./recording');
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 
@@ -88,7 +89,28 @@ const VIDEO_TRANSCODE = [
     '-force_key_frames', `expr:gte(t,n_forced*${SEGMENT_SECONDS})`, '-sc_threshold', '0',
 ];
 
-function ffmpegArgs(streamKey, dir, transcode) {
+// Выход — tee: один раз закодированный поток уходит и в HLS, и в кусок
+// записи эфира (utils/recording.js). Отдельный второй выход ffmpeg кодировал
+// бы видео заново — ещё 0,78 ядра на эфир. Кусок — MPEG-TS: оборванный на
+// середине, он всё равно читается. onfail=ignore — сбой записи (кончился
+// диск) не останавливает эфир.
+//
+// hls: omit_endlist — плейлист остаётся «живым»; delete_segments — диск не
+// растёт; independent_segments — обязательное условие проигрывания на iOS.
+// Номера сегментов — от секунд эпохи, а не с нуля. Сегмент кэшируется на час
+// (браузер, CDN), и с нуля новый эфир или перезапуск ffmpeg писали бы
+// seg00000.ts под тем же адресом — зритель получал бы кусок прошлого эфира.
+// Номер в плейлисте заодно только растёт.
+function ffmpegArgs(streamKey, dir, transcode, part) {
+    const hlsOut = '[f=hls' +
+        `:hls_time=${SEGMENT_SECONDS}` +
+        `:hls_list_size=${PLAYLIST_SEGMENTS}` +
+        ':hls_flags=delete_segments+omit_endlist+independent_segments' +
+        ':hls_start_number_source=epoch' +
+        ':hls_segment_type=mpegts' +
+        `:hls_segment_filename=${path.join(dir, 'seg%05d.ts')}]` +
+        path.join(dir, 'index.m3u8');
+
     return [
         '-nostdin', '-hide_banner', '-loglevel', 'error',
         '-fflags', 'nobuffer',
@@ -97,26 +119,18 @@ function ffmpegArgs(streamKey, dir, transcode) {
         ...(transcode ? VIDEO_TRANSCODE : ['-c:v', 'copy']),
         '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
 
-        '-f', 'hls',
-        '-hls_time', String(SEGMENT_SECONDS),
-        '-hls_list_size', String(PLAYLIST_SEGMENTS),
-        // omit_endlist — плейлист остаётся «живым»; delete_segments — диск не растёт;
-        // independent_segments — обязательное условие проигрывания на iOS.
-        '-hls_flags', 'delete_segments+omit_endlist+independent_segments',
-        // Номера сегментов — от секунд эпохи, а не с нуля. Сегмент кэшируется
-        // на час (браузер, CDN), и с нуля новый эфир или перезапуск ffmpeg
-        // писали бы seg00000.ts под тем же адресом — зритель получал бы кусок
-        // прошлого эфира. Номер в плейлисте заодно только растёт.
-        '-hls_start_number_source', 'epoch',
-        '-hls_segment_type', 'mpegts',
-        '-hls_segment_filename', path.join(dir, 'seg%05d.ts'),
-        path.join(dir, 'index.m3u8'),
+        // tee сам потоки не выбирает: без -map ffmpeg не знает, что ему отдать.
+        '-map', '0:v?', '-map', '0:a?',
+        '-f', 'tee',
+        part ? `${hlsOut}|[f=mpegts:onfail=ignore]${part}` : hlsOut,
     ];
 }
 
 function spawnFfmpeg(streamKey, job) {
     const dir = dirFor(streamKey);
-    const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.transcode), { stdio: ['ignore', 'ignore', 'pipe'] });
+    // Каждый запуск — новый кусок записи: после паузы и перезапуска тоже.
+    const part = recording.newPart(streamKey);
+    const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.transcode, part), { stdio: ['ignore', 'ignore', 'pipe'] });
     job.proc = proc;
 
     proc.stderr.on('data', (chunk) => {
@@ -131,7 +145,7 @@ function spawnFfmpeg(streamKey, job) {
 
     proc.on('close', (code, signal) => {
         if (job.stopping) {
-            jobs.delete(streamKey);
+            finish(streamKey, job);
             clean(dir);
             return;
         }
@@ -139,7 +153,7 @@ function spawnFfmpeg(streamKey, job) {
         // Эфир идёт, а ffmpeg вышел — обрыв связи с RTMP или сбой кодека.
         if (job.restarts >= MAX_RESTARTS) {
             console.error(`[hls ${streamKey}] ffmpeg падает подряд ${MAX_RESTARTS} раз, останавливаемся`);
-            jobs.delete(streamKey);
+            finish(streamKey, job);
             return;
         }
 
@@ -173,6 +187,7 @@ function start(streamKey) {
     const transcode = transcoding < MAX_TRANSCODES;
 
     const job = { proc: null, restarts: 0, stopping: false, timer: null, transcode };
+    job.done = new Promise((resolve) => { job.resolve = resolve; });
     jobs.set(streamKey, job);
     spawnFfmpeg(streamKey, job);
     console.log(`[hls ${streamKey}] ${transcode ? 'транскод' : 'копирование видео, лимит транскодов'} → /live/${streamKey}/index.m3u8`);
@@ -193,14 +208,25 @@ function stop(streamKey) {
             if (job.proc && job.proc.exitCode === null) job.proc.kill('SIGKILL');
         }, 5000).unref();
     } else {
-        jobs.delete(streamKey);
+        finish(streamKey, job);
         clean(dirFor(streamKey));
     }
     console.log(`[hls ${streamKey}] остановлен`);
+}
+
+function finish(streamKey, job) {
+    if (jobs.get(streamKey) === job) jobs.delete(streamKey);
+    job.resolve();
+}
+
+// Конвейер эфира остановлен и ffmpeg вышел: куски записи закрыты.
+function stopped(streamKey) {
+    const job = jobs.get(streamKey);
+    return job ? job.done : Promise.resolve();
 }
 
 function isRunning(streamKey) {
     return jobs.has(streamKey);
 }
 
-module.exports = { start, stop, isRunning, HLS_ROOT, hlsBase };
+module.exports = { start, stop, stopped, isRunning, HLS_ROOT, hlsBase };

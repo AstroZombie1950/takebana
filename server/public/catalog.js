@@ -88,13 +88,4 @@ document.addEventListener('DOMContentLoaded', function () {
       more.remove();
     });
   }
-
-  // «Стать первым» в пустом состоянии открывает те же настройки эфира,
-  // что кнопка в шапке. Кнопка приходит и с подгруженной сеткой, поэтому
-  // обработчик висит на документе.
-  document.addEventListener('click', function (e) {
-    if (!e.target.closest('#start-stream-btn')) return;
-    var modal = document.getElementById('streamSettingsModal');
-    if (modal) modal.classList.remove('hidden');
-  });
 });

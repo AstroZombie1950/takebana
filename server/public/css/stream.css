@@ -1,102 +1,20 @@
-/* Страница эфира: ведущий и зритель.
+/* Эфир: студия, пульт ведущего, страница зрителя, запись эфира.
  *
- * Заменяет Tailwind и пятьсот строк инлайновых заплаток, которые чинили его
- * же поведение на узких экранах. Раскладка одна: слева плеер и управление,
- * справа чат; ниже 1100px чат уезжает в выдвижную панель.
+ * Сцена — картинка и чат. Широкий экран: картинка, под ней кнопки и шапка
+ * эфира, справа чат. Телефон и планшет (до 1023px, как у левой панели):
+ * одна колонка на весь экран без шапки сайта — картинка, шапка эфира одной
+ * строкой, чат с полем ввода сверху. Во весь экран (класс is-full) —
+ * только картинка, кнопки и чат.
+ *
+ * Прежняя вёрстка: чат ниже 1100px уезжал в выдвижную панель по ярлычку.
  */
 
+/* display в правилах ниже сильнее браузерного [hidden]. */
+.tk-live [hidden],
+.tk-studio [hidden] { display: none !important; }
+
 .tk-live {
-  padding: 20px 24px 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-/* `.hidden` из app.css — это `display: none` с обычной специфичностью, и любое
- * правило ниже по каскаду, задающее display, его перебивает. Скрипт страницы
- * переключает именно этот класс, поэтому внутри эфира он должен быть сильнее
- * всего, что описано дальше. Без этой строки плашка «в эфире» висела рядом
- * с «на паузе»: сервер отдавал её скрытой, а браузер показывал. */
-.tk-live .hidden,
-.tk-live__chat.hidden { display: none; }
-
-/* ── Режим трансляции ─────────────────────────────────────────────────── */
-.tk-live__modes {
-  padding: 16px 18px;
-  border: 1px solid var(--tk-rule);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.tk-live__modes-top {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-.tk-live__id {
-  font-size: 12px;
-  color: var(--tk-muted);
-}
-
-.tk-live__id code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--tk-beige);
-}
-
-/* Переключатель на два положения. Отметка — класс is-on, а не набор
- * утилит: состояние переключает скрипт, вид описан здесь. */
-.tk-seg {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  background: var(--tk-rule);
-  border: 1px solid var(--tk-rule);
-}
-
-.tk-seg__btn {
-  padding: 11px 16px;
-  border: 0;
-  background: var(--tk-ink);
-  cursor: pointer;
-  font-family: Oswald, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-  color: var(--tk-muted);
-  transition: color .15s ease, background .15s ease;
-}
-
-.tk-seg__btn:hover { color: var(--tk-beige); }
-
-.tk-seg__btn.is-on {
-  background: var(--tk-accent);
-  color: var(--tk-ink);
-}
-
-.tk-live__warn {
-  margin: 0;
-  padding: 12px 14px;
-  border-left: 3px solid var(--tk-accent);
-  background: rgba(227, 66, 52, .07);
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: var(--tk-beige);
-}
-
-.tk-live__warn b {
-  display: block;
-  margin-bottom: 3px;
-  font-family: Oswald, sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-  color: var(--tk-accent);
+  padding: 20px 24px 24px;
 }
 
 /* ── Раскладка ────────────────────────────────────────────────────────── */
@@ -110,9 +28,10 @@
 .tk-live__col {
   min-width: 0;
   border: 1px solid var(--tk-rule);
+  background: var(--tk-ink);
 }
 
-/* ── Плеер ────────────────────────────────────────────────────────────── */
+/* ── Картинка ─────────────────────────────────────────────────────────── */
 .tk-live__player {
   position: relative;
   aspect-ratio: 16 / 9;
@@ -121,15 +40,10 @@
 }
 
 .tk-live__player video {
-  width: 100%;
-  height: 100%;
-}
-
-/* Предпросмотр OBS ложится поверх картинки Daily. */
-.tk-live__video--obs {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  width: 100%;
+  height: 100%;
 }
 
 .video-fit-cover { object-fit: cover; }
@@ -138,7 +52,7 @@
 .tk-live__hint {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -146,11 +60,12 @@
   gap: 10px;
   padding: 24px;
   text-align: center;
-  color: var(--tk-beige);
   font-size: 14px;
+  line-height: 1.5;
+  color: var(--tk-beige);
 }
 
-.tk-live__hint p { margin: 0; max-width: 34ch; }
+.tk-live__hint p { margin: 0; max-width: 40ch; }
 .tk-live__hint svg { color: var(--tk-muted); }
 
 .tk-live__hint-title {
@@ -161,94 +76,7 @@
   color: var(--tk-paper);
 }
 
-.tk-live__badges {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  z-index: 4;
-  display: flex;
-  gap: 8px;
-  /* Справа в том же углу живёт кнопка полноэкранного режима: на узком экране
-   * длинная подпись статуса заезжала под неё. Оставляем ей место. */
-  max-width: calc(100% - 70px);
-}
-
-/* display — только через :not(.hidden): иначе он перебьёт .hidden из app.css,
- * и метки «В эфире» и «на паузе» видны обе сразу. */
-.tk-live__badge:not(.hidden) { display: inline-flex; }
-
-.tk-live__badge {
-  align-items: center;
-  gap: 7px;
-  padding: 6px 11px;
-  background: rgba(10, 10, 10, .72);
-  border: 1px solid var(--tk-rule);
-  font-family: Oswald, sans-serif;
-  font-size: 11px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--tk-beige);
-}
-
-.tk-live__badge--live {
-  border-color: var(--tk-accent);
-  color: var(--tk-paper);
-}
-
-/* Точка «в эфире». Пульсация выключается вместе с анимациями системы. */
-.stream-indicator {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--tk-accent);
-  animation: tk-live-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes tk-live-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: .35; }
-}
-
-.tk-live__fs {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 4;
-  padding: 7px;
-  background: rgba(10, 10, 10, .72);
-  border: 1px solid var(--tk-rule);
-  color: var(--tk-beige);
-  cursor: pointer;
-  line-height: 0;
-}
-
-.tk-live__fs:hover { color: var(--tk-paper); border-color: var(--tk-beige); }
-
-/* ── Плеер зрителя ────────────────────────────────────────────────────── */
-/* Телефон: плеер зрителя выше 16:9, видео — целиком, без обрезки краёв. */
-@media (max-width: 500px) {
-  .tk-live--viewer .tk-live__player { aspect-ratio: auto; height: 62vh; min-height: 300px; }
-}
-
-/* Метка источника: OBS или веб-камера. */
-.tk-live__type {
-  position: absolute;
-  right: 12px;
-  top: 12px;
-  z-index: 5;
-  padding: 4px 8px;
-  background: rgba(10, 10, 10, .78);
-  border: 1px solid var(--tk-rule);
-  font-family: Oswald, sans-serif;
-  font-size: 10px;
-  letter-spacing: .14em;
-  color: var(--tk-muted);
-}
-
-/* Заставка приостановленного эфира: обложка уходит на фон и приглушается,
- * иначе белый текст ложится на светлую картинку. */
-.tk-live__hint--paused { z-index: 1; }
-
+/* Заставка приостановленного эфира: обложка уходит на фон и приглушается. */
 .tk-live__thumb {
   position: absolute;
   inset: 0;
@@ -258,132 +86,134 @@
   opacity: .25;
 }
 
-.tk-live__hint--paused > :not(.tk-live__thumb) { position: relative; }
+.tk-live__hint > :not(.tk-live__thumb) { position: relative; }
 
-.tk-live__author-acts {
-  margin-top: 6px;
+/* ── Метки поверх картинки ── */
+.tk-live__badges {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 3;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  /* Справа в том же углу — кнопка полного экрана. */
+  max-width: calc(100% - 72px);
+  pointer-events: none;
 }
 
-/* ── Информация об эфире ──────────────────────────────────────────────── */
-.tk-live__info {
-  padding: 18px;
-  border-top: 1px solid var(--tk-rule);
-}
-
-.tk-live__title {
-  margin: 0 0 14px;
-  font-size: 24px;
-  line-height: 1.1;
-  letter-spacing: -.02em;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.tk-live__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px 20px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.tk-live__author {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.tk-live__avatar {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  font-family: Oswald, sans-serif;
-  font-size: 18px;
-  font-weight: 500;
-  color: var(--tk-paper);
-  text-decoration: none;
-}
-
-.tk-live__avatar img { width: 100%; height: 100%; object-fit: cover; }
-
-.tk-live__author-name {
-  display: block;
-  font-family: Oswald, sans-serif;
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--tk-paper);
-  text-decoration: none;
-}
-
-.tk-live__author-name:hover { color: var(--tk-accent); }
-
-.tk-live__role {
-  font-size: 12px;
-  color: var(--tk-label);
-}
-
-.tk-live__stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.tk-live__stat {
+.tk-live__badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 11px;
+  gap: 6px;
+  padding: 5px 9px;
+  background: rgba(10, 10, 10, .72);
   border: 1px solid var(--tk-rule);
-  font-size: 13px;
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
   color: var(--tk-beige);
   font-variant-numeric: tabular-nums;
 }
 
-.tk-live__stat .duration-text {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+.tk-live__badge--live {
+  border-color: var(--tk-accent);
   color: var(--tk-paper);
 }
 
-.tk-live__desc {
-  margin: 14px 0 0;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--tk-beige);
+.tk-live__badge--time { letter-spacing: .04em; }
+
+/* Точка состояния: пульсирует только в эфире. */
+.stream-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tk-muted);
 }
 
-/* ── Управление ───────────────────────────────────────────────────────── */
-.tk-live__controls {
-  padding: 18px;
+.tk-live__badge--live .stream-indicator {
+  background: var(--tk-accent);
+  animation: tk-live-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tk-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+
+/* Время в эфире — только когда эфир идёт. */
+.tk-live__badges:has([data-state="paused"], [data-state="wait"]) .tk-live__badge--time { display: none; }
+
+.tk-live__fs {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 6;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(10, 10, 10, .72);
+  border: 1px solid var(--tk-rule);
+  color: var(--tk-beige);
+  cursor: pointer;
+}
+
+.tk-live__fs:hover { color: var(--tk-paper); border-color: var(--tk-beige); }
+.tk-live__fs-off,
+.tk-live__fs[aria-pressed="true"] .tk-live__fs-on { display: none; }
+.tk-live__fs[aria-pressed="true"] .tk-live__fs-off { display: block; }
+
+/* ── Кнопки ведущего ─────────────────────────────────────────────────── */
+.tk-live__bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 14px;
   border-top: 1px solid var(--tk-rule);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
 }
 
-.tk-live__lead {
-  margin: 0 0 12px;
-  font-size: 14px;
-  line-height: 1.55;
+.tk-live__end { margin-left: auto; }
+
+/* Квадратная кнопка со значком: микрофон, камера. */
+.tk-live__tool {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--tk-rule);
   color: var(--tk-beige);
+  cursor: pointer;
+  transition: border-color .18s ease, color .18s ease, background-color .18s ease;
 }
 
-.tk-live__lead a { color: var(--tk-accent); }
+.tk-live__tool:hover:not(:disabled) { border-color: var(--tk-beige); color: var(--tk-paper); }
+.tk-live__tool:disabled { opacity: .4; cursor: default; }
 
-.tk-live__actions {
-  margin-top: 12px;
-  display: flex;
-  gap: 10px;
+/* Микрофон выключен — кнопка киноварная и перечёркнутая. */
+.tk-live__tool[aria-pressed="true"] {
+  border-color: var(--tk-accent);
+  background: rgba(227, 66, 52, .16);
+  color: var(--tk-accent);
 }
 
-.tk-live__actions .tk-btn { flex: 1; }
+.tk-live__mic-off,
+.tk-live__tool[aria-pressed="true"] .tk-live__mic-on { display: none; }
+.tk-live__tool[aria-pressed="true"] .tk-live__mic-off { display: block; }
+
+/* ── Подключение OBS ── */
+.tk-live__obs {
+  padding: 14px 18px 16px;
+  border-top: 1px solid var(--tk-rule);
+}
 
 .tk-live__steps {
   margin: 0;
@@ -396,6 +226,8 @@
   color: var(--tk-beige);
 }
 
+.tk-live__steps a { color: var(--tk-accent); }
+
 .tk-live__key {
   display: block;
   margin-top: 6px;
@@ -406,6 +238,7 @@
   font-size: 13px;
   color: var(--tk-paper);
   word-break: break-all;
+  user-select: all;
 }
 
 .tk-live__note {
@@ -415,39 +248,125 @@
   color: var(--tk-muted);
 }
 
-.tk-live__danger {
-  padding-top: 14px;
+/* ── Шапка эфира ──────────────────────────────────────────────────────── */
+.tk-live__info {
+  padding: 16px 18px 18px;
   border-top: 1px solid var(--tk-rule);
 }
 
-.tk-live__danger .tk-btn:hover,
-.tk-live__danger .tk-btn:focus-visible {
-  background: var(--tk-accent);
-  border-color: var(--tk-accent);
-  color: var(--tk-ink);
+.tk-live__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tk-live__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.15;
+  letter-spacing: -.02em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+/* «←» и «▾» нужны только на телефоне: на широком экране есть шапка сайта
+ * и всё видно сразу. */
+.tk-live__back,
+.tk-live__more {
+  display: none;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--tk-rule);
+  color: var(--tk-beige);
+  cursor: pointer;
+}
+
+.tk-live__more svg { transition: transform .18s ease; }
+.tk-live__info.is-open .tk-live__more svg { transform: rotate(180deg); }
+
+.tk-live__more-body { margin-top: 14px; }
+
+.tk-live__author {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+}
+
+.tk-live__avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .35);
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-live__avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.tk-live__author-body { flex: 1; min-width: 0; }
+
+.tk-live__author-name {
+  display: block;
+  font-family: Oswald, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-live__author-name:hover { color: var(--tk-accent); }
+
+.tk-live__role {
+  font-size: 12px;
+  color: var(--tk-label);
+}
+
+.tk-live__author-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tk-live__desc {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--tk-beige);
+  white-space: pre-line;
 }
 
 /* ── Чат ──────────────────────────────────────────────────────────────── */
 .tk-live__chat {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 140px);
+  height: calc(100vh - 108px);
+  height: calc(100dvh - 108px);
   min-height: 420px;
   border: 1px solid var(--tk-rule);
+  background: var(--tk-ink);
 }
 
 .tk-live__chat-head {
   flex: none;
+  margin: 0;
   padding: 14px 16px;
   border-bottom: 1px solid var(--tk-rule);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.tk-live__chat-head h2 {
-  margin: 0;
   font-family: Oswald, sans-serif;
   font-size: 13px;
   font-weight: 500;
@@ -456,73 +375,35 @@
   color: var(--tk-label);
 }
 
-/* Крестик нужен только выдвижной панели: на широком экране чат никуда
- * не убирается, и закрывать его нечем и незачем. */
-.tk-live__chat-close {
-  display: none;
-  /* Крестик виден только в выдвижной панели, то есть на сенсорном экране —
-   * поэтому сразу под палец, а не под курсор. */
-  width: 36px;
-  height: 36px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--tk-muted);
-  cursor: pointer;
-  line-height: 0;
-}
-
-.wrapper__masseg {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
 .messeg-box {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   scrollbar-width: thin;
   scrollbar-color: var(--tk-rule) transparent;
 }
 
-.messeg-box::-webkit-scrollbar { width: 6px; }
-.messeg-box::-webkit-scrollbar-track { background: transparent; }
-.messeg-box::-webkit-scrollbar-thumb { background: var(--tk-rule); }
-
 .chat-message {
-  padding: 9px 11px;
+  padding: 7px 10px;
   border-left: 2px solid var(--tk-rule);
   font-size: 14px;
   line-height: 1.45;
 }
 
 .chat-message--own { border-left-color: var(--tk-green); }
-
 .chat-message__line { margin: 0; }
-
-.chat-message__who {
-  font-weight: 600;
-  color: var(--tk-paper);
-}
-
+.chat-message__who { font-weight: 600; color: var(--tk-paper); }
 .chat-message--own .chat-message__who { color: var(--tk-green); }
-
-.chat-message__text {
-  color: var(--tk-beige);
-  overflow-wrap: anywhere;
-}
+.chat-message__text { color: var(--tk-beige); overflow-wrap: anywhere; }
 
 .chat-message__time {
   display: block;
-  margin-top: 3px;
+  margin-top: 2px;
   font-size: 11px;
   color: var(--tk-muted);
   font-variant-numeric: tabular-nums;
@@ -530,11 +411,12 @@
 
 .input__messeng-box {
   flex: none;
-  padding: 12px 16px 0;
+  margin: 0;
+  padding: 12px 16px 14px;
   border-top: 1px solid var(--tk-rule);
   display: flex;
-  gap: 10px;
-  align-items: flex-end;
+  gap: 8px;
+  align-items: stretch;
 }
 
 .input__messeng {
@@ -542,83 +424,337 @@
   min-width: 0;
   resize: none;
   padding: 10px 12px;
-  font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
-.tk-live__limit {
-  flex: none;
-  margin: 6px 16px 12px;
-  font-size: 11px;
+/* ── Студия ───────────────────────────────────────────────────────────── */
+.tk-studio {
+  max-width: 1320px;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 20px;
+  align-items: start;
+}
+
+.tk-studio__screen {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tk-studio__screen .tk-live__player { border: 1px solid var(--tk-rule); }
+
+.tk-studio__panel {
+  padding: 16px 18px;
+  border: 1px solid var(--tk-rule);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tk-studio__form {
+  padding: 20px;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-studio__form .tk-page__h1 { margin-bottom: 4px; }
+.tk-studio__form .tk-form__row .tk-field { padding: 12px 14px; }
+.tk-studio__form .tk-select { padding-right: 40px; }
+
+.tk-studio__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.tk-studio__go { width: 100%; }
+
+/* Источник: две кнопки-переключателя. Сама кнопка — радио, растянутое
+ * прозрачным на всю кнопку: фокус и отметка остаются нативными. */
+.tk-seg {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.tk-seg legend { margin-bottom: 8px; padding: 0; }
+
+.tk-seg__btn {
+  position: relative;
+  padding: 11px 12px;
+  border: 1px solid var(--tk-rule);
+  text-align: center;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--tk-muted);
+  transition: color .15s ease, background-color .15s ease, border-color .15s ease;
+}
+
+.tk-seg__btn input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.tk-seg__btn:hover { color: var(--tk-beige); }
+
+.tk-seg__btn:has(:checked) {
+  border-color: var(--tk-accent);
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+}
+
+.tk-seg__btn:has(:focus-visible) { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
+
+/* ── Запись эфира ─────────────────────────────────────────────────────── */
+.tk-rec {
+  max-width: 1100px;
+  padding: 20px 24px 40px;
+}
+
+.tk-rec__col {
+  border: 1px solid var(--tk-rule);
+  background: var(--tk-ink);
+}
+
+.tk-rec__state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--tk-beige);
+}
+
+.tk-rec__body { margin-top: 14px; }
+
+.tk-rec__meta {
+  margin: 8px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
   color: var(--tk-muted);
 }
 
-/* ── Выдвижной чат ────────────────────────────────────────────────────── */
-.tk-live__chat-tab,
-.tk-live__chat-overlay { display: none; }
+.tk-rec__acts {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+}
 
-@media (max-width: 1100px) {
-  .tk-live__grid { grid-template-columns: minmax(0, 1fr); }
+/* ── Полный экран: картинка, кнопки, чат ──────────────────────────────── */
+.tk-live__grid.is-full {
+  position: fixed;
+  inset: 0;
+  /* Над шапкой и панелью кабинета, но под окнами звонка и подтверждений:
+   * входящий звонок во время эфира должен быть виден. */
+  z-index: 85;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 0;
+  align-items: stretch;
+  background: #000;
+}
 
+html.tk-stage-open { overflow: hidden; }
+
+.is-full .tk-live__col {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.is-full .tk-live__player { flex: 1; aspect-ratio: auto; }
+.is-full .tk-live__info,
+.is-full .tk-live__obs { display: none; }
+
+.is-full .tk-live__chat {
+  height: auto;
+  min-height: 0;
+  border: 0;
+  border-left: 1px solid var(--tk-rule);
+}
+
+.is-full .tk-live__chat-head { display: none; }
+
+/* ── Телефон и планшет ────────────────────────────────────────────────── */
+@media (max-width: 1023px) {
+  /* Шапка сайта на эфире не нужна: картинке и чату важен каждый пиксель.
+   * Назад — стрелкой браузера или жестом, меню — с других страниц. */
+  .tk-app--stage .tk-ahead,
+  .tk-app--stage .tk-msearch { display: none; }
+
+  .tk-live {
+    padding: 0;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .tk-live__grid {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 0;
+  }
+
+  .tk-live__col { flex: none; border: 0; }
+
+  .tk-live__player {
+    width: 100%;
+    max-height: 45vh;
+    max-height: 45dvh;
+  }
+
+  .tk-live__bar { padding: 8px 12px; }
+  .tk-live__bar .tk-btn { padding: 10px 14px; }
+  .tk-live__obs { max-height: 38dvh; overflow-y: auto; padding: 12px 14px; }
+
+  .tk-live__info { padding: 10px 12px; }
+
+  .tk-live__title {
+    font-size: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tk-live__back,
+  .tk-live__more { display: flex; }
+  .tk-live__more-body { display: none; margin-top: 10px; }
+  .tk-live__info.is-open .tk-live__more-body { display: block; }
+
+  /* Чат — на весь остаток экрана. Поле ввода сверху, новые сообщения
+   * сразу под ним (порядок ведёт tk-stream.js). */
   .tk-live__chat {
-    position: fixed;
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    border: 0;
+    border-top: 1px solid var(--tk-rule);
+  }
+
+  .tk-live__chat-head { display: none; }
+
+  .input__messeng-box {
+    order: -1;
+    padding: 10px 12px;
+    border-top: 0;
+    border-bottom: 1px solid var(--tk-rule);
+  }
+
+  .messeg-box { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
+
+  /* Во весь экран вертикально: картинка на весь экран, кнопки ведущего
+   * сверху, чат полупрозрачно поверх нижней части картинки. */
+  .tk-live__grid.is-full { display: block; }
+
+  .is-full .tk-live__col { position: absolute; inset: 0; }
+
+  .is-full .tk-live__player {
+    position: absolute;
+    inset: 0;
+    max-height: none;
+  }
+
+  .is-full .tk-live__bar {
+    position: absolute;
     top: 0;
+    left: 0;
+    right: 60px;
+    z-index: 5;
+    border: 0;
+    padding-top: calc(8px + env(safe-area-inset-top));
+    background: linear-gradient(rgba(10, 10, 10, .8), rgba(10, 10, 10, 0));
+  }
+
+  .is-full .tk-live__fs { top: calc(10px + env(safe-area-inset-top)); }
+
+  /* У ведущего сверху кнопки — метки опускаются под них. */
+  body[data-phase="console"] .is-full .tk-live__badges { top: calc(64px + env(safe-area-inset-top)); }
+
+  .is-full .tk-live__chat {
+    position: absolute;
+    left: 0;
     right: 0;
     bottom: 0;
-    z-index: 60;
-    width: min(360px, 92vw);
+    z-index: 4;
+    height: 44%;
+    border: 0;
+    background: linear-gradient(rgba(10, 10, 10, 0), rgba(10, 10, 10, .78) 18%);
+  }
+
+  .is-full .input__messeng-box { border-bottom: 0; padding-top: 24px; }
+  .is-full .input__messeng { background: rgba(10, 10, 10, .55); }
+  .is-full .chat-message { background: rgba(10, 10, 10, .4); }
+
+  /* Студия — одной колонкой: предпросмотр, камера, форма. */
+  .tk-studio {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .tk-rec { padding: 0 0 32px; }
+  .tk-rec__col { border: 0; }
+}
+
+/* Телефон горизонтально: по высоте на картинку и чат одной колонкой места
+ * нет — картинка с кнопками слева, чат справа, как на широком экране. */
+@media (max-width: 1023px) and (orientation: landscape) and (max-height: 600px) {
+  .tk-live__grid:not(.is-full) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40%;
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .tk-live__grid:not(.is-full) .tk-live__col { overflow-y: auto; min-height: 0; }
+  .tk-live__grid:not(.is-full) .tk-live__player { max-height: none; }
+  .tk-live__grid:not(.is-full) .tk-live__chat { border-top: 0; border-left: 1px solid var(--tk-rule); }
+}
+
+/* Во весь экран горизонтально: картинка слева, чат колонкой справа. */
+@media (max-width: 1023px) and (orientation: landscape) {
+  .tk-live__grid.is-full {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 38%;
+  }
+
+  .is-full .tk-live__col { position: relative; inset: auto; display: flex; flex-direction: column; }
+  .is-full .tk-live__player { position: relative; inset: auto; flex: 1; }
+  .is-full .tk-live__bar { position: static; background: var(--tk-ink); padding-top: 8px; }
+  .is-full .tk-live__fs { top: 10px; }
+  body[data-phase="console"] .is-full .tk-live__badges { top: 12px; }
+
+  .is-full .tk-live__chat {
+    position: static;
     height: auto;
     background: var(--tk-ink);
     border-left: 1px solid var(--tk-rule);
-    transform: translateX(100%);
-    transition: transform .22s ease;
   }
 
-  .tk-live__chat.open { transform: translateX(0); }
-  .tk-live__chat-close { display: flex; }
-
-  /* Имя ведущего — ссылка в одну строку: на сенсорном экране добираем высоту. */
-  .tk-live__author-name { min-height: 32px; display: flex; align-items: center; }
-
-  .tk-live__chat-tab {
-    position: fixed;
-    right: 0;
-    bottom: 84px;
-    z-index: 55;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    padding: 11px 9px;
-    border: 1px solid var(--tk-rule);
-    border-right: 0;
-    background: var(--tk-ink);
-    color: var(--tk-beige);
-    cursor: pointer;
-    font-family: Oswald, sans-serif;
-    font-size: 10px;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-  }
-
-  .tk-live__chat-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 59;
-    background: rgba(10, 10, 10, .7);
-  }
+  .is-full .input__messeng { background: transparent; }
+  .is-full .chat-message { background: none; }
 }
 
-@media (max-width: 640px) {
-  .tk-live { padding: 14px 14px 24px; }
-  .tk-live__title { font-size: 20px; }
-  .tk-live__info, .tk-live__controls { padding: 14px; }
-  .tk-live__actions { flex-direction: column; }
-  .tk-live__badges { top: 10px; left: 10px; }
-  .tk-live__fs { top: 10px; right: 10px; }
+@media (max-width: 560px) {
+  .tk-studio__pair { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stream-indicator { animation: none; }
-  .tk-live__chat { transition: none; }
+  .tk-live__badge--live .stream-indicator { animation: none; }
 }

@@ -517,6 +517,11 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   border-bottom: 1px solid var(--tk-rule);
   /* Линейка под шапкой — до краёв окна, а не обрывом на ширине 1440. */
   border-image: linear-gradient(var(--tk-rule), var(--tk-rule)) 0 0 1 / 0 0 1px / 0 100vmax;
+  /* И фон тоже: шире 1440 прилипшая шапка кончалась на ширине оболочки,
+   * а по бокам проступала бумага страницы. Тень во все стороны, обрезанная
+   * по высоте шапки; прокрутки она не создаёт. */
+  box-shadow: 0 0 0 100vmax var(--tk-ink);
+  clip-path: inset(0 -100vmax);
 }
 
 /* Логотип — ссылка на главную. */

@@ -33,6 +33,17 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null // Ссылка на фото профиля, по умолчанию пустая
   },
+  // Настройки последнего эфира: студия подставляет их в форму, чтобы
+  // регулярный эфир не заполнять заново. Пишет /start-stream.
+  streamDefaults: {
+    title: { type: String, default: '' },
+    category: { type: String, default: '' },
+    subcategory: { type: String, default: '' },
+    city: { type: String, default: '' },
+    description: { type: String, default: '' },
+    isAdult: { type: Boolean, default: false },
+    source: { type: String, enum: ['web', 'obs'], default: 'web' }
+  },
   gallery: {
     type: [String],
     default: [] // Массив URL фотографий личной галереи (макс. 30)

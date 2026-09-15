@@ -175,55 +175,6 @@ body.tk-app {
   background: var(--tk-accent);
 }
 
-/* Язык: кнопка со списком. Разметку задаёт старый скрипт, поэтому
- * структура кнопка + выпадашка сохранена как была. */
-.tk-ahead__lang { position: relative; }
-
-.tk-ahead__lang-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: none;
-  border: none;
-  padding: 6px 4px;
-  cursor: pointer;
-  font-family: Oswald, sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: .14em;
-  color: var(--tk-beige);
-}
-
-.tk-ahead__lang-btn:hover { color: var(--tk-paper); }
-
-.tk-ahead__lang-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 150px;
-  background: var(--tk-ink);
-  border: 1px solid var(--tk-rule);
-  z-index: 50;
-}
-
-.tk-ahead__lang-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  padding: 10px 14px;
-  cursor: pointer;
-  font-family: Oswald, sans-serif;
-  font-size: 14px;
-  color: var(--tk-beige);
-}
-
-.tk-ahead__lang-menu button:hover {
-  background: rgba(227, 66, 52, .12);
-  color: var(--tk-paper);
-}
-
 /* ──────────────────────────────────────────────────────────────────────────
  * Левая панель
  */
@@ -305,7 +256,7 @@ body.tk-app {
 }
 
 .tk-aside__title {
-  padding: 18px 18px 10px;
+  padding: 8px 18px 6px;
   font-family: Oswald, sans-serif;
   font-size: 11px;
   letter-spacing: .22em;
@@ -374,7 +325,7 @@ body.tk-app {
 .tk-aside__rule {
   height: 1px;
   background: var(--tk-rule);
-  margin: 14px 0;
+  margin: 8px 0;
 }
 
 /* Подписка: аватар со статусом, имя, подпись. */
@@ -449,19 +400,10 @@ body.tk-app {
 .tk-aside__cta {
   margin-top: auto;
   border-top: 1px solid var(--tk-rule);
-  padding: 16px 18px;
+  padding: 14px 18px;
 }
 
-.tk-aside__cta-title {
-  margin: 0 0 4px;
-  font-size: 15px;
-  font-weight: 900;
-  letter-spacing: -.01em;
-  text-transform: uppercase;
-  line-height: 1.15;
-}
-
-/* Низ панели: язык (только на телефоне), документы, выход. Прилипает
+/* Низ панели: документы и выход. Прилипает
  * к низу: на невысоком экране середина панели прокручивается, а «Выход»
  * остаётся на виду. */
 .tk-aside__foot {
@@ -470,32 +412,6 @@ body.tk-app {
   border-top: 1px solid var(--tk-rule);
   padding: 10px 0 calc(6px + env(safe-area-inset-bottom));
   background: var(--tk-ink);
-}
-
-.tk-aside__lang {
-  display: none;
-  gap: 10px;
-  padding: 6px 18px 10px;
-}
-
-.tk-aside__lang button {
-  flex: 1;
-  background: none;
-  border: 1px solid var(--tk-rule);
-  padding: 9px 0;
-  cursor: pointer;
-  font-family: Oswald, sans-serif;
-  font-size: 13px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--tk-beige);
-  transition: border-color .18s ease, color .18s ease;
-}
-
-.tk-aside__lang button:hover,
-.tk-aside__lang button[aria-pressed="true"] {
-  border-color: var(--tk-accent);
-  color: var(--tk-paper);
 }
 
 .tk-aside__docs {
@@ -549,8 +465,7 @@ body.tk-app {
 
 /* Ниже 640 шапка не вмещает всё: на 320px она переполняла страницу почти
  * на 300px. Инлайн-поиск заменяется кнопкой (ради неё .tk-msearch и есть),
- * а язык, переписка и запуск эфира уезжают в мобильное меню — там они
- * подписаны словами, а не иконками. */
+ * логотип и запуск эфира прячутся: эфир запускается из левой панели. */
 @media (max-width: 639px) {
   .tk-ahead {
     padding: 0 12px;
@@ -561,14 +476,10 @@ body.tk-app {
    * тот же .tk-ahead__search, и без уточнения пряталась вместе с ним
    * (кнопка лупы на телефоне открывала пустую полосу). */
   .tk-ahead > .tk-ahead__search,
-  .tk-ahead__lang,
   .tk-ahead__brand,
   #startStreamButtonHeader { display: none; }
 
   .tk-ahead__right { gap: 8px; }
-
-  /* Язык из шапки уехал в панель. */
-  .tk-aside__lang { display: flex; }
 }
 
 /* Скрипт Tailwind подгружается в рантайме и вставляет свой preflight в конец
@@ -593,8 +504,8 @@ body.tk-app {
 /* ──────────────────────────────────────────────────────────────────────────
  * Модальные окна
  *
- * Пять окон каркаса: настройки эфира, профиль, уведомления и два окна
- * звонка. Разметка — views/partials/appModals.ejs.
+ * Окна каркаса: настройки эфира, уведомления, два окна звонка и жалоба.
+ * Разметка — views/partials/appModals.ejs.
  *
  * Само окно и есть затемнение: отдельной подложки нет. Прежняя (.shodow)
  * умерла вместе со старой шапкой — её включатели ссылались на .profile__box
@@ -700,22 +611,6 @@ body.tk-app {
   border-top: 1px solid var(--tk-rule);
 }
 
-.tk-modal__foot--split {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.tk-modal__exit {
-  font-family: Oswald, sans-serif;
-  font-size: 14px;
-  color: var(--tk-accent);
-  transition: color .18s ease;
-}
-
-.tk-modal__exit:hover { color: var(--tk-paper); }
-
 /* Состояние вместо формы: «у вас уже есть активный стрим». */
 .tk-modal__state {
   padding: 26px 0;
@@ -813,7 +708,48 @@ body.tk-app {
   color: var(--tk-muted);
 }
 
-/* ── Панель внутри окна: аватар, галерея, безопасность ── */
+/* ── Страница-форма кабинета: настройки профиля, заявка заведения, студия
+ * эфира. Ссылка назад, заголовок, дальше панели. ── */
+.tk-page {
+  max-width: 760px;
+  padding: 32px 40px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tk-page__back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--tk-muted);
+  transition: color .18s ease;
+}
+
+.tk-page__back:hover { color: var(--tk-paper); }
+
+.tk-page__h1 {
+  margin: 0 0 8px;
+  font-size: 32px;
+  line-height: 1;
+  letter-spacing: -.02em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+@media (max-width: 767px) {
+  .tk-page { padding: 24px 16px 48px; }
+  .tk-page__h1 { font-size: 24px; }
+}
+
+/* ── Панель: разделы настроек профиля и заведения ── */
 .tk-panel {
   padding: 16px;
   border: 1px solid var(--tk-rule);
@@ -846,26 +782,6 @@ body.tk-app {
   gap: 10px;
 }
 
-.tk-panel__spacer { margin-left: auto; }
-
-.tk-panel__toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font-family: Oswald, sans-serif;
-  font-size: 14px;
-  color: var(--tk-beige);
-  transition: color .18s ease;
-}
-
-.tk-panel__toggle:hover { color: var(--tk-paper); }
-.tk-panel__toggle svg { flex: none; color: var(--tk-accent); }
-
 .tk-note {
   margin: 0;
   font-family: Oswald, sans-serif;
@@ -876,39 +792,6 @@ body.tk-app {
 
 .tk-note--center { text-align: center; padding: 28px 0; }
 .tk-note--bad { color: var(--tk-accent); }
-
-/* ── Аватар ── */
-.tk-avatar-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.tk-avatar-row__side {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.tk-avatar-box {
-  width: 80px;
-  height: 80px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: rgba(144, 113, 99, .25);
-  border: 1px solid var(--tk-rule);
-  font-family: Oswald, sans-serif;
-  font-size: 12px;
-  color: var(--tk-muted);
-}
-
-.tk-avatar-box img:not(.hidden) { display: block; }
-.tk-avatar-box img { width: 100%; height: 100%; object-fit: cover; }
 
 /* ── Теги фильтров: каталог эфиров и карта заведений ── */
 .tk-tags {
@@ -1341,7 +1224,6 @@ body.tk-app {
   .tk-modal__body--list { padding: 0 16px; }
   .tk-modal__foot { padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
   .tk-notice { margin: 0 -16px; padding-left: 13px; padding-right: 16px; }
-  .tk-avatar-row { flex-direction: column; }
 
   /* Звонок без видео — дозвон, аудиозвонок, «только голос»: статус и кнопки
    * одной группой посередине экрана, а не кнопки у нижнего края под пустотой. */
@@ -1401,8 +1283,7 @@ body.tk-app {
   .pip-local { bottom: calc(96px + env(safe-area-inset-bottom)); right: 12px; }
 }
 
-/* Бургер и язык: по одной из сторон они уже пальца. Увеличиваем зону нажатия, не трогая рисунок. */
+/* Бургер по одной из сторон уже пальца. Увеличиваем зону нажатия, не трогая рисунок. */
 @media (max-width: 1024px) {
   .tk-ahead__burger { width: 40px; height: 40px; }
-  .tk-ahead__lang-btn { min-height: 36px; padding: 6px 8px; }
 }

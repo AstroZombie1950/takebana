@@ -1,22 +1,19 @@
-/* Регистрация заведения. Раскладка карточки и полей общая со входом
- * (auth.css), здесь только то, чего на входе нет: пары полей и часы работы.
+/* Заявка на заведение — /company-register, страница кабинета. Каркас
+ * (.tk-page) и панели — app.css, здесь пары полей и часы работы.
  */
 
-/* Карточка шире, чем на входе: тут десять полей, а не два. */
-.tk-company {
-  max-width: 560px;
+.tk-company__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
+
+.tk-company__submit { align-self: flex-start; }
 
 .tk-company__pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
-}
-
-.tk-company__rule {
-  height: 1px;
-  background: var(--tk-rule);
-  margin: 10px 0 4px;
 }
 
 /* Строка часов: подпись слева, «с» и «до» справа.
@@ -54,7 +51,7 @@
 }
 
 .tk-company__done {
-  margin: 32px 0 0;
+  margin: 0;
   padding: 22px 24px;
   border: 1px solid var(--tk-green);
   font-family: Oswald, sans-serif;
@@ -83,4 +80,6 @@
   .tk-company__time .tk-field {
     width: 100%;
   }
+
+  .tk-company__submit { align-self: stretch; }
 }

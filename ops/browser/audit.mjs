@@ -46,7 +46,8 @@ const PRIVATE = [
   ['каталог с фильтрами', '/streaming/business?sub=horeca&city=belgrade&sort=new'],
   ['личная главная', '/main'],
   ['переписка', '/chatsPage'],
-  ['журнал звонков', '/calls'],
+  ['журнал звонков', '/chatsPage?tab=calls'],
+  ['настройки профиля', '/settings'],
 ];
 
 const findings = [];

@@ -1,66 +1,49 @@
-<%# Шапка эфира — общая у пульта ведущего и страницы зрителя: название, автор,
-    время в эфире, зрители. Под именем ведущему — метка, зрителю — подписка
-    и жалоба. Время и счётчик ведёт /tk-stream.js. %>
-<div class="tk-live__info stream-info">
-  <h1 class="tk-live__title stream-title"><%= stream.title %></h1>
-
-  <div class="tk-live__meta stream-meta">
-    <div class="tk-live__author author-section">
-      <a href="/userPage/<%= user._id %>" class="tk-live__avatar avatar"<% if (!user.avatarStyle.url) { %> style="background: <%= user.avatarStyle.gradient %>;"<% } %>>
-        <% if (user.avatarStyle.url) { %>
-          <img src="<%= user.avatarStyle.url %>" alt="<%= user.displayName %>">
-        <% } else { %>
-          <%= user.avatarStyle.initial %>
-        <% } %>
-      </a>
-
-      <div class="author-info">
-        <a href="/userPage/<%= user._id %>" class="tk-live__author-name author-name"><%= user.displayName %></a>
-
-        <% if (isStreamer) { %>
-          <span class="tk-live__role streamer-badge" data-i18n="stream.host"><%- t('stream.host') %></span>
-        <% } else { %>
-          <div class="tk-live__author-acts subscribe-section">
-            <% if (isSubscribed) { %>
-              <button type="button" class="tk-btn tk-btn--outline tk-btn--xs js-unsubscribe" data-i18n="stream.unsubscribe"><%- t('stream.unsubscribe') %></button>
-            <% } else { %>
-              <button type="button" class="tk-btn tk-btn--primary tk-btn--xs js-subscribe" data-i18n="stream.subscribe"><%- t('stream.subscribe') %></button>
-            <% } %>
-
-            <%# Жалоба на эфир: окно живёт в общем партиале шапки. %>
-            <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs"
-                    data-report="stream"
-                    data-report-id="<%= stream._id %>"
-                    data-report-name="<%= stream.title %>" data-i18n="common.report"><%- t('common.report') %></button>
-          </div>
-        <% } %>
-      </div>
-    </div>
-
-    <div class="tk-live__stats stats-section">
-      <span class="tk-live__stat live-indicator">
-        <i class="stream-indicator"></i>
-        <span class="live-text" data-i18n="stream.onlineLabel"><%- t('stream.onlineLabel') %></span>
-        <span id="streamDuration" class="duration-text">00:00:00</span>
-      </span>
-
-      <span class="tk-live__stat viewer-count">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>
-        <span class="online__pepole-count">
-          <span class="viewers-number"><%= stream.viewers %></span>
-          <%# Форма слова считается здесь, чтобы первый показ был правильным
-              без скрипта; дальше её обновляет public/tk-stream.js, а ключ
-              нужен, чтобы слово перевелось при смене языка. %>
-          <% const _v = Number(stream.viewers) || 0, _d10 = _v % 10, _d100 = _v % 100;
-             const _vk = (_d10 === 1 && _d100 !== 11) ? 'stream.viewerOne'
-                       : (_d10 >= 2 && _d10 <= 4 && (_d100 < 12 || _d100 > 14)) ? 'stream.viewerFew' : 'stream.viewerMany'; %>
-          <span class="viewers-text" data-i18n="<%= _vk %>"><%- t(_vk) %></span>
-        </span>
-      </span>
-    </div>
+<%# Шапка эфира — общая у пульта ведущего и страницы зрителя: название,
+    автор, описание. Зрителю — подписка и жалоба. На телефоне видно только
+    название: остальное раскрывается кнопкой «▾», чтобы чат получил экран. %>
+<div class="tk-live__info" id="streamInfo">
+  <div class="tk-live__title-row">
+    <%# Шапки сайта на телефоне у эфира нет — назад ведёт эта стрелка. %>
+    <a href="/streaming" class="tk-live__back" aria-label="<%= ta('stream.back') %>" data-i18n-aria="stream.back">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+    </a>
+    <h1 class="tk-live__title"><%= stream.title %></h1>
+    <button type="button" class="tk-live__more" id="infoToggle" aria-expanded="false" aria-controls="infoMore" aria-label="<%= ta('stream.details') %>" data-i18n-aria="stream.details">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+    </button>
   </div>
 
-  <% if (stream.description) { %>
-    <p class="tk-live__desc stream-description"><%= stream.description %></p>
-  <% } %>
+  <div class="tk-live__more-body" id="infoMore">
+    <div class="tk-live__author">
+      <a href="/userPage/<%= user._id %>" class="tk-live__avatar"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
+        <% if (user.avatarStyle.url) { %><img src="<%= user.avatarStyle.url %>" alt=""><% } else { %><%= user.avatarStyle.initial %><% } %>
+      </a>
+
+      <div class="tk-live__author-body">
+        <a href="/userPage/<%= user._id %>" class="tk-live__author-name"><%= user.displayName %></a>
+        <% if (isStreamer) { %>
+          <span class="tk-live__role streamer-badge" data-i18n="stream.host"><%- t('stream.host') %></span>
+        <% } %>
+      </div>
+
+      <% if (!isStreamer) { %>
+      <div class="tk-live__author-acts">
+        <% if (isSubscribed) { %>
+          <button type="button" class="tk-btn tk-btn--outline tk-btn--xs js-unsubscribe" data-i18n="stream.unsubscribe"><%- t('stream.unsubscribe') %></button>
+        <% } else { %>
+          <button type="button" class="tk-btn tk-btn--primary tk-btn--xs js-subscribe" data-i18n="stream.subscribe"><%- t('stream.subscribe') %></button>
+        <% } %>
+        <%# Жалоба на эфир: окно живёт в общем партиале шапки. %>
+        <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs"
+                data-report="stream"
+                data-report-id="<%= stream._id %>"
+                data-report-name="<%= stream.title %>" data-i18n="common.report"><%- t('common.report') %></button>
+      </div>
+      <% } %>
+    </div>
+
+    <% if (stream.description) { %>
+      <p class="tk-live__desc"><%= stream.description %></p>
+    <% } %>
+  </div>
 </div>

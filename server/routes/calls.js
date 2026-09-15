@@ -1,14 +1,12 @@
 // Звонки. Исходящий: маршрут только создаёт заявку и будит собеседника через
 // сокет; приём, отказ, отмена, завершение — в sockets/. Журнал звонков —
-// страница /calls, пишет его utils/callLog.js.
+// вкладка на странице переписки, пишет и читает его utils/callLog.js.
 
 const express = require('express');
 const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
-const { requireAuth, requireAuthApi, requireNotBanned } = require('../middleware/auth');
-const { commonDataMiddleware } = require('./streaming/shared');
-const Call = require('../models/Call');
+const { requireAuthApi, requireNotBanned } = require('../middleware/auth');
 const Notification = require('../models/Notification');
 const { validate } = require('../middleware/validate');
 const userView = require('../utils/userView');
@@ -67,42 +65,18 @@ router.post('/api/calls/create', requireAuthApi, requireNotBanned, validate({
   }
 });
 
-// Журнал: последние сто звонков в обе стороны. Открыли — пропущенные
-// увидены: счётчик в левой панели и уведомления о них гаснут.
-router.get('/calls', requireAuth, commonDataMiddleware, async (req, res) => {
+// Журнал — вкладка «Звонки» на странице переписки. Старый адрес страницы
+// ведёт туда же: на него могли остаться закладки.
+router.get('/calls', (req, res) => res.redirect('/chatsPage?tab=calls'));
+
+// Список для вкладки. Открыли — пропущенные увидены (utils/callLog.js).
+// unread — осталось ли непрочитанное у колокольчика: уведомления о
+// пропущенных только что погасли.
+router.get('/api/calls', requireAuthApi, async (req, res) => {
   const me = String(req.session.userId);
-  const calls = await Call.find({ $or: [{ caller: me }, { callee: me }] })
-    .sort({ startedAt: -1 })
-    .limit(100)
-    .populate('caller callee', 'login email avatar')
-    .lean();
-
-  await Promise.all([
-    Call.updateMany({ callee: me, seen: false }, { $set: { seen: true } }),
-    Notification.updateMany({ recipient: me, type: 'call', isRead: false }, { $set: { isRead: true } }),
-  ]);
-
-  const rows = calls
-    .filter((c) => c.caller && c.callee) // собеседник мог удалить аккаунт
-    .map((c) => {
-      const outgoing = String(c.caller._id) === me;
-      const other = outgoing ? c.callee : c.caller;
-      const displayName = userView.displayName(other);
-      const seconds = c.answeredAt && c.endedAt ? Math.round((c.endedAt - c.answeredAt) / 1000) : 0;
-      return {
-        peer: { id: String(other._id), displayName, avatarStyle: userView.avatarStyle(other, displayName) },
-        type: c.type,
-        outgoing,
-        status: c.status,
-        missed: !outgoing && (c.status === 'missed' || c.status === 'canceled'),
-        startedAt: c.startedAt,
-        duration: seconds ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : '',
-      };
-    });
-
-  // Пропущенные просмотрены — счётчик на этой же странице уже не нужен.
-  res.locals.missedCalls = 0;
-  res.render('calls', { calls: rows });
+  const calls = await callLog.journal(me);
+  const unread = await Notification.countDocuments({ recipient: me, isRead: false });
+  res.json({ calls, unread });
 });
 
 module.exports = router;

@@ -80,8 +80,9 @@ router.get('/register', (req, res) => {
   }
 });
 
-router.get('/company-register', (req, res) => {
-  res.render('newCompany.ejs', { catalog });
+// Заявка на заведение — страница кабинета: без входа её всё равно не отправить.
+router.get('/company-register', checkLoggedIn, commonDataMiddleware, (req, res) => {
+  res.render('newCompany', { catalog });
 });
 
 

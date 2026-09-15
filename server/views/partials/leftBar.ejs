@@ -1,8 +1,9 @@
 <%
   // Левая панель кабинета — единственное меню: на десктопе стоит слева всегда,
   // ниже 1024 выезжает по бургеру из шапки. Сверху профиль и личные ссылки,
-  // затем разделы каталога и подписки, внизу язык (на телефоне его нет
-  // в шапке), документы и выход. Поведение — tk-app.js.
+  // затем разделы каталога, подписки и запуск эфира, внизу документы и выход.
+  // Настройки профиля и язык — на странице /settings, звонки — вкладкой
+  // в сообщениях. Поведение — tk-app.js.
   //
   // Активный раздел каталога: страницу рендерит catalog.js и передаёт category.
   // Активная личная ссылка — по адресу страницы (commonDataMiddleware).
@@ -16,8 +17,7 @@
   var myPage = '/userPage/' + currentUser._id;
   var links = [
     { href: myPage,       i18n: 'app.myProfile', icon: '<circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path>' },
-    { href: '/chatsPage', i18n: 'app.messages',  icon: '<path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path>', badge: 'messages' },
-    { href: '/calls',     i18n: 'side.calls',    icon: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2Z"></path>', badge: 'calls' },
+    { href: '/chatsPage', i18n: 'app.messages',  icon: '<path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path>', badge: true },
     { href: '/main',      i18n: 'app.venues',    icon: '<path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle>' }
   ];
   var online = (subscriptions || []).filter(function (x) { return x.status === 'online'; }).length;
@@ -36,16 +36,15 @@
     </span>
   </a>
 
-  <button type="button" class="tk-aside__item" data-open-profile>
-    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg>
-    <span data-i18n="side.settings"><%- t('side.settings') %></span>
-  </button>
-
+  <%# Настройки открываются с «Моей страницы» и подсвечивают её, заявка
+      заведения — «Карту». Счётчик у «Сообщений» — пропущенные звонки:
+      звонки — вкладка переписки. %>
+  <% var parentOf = { '/settings': myPage, '/company-register': '/main' }; %>
   <% links.forEach(function (item) { %>
-  <a href="<%= item.href %>" class="tk-aside__item<%= here === item.href ? ' tk-aside__item--on' : '' %>">
+  <a href="<%= item.href %>" class="tk-aside__item<%= (parentOf[here] || here) === item.href ? ' tk-aside__item--on' : '' %>">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><%- item.icon %></svg>
     <span data-i18n="<%= item.i18n %>"><%- t(item.i18n) %></span>
-    <% if (item.badge === 'calls') { %><span class="tk-aside__badge<%= missed ? '' : ' hidden' %>" id="missedCallsBadge"><%= missed %></span><% } %>
+    <% if (item.badge) { %><span class="tk-aside__badge<%= missed ? '' : ' hidden' %>" data-missed-calls><%= missed %></span><% } %>
   </a>
   <% }); %>
 
@@ -99,17 +98,10 @@
   </div>
 
   <div class="tk-aside__cta">
-    <p class="tk-aside__cta-title" data-i18n="side.ctaTitle"><%- t('side.ctaTitle') %></p>
-    <p class="tk-aside__sub-state" style="margin: 0 0 14px;" data-i18n="side.ctaHint"><%- t('side.ctaHint') %></p>
-    <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-btn--block" data-open-stream data-i18n="side.ctaButton"><%- t('side.ctaButton') %></button>
+    <a href="/studio" class="tk-btn tk-btn--ghost tk-btn--sm tk-btn--block" data-i18n="side.ctaButton"><%- t('side.ctaButton') %></a>
   </div>
 
   <div class="tk-aside__foot">
-    <div class="tk-aside__lang">
-      <button type="button" data-lang="ru" data-i18n="app.langRu"><%- t('app.langRu') %></button>
-      <button type="button" data-lang="en" data-i18n="app.langEn"><%- t('app.langEn') %></button>
-    </div>
-
     <nav class="tk-aside__docs" aria-label="<%= ta('side.docs') %>" data-i18n-aria="side.docs">
       <a href="/terms_of_service" data-i18n="app.rules"><%- t('app.rules') %></a>
       <a href="/user_agreement" data-i18n="app.agreement"><%- t('app.agreement') %></a>

@@ -1,24 +1,49 @@
 <%#
-  Пульт ведущего: эфир с камеры (/stream/:id) или с OBS (/stream-obs/:id) —
-  две страницы одного шаблона, их различает obsOnly. Общее со страницей
-  зрителя — шапка эфира, чат, счётчик и таймер — в partials/streamInfo,
-  partials/streamChat и /tk-stream.js.
+  Эфир глазами ведущего — две фазы одного шаблона.
+
+  Студия (/studio, и черновик веб-эфира на /stream/:id): настройки эфира,
+  источник — браузер или OBS, камера с предпросмотром, «Выйти в эфир».
+  Раньше настройки были окном в шапке, а источник и камера — на отдельной
+  странице пульта. Поведение — /tk-studio.js.
+
+  Пульт (/stream/:id): картинка, кнопки эфира, чат — и больше ничего:
+  настройки после выхода в эфир не нужны. Поведение — /tk-console.js.
+  Общее со зрителем — метки, шапка эфира, чат, полный экран — в partials
+  и /tk-stream.js.
+%>
+<%
+  var s = stream;
+  var source = s ? (s.streamType === 'obs-stream' ? 'obs' : 'web') : (defaults.source || 'web');
+  // Веб-черновик — ещё студия; после «Выйти в эфир» страница приходит с ?go=1
+  // и сразу пультом, который подключается сам.
+  var phase = s && (s.firstLiveAt || s.isActive || source === 'obs' || autostart) ? 'console' : 'setup';
+  var state = s && s.isActive ? 'live' : source === 'obs' ? 'wait' : 'paused';
 %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { title: stream.title + ' — Takebana' }) %>
+<% if (phase === 'setup') { %>
+<%- include('partials/tkHead', { titleKey: 'page.studio.title' }) %>
+<% } else { %>
+<%- include('partials/tkHead', { title: s.title + ' — Takebana' }) %>
+<% } %>
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="/css/stream.css">
 </head>
 
-<body class="tk-app"
-      data-obs-only="<%= obsOnly ? '1' : '0' %>"
-      data-stream-id="<%= stream._id %>"
-      data-stream-key="<%= streamKey %>"
-      data-user-id="<%= currentUser._id %>"
-      data-started-at="<%= stream.isActive && stream.startedAt ? new Date(stream.startedAt).toISOString() : '' %>">
+<body class="tk-app<%= phase === 'console' ? ' tk-app--stage' : '' %>"
+      data-phase="<%= phase %>"
+      data-source="<%= source %>"
+      <% if (s) { %>
+      data-stream-id="<%= s._id %>"
+      data-stream-key="<%= s.streamKey %>"
+      data-started-at="<%= s.isActive && s.startedAt ? new Date(s.startedAt).toISOString() : '' %>"
+      data-first-live="<%= s.firstLiveAt ? '1' : '' %>"
+      data-autostart="<%= autostart ? '1' : '' %>"
+      <% } %>
+      data-recording="<%= recordingEnabled ? '1' : '' %>"
+      data-user-id="<%= currentUser._id %>">
 
 <%- include('partials/header') %>
 
@@ -26,381 +51,176 @@
   <%- include('partials/leftBar') %>
 
   <main class="tk-app-main">
-    <div class="tk-live">
+  <%# ── Подключение OBS: в студии и в пульте OBS-эфира ── %>
+  <% var obsSteps = function () { %>
+    <ol class="tk-live__steps">
+      <li><span data-i18n="stream.obs.step1"><%- t('stream.obs.step1') %></span> <a href="https://obsproject.com/download" target="_blank" rel="noopener" data-i18n="stream.obs.download"><%- t('stream.obs.download') %></a></li>
+      <li data-i18n="stream.obs.step3"><%- t('stream.obs.step3') %></li>
+      <li>
+        <span data-i18n="stream.obs.step4"><%- t('stream.obs.step4') %></span>
+        <code class="tk-live__key"><%= rtmpUrl %></code>
+      </li>
+      <li>
+        <span data-i18n="stream.obs.step5"><%- t('stream.obs.step5') %></span>
+        <code class="tk-live__key"><%= obsStreamKey %></code>
+        <% if (obsKeyExpiresAt) { %>
+          <span class="tk-live__note"><span data-i18n="stream.keyValidUntil"><%- t('stream.keyValidUntil') %></span> <%= date(obsKeyExpiresAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %><span data-i18n="stream.keyRenew"><%- t('stream.keyRenew') %></span></span>
+        <% } %>
+      </li>
+    </ol>
+  <% }; %>
 
-      <!-- Режим трансляции -->
-      <section class="tk-live__modes">
-        <div class="tk-live__modes-top">
-          <span class="tk-kicker" data-i18n="stream.mode"><%- t('stream.mode') %></span>
-          <span class="tk-live__id"><span data-i18n="stream.modeLabel"><%- t('stream.modeLabel') %></span> <code><%= stream._id %></code></span>
+  <% if (phase === 'setup') { %>
+    <div class="tk-studio">
+      <section class="tk-studio__screen">
+        <div class="tk-live__player" data-for="web"<% if (source !== 'web') { %> hidden<% } %>>
+          <video id="previewVideo" class="video-fit-cover" autoplay muted playsinline hidden></video>
+          <div class="tk-live__hint" id="previewHint">
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg>
+            <p data-i18n="studio.preview"><%- t('studio.preview') %></p>
+          </div>
         </div>
 
-        <%# Режим — это страница: вторая кнопка ведёт на пульт другого режима. %>
-        <div class="tk-seg">
-          <button type="button" class="tk-seg__btn web_stream<%= obsOnly ? '' : ' is-on' %>">
-            <span data-i18n="stream.modeWeb"><%- t('stream.modeWeb') %></span>
-          </button>
-          <button type="button" class="tk-seg__btn obs_stream<%= obsOnly ? ' is-on' : '' %>">
-            <span data-i18n="stream.modeObs"><%- t('stream.modeObs') %></span>
-          </button>
+        <div class="tk-studio__panel" data-for="web"<% if (source !== 'web') { %> hidden<% } %>>
+          <label class="tk-form__label" for="cameraSelect" data-i18n="studio.camera"><%- t('studio.camera') %></label>
+          <select id="cameraSelect" class="tk-field tk-select"></select>
+          <p class="tk-form__note" data-i18n="studio.webNote"><%- t('studio.webNote') %></p>
         </div>
 
-        <p class="tk-live__warn">
-          <b data-i18n="stream.important"><%- t('stream.important') %></b>
-          <span data-i18n="stream.importantText"><%- t('stream.importantText') %></span>
-        </p>
+        <div class="tk-studio__panel tk-studio__panel--obs" data-for="obs"<% if (source !== 'obs') { %> hidden<% } %>>
+          <% obsSteps(); %>
+          <p class="tk-form__note" data-i18n="studio.obsNote"><%- t('studio.obsNote') %></p>
+        </div>
       </section>
 
-      <div class="tk-live__grid">
+      <form class="tk-studio__form tk-form" id="studioForm" novalidate>
+        <h1 class="tk-page__h1" data-i18n="studio.h1"><%- t('studio.h1') %></h1>
 
-        <!-- Плеер и управление -->
+        <fieldset class="tk-seg">
+          <legend class="tk-form__label" data-i18n="studio.source"><%- t('studio.source') %></legend>
+          <label class="tk-seg__btn"><input type="radio" name="source" value="web"<%= source === 'web' ? ' checked' : '' %>><span data-i18n="studio.sourceWeb"><%- t('studio.sourceWeb') %></span></label>
+          <label class="tk-seg__btn"><input type="radio" name="source" value="obs"<%= source === 'obs' ? ' checked' : '' %>><span>OBS</span></label>
+        </fieldset>
+
+        <div class="tk-form__row">
+          <label class="tk-form__label" for="streamTitle" data-i18n="studio.name"><%- t('studio.name') %></label>
+          <input class="tk-field" type="text" id="streamTitle" name="title" maxlength="200" value="<%= defaults.title || '' %>" placeholder="<%= ta('studio.namePh') %>" data-i18n-placeholder="studio.namePh">
+        </div>
+
+        <div class="tk-studio__pair">
+          <div class="tk-form__row">
+            <label class="tk-form__label" for="streamCategory" data-i18n="studio.category"><%- t('studio.category') %></label>
+            <select id="streamCategory" name="category" class="tk-field tk-select">
+              <option value="" data-i18n="studio.categoryPh"><%- t('studio.categoryPh') %></option>
+              <% Object.entries(catalog.CATEGORIES).forEach(function ([code, cat]) { %>
+              <option value="<%= code %>" data-i18n="<%= cat.i18n %>"<%= defaults.category === code ? ' selected' : '' %>><%= ta(cat.i18n, cat.name) %></option>
+              <% }); %>
+            </select>
+          </div>
+
+          <%# Подкатегории — из config/catalog.js, как и теги каталога. %>
+          <div class="tk-form__row">
+            <label class="tk-form__label" for="streamSubcategory" data-i18n="studio.subcategory"><%- t('studio.subcategory') %></label>
+            <select id="streamSubcategory" name="subcategory" class="tk-field tk-select" data-subs="<%= catalog.SUBS_JSON %>" data-value="<%= defaults.subcategory || '' %>" disabled>
+              <option value="" data-i18n="studio.subcategoryPh"><%- t('studio.subcategoryPh') %></option>
+            </select>
+          </div>
+        </div>
+
+        <div class="tk-form__row">
+          <label class="tk-form__label" for="streamCity"><span data-i18n="studio.city"><%- t('studio.city') %></span> <span class="tk-form__hint" data-i18n="common.optional"><%- t('common.optional') %></span></label>
+          <select id="streamCity" name="city" class="tk-field tk-select">
+            <option value="" data-i18n="common.notSet"><%- t('common.notSet') %></option>
+            <% catalog.CITIES.forEach(function (city) { %>
+            <option value="<%= city.code %>" data-i18n="<%= city.i18n %>"<%= defaults.city === city.code ? ' selected' : '' %>><%= ta(city.i18n, city.name) %></option>
+            <% }); %>
+          </select>
+        </div>
+
+        <div class="tk-form__row">
+          <label class="tk-form__label" for="streamDescription"><span data-i18n="studio.description"><%- t('studio.description') %></span> <span class="tk-form__hint" data-i18n="common.optional"><%- t('common.optional') %></span></label>
+          <textarea id="streamDescription" name="description" class="tk-field" rows="3" maxlength="5000" placeholder="<%= ta('studio.descriptionPh') %>" data-i18n-placeholder="studio.descriptionPh"><%= defaults.description || '' %></textarea>
+        </div>
+
+        <div class="tk-form__row">
+          <label class="tk-form__toggle">
+            <input type="checkbox" name="isAdult"<%= defaults.isAdult ? ' checked' : '' %>>
+            <span data-i18n="studio.adult"><%- t('studio.adult') %></span>
+          </label>
+          <p class="tk-form__note" data-i18n="studio.adultNote"><%- t('studio.adultNote') %></p>
+        </div>
+
+        <button type="submit" class="tk-btn tk-btn--primary tk-studio__go" id="studioGo" data-i18n="<%= source === 'obs' ? 'studio.goObs' : 'studio.go' %>"><%- t(source === 'obs' ? 'studio.goObs' : 'studio.go') %></button>
+      </form>
+    </div>
+
+    <script src="/tk-studio.js"></script>
+
+  <% } else { %>
+    <div class="tk-live">
+      <div class="tk-live__grid" id="stage">
         <section class="tk-live__col">
-          <div class="tk-live__player video-player-area" id="playerContainer">
-            <% if (obsOnly) { %>
-              <%# Предпросмотр — тот же HLS, что у зрителя; видео показывается с первым кадром. %>
-              <video id="video" class="video-fit-cover tk-live__video--obs" autoplay muted playsinline style="display: none;"></video>
-              <div class="tk-live__hint" id="obsPreviewHint">
-                <p class="tk-live__hint-title" data-i18n="stream.obsPreview"><%- t('stream.obsPreview') %></p>
-                <p data-i18n="stream.obsPreviewHint"><%- t('stream.obsPreviewHint') %></p>
-              </div>
+          <div class="tk-live__player" id="player">
+            <% if (source === 'obs') { %>
+              <%# Предпросмотр — тот же HLS, что у зрителя; видео — с первым кадром. %>
+              <video id="video" class="video-fit-contain" autoplay muted playsinline hidden></video>
             <% } else { %>
-              <%# Картинку своей камеры Daily отдаёт сюда после выхода в эфир. %>
-              <video id="localVideo" class="video-fit-cover" autoplay muted playsinline style="display: none;"></video>
-              <div class="tk-live__hint" id="videoPlaceholder">
-                <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M9 7.5l8 4.5-8 4.5V7.5Z"></path><rect x="3" y="4" width="18" height="16" rx="1"></rect></svg>
-                <p><span data-i18n="stream.pressHint1"><%- t('stream.pressHint1') %></span> <b data-i18n="stream.pressHint2"><%- t('stream.pressHint2') %></b> <span data-i18n="stream.pressHint3"><%- t('stream.pressHint3') %></span></p>
-              </div>
+              <video id="localVideo" class="video-fit-contain" autoplay muted playsinline hidden></video>
             <% } %>
-
-            <div class="tk-live__badges">
-              <span class="tk-live__badge stream-paused-message<%= stream.isActive ? ' hidden' : '' %>" data-i18n="stream.hintPaused"><%- t('stream.hintPaused') %></span>
-              <span class="tk-live__badge tk-live__badge--live stream-active-message<%= stream.isActive ? '' : ' hidden' %>">
-                <i class="stream-indicator"></i><span data-i18n="stream.hintLive"><%- t('stream.hintLive') %></span>
-              </span>
+            <div class="tk-live__hint" id="playerHint">
+              <% var hintKey = source === 'obs' ? 'stream.obsWaitHint' : autostart ? 'studio.connecting' : 'stream.pausedHint'; %>
+              <p data-i18n="<%= hintKey %>"><%- t(hintKey) %></p>
             </div>
 
-            <button type="button" class="tk-live__fs" id="streamerFsButton" title="<%= ta('stream.fullscreen') %>" aria-label="<%= ta('stream.fullscreen') %>" data-i18n-title="stream.fullscreen" data-i18n-aria="stream.fullscreen">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M4.5 15v4.5H9M15 19.5h4.5V15"></path></svg>
+            <%- include('partials/streamBadges', { state: state }) %>
+
+            <button type="button" class="tk-live__fs" data-fullscreen aria-pressed="false" aria-label="<%= ta('stream.fullscreen') %>" data-i18n-aria="stream.fullscreen" title="<%= ta('stream.fullscreen') %>" data-i18n-title="stream.fullscreen">
+              <svg class="tk-live__fs-on" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M4.5 15v4.5H9M15 19.5h4.5V15"></path></svg>
+              <svg class="tk-live__fs-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 4.5V9H4.5M19.5 9H15V4.5M9 19.5V15H4.5M15 19.5V15h4.5"></path></svg>
             </button>
           </div>
 
-          <%- include('partials/streamInfo', { isStreamer: true }) %>
-
-          <!-- Управление -->
-          <div class="tk-live__controls">
-            <% if (obsOnly) { %>
-              <div class="obs_tab">
-                <p class="tk-live__lead">
-                  <span data-i18n="stream.obs.step1"><%- t('stream.obs.step1') %></span>
-                  <a href="https://obsproject.com/ru/download" target="_blank" rel="noopener" data-i18n="stream.obs.download"><%- t('stream.obs.download') %></a>
-                </p>
-
-                <ol class="tk-live__steps">
-                  <li data-i18n="stream.obs.step2"><%- t('stream.obs.step2') %></li>
-                  <li data-i18n="stream.obs.step3"><%- t('stream.obs.step3') %></li>
-                  <li>
-                    <span data-i18n="stream.obs.step4"><%- t('stream.obs.step4') %></span>
-                    <code class="tk-live__key"><%= rtmpUrl %></code>
-                  </li>
-                  <li>
-                    <span data-i18n="stream.obs.step5"><%- t('stream.obs.step5') %></span>
-                    <code class="tk-live__key"><%= obsStreamKey %></code>
-                    <% if (obsKeyExpiresAt) { %>
-                      <span class="tk-live__note"><span data-i18n="stream.keyValidUntil"><%- t('stream.keyValidUntil') %></span> <%= date(obsKeyExpiresAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %><span data-i18n="stream.keyRenew"><%- t('stream.keyRenew') %></span></span>
-                    <% } %>
-                  </li>
-                  <li data-i18n="stream.obs.step6"><%- t('stream.obs.step6') %></li>
-                </ol>
-              </div>
+          <%# Кнопки эфира. Веб: микрофон, камера, пауза или «продолжить»,
+              завершить. OBS: подключение и завершить — паузу ставят в программе. %>
+          <div class="tk-live__bar" id="hostBar">
+            <% if (source === 'web') { %>
+              <button type="button" class="tk-live__tool" id="micBtn" aria-pressed="false" aria-label="<%= ta('stream.micOff') %>" data-i18n-aria="stream.micOff" title="<%= ta('stream.micOff') %>" data-i18n-title="stream.micOff" disabled>
+                <svg class="tk-live__mic-on" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0014 0M12 18v3"></path></svg>
+                <svg class="tk-live__mic-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M15 9.5V6a3 3 0 00-6 0v5a3 3 0 004.6 2.5M5 11a7 7 0 0011.3 5.5M19 11a7 7 0 01-.5 2.5M12 18v3M4 4l16 16"></path></svg>
+              </button>
+              <button type="button" class="tk-live__tool" id="cameraBtn" aria-label="<%= ta('stream.switchCamera') %>" data-i18n-aria="stream.switchCamera" title="<%= ta('stream.switchCamera') %>" data-i18n-title="stream.switchCamera" hidden>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M4 7h3l2-3h6l2 3h3v13H4V7Z"></path><path d="M9 13a3 3 0 015-2.2M15 13a3 3 0 01-5 2.2M14 9v2h-2M10 17v-2h2"></path></svg>
+              </button>
+              <select id="cameraSelect" hidden></select>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="pauseBtn"<% if (!s.isActive) { %> hidden<% } %> data-i18n="stream.pause"><%- t('stream.pause') %></button>
+              <% var goKey = s.firstLiveAt ? 'stream.resume' : 'studio.go'; %>
+              <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="startBtn"<% if (s.isActive) { %> hidden<% } %> data-i18n="<%= goKey %>"><%- t(goKey) %></button>
             <% } else { %>
-              <div class="web_tab">
-                <p class="tk-live__lead" data-i18n="stream.hintWeb"><%- t('stream.hintWeb') %></p>
-                <select id="cameraSelect" class="tk-field tk-select"></select>
-
-                <div class="tk-live__actions">
-                  <button type="button" class="tk-btn tk-btn--outline tk-btn--sm btn pause_stream<%= stream.isActive ? '' : ' hidden' %>" data-i18n="stream.pause"><%- t('stream.pause') %></button>
-                  <button type="button" class="tk-btn tk-btn--primary tk-btn--sm btn start_stream<%= stream.isActive ? ' hidden' : '' %>" id="startStream" data-i18n="stream.start"><%- t('stream.start') %></button>
-                </div>
-              </div>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="obsToggle" aria-expanded="<%= s.firstLiveAt ? 'false' : 'true' %>" aria-controls="obsPanel" data-i18n="stream.obsKey"><%- t('stream.obsKey') %></button>
             <% } %>
-
-            <div class="tk-live__danger">
-              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-btn--block btn stop_stream" data-i18n="stream.endFully"><%- t('stream.endFully') %></button>
-            </div>
+            <button type="button" class="tk-btn tk-btn--danger tk-btn--sm tk-live__end" id="endBtn" data-i18n="stream.end"><%- t('stream.end') %></button>
           </div>
+
+          <% if (source === 'obs') { %>
+          <div class="tk-live__obs" id="obsPanel"<% if (s.firstLiveAt) { %> hidden<% } %>>
+            <% obsSteps(); %>
+          </div>
+          <% } %>
+
+          <%- include('partials/streamInfo', { stream: s, user: user, isStreamer: true }) %>
         </section>
 
         <%- include('partials/streamChat') %>
       </div>
     </div>
+
+    <%# socket.io и tk-daily.js грузит шапка. Плеер HLS нужен только предпросмотру OBS. %>
+    <% if (source === 'obs') { %><script src="/tk-hls.js"></script><% } %>
+    <script src="/tk-stream.js"></script>
+    <script src="/tk-console.js"></script>
+  <% } %>
   </main>
 </div>
 
-<%# socket.io и tk-daily.js грузит шапка. Плеер HLS нужен только предпросмотру OBS. %>
-<% if (obsOnly) { %>
-<script src="/tk-hls.js"></script>
-<% } %>
-<script src="/tk-stream.js"></script>
-<script>
-(function () {
-  const data = document.body.dataset;
-  const streamId = data.streamId;
-  const streamKey = data.streamKey;
-  const OBS = data.obsOnly === '1';
-
-  const post = (url, body) => fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  }).then(async (r) => {
-    // Текст сервера — на языке интерфейса: «сервис видео не запустил
-    // трансляцию» ведущему понятнее, чем HTTP 502.
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || 'HTTP ' + r.status);
-    return r;
-  });
-
-  // Пульт открыт — сообщаем серверу, какой: веб или OBS. Сам GET страницы
-  // в базу не пишет: его делают префетч браузера и предпросмотр ссылок.
-  post(`/stream/${streamId}/enter`, { mode: OBS ? 'obs' : 'web' })
-    .catch((e) => console.error('[stream] вход на пульт не отмечен:', e));
-
-  // Пульс ведущего: пока пульт открыт, эфир не считается брошенным —
-  // jobs/streamCleanup.js смотрит на updatedAt. Таймеры фоновой вкладки
-  // браузер душит, поэтому пульс уходит и при каждой смене видимости.
-  let lastBeat = 0;
-  function beat() {
-    if (Date.now() - lastBeat < 3000) return;
-    lastBeat = Date.now();
-    fetch(`/stream/active/${streamId}`, { method: 'POST', keepalive: true }).catch(() => {});
-  }
-  beat();
-  setInterval(beat, 20000);
-  document.addEventListener('visibilitychange', beat);
-  window.addEventListener('pagehide', () => navigator.sendBeacon(`/stream/active/${streamId}`));
-
-  document.querySelector(OBS ? '.web_stream' : '.obs_stream').addEventListener('click', () => {
-    location.href = OBS ? `/stream/${streamId}` : `/stream-obs/${streamId}`;
-  });
-
-  const player = document.getElementById('playerContainer');
-  document.getElementById('streamerFsButton').addEventListener('click', () => {
-    TKStream.fullscreen(player, player.querySelector('video'));
-  });
-
-  const liveBadge = document.querySelector('.stream-active-message');
-  const pausedBadge = document.querySelector('.stream-paused-message');
-  function showLive(on) {
-    liveBadge.classList.toggle('hidden', !on);
-    pausedBadge.classList.toggle('hidden', on);
-  }
-
-  const stopBtn = document.querySelector('.stop_stream');
-  stopBtn.addEventListener('click', async () => {
-    const sure = await confirmDialog(
-      t('stream.endConfirm'),
-      { okText: t('app.endStreamOk') });
-    if (!sure) return;
-
-    stopBtn.disabled = true;
-    stopBtn.textContent = t('stream.ending');
-    try {
-      if (window.dailyStreamer && window.dailyStreamer.isConnected) await window.dailyStreamer.stopStream();
-      await post('/terminate-stream', { streamId });
-      location.href = '/streaming';
-    } catch (e) {
-      toast(t('stream.endFailed') + e.message, 'error');
-      stopBtn.disabled = false;
-      stopBtn.textContent = t('stream.endFully');
-    }
-  });
-
-  if (OBS) {
-    // Предпросмотр ждёт плейлист, пока OBS не начал вещать, и снова ждёт после обрыва.
-    const preview = document.getElementById('video');
-    const hint = document.getElementById('obsPreviewHint');
-    preview.addEventListener('playing', () => {
-      hint.style.display = 'none';
-      preview.style.display = 'block';
-    });
-    TKHls.play(preview, `/live/${streamKey}/index.m3u8`);
-
-    // Идёт ли OBS-эфир, решает приём RTMP (mediaServer.js) — он и присылает
-    // stream:update. Пульт перекрашивает метку и ведёт таймер только на смене
-    // состояния: тот же stream:update шлёт и отметка входа на пульт.
-    let live = !!data.startedAt;
-    TKStream.onUpdate((u) => {
-      if (typeof u.isActive !== 'boolean' || u.isActive === live) return;
-      live = u.isActive;
-      showLive(live);
-      if (live) TKStream.timer.start(u.startedAt || new Date().toISOString());
-      else TKStream.timer.stop();
-    });
-    return;
-  }
-
-  // ── Эфир с камеры через Daily ──
-  const startBtn = document.getElementById('startStream');
-  const pauseBtn = document.querySelector('.pause_stream');
-  const localVideo = document.getElementById('localVideo');
-  const placeholder = document.getElementById('videoPlaceholder');
-  const select = document.getElementById('cameraSelect');
-
-  function setLive(on) {
-    showLive(on);
-    startBtn.classList.toggle('hidden', on);
-    pauseBtn.classList.toggle('hidden', !on);
-  }
-
-  function showLocalVideo(track) {
-    TKDaily.attach(localVideo, track);
-    localVideo.style.display = track ? 'block' : 'none';
-    placeholder.style.display = track ? 'none' : '';
-  }
-
-  // Камера в списке: «device:<id>», а если браузер список не отдал (iOS) —
-  // «facing:user» или «facing:environment».
-  async function useCamera(call, value) {
-    const v = value.slice('device:'.length);
-    if (!v) return;
-    if (value.startsWith('device:')) await call.setInputDevicesAsync({ videoDeviceId: v });
-    else await call.startCamera({ facingMode: v });
-  }
-
-  async function fillCameras() {
-    let cams = [];
-    try {
-      cams = (await navigator.mediaDevices.enumerateDevices()).filter((dev) => dev.kind === 'videoinput');
-    } catch (_) {}
-    const was = select.value;
-    // Название камеры, которое даёт браузер, — данные: ключа у него нет.
-    // Наши подписи идут с ключом, чтобы пережить переключение языка.
-    const options = cams.length
-      ? cams.map((c, i) => ['device:' + c.deviceId, c.label ? null : 'stream.cameraN', { n: i + 1 }, c.label])
-      : [['facing:user', 'stream.cameraFront'], ['facing:environment', 'stream.cameraBack']];
-    select.replaceChildren(...options.map(([value, key, vars, plain]) => {
-      const option = new Option(key ? t(key, vars) : plain, value);
-      if (key) {
-        option.setAttribute('data-i18n', key);
-        if (vars) option.setAttribute('data-i18n-vars', JSON.stringify(vars));
-      }
-      return option;
-    }));
-    if (options.some(([value]) => value === was)) select.value = was;
-  }
-
-  // Разрешение спрашиваем один раз и сразу на камеру с микрофоном: без него
-  // браузер не отдаёт названий камер, а эфир без микрофона не начнётся.
-  // На OBS-пульте камера не нужна вовсе — до этого места он не доходит.
-  (async () => {
-    if (!navigator.mediaDevices) return;
-    try {
-      const media = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      media.getTracks().forEach((track) => track.stop());
-    } catch (err) {
-      toast(err.name === 'NotAllowedError'
-        ? t('stream.mediaDenied')
-        : t('stream.mediaFailed', { error: err.name }), 'error');
-    }
-    await fillCameras();
-    navigator.mediaDevices.addEventListener('devicechange', fillCameras);
-  })();
-
-  // Смена камеры посреди эфира. До эфира выбор применяет startStream.
-  select.addEventListener('change', async () => {
-    const call = window.dailyStreamer.callObject;
-    if (!call) return;
-    try {
-      await call.setLocalVideo(false);
-      await useCamera(call, select.value);
-      await call.setLocalVideo(true);
-    } catch (e) {
-      console.warn('[stream] камера не переключилась:', e);
-    }
-  });
-
-  class DailyStreamer {
-    constructor() {
-      this.session = null;
-      this.isConnected = false;
-    }
-
-    // Объект звонка Daily — через него переключается камера.
-    get callObject() { return this.session && this.session.call; }
-
-    // Сервер создаёт комнату и тем же ответом отдаёт токен вещателя. Камеру
-    // и микрофон Daily берёт сам при входе.
-    async startStream() {
-      startBtn.disabled = true;
-      tkText(startBtn, 'call.connectingShort');
-      try {
-        let first = await TKDaily.requestAccess('/api/create-room', { streamId });
-        await new Promise((resolve, reject) => {
-          this.session = TKDaily.connect({
-            send: true,
-            video: true,
-            // Повторный вход после обрыва — в ту же комнату со свежим токеном.
-            access: () => {
-              if (!first) return TKDaily.requestAccess('/api/get-token', { streamId });
-              const a = first;
-              first = null;
-              return Promise.resolve(a);
-            },
-            onTrack: (track, p, on) => {
-              if (p.local && track.kind === 'video') showLocalVideo(on ? track : null);
-            },
-            onMediaError: () => toast(t('stream.mediaDeniedObs'), 'error'),
-            onState: (state) => {
-              if (state === 'live') resolve();
-              if (state !== 'ended') return;
-              reject(new Error(t('stream.serviceDown')));
-              if (this.isConnected) {
-                toast(t('stream.serviceLost'), 'error');
-                this.stopStream();
-              }
-            },
-          });
-        });
-        await useCamera(this.callObject, select.value).catch(() => {});
-        await post('/set-active', { streamKey });
-        this.isConnected = true;
-        TKStream.timer.start(new Date().toISOString());
-        setLive(true);
-      } catch (error) {
-        if (this.session) { this.session.leave(); this.session = null; }
-        toast(t('app.errorShort', { message: error.message }), 'error');
-      } finally {
-        startBtn.disabled = false;
-        tkText(startBtn, 'stream.start');
-      }
-    }
-
-    async stopStream() {
-      const session = this.session;
-      this.session = null;
-      this.isConnected = false;
-      if (session) await session.leave();
-      TKStream.timer.stop();
-      await post('/set-inactive', { streamKey })
-        .catch((e) => console.error('[stream] эфир не снят в базе:', e));
-      // Удаление комнаты отключает и зрителей.
-      await fetch(`/api/delete-room/${streamId}`, { method: 'DELETE' }).catch(() => {});
-      setLive(false);
-      showLocalVideo(null);
-    }
-  }
-
-  window.dailyStreamer = new DailyStreamer();
-  startBtn.addEventListener('click', () => window.dailyStreamer.startStream());
-  pauseBtn.addEventListener('click', async () => {
-    pauseBtn.disabled = true;
-    try {
-      await window.dailyStreamer.stopStream();
-      toast(t('stream.paused'));
-    } finally {
-      pauseBtn.disabled = false;
-    }
-  });
-})();
-</script>
 </body>
 </html>

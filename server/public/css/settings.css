@@ -1,0 +1,78 @@
+/* Настройки профиля — /settings.
+ *
+ * Каркас страницы (.tk-page), панели, подписи, миниатюры и зона загрузки —
+ * общие, лежат в app.css. Здесь только своё.
+ */
+
+/* Поле и кнопка в одну строку; на телефоне кнопка уходит под поле. */
+.tk-set__line {
+  display: flex;
+  gap: 10px;
+}
+
+.tk-set__line .tk-field { flex: 1; min-width: 0; padding: 12px 16px; }
+.tk-set__line .tk-btn { flex: none; }
+
+/* ── Фото ── */
+.tk-set__photo {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.tk-set__ava {
+  width: 88px;
+  height: 88px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .35);
+  border: 1px solid var(--tk-rule);
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-set__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-set__side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* display у кнопок сильнее браузерного [hidden]. */
+.tk-set .tk-btn[hidden] { display: none; }
+
+.tk-set__danger { border-color: transparent; color: var(--tk-accent); }
+.tk-set__danger:hover,
+.tk-set__danger:focus-visible { background: rgba(227, 66, 52, .12); color: var(--tk-paper); }
+
+/* Тумблер языка — тот же, что в публичной шапке (tk.css). */
+.tk-set__lang { align-self: flex-start; margin-left: 0; }
+.tk-set__lang .tk-lang__btn { padding: 9px 16px; }
+
+.tk-set__pass { max-width: 420px; }
+.tk-set__pass .tk-field { padding: 12px 16px; }
+.tk-set__pass .tk-btn { align-self: flex-start; }
+
+.tk-set__exit {
+  align-self: flex-start;
+  margin-top: 8px;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  color: var(--tk-accent);
+  transition: color .18s ease;
+}
+
+.tk-set__exit:hover { color: var(--tk-paper); }
+
+@media (max-width: 767px) {
+  .tk-set__line { flex-direction: column; }
+  .tk-set__line .tk-btn { align-self: flex-start; }
+  .tk-set__photo { align-items: flex-start; }
+  .tk-set__ava { width: 72px; height: 72px; font-size: 26px; }
+}

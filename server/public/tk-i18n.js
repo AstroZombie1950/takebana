@@ -156,31 +156,24 @@
 
     document.documentElement.setAttribute('lang', current);
 
-    // Переключатели: выпадашка шапки, мобильное меню, публичная шапка.
+    // Переключатели: публичная шапка и настройки кабинета.
     var buttons = document.querySelectorAll('[data-lang]');
     for (var i = 0; i < buttons.length; i++) {
       var on = buttons[i].getAttribute('data-lang') === current;
       buttons[i].classList.toggle('tk-lang__btn--on', on);
       buttons[i].setAttribute('aria-pressed', String(on));
     }
-    var toggle = document.getElementById('languageToggle');
-    var label = toggle && toggle.querySelector('span');
-    if (label) label.textContent = current.toUpperCase();
 
     document.dispatchEvent(new CustomEvent('tk:lang', { detail: { lang: current } }));
   }
 
-  // Перехват на всплытии вниз: в шапке кабинета на этих же кнопках висят
-  // свои обработчики, и они закрывают выпадашку.
   document.addEventListener('click', function (e) {
     var btn = e.target && e.target.closest ? e.target.closest('[data-lang]') : null;
     if (!btn) return;
     var next = btn.getAttribute('data-lang');
     if (next !== 'ru' && next !== 'en') return;
     apply(next).catch(function (err) { console.error('[i18n]', err.message); });
-    var dropdown = document.getElementById('languageDropdown');
-    if (dropdown) dropdown.classList.add('hidden');
-  }, true);
+  });
 
   window.t = t;
   window.tkText = setText;

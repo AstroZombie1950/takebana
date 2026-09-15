@@ -1,0 +1,20 @@
+<%# Метки поверх картинки — у пульта и у зрителя: состояние эфира, время
+    в эфире, зрители. Время и счётчик ведёт /tk-stream.js, состояние меняет
+    скрипт страницы (TKStream.state). state: live | paused | wait. %>
+<% var badgeKey = { live: 'stream.hintLive', paused: 'stream.pausedBadge', wait: 'stream.waitObs' }[state]; %>
+<div class="tk-live__badges">
+  <span class="tk-live__badge<%= state === 'live' ? ' tk-live__badge--live' : '' %>" id="stateBadge" data-state="<%= state %>">
+    <i class="stream-indicator"></i><span data-i18n="<%= badgeKey %>"><%- t(badgeKey) %></span>
+  </span>
+  <span class="tk-live__badge tk-live__badge--time" id="streamDuration">00:00:00</span>
+  <span class="tk-live__badge viewer-count" title="<%= ta('stream.viewerMany') %>">
+    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>
+    <span class="viewers-number"><%= stream.viewers %></span>
+    <%# Форма слова считается здесь, чтобы первый показ был правильным без
+        скрипта; дальше её обновляет public/tk-stream.js. %>
+    <% var _v = Number(stream.viewers) || 0, _d10 = _v % 10, _d100 = _v % 100;
+       var _vk = (_d10 === 1 && _d100 !== 11) ? 'stream.viewerOne'
+               : (_d10 >= 2 && _d10 <= 4 && (_d100 < 12 || _d100 > 14)) ? 'stream.viewerFew' : 'stream.viewerMany'; %>
+    <span class="viewers-text" data-i18n="<%= _vk %>"><%- t(_vk) %></span>
+  </span>
+</div>

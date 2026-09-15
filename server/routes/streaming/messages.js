@@ -1,5 +1,6 @@
-// Личная переписка: список диалогов, история, отправка, пересылка, удаление,
-// статусы «доставлено» и «прочитано».
+// Личная переписка: список диалогов, история со звонками, отправка, пересылка,
+// удаление, статусы «доставлено» и «прочитано». Журнал звонков для соседней
+// вкладки — routes/calls.js.
 //
 // Новые сообщения и статусы приходят в браузер сокетом — в комнату
 // `user:<id>`, куда входит каждая вкладка вошедшего (sockets/index.js).
@@ -18,6 +19,7 @@ const Notification = require('../../models/Notification');
 const { validate } = require('../../middleware/validate');
 const { commonDataMiddleware } = require('./shared');
 const userView = require('../../utils/userView');
+const callLog = require('../../utils/callLog');
 
 const PAGE = 15;
 const { ObjectId } = mongoose.Types;
@@ -149,7 +151,8 @@ router.get('/chatsPage', commonDataMiddleware, async (req, res) => {
     })
     .sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
 
-  res.render('chatsPage', { conversations: list, timeAgo });
+  // Вкладка «Звонки» открывается и адресом: из уведомления о пропущенном.
+  res.render('chatsPage', { conversations: list, timeAgo, tab: req.query.tab === 'calls' ? 'calls' : 'messages' });
 });
 
 
@@ -175,13 +178,20 @@ router.post('/start-conversation', requireAuthApi, requireNotBanned, validate({
 });
 
 
-// История: страница по 15 от конца, offset — сколько уже загружено.
+// История: страница по 15 сообщений от конца. before — время самого старого
+// из уже загруженных; без него — последние. Прежде страница отсчитывалась
+// сдвигом offset, и новое или удалённое сообщение сдвигало её: одно
+// сообщение приходило дважды или пропадало.
+//
+// Вместе со страницей — звонки двоих за тот же отрезок: лента показывает их
+// между сообщениями. Страница неполная — дальше сообщений нет, и звонки
+// берутся до самого начала.
 router.get('/getMessages', requireAuthApi, async (req, res) => {
   const { recipientId } = req.query;
-  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+  const before = req.query.before ? new Date(req.query.before) : null;
   const me = req.session.userId;
 
-  if (typeof recipientId !== 'string' || !ObjectId.isValid(recipientId)) {
+  if (typeof recipientId !== 'string' || !ObjectId.isValid(recipientId) || (before && isNaN(before))) {
     return res.status(400).json({ message: 'Не указан ID получателя' });
   }
 
@@ -190,13 +200,19 @@ router.get('/getMessages', requireAuthApi, async (req, res) => {
     return res.status(404).json({ message: 'Диалог не найден' });
   }
 
-  const messages = await Message.find({ conversationId: conversation._id, deletedFor: { $ne: me } })
+  const messages = await Message.find({
+    conversationId: conversation._id,
+    deletedFor: { $ne: me },
+    ...(before ? { sentAt: { $lt: before } } : {}),
+  })
     .sort({ sentAt: -1 })
-    .skip(offset)
     .limit(PAGE)
     .lean();
 
-  res.json(messages.reverse().map(view));
+  const from = messages.length === PAGE ? messages[messages.length - 1].sentAt : null;
+  const calls = await callLog.between(me, recipientId, { from, to: before });
+
+  res.json({ messages: messages.reverse().map(view), calls });
 });
 
 

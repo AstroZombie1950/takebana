@@ -1,4 +1,5 @@
-// Профиль: аватар, галерея, поиск людей. Смена логина и пароля — в routes/userRoutes.js.
+// Профиль: страница настроек, аватар, галерея, поиск людей. Смена логина
+// и пароля — в routes/userRoutes.js.
 
 const express = require('express');
 const router = express.Router();
@@ -10,65 +11,64 @@ const User = require('../../models/User');
 const Subscription = require('../../models/Subscription');
 const { requireAuth } = require('../../middleware/auth');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
-const { uploadAvatar, uploadGallery } = require('./uploads');
+const { UPLOADS, uploadAvatar, uploadGallery } = require('./uploads');
+const { commonDataMiddleware } = require('./shared');
+const { PASSWORD_PROVIDER } = require('../../utils/password');
 const userView = require('../../utils/userView');
 
-// Загрузка аватарки профиля.
+// Страница настроек: имя, фото, язык, галерея, пароль. Раньше — окно поверх
+// любой страницы кабинета, и его разметка со скриптом ехали с каждой из них.
+router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
+  const user = await User.findById(req.session.userId).select('provider').lean();
+  res.render('settings', { hasPassword: !!user && (user.provider || '') === PASSWORD_PROVIDER });
+});
+
+// Файл аватара удаляем, только если он наш: у входа через Google в поле
+// лежит внешний адрес.
+function removeAvatarFile(url) {
+  const prefix = '/uploads/avatars/';
+  if (typeof url !== 'string' || !url.startsWith(prefix)) return;
+  const name = url.slice(prefix.length);
+  const file = isPlainFileName(name) && resolveWithin(path.join(UPLOADS, 'avatars'), name);
+  if (file) fs.unlink(file, () => {});
+}
+
+// Ответ после смены фото: как теперь выглядит аватар везде — фото или
+// градиент с буквой.
+const avatarOf = (user) => userView.avatarStyle(user);
+
+// Загрузка аватарки профиля. Прежнее фото с диска удаляется.
 // requireAuth стоит ПЕРЕД multer намеренно: иначе файл успевал лечь на диск
 // до проверки сессии — аноним получал 401, но место на диске уже занял.
 router.post('/profile/avatar', requireAuth, uploadAvatar.single('avatar'), async (req, res) => {
-  try {
-    console.log('Запрос на загрузку аватара:', {
-      hasSession: !!req.session,
-      userId: req.session?.userId,
-      hasFile: !!req.file,
-      fileInfo: req.file ? {
-        originalname: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size,
-        filename: req.file.filename
-      } : null
-    });
-
-    if (!req.session || !req.session.userId) {
-      console.error('Ошибка: нет сессии или userId');
-      return res.status(401).json({ success: false, message: 'Необходима авторизация' });
-    }
-    if (!req.file) {
-      console.error('Ошибка: файл не передан');
-      return res.status(400).json({ success: false, message: 'Файл не передан' });
-    }
-
-    const user = await User.findById(req.session.userId);
-    if (!user) {
-      console.error('Ошибка: пользователь не найден, userId:', req.session.userId);
-      return res.status(404).json({ success: false, message: 'Пользователь не найден' });
-    }
-
-    const publicUrl = `/uploads/avatars/${req.file.filename}`;
-    const oldAvatar = user.avatar;
-    user.avatar = publicUrl;
-    await user.save();
-
-    console.log('Аватар успешно загружен и сохранен:', {
-      filename: req.file.filename,
-      path: req.file.path,
-      url: publicUrl,
-      userId: req.session.userId,
-      oldAvatar: oldAvatar,
-      newAvatar: user.avatar
-    });
-
-    // Проверяем, что файл действительно существует
-    const filePath = path.join(__dirname, '..', 'public', 'uploads', 'avatars', req.file.filename);
-    const fileExists = fs.existsSync(filePath);
-    console.log('Файл существует на диске:', fileExists, 'по пути:', filePath);
-
-    return res.json({ success: true, url: publicUrl });
-  } catch (err) {
-    console.error('Ошибка загрузки аватара:', err);
-    return res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'Файл не передан' });
   }
+  const user = await User.findById(req.session.userId);
+  if (!user) {
+    fs.unlink(req.file.path, () => {});
+    return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+  }
+
+  const old = user.avatar;
+  user.avatar = `/uploads/avatars/${req.file.filename}`;
+  await user.save();
+  removeAvatarFile(old);
+
+  res.json({ success: true, url: user.avatar, avatar: avatarOf(user) });
+});
+
+// Удаление фото профиля: остаётся градиент с первой буквой имени.
+router.delete('/profile/avatar', requireAuth, async (req, res) => {
+  const user = await User.findById(req.session.userId);
+  if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+
+  const old = user.avatar;
+  user.avatar = null;
+  await user.save();
+  removeAvatarFile(old);
+
+  res.json({ success: true, avatar: avatarOf(user) });
 });
 
 // Загрузка фотографий в галерею (до 100 суммарно).
@@ -127,7 +127,7 @@ router.delete('/profile/gallery/:name', requireAuth, async (req, res) => {
     await user.save();
 
     // Удаляем из файловой системы — строго из папки галереи этого пользователя
-    const galleryDir = path.join(__dirname, '..', 'public', 'uploads', 'gallery', String(req.session.userId));
+    const galleryDir = path.join(UPLOADS, 'gallery', String(req.session.userId));
     const filePath = resolveWithin(galleryDir, fileName);
     if (filePath && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
@@ -183,7 +183,5 @@ router.get('/search-users', requireAuth, async (req, res) => {
   }
 });
 
-
-// Маршрут для "Terms Of Service"
 
 module.exports = router;

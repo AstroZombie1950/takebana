@@ -1,17 +1,20 @@
 // Приём файлов: обложки эфиров, аватары, галерея профиля.
 //
-// Три разных хранилища с общим фильтром типов. Пути считаются от рабочего
-// каталога процесса — так было и раньше; pm2 запускает приложение из server/
-// (ops/ecosystem.config.js), туда же смотрит и раздача public/.
+// Три разных хранилища с общим фильтром типов. Папка — от расположения
+// файла, а не от рабочего каталога: маршруты, которые удаляют файлы, считают
+// путь так же (UPLOADS), и раньше они промахивались мимо папки — удалённое
+// из галереи оставалось на диске.
 
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+const UPLOADS = path.join(__dirname, '..', '..', 'public', 'uploads');
+
 // Настройка хранилища для Multer
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'public/uploads/thumbnails'); // Папка для хранения заглавных картинок
+    cb(null, path.join(UPLOADS, 'thumbnails')); // Папка для хранения заглавных картинок
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -44,7 +47,7 @@ const upload = multer({
 const avatarStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     try {
-      const dest = path.join('public', 'uploads', 'avatars');
+      const dest = path.join(UPLOADS, 'avatars');
       if (!fs.existsSync(dest)) {
         fs.mkdirSync(dest, { recursive: true });
       }
@@ -69,7 +72,7 @@ const galleryStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     try {
       if (!req.session || !req.session.userId) return cb(new Error('Необходима авторизация'));
-      const dest = path.join('public', 'uploads', 'gallery', String(req.session.userId));
+      const dest = path.join(UPLOADS, 'gallery', String(req.session.userId));
       if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
       cb(null, dest);
     } catch (e) { cb(e); }
@@ -85,4 +88,4 @@ const uploadGallery = multer({
   fileFilter: fileFilter
 });
 
-module.exports = { upload, uploadAvatar, uploadGallery };
+module.exports = { UPLOADS, upload, uploadAvatar, uploadGallery };

@@ -40,6 +40,13 @@ const StreamSchema = new mongoose.Schema({
     type: Date,
     default: null // Время начала стрима
   },
+  // Первый выход в эфир. В отличие от startedAt не сбрасывается паузой:
+  // по нему пульт отличает черновик (настройки ещё не отправлены в эфир)
+  // от эфира на паузе, а запись знает, когда начался эфир.
+  firstLiveAt: {
+    type: Date,
+    default: null
+  },
   viewers: {
     type: Number,
     default: 0

@@ -1,5 +1,5 @@
-// Управление эфиром: запуск, остановка, переключение на OBS и обратно,
-// обложка, пауза, завершение.
+// Управление эфиром: настройки со студии, выход в эфир и пауза, обложка,
+// завершение с записью или без.
 
 const express = require('express');
 const router = express.Router();
@@ -13,9 +13,11 @@ const { requireAuth, requireOwner, requireNotBanned } = require('../../middlewar
 const { validate } = require('../../middleware/validate');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
 const { CATEGORIES, SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
-const { upload } = require('./uploads');
+const { UPLOADS, upload } = require('./uploads');
 const daily = require('../../utils/daily');
 const webLive = require('../../utils/webLive');
+const hls = require('../../utils/hls');
+const recording = require('../../utils/recording');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
 const { randomUUID: uuidv4 } = require('crypto');
 
@@ -50,13 +52,19 @@ router.post('/stream/active/:streamId', requireAuth, requireOwner(Stream, { para
 });
 
 
-// ===== Auto cleanup abandoned streams =====
-// Why: old streams (especially isActive:false) never got removed and accumulated in DB.
-// Policy:
-// - Active streams: if no activity ping updates `updatedAt` for N minutes -> delete
-// - Inactive streams: if `updatedAt` older than M days -> delete
+// Источник эфира: что пульт делает дальше. Веб — ведущий выходит в эфир
+// кнопкой, картинка идёт через Daily; OBS — эфир начинается, когда программа
+// начала слать поток на наш приём (mediaServer.js).
+const SOURCES = {
+  web: { streamType: 'daily-stream', streamProvider: 'web-stream' },
+  obs: { streamType: 'obs-stream', streamProvider: 'obs' },
+};
 
-router.post('/start-stream', requireNotBanned, validate({
+// Студия (/studio) отправляет настройки перед выходом в эфир. Черновик —
+// эфир, который ещё ни разу не выходил, — обновляется на месте: у OBS-эфира
+// его ключ уже вставлен в программу, а у веба могла не подняться камера.
+// Эфир, который уже выходил, так не переписать: сначала его завершают.
+router.post('/start-stream', requireAuth, requireNotBanned, validate({
   title: { type: 'string', required: true, min: 1, max: 200, label: 'Название' },
   // Коды из закрытых списков config/catalog.js. Любая другая строка давала
   // эфир, который каталог не показывает ни на одной вкладке и ни в одном фильтре.
@@ -67,76 +75,45 @@ router.post('/start-stream', requireNotBanned, validate({
   // Метку 18+ ставит сам вещатель при создании эфира. Снять её может только
   // модерация — иначе смысл гейта теряется на первом же нажатии.
   isAdult: { type: 'bool', required: false, default: false, label: 'Контент 18+' },
+  source: { type: 'string', required: true, values: Object.keys(SOURCES), label: 'Источник' },
 }), async (req, res) => {
   const userId = req.session.userId;
-  if (!userId) {
-    return res.status(401).json({ message: 'Пользователь не авторизован' });
-  }
-
-  const { title, category, subcategory, city, description, isAdult } = req.body;
+  const { title, category, subcategory, city, description, isAdult, source } = req.body;
 
   if (SUB_CATEGORY[subcategory] !== category) {
     return res.status(400).json({ message: 'Подкатегория не относится к выбранной категории' });
   }
 
-  try {
-    // Проверка на наличие активного стрима - улучшенная логика
-    // Прежнее условие { dailyRoom: { $exists: true, $ne: null } } совпадало
-    // с любым эфиром: схема сама заводит dailyRoom = { name: null, url: null }.
-    const existingStream = await Stream.findOne({
-      userId: userId,
-      $or: [{ isActive: true }, { dailyRoomName: { $ne: null } }]
-    });
+  const user = await User.findById(userId);
+  if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
 
-    if (existingStream) {
-      if (existingStream.isActive) {
-        return res.status(400).json({ message: 'У вас уже есть активный стрим.' });
-      }
-      // Зависший веб-эфир: комната Daily от него пережила бы запись в базе.
-      await daily.deleteRoom(existingStream.dailyRoomName)
-        .catch(err => console.error('[daily] stale room', err.message));
-      await Stream.findByIdAndDelete(existingStream._id);
-    }
+  const fields = { title, category, subcategory, city: city || '', description: description || '', isAdult };
+  user.streamDefaults = { ...fields, source };
+  // Ключ создаёт ещё студия, когда показывает его для OBS; здесь — страховка.
+  if (!user.streamKey) user.streamKey = uuidv4();
+  await user.save();
 
-    // Получение пользователя из базы
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'Пользователь не найден' });
-    }
-
-    // Проверка на наличие streamKey
-    if (!user.streamKey || user.streamKey === '') {
-      // Генерация нового streamKey
-      user.streamKey = uuidv4();
-      await user.save(); // Сохранение ключа в базе
-    }
-
-
-  // Создание новой трансляции и запись streamKey
-  const newStream = new Stream({
-    userId,
-    streamKey: user.streamKey, // Сохранение streamKey в стриме
-    title,
-    category,
-    subcategory,
-    city,
-    description,
-    isAdult,
-    isActive: false
-  });
-
-  await newStream.save();
-
-    // Отправка streamKey и данных трансляции клиенту
-    res.status(200).json({
-      message: 'Трансляция запущена',
-      streamId: newStream._id.toString(),
-      streamKey: user.streamKey
-    });
-  } catch (error) {
-    console.error('Ошибка при запуске трансляции:', error);
-    res.status(500).json({ message: 'Ошибка сервера' });
+  let stream = await Stream.findOne({ userId });
+  if (stream && (stream.firstLiveAt || stream.isActive)) {
+    return res.status(409).json({ message: 'У вас уже есть эфир: завершите его, чтобы начать новый', streamId: String(stream._id) });
   }
+
+  if (stream) {
+    // Сменили веб на OBS — комната Daily черновику больше не нужна.
+    if (source === 'obs' && stream.dailyRoomName) {
+      await daily.deleteRoom(stream.dailyRoomName).catch((err) => console.error('[daily] комната черновика', err.message));
+      stream.dailyRoomName = null;
+      stream.dailyRoom = undefined;
+    }
+    Object.assign(stream, fields, SOURCES[source], { streamKey: user.streamKey, updatedAt: Date.now() });
+    await stream.save();
+  } else {
+    // Куски записи прошлого эфира с этим ключом, если он оборвался без завершения.
+    await recording.discard(user.streamKey);
+    stream = await Stream.create({ userId, streamKey: user.streamKey, ...fields, ...SOURCES[source], isActive: false });
+  }
+
+  res.json({ streamId: String(stream._id), streamKey: stream.streamKey });
 });
 
 
@@ -175,14 +152,12 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
       }
     }
 
-    // Обновляем isActive на true, устанавливаем время начала.
+    // В эфире с этой секунды; первый выход запоминается навсегда (firstLiveAt).
+    const now = new Date();
     const stream = await Stream.findOneAndUpdate(
       { streamKey, userId: req.session.userId },
-      { 
-        isActive: true,
-        startedAt: new Date() // Устанавливаем время начала стрима
-      },
-      { new: true } // Возвращаем обновлённый документ
+      [{ $set: { isActive: true, startedAt: now, updatedAt: now, firstLiveAt: { $ifNull: ['$firstLiveAt', now] } } }],
+      { new: true }
     );
 
     if (!stream) {
@@ -294,7 +269,7 @@ router.post('/upload-thumbnail', requireAuth, upload.single('thumbnail'), valida
           // oldThumbnailPath приходит из тела запроса. Без проверки границ
           // сюда подставлялось `../что-угодно` и удалялся произвольный файл.
           // Старую обложку ищем только внутри папки обложек и только по имени.
-          const thumbsDir = path.join(__dirname, '..', 'public', 'uploads', 'thumbnails');
+          const thumbsDir = path.join(UPLOADS, 'thumbnails');
           const oldName = oldThumbnailPath ? path.basename(String(oldThumbnailPath)) : null;
           const fullOldPath = isPlainFileName(oldName) ? resolveWithin(thumbsDir, oldName) : null;
 
@@ -323,87 +298,49 @@ router.post('/upload-thumbnail', requireAuth, upload.single('thumbnail'), valida
 });
 
 
-// Маршрут для постановки стрима на паузу
-router.post('/api/pause-stream', validate({
-  streamKey: { type: 'key', required: true, label: 'Ключ трансляции' },
-}), async (req, res) => {
-  const { streamKey } = req.body;
-  const userId = req.session.userId;
-
-  console.log(`Запрос на паузу стрима: streamKey=${streamKey}, userId=${userId}`);
-
-  if (!streamKey || !userId) {
-      console.log('Недостаточно данных для постановки стрима на паузу');
-      return res.status(400).json({ message: 'Недостаточно данных' });
-  }
-
-  try {
-      const stream = await Stream.findOne({ streamKey: streamKey, userId: userId, isActive: true });
-
-      if (!stream) {
-          console.log('Активный стрим не найден для паузы');
-          return res.status(404).json({ message: 'Активный стрим не найден.' });
-      }
-
-      stream.isActive = false;
-      stream.startedAt = null; // Сбрасываем время начала при паузе
-      await stream.save();
-
-      console.log('Стрим поставлен на паузу:', stream._id);
-
-      res.json({ message: 'Стрим успешно поставлен на паузу.', stream: stream });
-  } catch (error) {
-      console.error('Ошибка при постановке стрима на паузу:', error);
-      res.status(500).json({ message: 'Ошибка сервера' });
-  }
-});
-
-// // Маршрут для возобновления стрима
-
-//       // Проверяем, есть ли уже другой активный стрим
-
-// Маршрут для завершения стрима
-router.post('/terminate-stream', validate({
+// Завершение эфира. save — «Сохранить запись»: куски склеиваются в запись
+// на странице автора (utils/recording.js); без него куски удаляются.
+// Сохранить можно только эфир, который выходил в эфир и не погашен
+// модерацией, и не с ограниченного аккаунта — запись видят все.
+router.post('/terminate-stream', requireAuth, validate({
   streamId: { type: 'objectId', required: true, label: 'Эфир' },
+  save: { type: 'bool', default: false, label: 'Сохранить запись' },
 }), async (req, res) => {
-  const { streamId } = req.body;
+  const { streamId, save } = req.body;
   const userId = req.session.userId;
 
-  console.log(`Запрос на завершение стрима: streamId=${streamId}, userId=${userId}`);
-
-  if (!streamId || !userId) {
-      console.log('Недостаточно данных для завершения стрима');
-      return res.status(400).json({ message: 'Недостаточно данных' });
+  const stream = await Stream.findOneAndDelete({ _id: streamId, userId });
+  if (!stream) {
+    return res.status(404).json({ message: 'Стрим не найден или уже завершен.' });
   }
 
-  try {
-      // Завершаем стрим независимо от его текущего состояния
-      const stream = await Stream.findOneAndDelete({ _id: streamId, userId: userId });
-
-      if (!stream) {
-          console.log('Стрим не найден или уже завершен');
-          return res.status(404).json({ message: 'Стрим не найден или уже завершен.' });
-      }
-
-      console.log('Стрим завершён и удалён:', stream._id);
-
-      // Завершить можно и из шапки, с другой вкладки, пока пульт в эфире:
-      // комната Daily и её RTMP-выход пережили бы запись, а HLS писался бы
-      // для эфира, которого нет.
-      if (stream.dailyRoomName) {
-        webLive.stop(stream).catch(() => {});
-        daily.deleteRoom(stream.dailyRoomName).catch((err) => console.error('[daily] комната завершённого эфира', err.message));
-      }
-      require('../../mediaServer').dropPublisher(stream.streamKey);
-
-      res.json({ message: 'Стрим успешно завершен и удален.' });
-  } catch (error) {
-      console.error('Ошибка при завершении стрима:', error);
-      res.status(500).json({ message: 'Ошибка сервера' });
+  // Завершить можно и из другой вкладки, пока пульт в эфире: комната Daily
+  // и её RTMP-выход пережили бы запись, а HLS писался бы для эфира, которого нет.
+  if (stream.dailyRoomName) {
+    webLive.stop(stream).catch(() => {});
+    daily.deleteRoom(stream.dailyRoomName).catch((err) => console.error('[daily] комната завершённого эфира', err.message));
   }
+  const media = require('../../mediaServer');
+  media.dropPublisher(stream.streamKey, 'эфир завершён');
+  hls.stop(stream.streamKey);
+  // Кусок записи закрывается, когда ffmpeg вышел: до этого ни склеивать,
+  // ни удалять нельзя. Обычно это доли секунды, в худшем случае — 5 с.
+  await hls.stopped(stream.streamKey);
+
+  const io = req.app.get('io');
+  if (io) io.to(`stream:${stream.streamKey}`).emit('stream:update', { streamKey: stream.streamKey, isActive: false, ended: true });
+
+  if (save && recording.enabled && stream.firstLiveAt && !stream.stoppedByModeration) {
+    const owner = await User.findById(userId).select('banned').lean();
+    if (owner && !owner.banned) {
+      const rec = await recording.save(stream);
+      return res.json({ message: 'Эфир завершён, запись сохраняется', recordingId: String(rec._id) });
+    }
+  }
+
+  await recording.discard(stream.streamKey);
+  res.json({ message: 'Стрим успешно завершен и удален.' });
 });
 
-
-// Эндпоинт для отправки сообщений
 
 module.exports = router;

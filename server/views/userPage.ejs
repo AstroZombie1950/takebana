@@ -40,7 +40,14 @@
             </div>
           </div>
 
-          <% if (!isSelf) { %>
+          <% if (isSelf) { %>
+          <div class="tk-prof__acts">
+            <a href="/settings" class="tk-btn tk-btn--outline tk-btn--sm">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg>
+              <span data-i18n="settings.title"><%- t('settings.title') %></span>
+            </a>
+          </div>
+          <% } else { %>
           <div class="tk-prof__acts">
             <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="message-button" data-user-id="<%= user._id %>">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
@@ -112,7 +119,7 @@
           <% if (user.isStreaming && user.activeStreamId) { %>
           <div class="tk-prof__live">
             <span class="tk-prof__live-mark" data-i18n="user.live"><%- t('user.live') %></span>
-            <a href="/stream/<%= user.activeStreamId %>" data-i18n="modal.stream.goto"><%- t('modal.stream.goto') %></a>
+            <a href="/stream/<%= user.activeStreamId %>" data-i18n="stream.goto"><%- t('stream.goto') %></a>
           </div>
           <% } else { %>
           <div class="tk-prof__none">
@@ -122,6 +129,37 @@
           <% } %>
         </section>
       </div>
+
+      <!-- Записи эфиров: автор видит и те, что ещё сохраняются -->
+      <section class="tk-prof__gal" id="recordings">
+        <div class="tk-prof__gal-head">
+          <p class="tk-kicker" style="margin: 0; flex: 1;" data-i18n="rec.title"><%- t('rec.title') %></p>
+          <span class="tk-note"><%= recordings.length %></span>
+        </div>
+
+        <% if (recordings.length) { %>
+        <div class="tk-recs">
+          <% recordings.forEach(function (r) { %>
+          <a href="/recording/<%= r._id %>" class="tk-recard<%= r.status !== 'ready' ? ' is-' + r.status : '' %>">
+            <span class="tk-recard__thumb">
+              <% if (r.thumb && r.thumb.url) { %><img src="<%= r.thumb.url %>" alt="" loading="lazy"><% } %>
+              <% if (r.status === 'ready') { %>
+                <span class="tk-recard__len"><%= clock(r.duration) %></span>
+              <% } else { %>
+                <% var stKey = r.status === 'failed' ? 'rec.failed' : 'rec.processing'; %>
+                <span class="tk-recard__state" data-i18n="<%= stKey %>"><%- t(stKey) %></span>
+              <% } %>
+              <% if (r.isAdult) { %><span class="tk-recard__adult">18+</span><% } %>
+            </span>
+            <span class="tk-recard__title"><%= r.title %></span>
+            <time class="tk-recard__date"><%= date(r.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></time>
+          </a>
+          <% }); %>
+        </div>
+        <% } else { %>
+        <p class="tk-note tk-note--center" data-i18n="rec.empty"><%- t('rec.empty') %></p>
+        <% } %>
+      </section>
 
       <!-- Галерея -->
       <section class="tk-prof__gal">

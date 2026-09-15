@@ -1,12 +1,12 @@
 /* Каркас кабинета: шапка, левая панель, модальные окна, поиск и звонки.
  *
  * Раньше жил инлайном в header.ejs — 1537 строк в шаблоне, которые заново
- * прилетали с каждой страницей и не кэшировались. Из EJS сюда приходили
- * ровно два значения, они переехали в window.TK.
+ * прилетали с каждой страницей и не кэшировались. Из EJS сюда приходит
+ * одно значение — id пользователя, оно в window.TK.
  *
  * Разметка модалок — views/partials/appModals.ejs, стили — css/app.css.
  */
-var TK = window.TK || { userId: '', activeStreamId: '' };
+var TK = window.TK || { userId: '' };
 
 // Подписи — из общего словаря (public/tk-i18n.js), он подключён выше в шапке.
 // Этот файл без обёртки, его `var` попадает в window: поэтому именно ссылка
@@ -42,37 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Растянули окно с открытой панелью — на десктопе она не выезжает, а
   // запрет прокрутки остался бы.
   matchMedia('(min-width: 1024px)').addEventListener('change', (e) => { if (e.matches) setOpen(false); });
-});
-
-// Выпадашка языка: открыть и закрыть. Сам перевод, подсветку кнопок, ярлык
-// с текущим языком и закрытие после выбора делает общий переключатель
-// (public/tk-i18n.js) — он один на кабинет и публичные страницы.
-document.addEventListener('DOMContentLoaded', () => {
-  const languageToggle = document.getElementById('languageToggle');
-  const languageDropdown = document.getElementById('languageDropdown');
-
-  if (!languageToggle || !languageDropdown) return;
-
-  languageToggle.addEventListener('click', (e) => {
-    e.stopPropagation();
-    languageDropdown.classList.toggle('hidden');
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!languageDropdown.contains(e.target) && !languageToggle.contains(e.target)) {
-      languageDropdown.classList.add('hidden');
-    }
-  });
-});
-
-// Безопасность в профиле
-document.addEventListener('DOMContentLoaded', () => {
-  const securityToggle = document.getElementById('securityToggle');
-  const securityFields = document.getElementById('securityFields');
-
-  securityToggle.addEventListener('click', () => {
-    securityFields.classList.toggle('hidden');
-  });
 });
 
 // Apply gradients from data-bg (used across multiple pages)
@@ -148,14 +117,10 @@ window.tkSubscriptions = {
 // Модальные окна
 document.addEventListener('DOMContentLoaded', () => {
   const modals = {
-    streamSettings: document.getElementById('streamSettingsModal'),
-    profileInfo: document.getElementById('profileInfoModal'),
     notification: document.getElementById('notificationModal')
   };
 
   const closeButtons = {
-    streamSettings: document.getElementById('closeStreamModal'),
-    profileInfo: document.getElementById('closeProfileModal'),
     notification: document.getElementById('closeNotificationModal')
   };
 
@@ -184,16 +149,6 @@ document.addEventListener('DOMContentLoaded', () => {
     modal.classList.remove('hidden');
   };
 
-  // Настройки эфира: кнопка в шапке и в конце левой панели.
-  document.querySelectorAll('[data-open-stream]').forEach((btn) => {
-    btn.addEventListener('click', () => open(modals.streamSettings));
-  });
-
-  // Настройки профиля — пункт левой панели.
-  document.querySelectorAll('[data-open-profile]').forEach((btn) => {
-    btn.addEventListener('click', () => open(modals.profileInfo));
-  });
-
   // Уведомления. Открыли список — значит, прочитали: точка в шапке гаснет,
   // а новые строки остаются подсвеченными до следующего открытия. Строка —
   // ссылка туда, о чём уведомление: переписка с отправителем или звонки.
@@ -220,7 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const sender = n.sender || {};
             const name = sender.login || sender.email || t('modal.notifications.unknown');
             const isCall = n.type === 'call';
-            const href = isCall ? '/calls' : '/chatsPage?peer=' + encodeURIComponent(sender._id || '');
+            const href = isCall ? '/chatsPage?tab=calls' : '/chatsPage?peer=' + encodeURIComponent(sender._id || '');
             const title = isCall ? t('modal.notifications.missedCall', { name }) : t('modal.notifications.from') + ' ' + name;
             const text = isCall ? '' : (n.content || t('modal.notifications.fallback'));
             return `
@@ -245,52 +200,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Завершение активного стрима из модалки (кнопка в header.ejs)
-  const terminateStreamButton = document.getElementById('terminateStreamButton');
-  if (terminateStreamButton) {
-    terminateStreamButton.addEventListener('click', async () => {
-      const streamId = TK.activeStreamId;
-      console.log('[terminate] click', { streamId });
-
-      if (!streamId) {
-        toast(t('app.streamUnknown'), 'error');
-        return;
-      }
-
-      const ok = await confirmDialog(t('app.endStreamConfirm'), { okText: t('app.endStreamOk') });
-      if (!ok) return;
-
-      terminateStreamButton.disabled = true;
-      const prevHtml = terminateStreamButton.innerHTML;
-      terminateStreamButton.textContent = t('stream.ending');
-
-      try {
-        const response = await fetch('/terminate-stream', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ streamId })
-        });
-
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          console.error('[terminate] failed', response.status, data);
-          toast(data?.message || t('app.endStreamFailed'), 'error');
-          return;
-        }
-
-        console.log('[terminate] success', data);
-        // Закрываем модалку и обновляем страницу, чтобы пропал "активный стрим"
-        if (modals.streamSettings) modals.streamSettings.classList.add('hidden');
-        window.location.reload();
-      } catch (e) {
-        console.error('[terminate] exception', e);
-        toast(t('app.endStreamNetwork'), 'error');
-      } finally {
-        terminateStreamButton.disabled = false;
-        terminateStreamButton.innerHTML = prevHtml;
-      }
-    });
-  }
 });
 
 // Поиск
@@ -509,368 +418,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
-// Сохранение пароля
-document.addEventListener('DOMContentLoaded', function() {
-  const savePasswordButton = document.getElementById('savePasswordButton');
-  const oldPasswordInput = document.getElementById('oldPassword');
-  const newPasswordInput = document.getElementById('newPassword');
-  const confirmPasswordInput = document.getElementById('confirmPassword');
-
-  if (!savePasswordButton) return;
-
-  savePasswordButton.addEventListener('click', async function(event) {
-    event.preventDefault();
-
-    const oldPassword = oldPasswordInput.value.trim();
-    const newPassword = newPasswordInput.value.trim();
-    const confirmPassword = confirmPasswordInput.value.trim();
-
-    if (!oldPassword || !newPassword || !confirmPassword) {
-      toast(t('app.passwordFields'), 'error');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      toast(t('app.passwordMismatch'), 'error');
-      return;
-    }
-
-    try {
-      const response = await fetch('/update-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          oldPassword: oldPassword,
-          newPassword: newPassword
-        })
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        toast(t('app.passwordSaved'), 'ok');
-        // Очищаем поля пароля
-        oldPasswordInput.value = '';
-        newPasswordInput.value = '';
-        confirmPasswordInput.value = '';
-        // Закрываем блок Security
-        document.getElementById('securityFields').classList.add('hidden');
-        window.location.reload();
-      } else {
-        toast(t('app.errorPrefix', { message: result.message || t('app.passwordFailed') }), 'error');
-      }
-    } catch (error) {
-      console.error('Ошибка:', error);
-      toast(t('app.passwordError'), 'error');
-    }
-  });
-});
-
-// Сохранение только имени
-document.addEventListener('DOMContentLoaded', function() {
-  const saveNameButton = document.getElementById('saveNameButton');
-  const nameInput = document.getElementById('profileNameInput');
-
-  if (!saveNameButton || !nameInput) return;
-
-  saveNameButton.addEventListener('click', async function(event) {
-    event.preventDefault();
-
-    const newName = nameInput.value.trim();
-    if (!newName) {
-      toast(t('app.nameEmpty'), 'error');
-      return;
-    }
-
-    try {
-      const response = await fetch('/update-profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          login: newName
-        })
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        toast(t('app.nameSaved'), 'ok');
-        window.location.reload();
-      } else {
-        toast(t('app.errorPrefix', { message: result.message || t('app.nameFailed') }), 'error');
-      }
-    } catch (error) {
-      console.error('Ошибка:', error);
-      toast(t('app.nameError'), 'error');
-    }
-  });
-});
-
-// Запуск стрима
-document.addEventListener('DOMContentLoaded', function() {
-  const startStreamButton = document.getElementById('startStreamButton');
-  const streamTitleInput = document.getElementById('streamTitle');
-  const streamCategoryInput = document.getElementById('streamCategory');
-  const streamSubcategoryInput = document.getElementById('streamSubcategory');
-  const streamDescriptionInput = document.getElementById('streamDescription');
-  const streamCityInput = document.getElementById('streamCity');
-  const streamAdultInput = document.getElementById('streamAdult');
-
-  if (!startStreamButton) return;
-
-  startStreamButton.addEventListener('click', async function(event) {
-    event.preventDefault();
-
-    const title = streamTitleInput.value.trim();
-    const category = streamCategoryInput.value;
-    const subcategory = streamSubcategoryInput.value;
-    const description = streamDescriptionInput.value.trim();
-
-    if (!title || !category) {
-      toast(t('app.startStreamFields'), 'error');
-      return;
-    }
-
-    try {
-      const response = await fetch('/start-stream', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          title,
-          category,
-          subcategory,
-          description,
-          city: streamCityInput ? streamCityInput.value : '',
-          isAdult: !!(streamAdultInput && streamAdultInput.checked)
-        })
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        window.location.href = `/stream/${result.streamId}`;
-      } else {
-        toast(t('app.errorPrefix', { message: result.message }), 'error');
-      }
-    } catch (error) {
-      console.error('Ошибка при запуске трансляции:', error);
-      toast(t('app.startStreamFailed'), 'error');
-    }
-  });
-});
-
-// Подкатегории для стрима. Список приходит из config/catalog.js атрибутом
-// data-subs: [[код, подпись], …] на каждую категорию. Подпись из атрибута —
-// русская; на английском её отдаёт словарь по ключу sub.<код>, а data-i18n
-// на созданной строке нужен, чтобы переключение языка её тоже подхватило.
-document.addEventListener('DOMContentLoaded', function() {
-  const categorySelect = document.getElementById('streamCategory');
-  const subSelect = document.getElementById('streamSubcategory');
-  if (!categorySelect || !subSelect) return;
-
-  const subcategories = JSON.parse(subSelect.dataset.subs || '{}');
-
-  categorySelect.addEventListener('change', function() {
-    const subs = subcategories[this.value];
-    subSelect.disabled = !subs;
-    const firstKey = subs ? 'modal.stream.subcategoryPick' : 'modal.stream.subcategoryPh';
-    const first = new Option(t(firstKey, subs ? 'Выберите подкатегорию' : 'Сначала выберите категорию'), '');
-    first.setAttribute('data-i18n', firstKey);
-    subSelect.replaceChildren(first, ...(subs || []).map(([code, name]) => {
-      const option = new Option(t('sub.' + code, name), code);
-      option.setAttribute('data-i18n', 'sub.' + code);
-      return option;
-    }));
-  });
-});
-
-// Аватар: выбор, предпросмотр и загрузка
-document.addEventListener('DOMContentLoaded', () => {
-  const chooseBtn = document.getElementById('chooseAvatarBtn');
-  const uploadBtn = document.getElementById('uploadAvatarBtn');
-  const fileInput = document.getElementById('profileAvatarInput');
-  const preview = document.getElementById('profileAvatarPreview');
-  const empty = document.getElementById('profileAvatarEmpty');
-  const hint = document.getElementById('avatarHint');
-
-  if (!chooseBtn || !uploadBtn || !fileInput) return;
-
-  chooseBtn.addEventListener('click', () => fileInput.click());
-
-  fileInput.addEventListener('change', () => {
-    const file = fileInput.files && fileInput.files[0];
-    if (!file) { uploadBtn.disabled = true; return; }
-    const valid = /image\/(png|jpeg)/.test(file.type) && file.size <= 5 * 1024 * 1024;
-    if (!valid) {
-      tkText(hint, 'app.fileBad');
-      uploadBtn.disabled = true;
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (empty) empty.classList.add('hidden');
-      preview.src = e.target.result;
-      preview.classList.remove('hidden');
-      uploadBtn.disabled = false;
-    };
-    reader.readAsDataURL(file);
-  });
-
-  uploadBtn.addEventListener('click', async () => {
-    const file = fileInput.files && fileInput.files[0];
-    if (!file) return;
-    uploadBtn.disabled = true;
-    tkText(hint, 'app.uploading');
-    try {
-      const form = new FormData();
-      form.append('avatar', file);
-      const res = await fetch('/profile/avatar', { method: 'POST', body: form });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message || t('app.uploadFailed'));
-      
-      // Обновляем превью в модалке
-      if (empty) empty.classList.add('hidden');
-      if (preview) {
-        preview.src = data.url + '?t=' + Date.now(); // Добавляем timestamp для обхода кеша
-        preview.classList.remove('hidden');
-      }
-      
-      // Аватар в левой панели
-      const avatarUrl = data.url + '?t=' + Date.now();
-      document.querySelectorAll('[data-my-avatar]').forEach((box) => {
-        box.removeAttribute('style');
-        box.innerHTML = '<img src="' + escapeHtml(avatarUrl) + '" alt="">';
-      });
-
-      tkText(hint, 'app.photoDone');
-      
-      // Перезагружаем страницу через небольшую задержку, чтобы пользователь увидел сообщение
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
-    } catch (e) {
-      console.error('Ошибка загрузки аватара:', e);
-    hint.textContent = t('app.errorShort', { message: e.message });
-      uploadBtn.disabled = false;
-    }
-  });
-});
-
-// Галерея: превью и подготовка к загрузке (без отправки на сервер)
-document.addEventListener('DOMContentLoaded', () => {
-  const dz = document.getElementById('galleryDropzone');
-  const input = document.getElementById('galleryInput');
-  const chooseBtn = document.getElementById('chooseGalleryBtn');
-  const uploadBtn = document.getElementById('uploadGalleryBtn');
-  const countEl = document.getElementById('galleryCount');
-  const hint = document.getElementById('galleryHint');
-  const previewGrid = document.getElementById('galleryPreview');
-  const persistedGrid = document.getElementById('galleryPersisted');
-  let files = [];
-
-  if (!dz || !input || !chooseBtn || !uploadBtn) return;
-
-  function renderPreviews() {
-    previewGrid.innerHTML = '';
-    files.slice(0, 30).forEach((file, idx) => {
-      const url = URL.createObjectURL(file);
-      const item = document.createElement('div');
-      item.className = 'tk-thumb';
-      item.innerHTML = `
-        <img src="${url}" alt="">
-        <button type="button" data-idx="${idx}" class="tk-thumb__del" aria-label="${escapeHtml(t('common.remove'))}" data-i18n-aria="common.remove">
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-        </button>`;
-      previewGrid.appendChild(item);
-    });
-    countEl.textContent = String(files.length);
-    uploadBtn.disabled = files.length === 0;
-    tkText(hint, files.length ? 'modal.gallery.ready' : 'modal.gallery.noFiles');
-  }
-
-  function addFiles(fileList) {
-    const incoming = Array.from(fileList).filter(f => /image\/(png|jpeg)/.test(f.type) && f.size <= 10 * 1024 * 1024);
-    files = [...files, ...incoming].slice(0, 30);
-    renderPreviews();
-  }
-
-  chooseBtn.addEventListener('click', () => input.click());
-  input.addEventListener('change', (e) => addFiles(e.target.files || []));
-
-  dz.addEventListener('click', () => input.click());
-  dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('is-over'); });
-  dz.addEventListener('dragleave', () => dz.classList.remove('is-over'));
-  dz.addEventListener('drop', (e) => { e.preventDefault(); dz.classList.remove('is-over'); addFiles(e.dataTransfer.files || []); });
-
-  previewGrid.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-idx]');
-    if (!btn) return;
-    const idx = Number(btn.getAttribute('data-idx'));
-    files.splice(idx, 1);
-    renderPreviews();
-  });
-
-  uploadBtn.addEventListener('click', () => {
-    if (!files.length) return;
-    tkText(hint, 'app.uploading');
-    uploadBtn.disabled = true;
-    const form = new FormData();
-    files.forEach(f => form.append('photos', f));
-    fetch('/profile/gallery', { method: 'POST', body: form })
-      .then(r => r.json())
-      .then(data => {
-        if (!data.success) throw new Error(data.message || t('app.uploadFailed'));
-        // Очистим локальный список и обновим UI
-        files = [];
-        renderPreviews();
-        tkText(hint, 'app.galleryDone', { total: data.total });
-        // Добавим загруженные в persisted сетку
-        if (persistedGrid && Array.isArray(data.urls)) {
-          data.urls.forEach(url => {
-            const name = (url || '').split('/').pop();
-            const div = document.createElement('div');
-            div.className = 'tk-thumb';
-            div.innerHTML = `
-              <img src="${escapeHtml(url)}" alt="" loading="lazy">
-              <button type="button" data-name="${escapeHtml(name)}" class="tk-thumb__del" aria-label="${escapeHtml(t('common.delete'))}" data-i18n-aria="common.delete">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-              </button>`;
-            persistedGrid.prepend(div);
-          });
-        }
-      })
-      .catch(e => {
-        hint.textContent = t('app.errorShort', { message: e.message });
-      })
-      .finally(() => { uploadBtn.disabled = false; });
-  });
-
-  // Удаление из галереи (persisted)
-  if (persistedGrid) {
-    persistedGrid.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-name]');
-      if (!btn) return;
-      const name = btn.getAttribute('data-name');
-      btn.disabled = true;
-      fetch('/profile/gallery/' + encodeURIComponent(name), { method: 'DELETE' })
-        .then(r => r.json())
-        .then(data => {
-          if (!data.success) throw new Error(data.message || t('app.deleteFailed'));
-          const card = btn.closest('.tk-thumb');
-          if (card) card.remove();
-        })
-        .catch(err => { hint.textContent = t('app.deleteError', { message: err.message }); })
-        .finally(() => { btn.disabled = false; });
-    });
-  }
-});
-
 // ===== Presence Client (глобально) =====
 (function(){
   function initPresenceAndCalls(){
@@ -885,16 +432,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Переписка: события сокета уходят в document как tk:<событие>, их слушает
     // страница переписки (chats.js). Колокольчик зажигается на любой странице.
-    ['message:new', 'message:read', 'message:delivered', 'message:deleted', 'conversation:deleted'].forEach((name) => {
+    ['message:new', 'message:read', 'message:delivered', 'message:deleted', 'conversation:deleted', 'call:logged'].forEach((name) => {
       socket.on(name, (detail) => document.dispatchEvent(new CustomEvent('tk:' + name, { detail })));
     });
     socket.on('notification:new', () => window.setNotificationDot(true));
-    // Пропущенный звонок — счётчик у «Звонков» в левой панели.
+    // Пропущенный звонок — счётчик у «Сообщений» в левой панели и у вкладки
+    // «Звонки». Открытая вкладка гасит его сама (chats.js).
     socket.on('call:missed', () => {
-      const badge = document.getElementById('missedCallsBadge');
-      if (!badge || location.pathname === '/calls') return;
-      badge.textContent = String((parseInt(badge.textContent, 10) || 0) + 1);
-      badge.classList.remove('hidden');
+      document.querySelectorAll('[data-missed-calls]').forEach((badge) => {
+        badge.textContent = String((parseInt(badge.textContent, 10) || 0) + 1);
+        badge.classList.remove('hidden');
+      });
     });
     // Связь вернулась после обрыва: за это время могло прийти что-то, чего
     // сокет уже не доставит.

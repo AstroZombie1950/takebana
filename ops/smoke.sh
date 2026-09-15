@@ -167,7 +167,10 @@ expect "DELETE /profile/gallery/:name"    "401"     DELETE /profile/gallery/x.jp
 expect "POST /upload-thumbnail"           "401"     POST /upload-thumbnail
 expect "POST /set-active"                 "401"     POST /set-active                 -H 'Content-Type: application/json' -d '{}'
 expect "POST /set-inactive"               "401"     POST /set-inactive               -H 'Content-Type: application/json' -d '{}'
-expect "POST /stream/:id/enter"           "401"     POST /stream/000000000000000000000000/enter -H 'Content-Type: application/json' -d '{"mode":"web"}'
+expect "POST /start-stream"               "401"     POST /start-stream               -H 'Content-Type: application/json' -d '{}'
+expect "POST /terminate-stream"           "401"     POST /terminate-stream           -H 'Content-Type: application/json' -d '{}'
+expect "DELETE /recording/:id"            "401"     DELETE /recording/000000000000000000000000
+expect "DELETE /profile/avatar"           "401"     DELETE /profile/avatar
 expect "POST /chat/message"               "401"     POST /chat/message               -H 'Content-Type: application/json' -d '{}'
 expect "GET /search-users"                "401|302" GET  /search-users               -H 'X-Requested-With: XMLHttpRequest'
 expect "GET /api/presence"                "401"     GET  /api/presence?ids=000000000000000000000000
@@ -198,6 +201,11 @@ expect "/streams/x"     "404" GET /streams/x
 # отдаются отдельно, а статус камеры заведения ставит только venueLive.
 expect "/api/room-info/:name"             "404" GET  /api/room-info/x
 expect "/api/get-stream-room/:id"         "404" GET  /api/get-stream-room/000000000000000000000000
+# 16 сентября 2026: пульт OBS и отметка входа на пульт стали одной студией
+# (/studio), пауза — /set-inactive.
+expect "/stream-obs/:id"                  "404" GET  /stream-obs/000000000000000000000000
+expect "/stream/:id/enter"                "404" POST /stream/000000000000000000000000/enter -H 'Content-Type: application/json' -d '{"mode":"web"}'
+expect "/api/pause-stream"                "404" POST /api/pause-stream -H 'Content-Type: application/json' -d '{}'
 expect "/updateEstablishmentOnlineStatus" "404" POST /updateEstablishmentOnlineStatus -H 'Content-Type: application/json' -d '{}'
 
 step "Обход каталогов"

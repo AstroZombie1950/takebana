@@ -1,4 +1,4 @@
-/* Переписка — /chatsPage.
+/* Переписка — /chatsPage: вкладки диалогов и звонков, лента диалога.
  *
  * Раскладка одной страницы. Общее (токены, шрифты, кнопки, поля) — tk.css,
  * каркас кабинета — app.css.
@@ -26,27 +26,47 @@
   border-right: 1px solid var(--tk-rule);
 }
 
-.tk-chat__list-head {
+/* ── Вкладки: сообщения и звонки ── */
+.tk-chat__tabs {
   flex: none;
-  padding: 18px 20px;
+  display: flex;
   border-bottom: 1px solid var(--tk-rule);
 }
 
-.tk-chat__h1 {
-  margin: 0;
-  font-size: 22px;
-  line-height: 1;
-  letter-spacing: -.02em;
+.tk-chat__tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 12px 15px;
+  border-bottom: 3px solid transparent;
+  font-size: 15px;
   font-weight: 900;
+  letter-spacing: -.01em;
   text-transform: uppercase;
+  color: var(--tk-muted);
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.tk-chat__tab:hover { color: var(--tk-paper); }
+
+.tk-chat__tab[aria-selected="true"] {
+  border-bottom-color: var(--tk-accent);
   color: var(--tk-paper);
 }
 
-.tk-chat__sub {
-  margin: 6px 0 0;
+/* Пропущенные звонки — тот же счётчик, что у «Сообщений» в левой панели. */
+.tk-chat__badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
   font-family: Oswald, sans-serif;
-  font-size: 13px;
-  color: var(--tk-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-align: center;
 }
 
 .tk-chat__scroll {
@@ -190,6 +210,9 @@
   flex-direction: column;
 }
 
+/* Диалог не выбран — пустое поле: без заголовка-заглушки и поля ввода. */
+.tk-chat:not(.has-peer) .tk-chat__area > * { display: none; }
+
 .tk-chat__head {
   flex: none;
   display: flex;
@@ -218,12 +241,11 @@
 }
 
 .tk-chat__ava-big img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.tk-chat__ava-big svg { color: var(--tk-muted); }
 
 .tk-chat__peer-wrap { flex: 1; min-width: 0; cursor: pointer; }
 
 /* Кнопка в шапке диалога: удалить переписку. */
-.tk-chat__tool:not(.hidden) {
+.tk-chat__tool {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -255,13 +277,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.tk-chat__peer-note {
-  margin: 2px 0 0;
-  font-family: Oswald, sans-serif;
-  font-size: 12px;
-  color: var(--tk-muted);
 }
 
 /* ── Лента сообщений ── */
@@ -355,6 +370,27 @@
 
 .tk-msg--in .tk-msg__when { margin-left: 40px; }
 
+/* Звонок в ленте: строка посередине между сообщениями. */
+.tk-callnote {
+  align-self: center;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 8px;
+  padding: 6px 12px;
+  border: 1px solid rgba(144, 113, 99, .35);
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-beige);
+}
+
+.tk-callnote svg { flex: none; color: var(--tk-green); }
+.tk-callnote time { font-size: 11px; color: var(--tk-muted); }
+.tk-callnote.is-missed,
+.tk-callnote.is-missed svg { color: var(--tk-accent); }
+
 /* ── Поле ввода ── */
 .tk-chat__compose {
   flex: none;
@@ -374,6 +410,101 @@
 }
 
 .tk-chat__send { flex: none; }
+
+/* ── Журнал звонков ── */
+/* Строка: аватар, имя, итог и время — одна кнопка (открыть переписку),
+ * справа — перезвонить голосом или с видео. */
+.tk-callrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 16px;
+  border-bottom: 1px solid rgba(144, 113, 99, .25);
+  transition: background-color .18s ease;
+}
+
+.tk-callrow:hover { background: rgba(227, 66, 52, .08); }
+
+.tk-callrow__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 6px 11px 20px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.tk-callrow__ava {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .35);
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-callrow__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-callrow__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tk-callrow__name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-callrow__meta,
+.tk-callrow__when {
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--tk-muted);
+}
+
+.tk-callrow__meta svg { vertical-align: -2px; margin-right: 4px; color: var(--tk-green); }
+.tk-callrow.is-missed .tk-callrow__meta,
+.tk-callrow.is-missed .tk-callrow__meta svg { color: var(--tk-accent); }
+
+.tk-callrow__btn {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--tk-rule);
+  padding: 0;
+  cursor: pointer;
+  color: var(--tk-beige);
+  transition: border-color .18s ease, color .18s ease, background-color .18s ease;
+}
+
+.tk-callrow__btn:hover,
+.tk-callrow__btn:focus-visible {
+  border-color: var(--tk-accent);
+  color: var(--tk-paper);
+  background: rgba(227, 66, 52, .12);
+}
 
 /* ── Меню сообщения ── */
 .tk-msgmenu {
@@ -497,12 +628,12 @@
 }
 
 @media (max-width: 640px) {
-  .tk-chat__list-head { padding: 14px 16px; }
   .tk-dialog { padding: 10px 16px; }
+  .tk-callrow { padding-right: 12px; }
+  .tk-callrow__main { padding-left: 16px; }
   .tk-chat__head { padding: 10px 16px; }
   .tk-chat__feed { padding: 16px; gap: 12px; }
   .tk-chat__compose { padding: 12px 16px; }
-  .tk-chat__h1 { font-size: 19px; }
   .tk-msg { max-width: 92%; }
   .tk-fwd__list { margin: 0 -16px; }
   .tk-fwd__row { padding-left: 16px; padding-right: 16px; }

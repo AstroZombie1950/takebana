@@ -8,9 +8,10 @@
 <%- include('appModals') %>
 
 <%# Шапка: бургер (ниже 1024 — открывает левую панель), логотип, поиск,
-    справа — язык, уведомления, переписка и запуск эфира. Профиль, выход
-    и остальные ссылки — в левой панели (leftBar.ejs): раньше то же самое
-    дублировалось выпадашкой у аватара и отдельным мобильным меню. %>
+    справа — уведомления, переписка и запуск эфира. Профиль, выход и остальные
+    ссылки — в левой панели (leftBar.ejs): раньше то же самое дублировалось
+    выпадашкой у аватара и отдельным мобильным меню. Язык — тумблером на
+    странице настроек (/settings). %>
 <header class="tk-ahead">
   <button class="tk-ahead__burger" id="sidebarToggle" aria-label="<%= ta('app.menu') %>" data-i18n-aria="app.menu" aria-controls="sidebar" aria-expanded="false">
     <span></span><span></span>
@@ -33,17 +34,6 @@
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
     </button>
 
-    <div class="tk-ahead__lang">
-      <button class="tk-ahead__lang-btn" id="languageToggle">
-        <span><%= lang.toUpperCase() %></span>
-        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
-      </button>
-      <div class="tk-ahead__lang-menu hidden" id="languageDropdown">
-        <button type="button" data-lang="ru" data-i18n="app.langRu"><%- t('app.langRu') %></button>
-        <button type="button" data-lang="en" data-i18n="app.langEn"><%- t('app.langEn') %></button>
-      </div>
-    </div>
-
     <button class="tk-ahead__icon" id="notificationButton" aria-label="<%= ta('app.notifications') %>" data-i18n-aria="app.notifications">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 5-2 6-2 6h16s-2-1-2-6Z"></path><path d="M10 20h4"></path></svg>
       <span class="tk-ahead__dot<%= notifications && notifications.hasUnread ? '' : ' hidden' %>" id="notificationDot"></span>
@@ -53,9 +43,9 @@
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
     </a>
 
-    <button class="tk-btn tk-btn--primary tk-btn--sm" id="startStreamButtonHeader" data-open-stream>
+    <a href="/studio" class="tk-btn tk-btn--primary tk-btn--sm" id="startStreamButtonHeader">
       <span data-i18n="app.startStream"><%- t('app.startStream') %></span>
-    </button>
+    </a>
   </div>
 </header>
 
@@ -84,8 +74,7 @@
 <%# Единственное, что скрипту нужно от сервера. %>
 <script>
   window.TK = {
-    userId: <%- JSON.stringify(currentUser && currentUser._id ? String(currentUser._id) : '') %>,
-    activeStreamId: <%- JSON.stringify(currentUser && currentUser.activeStreamId ? String(currentUser.activeStreamId) : '') %>
+    userId: <%- JSON.stringify(currentUser && currentUser._id ? String(currentUser._id) : '') %>
   };
 </script>
 <%# Словарь языка страницы и переключатель — одни на весь сайт

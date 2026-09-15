@@ -124,6 +124,8 @@ app.locals.googleOAuthConfigured = googleOAuthConfigured;
 app.locals.mailConfigured = require('./utils/mail').mailConfigured;
 // Откуда зритель берёт HLS: пусто — со своего домена, иначе — адрес CDN.
 app.locals.hlsBase = require('./utils/hls').hlsBase;
+// Длительность записи эфира в шаблонах: страница записи и карточки профиля.
+app.locals.clock = require('./utils/recording').clock;
 // Категории и города: форма эфира живёт в шапке каждой страницы кабинета.
 app.locals.catalog = require('./config/catalog');
 // Страницы и сообщения в JSON-ответах — на языке интерфейса (cookie `lang`,
@@ -179,9 +181,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Брошенные эфиры: раньше таймер стартовал сам, фактом подключения роутера.
 require('./jobs/streamCleanup').startStreamCleanup();
+// Записи, чью склейку оборвал перезапуск процесса, — в «не сохранилась».
+require('./utils/recording').sweep();
 
 app.use(require('./routes/presence'));
 app.use(require('./routes/calls'));
+app.use(require('./routes/recordings'));
 app.use(require('./routes/pages'));
 app.use(require('./routes/streamStatus'));
 

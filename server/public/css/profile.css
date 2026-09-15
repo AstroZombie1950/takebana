@@ -247,6 +247,71 @@
 .tk-shot:hover img,
 .tk-shot:focus-visible img { border-color: var(--tk-accent); }
 
+/* ── Записи эфиров ── */
+.tk-recs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.tk-recard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tk-recard__thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .2);
+  border: 1px solid var(--tk-rule);
+  transition: border-color .18s ease;
+}
+
+.tk-recard:hover .tk-recard__thumb,
+.tk-recard:focus-visible .tk-recard__thumb { border-color: var(--tk-accent); }
+
+.tk-recard__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-recard__len,
+.tk-recard__adult,
+.tk-recard__state {
+  position: absolute;
+  padding: 3px 7px;
+  background: rgba(10, 10, 10, .78);
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .06em;
+  color: var(--tk-paper);
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-recard__len { right: 8px; bottom: 8px; }
+.tk-recard__adult { left: 8px; top: 8px; color: var(--tk-accent); }
+
+/* Сохраняется или не сохранилась — видит только автор. */
+.tk-recard__state { left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; }
+.tk-recard.is-failed .tk-recard__state { color: var(--tk-accent); }
+
+.tk-recard__title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--tk-paper);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tk-recard__date {
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
 /* ── Лайтбокс ─────────────────────────────────────────────────────────── */
 .tk-lightbox {
   position: fixed;

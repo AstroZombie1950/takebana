@@ -1,105 +1,111 @@
+<%#
+  Заявка на заведение (/company-register) — страница кабинета, открывается
+  с карты заведений. Раньше жила среди публичных страниц: с шапкой главной
+  и без левой панели, и человек будто выпадал из кабинета. Маршрут —
+  routes/pages.js, отправка — public/tk-company.js, вёрстка — css/company.css.
+%>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.company.title', descriptionKey: 'page.company.description' }) %>
-<link rel="stylesheet" href="/css/auth.css">
+<link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="/css/company.css">
 <%# Карта нужна только блоку «Точка на карте» (partials/venuePoint). %>
 <link rel="stylesheet" href="/vendor/maplibre-gl-6.9.0/maplibre-gl.css">
 <link rel="stylesheet" href="/css/tk-map.css">
 </head>
-<body>
+<body class="tk-app">
 
-<div class="tk-shell">
-<%- include('partials/tkHeader') %>
+<%- include('partials/header') %>
 
-<main class="tk-auth">
-  <div class="tk-auth__card tk-company">
-    <a href="/main" class="tk-auth__back">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5l-7 7 7 7M4 12h16"></path></svg>
-      <span data-i18n="company.back"><%- t('company.back') %></span>
-    </a>
+<div>
+  <%- include('partials/leftBar') %>
 
-    <span class="tk-auth__kicker" data-i18n="company.kicker"><%- t('company.kicker') %></span>
-    <h1 class="tk-auth__h1" data-i18n="company.h1"><%- t('company.h1') %></h1>
+  <main class="tk-app-main">
+    <div class="tk-page tk-company">
+      <a href="/main" class="tk-page__back">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        <span data-i18n="app.venues"><%- t('app.venues') %></span>
+      </a>
+      <h1 class="tk-page__h1" data-i18n="company.h1"><%- t('company.h1') %></h1>
 
-    <%# Показывается вместо формы после успешной отправки. %>
-    <p class="tk-company__done" id="tkCompanyDone" hidden data-i18n="company.finish"><%- t('company.finish') %></p>
+      <%# Показывается вместо формы после успешной отправки. %>
+      <p class="tk-company__done" id="tkCompanyDone" hidden data-i18n="company.finish"><%- t('company.finish') %></p>
 
-    <form class="tk-auth__form" id="tkCompanyForm" novalidate>
-      <%# Город и тип — закрытые списки config/catalog.js: по ним фильтрует карта. %>
-      <div class="tk-company__pair">
-        <input class="tk-field" type="text" name="country" placeholder="<%= ta('company.ph.country') %>" data-i18n-placeholder="company.ph.country" autocomplete="country-name" required>
-        <select class="tk-field tk-select" name="city" required>
-          <option value="" data-i18n="company.ph.city"><%- t('company.ph.city') %></option>
-          <% catalog.CITIES.forEach(function (city) { %>
-          <option value="<%= city.code %>" data-i18n="<%= city.i18n %>"><%= ta(city.i18n, city.name) %></option>
-          <% }); %>
-        </select>
-      </div>
+      <form class="tk-company__form" id="tkCompanyForm" novalidate>
+        <section class="tk-panel">
+          <p class="tk-panel__title" data-i18n="company.kicker"><%- t('company.kicker') %></p>
 
-      <input class="tk-field" type="text" name="name" placeholder="<%= ta('company.ph.name') %>" data-i18n-placeholder="company.ph.name" required>
-      <select class="tk-field tk-select" name="type" required>
-        <option value="" data-i18n="company.ph.type"><%- t('company.ph.type') %></option>
-        <% catalog.VENUE_TYPES.forEach(function (type) { %>
-        <option value="<%= type.code %>" data-i18n="venue.<%= type.code %>"><%= ta('venue.' + type.code, type.name) %></option>
-        <% }); %>
-      </select>
-      <input class="tk-field" type="text" name="address" placeholder="<%= ta('company.ph.address') %>" data-i18n-placeholder="company.ph.address" autocomplete="street-address" required>
-      <input class="tk-field" type="email" name="email" placeholder="<%= ta('company.ph.email') %>" data-i18n-placeholder="company.ph.email" autocomplete="email" required>
-      <input class="tk-field" type="tel" name="phone" placeholder="<%= ta('company.ph.phone') %>" data-i18n-placeholder="company.ph.phone" autocomplete="tel" required>
+          <input class="tk-field" type="text" name="name" placeholder="<%= ta('company.ph.name') %>" data-i18n-placeholder="company.ph.name" required>
+          <select class="tk-field tk-select" name="type" required>
+            <option value="" data-i18n="company.ph.type"><%- t('company.ph.type') %></option>
+            <% catalog.VENUE_TYPES.forEach(function (type) { %>
+            <option value="<%= type.code %>" data-i18n="venue.<%= type.code %>"><%= ta('venue.' + type.code, type.name) %></option>
+            <% }); %>
+          </select>
 
-      <div class="tk-company__rule"></div>
+          <%# Город и тип — закрытые списки config/catalog.js: по ним фильтрует карта. %>
+          <div class="tk-company__pair">
+            <input class="tk-field" type="text" name="country" placeholder="<%= ta('company.ph.country') %>" data-i18n-placeholder="company.ph.country" autocomplete="country-name" required>
+            <select class="tk-field tk-select" name="city" required>
+              <option value="" data-i18n="company.ph.city"><%- t('company.ph.city') %></option>
+              <% catalog.CITIES.forEach(function (city) { %>
+              <option value="<%= city.code %>" data-i18n="<%= city.i18n %>"><%= ta(city.i18n, city.name) %></option>
+              <% }); %>
+            </select>
+          </div>
 
-      <%- include('partials/venuePoint') %>
+          <input class="tk-field" type="text" name="address" placeholder="<%= ta('company.ph.address') %>" data-i18n-placeholder="company.ph.address" autocomplete="street-address" required>
 
-      <div class="tk-company__rule"></div>
+          <div class="tk-company__pair">
+            <input class="tk-field" type="email" name="email" placeholder="<%= ta('company.ph.email') %>" data-i18n-placeholder="company.ph.email" value="<%= currentUser.email %>" autocomplete="email" required>
+            <input class="tk-field" type="tel" name="phone" placeholder="<%= ta('company.ph.phone') %>" data-i18n-placeholder="company.ph.phone" autocomplete="tel" required>
+          </div>
+        </section>
 
-      <div class="tk-company__hours">
-        <span class="tk-company__label" data-i18n="company.weekdays"><%- t('company.weekdays') %></span>
-        <label class="tk-company__time">
-          <span data-i18n="company.from"><%- t('company.from') %></span>
-          <input class="tk-field" type="text" name="weekdayOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
-        </label>
-        <label class="tk-company__time">
-          <span data-i18n="company.to"><%- t('company.to') %></span>
-          <input class="tk-field" type="text" name="weekdayClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
-        </label>
-      </div>
+        <section class="tk-panel">
+          <%- include('partials/venuePoint') %>
+        </section>
 
-      <div class="tk-company__hours">
-        <span class="tk-company__label" data-i18n="company.weekend"><%- t('company.weekend') %></span>
-        <label class="tk-company__time">
-          <span data-i18n="company.from"><%- t('company.from') %></span>
-          <input class="tk-field" type="text" name="weekendOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
-        </label>
-        <label class="tk-company__time">
-          <span data-i18n="company.to"><%- t('company.to') %></span>
-          <input class="tk-field" type="text" name="weekendClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
-        </label>
-      </div>
+        <section class="tk-panel">
+          <div class="tk-company__hours">
+            <span class="tk-company__label" data-i18n="company.weekdays"><%- t('company.weekdays') %></span>
+            <label class="tk-company__time">
+              <span data-i18n="company.from"><%- t('company.from') %></span>
+              <input class="tk-field" type="text" name="weekdayOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
+            </label>
+            <label class="tk-company__time">
+              <span data-i18n="company.to"><%- t('company.to') %></span>
+              <input class="tk-field" type="text" name="weekdayClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
+            </label>
+          </div>
 
-      <button class="tk-btn tk-btn--primary tk-btn--block tk-auth__submit" type="submit" data-i18n="company.submit"><%- t('company.submit') %></button>
-    </form>
-  </div>
-</main>
+          <div class="tk-company__hours">
+            <span class="tk-company__label" data-i18n="company.weekend"><%- t('company.weekend') %></span>
+            <label class="tk-company__time">
+              <span data-i18n="company.from"><%- t('company.from') %></span>
+              <input class="tk-field" type="text" name="weekendOpen" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
+            </label>
+            <label class="tk-company__time">
+              <span data-i18n="company.to"><%- t('company.to') %></span>
+              <input class="tk-field" type="text" name="weekendClose" placeholder="00:00" inputmode="numeric" maxlength="5" data-time required>
+            </label>
+          </div>
+        </section>
 
-<%- include('partials/tkFooter') %>
+        <p class="tk-form__note" data-i18n="company.reviewNote"><%- t('company.reviewNote') %></p>
+        <button class="tk-btn tk-btn--primary tk-company__submit" type="submit" data-i18n="company.submit"><%- t('company.submit') %></button>
+      </form>
+    </div>
+  </main>
 </div>
 
-<%- include('partials/tkMenu') %>
-
 <%# Центры городов — с них открывается выбор точки (public/tk-point.js).
-    Сама карта (MapLibre, ~290 КБ) грузится не здесь, а когда до блока
-    доскроллили: до заявки доходят не все, кто открыл страницу. %>
+    Сама карта (MapLibre, ~290 КБ) грузится, когда до блока доскроллили. %>
 <script>window.TKCityCenter = <%- JSON.stringify(catalog.CITY_CENTER) %>;</script>
-<script defer src="/tk-i18n-<%= lang %>.js"></script>
-<script defer src="/tk-i18n.js"></script>
-<script defer src="/tk.js"></script>
-<script defer src="/toast.js"></script>
-<script defer src="/vendor/pmtiles-4.5.0.js"></script>
-<script defer src="/tk-map.js"></script>
-<script defer src="/tk-point.js"></script>
-<script defer src="/tk-company.js"></script>
+<script src="/vendor/pmtiles-4.5.0.js"></script>
+<script src="/tk-map.js"></script>
+<script src="/tk-point.js"></script>
+<script src="/tk-company.js"></script>
 </body>
 </html>

@@ -100,20 +100,9 @@ const commonDataMiddleware = async (req, res, next) => {
           };
       });
 
-      // Проверка наличия любого стрима (активного или на паузе).
-      //
-      // Условие `deleted: { $ne: true }` убрано: поля `deleted` нет в схеме Stream
-      // и его никто нигде не выставляет. Отсутствующее поле не равно true, поэтому
-      // условие проходило всегда — мягкого удаления в проекте не существует,
-      // а строка создавала впечатление, что оно есть.
-      const stream = await Stream.findOne({ userId: currentUserId })
-        .select('_id isActive')
-        .lean();
-
-      // Общая часть собирается один раз, а от наличия стрима зависят ровно три
-      // поля. Прежде объект дублировался целиком в обеих ветках, и новое поле
-      // легко было дописать в одну из них: подтверждение возраста именно так
-      // и потерялось — в шаблон приходило только то, что перечислено здесь.
+      // Есть ли у человека эфир, каждой странице кабинета больше знать не
+      // нужно: это решает студия (/studio), куда ведёт «Запустить эфир».
+      // Раньше на каждый запрос кабинета уходил поиск эфира ради окна настроек.
       res.locals.currentUser = {
           _id: currentUser._id,
           displayName: currentUserDisplayName,
@@ -123,10 +112,7 @@ const commonDataMiddleware = async (req, res, next) => {
           // Модерация: гейт 18+ и ограничение аккаунта
           adultConfirmedAt: currentUser.adultConfirmedAt || null,
           banned: !!currentUser.banned,
-          banReason: currentUser.banReason || '',
-          hasActiveStream: !!stream,               // стрим есть — активный или на паузе
-          isPaused: stream ? !stream.isActive : false,
-          activeStreamId: stream ? stream._id.toString() : null
+          banReason: currentUser.banReason || ''
       };
 
       res.locals.subscriptions = subscriptions;

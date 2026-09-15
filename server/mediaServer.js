@@ -58,15 +58,18 @@ function setIO(io) {
 async function markObsStreamStarted(streamKey) {
   try {
     const Stream = require('./models/Stream');
+    const now = new Date();
     const updated = await Stream.findOneAndUpdate(
       { streamKey },
-      {
+      [{ $set: {
         streamType: 'obs-stream',
         streamProvider: 'obs',
         isActive: true,
-        startedAt: new Date(),
-        updatedAt: Date.now()
-      },
+        startedAt: now,
+        updatedAt: now,
+        // Первый выход в эфир: пульт по нему отличает эфир на паузе от черновика.
+        firstLiveAt: { $ifNull: ['$firstLiveAt', now] }
+      } }],
       { new: true }
     ).lean();
     if (ioRef) {
@@ -74,7 +77,8 @@ async function markObsStreamStarted(streamKey) {
         streamKey,
         streamType: 'obs-stream',
         streamProvider: 'obs',
-        isActive: true
+        isActive: true,
+        startedAt: now
       });
     }
     return updated;
@@ -157,14 +161,15 @@ function dropSession(id, why) {
     if (session && typeof session.reject === 'function') session.reject();
 }
 
-// Разрыв уже идущего вещания: модератор погасил эфир или ограничил вещателя.
-// Без этого «стоп-эфир» оставался косметикой — в базе эфир помечен погашенным,
-// а OBS продолжает лить, HLS продолжает писать сегменты и зритель их получает.
-function dropPublisher(streamKey) {
+// Разрыв уже идущего вещания: ведущий завершил эфир, модератор погасил его
+// или ограничил вещателя. Без этого «стоп-эфир» оставался косметикой —
+// в базе эфир помечен погашенным, а OBS продолжает лить, HLS продолжает
+// писать сегменты и зритель их получает.
+function dropPublisher(streamKey, why = 'прервано модерацией') {
     const live = activeStreams.get(streamKey);
     if (!live) return false;
 
-    dropSession(live.id, `вещание ${streamKey} прервано модерацией`);
+    dropSession(live.id, `вещание ${streamKey}: ${why}`);
     activeStreams.delete(streamKey);
     // donePublish на отклонённой сессии приходит не всегда, поэтому конвейер
     // гасим сами: stop() у себя проверяет, есть ли что останавливать.

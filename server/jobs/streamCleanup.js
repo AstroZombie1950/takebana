@@ -6,6 +6,7 @@
 // подключения; теперь запуск явный, из app.js.
 
 const Stream = require('../models/Stream');
+const recording = require('../utils/recording');
 
 const ACTIVE_TTL_MINUTES = Number(process.env.STREAM_CLEANUP_ACTIVE_TTL_MINUTES || 5);
 const INACTIVE_TTL_DAYS = Number(process.env.STREAM_CLEANUP_INACTIVE_TTL_DAYS || 30);
@@ -25,13 +26,14 @@ const cleanupAbandonedStreams = async () => {
       ]
     };
 
-    const toDelete = await Stream.find(query).select('_id isActive updatedAt userId streamType').lean();
+    const toDelete = await Stream.find(query).select('_id isActive updatedAt userId streamType streamKey').lean();
     if (!toDelete.length) return;
 
     console.log(`[cleanup] deleting abandoned streams: count=${toDelete.length} activeTTL=${ACTIVE_TTL_MINUTES}m inactiveTTL=${INACTIVE_TTL_DAYS}d`);
 
-    // Bulk delete
     await Stream.deleteMany({ _id: { $in: toDelete.map(s => s._id) } });
+    // Брошенный эфир так и не сказал, сохранять ли запись, — куски удаляются.
+    await Promise.all(toDelete.map((s) => recording.discard(s.streamKey).catch(() => {})));
   } catch (error) {
     console.error('[cleanup] error while deleting abandoned streams:', error);
   }
