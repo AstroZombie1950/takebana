@@ -6,6 +6,7 @@ const router = express.Router();
 const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const Notification = require('../../models/Notification');
+const { displayName } = require('../../utils/userView');
 
 router.get('/api/notifications', async (req, res) => {
   const userId = req.session.userId;
@@ -16,13 +17,19 @@ router.get('/api/notifications', async (req, res) => {
 
   // Последние десять, от новых к старым; прочитанные тоже — они просто
   // не подсвечены. Отправитель — с _id: строка ведёт в переписку с ним.
+  // Имя — как везде на сайте: логин, иначе часть почты до @ (displayName).
+  // Саму почту в браузер не отдаём: раньше она уходила получателю целиком
+  // и показывалась, если логина нет.
   const notifications = await Notification.find({ recipient: userId })
     .sort({ createdAt: -1 })
     .limit(10)
     .populate('sender', 'login email')
     .lean();
 
-  res.json(notifications);
+  res.json(notifications.map((n) => ({
+    ...n,
+    sender: n.sender ? { _id: n.sender._id, name: displayName(n.sender) } : null,
+  })));
 });
 
 // Список открыт — всё в нём прочитано: точка на колокольчике гаснет.

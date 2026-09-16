@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           notificationsContent.innerHTML = notifications.map((n) => {
             const sender = n.sender || {};
-            const name = sender.login || sender.email || t('modal.notifications.unknown');
+            const name = sender.name || t('modal.notifications.unknown');
             const isCall = n.type === 'call';
             const href = isCall ? '/chatsPage?tab=calls' : '/chatsPage?peer=' + encodeURIComponent(sender._id || '');
             const title = isCall ? t('modal.notifications.missedCall', { name }) : t('modal.notifications.from') + ' ' + name;
@@ -211,6 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Поиск в шапке: быстрые результаты выпадашкой, полные — на /search.
+// На телефоне выпадашки нет: Enter сразу открывает страницу результатов.
 //
 // Поле лежит в обычной форме, поэтому Enter и кнопка лупы работают и без
 // скрипта. Скрипт добавляет к этому выпадашку: одна строка запроса — один
@@ -223,6 +224,8 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('DOMContentLoaded', function () {
   // Меньше двух символов не ищем: столько же требует сервер.
   const MIN = 2;
+  // Граница телефона — та же, что в app.css.
+  const PHONE = window.matchMedia('(max-width: 639px)');
   const GROUPS = [
     { key: 'people',     i18n: 'search.people',     href: (x) => '/userPage/' + encodeURIComponent(x._id) },
     { key: 'streams',    i18n: 'search.streams',    href: (x) => '/stream/' + encodeURIComponent(x._id) },
@@ -305,7 +308,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // Поле и его выпадашка: в шапке и в выдвижной строке на телефоне.
   function attach(input, box) {
     if (!input || !box) return;
     let timer = null;
@@ -316,7 +318,7 @@ document.addEventListener('DOMContentLoaded', function () {
     input.addEventListener('input', () => {
       clearTimeout(timer);
       const q = input.value.trim();
-      if (q.length < MIN) return hide();
+      if (q.length < MIN || PHONE.matches) return hide();
       // Задержка: иначе каждая буква — запрос с перебором по базе.
       timer = setTimeout(() => {
         if (ctrl) ctrl.abort();
@@ -337,28 +339,6 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   attach(document.getElementById('searchInput'), document.getElementById('searchResults'));
-  attach(document.getElementById('mobileSearchField'), document.getElementById('mobileSearchFieldResults'));
-
-  // Выдвижная строка поиска на телефоне: в шапке для поля места нет.
-  const toggle = document.getElementById('mobileSearchToggle');
-  const bar = document.getElementById('mobileSearchBar');
-  const field = document.getElementById('mobileSearchField');
-  const close = document.getElementById('closeMobileSearch');
-  if (toggle && bar) {
-    toggle.addEventListener('click', () => {
-      bar.classList.remove('hidden');
-      if (field) field.focus();
-    });
-    if (close) {
-      close.addEventListener('click', () => {
-        bar.classList.add('hidden');
-        if (field) field.value = '';
-      });
-    }
-    if (field) {
-      field.addEventListener('keydown', (e) => { if (e.key === 'Escape') bar.classList.add('hidden'); });
-    }
-  }
 });
 
 // ===== Presence Client (глобально) =====
@@ -379,7 +359,7 @@ document.addEventListener('DOMContentLoaded', function () {
       socket.on(name, (detail) => document.dispatchEvent(new CustomEvent('tk:' + name, { detail })));
     });
     socket.on('notification:new', () => window.setNotificationDot(true));
-    // Пропущенный звонок — счётчик у «Сообщений» в левой панели и у вкладки
+    // Пропущенный звонок — счётчик у иконки сообщений в шапке и у вкладки
     // «Звонки». Открытая вкладка гасит его сама (chats.js).
     socket.on('call:missed', () => {
       document.querySelectorAll('[data-missed-calls]').forEach((badge) => {

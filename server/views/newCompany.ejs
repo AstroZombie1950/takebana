@@ -8,11 +8,11 @@
 <html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.company.title', descriptionKey: 'page.company.description' }) %>
-<link rel="stylesheet" href="/css/app.css">
-<link rel="stylesheet" href="/css/company.css">
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/company.css') %>">
 <%# Карта нужна только блоку «Точка на карте» (partials/venuePoint). %>
 <link rel="stylesheet" href="/vendor/maplibre-gl-6.9.0/maplibre-gl.css">
-<link rel="stylesheet" href="/css/tk-map.css">
+<link rel="stylesheet" href="<%= asset('/css/tk-map.css') %>">
 </head>
 <body class="tk-app">
 

@@ -74,6 +74,7 @@ const ACTIONS = {
   'admin.user.delete': 'Удаление аккаунта',
   'admin.audit.clear': 'Очистка журнала',
   'admin.session.kill': 'Сеанс завершён администратором',
+  'admin.password.set': 'Пароль задан администратором',
   'admin.error.resolve': 'Ошибка отмечена разобранной',
 };
 

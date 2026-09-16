@@ -19,7 +19,7 @@
     Takebana?», справа — у вошедшего уведомления, переписка и запуск эфира,
     у гостя язык, вход и регистрация. Профиль, выход и остальные ссылки —
     в левой панели (leftBar.ejs). Язык вошедшего — на странице настроек. %>
-<header class="tk-ahead<%= guest ? ' tk-ahead--guest' : '' %>">
+<header class="tk-ahead<%= guest ? ' tk-ahead--guest' : '' %><%= onAuthPage ? ' tk-ahead--auth' : '' %>">
   <button class="tk-ahead__burger" id="sidebarToggle" aria-label="<%= ta('app.menu') %>" data-i18n-aria="app.menu" aria-controls="sidebar" aria-expanded="false">
     <span></span><span></span>
   </button>
@@ -29,23 +29,23 @@
   </a>
 
   <%# Обычная форма: Enter и кнопка лупы уводят на страницу результатов
-      (/search), а выпадашка с быстрыми результатами — сверху, скриптом. %>
+      (/search), а выпадашка с быстрыми результатами — сверху, скриптом
+      (на телефоне её нет, там сразу страница). На входе и регистрации
+      поиска нет: форма прямо под шапкой, уводить с неё незачем. %>
+  <% if (!onAuthPage) { %>
   <form class="tk-ahead__search" action="/search" method="get" role="search">
     <button type="submit" class="tk-ahead__loupe" aria-label="<%= ta('search.submit') %>" data-i18n-aria="search.submit">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
     </button>
-    <input type="search" name="q" class="tk-ahead__field" id="searchInput" placeholder="<%= ta('app.searchPh') %>" data-i18n-placeholder="app.searchPh" autocomplete="off" value="<%= path === '/search' && typeof query !== 'undefined' ? query : '' %>">
+    <input type="search" name="q" class="tk-ahead__field" id="searchInput" enterkeyhint="search" placeholder="<%= ta('app.searchPh') %>" data-i18n-placeholder="app.searchPh" autocomplete="off" value="<%= path === '/search' && typeof query !== 'undefined' ? query : '' %>">
     <div class="tk-ahead__results hidden" id="searchResults"></div>
   </form>
+  <% } %>
 
   <%# Заметный вход в «что это за сервис»: не мелкая ссылка в подвале. %>
   <a href="/about" class="tk-btn tk-btn--outline tk-btn--sm tk-ahead__about"<%- path === '/about' ? ' aria-current="page"' : '' %> data-i18n="nav.whatIs"><%- t('nav.whatIs') %></a>
 
   <div class="tk-ahead__right">
-    <button class="tk-ahead__icon tk-ahead__msearch-btn" id="mobileSearchToggle" aria-label="<%= ta('app.search') %>" data-i18n-aria="app.search">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
-    </button>
-
     <% if (guest) { %>
     <div class="tk-lang tk-ahead__lang">
       <button type="button" class="tk-lang__btn<%= lang === 'ru' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'ru' %>" data-lang="ru">RU</button>
@@ -63,8 +63,10 @@
       <span class="tk-ahead__dot<%= notifications && notifications.hasUnread ? '' : ' hidden' %>" id="notificationDot"></span>
     </button>
 
+    <%# Счётчик — пропущенные звонки: звонки — вкладка переписки. %>
     <a href="/chatsPage" class="tk-ahead__icon" aria-label="<%= ta('app.chats') %>" data-i18n-aria="app.chats">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M21 11a8 8 0 01-11.5 7.2L4 20l1.8-5.5A8 8 0 1121 11Z"></path></svg>
+      <span class="tk-ahead__count<%= missedCalls ? '' : ' hidden' %>" data-missed-calls><%= missedCalls %></span>
     </a>
 
     <a href="/studio" class="tk-btn tk-btn--primary tk-btn--sm" id="startStreamButtonHeader">
@@ -82,19 +84,6 @@
   <span><span data-i18n="app.bannedText"><%- t('app.bannedText') %></span><% if (currentUser.banReason) { %> <span data-i18n="app.bannedReason"><%- t('app.bannedReason') %></span> <%= currentUser.banReason %><% } %></span>
 </div>
 <% } %>
-
-<div class="tk-msearch hidden" id="mobileSearchBar">
-  <form class="tk-ahead__search" action="/search" method="get" role="search" style="max-width: none;">
-    <button type="submit" class="tk-ahead__loupe" aria-label="<%= ta('search.submit') %>" data-i18n-aria="search.submit">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
-    </button>
-    <input type="search" name="q" class="tk-ahead__field" id="mobileSearchField" placeholder="<%= ta('app.searchPh') %>" data-i18n-placeholder="app.searchPh" autocomplete="off">
-    <button class="tk-ahead__icon" id="closeMobileSearch" aria-label="<%= ta('app.searchClose') %>" data-i18n-aria="app.searchClose" style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%);">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-    </button>
-    <div class="tk-ahead__results hidden" id="mobileSearchFieldResults"></div>
-  </form>
-</div>
 
 <%# Единственное, что скрипту нужно от сервера. %>
 <script>

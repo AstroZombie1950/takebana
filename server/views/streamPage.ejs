@@ -28,8 +28,8 @@
 <%- include('partials/tkHead', { title: s.title + ' — Takebana' }) %>
 <% } %>
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="/css/app.css">
-<link rel="stylesheet" href="/css/stream.css">
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
 </head>
 
 <body class="tk-app<%= phase === 'console' ? ' tk-app--stage' : '' %>"

@@ -3,8 +3,8 @@
 <html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName } }) %>
-<link rel="stylesheet" href="/css/app.css">
-<link rel="stylesheet" href="/css/profile.css">
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/profile.css') %>">
 </head>
 <body class="tk-app">
 

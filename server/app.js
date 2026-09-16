@@ -128,6 +128,8 @@ app.locals.hlsBase = require('./utils/hls').hlsBase;
 app.locals.clock = require('./utils/recording').clock;
 // Категории и города: форма эфира живёт в шапке каждой страницы кабинета.
 app.locals.catalog = require('./config/catalog');
+// Стили с версией по содержимому: после выкладки браузер не держит старые (utils/assets.js).
+app.locals.asset = require('./utils/assets').asset;
 // Гость по умолчанию. Шапка и левая панель (header.ejs, leftBar.ejs) есть и на
 // страницах без commonDataMiddleware — вход, документы; вошедшему эти поля
 // перекрывает он же (routes/streaming/shared.js).

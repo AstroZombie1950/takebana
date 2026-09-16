@@ -13,10 +13,10 @@
 <html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.map.title' }) %>
-<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="/vendor/maplibre-gl-6.9.0/maplibre-gl.css">
-<link rel="stylesheet" href="/css/tk-map.css">
-<link rel="stylesheet" href="/css/venues.css">
+<link rel="stylesheet" href="<%= asset('/css/tk-map.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/venues.css') %>">
 </head>
 <body class="tk-app">
 

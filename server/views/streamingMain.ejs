@@ -35,8 +35,8 @@
 <% } else { %>
 <%- include('partials/tkHead', { titleKey: 'page.' + category + '.title' }) %>
 <% } %>
-<link rel="stylesheet" href="/css/app.css">
-<link rel="stylesheet" href="/css/catalog.css">
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/catalog.css') %>">
 </head>
 <body class="tk-app">
 

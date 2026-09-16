@@ -12,8 +12,8 @@
 <html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { title: stream.title + ' — Takebana' }) %>
-<link rel="stylesheet" href="/css/app.css">
-<link rel="stylesheet" href="/css/stream.css">
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
 </head>
 
 <body class="tk-app tk-app--stage"

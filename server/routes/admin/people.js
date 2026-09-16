@@ -23,6 +23,8 @@ const Call = require('../../models/Call');
 const AuditLog = require('../../models/AuditLog');
 const Stream = require('../../models/Stream');
 const { audit } = require('../../utils/audit');
+const { validate } = require('../../middleware/validate');
+const { PASSWORD_PROVIDER, PASSWORD_MIN, PASSWORD_MAX, hashPassword } = require('../../utils/password');
 const { removeUser } = require('../../utils/userDelete');
 const { requireModerator, requireAdmin, paging, list, needle, personBrief, csvRoute } = require('./shared');
 
@@ -247,6 +249,41 @@ router.post('/users/:id/sessions/kill', requireAdmin, async (req, res) => {
     meta: { sessions: deletedCount },
   });
 
+  res.json({ ok: true, sessions: deletedCount });
+});
+
+// ── Пароль ───────────────────────────────────────────────────────────────────
+//
+// Новый пароль без старого: человек забыл его, а письма восстановления нет
+// или не доходят. Только администратору и только аккаунту со входом по
+// паролю — у вошедшего через Google пароля нет, и заведённый здесь не
+// пустил бы его никуда. Чужому администратору нельзя: иначе панель
+// отдаёт один администраторский аккаунт другому. Прежние сеансы человека
+// закрываются — пароль меняют и тогда, когда его увели.
+router.post('/users/:id/password', requireAdmin, validate({
+  password: { type: 'string', required: true, min: PASSWORD_MIN, max: PASSWORD_MAX, trim: false, label: 'Пароль' },
+}), async (req, res) => {
+  if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Пользователь не найден' });
+
+  const user = await User.findById(req.params.id).select('login email role provider');
+  if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
+  if (user.provider !== PASSWORD_PROVIDER) return res.status(400).json({ message: 'Аккаунт входит через Google, пароля у него нет' });
+  const self = req.params.id === String(req.session.userId);
+  if (user.role === 'admin' && !self) return res.status(403).json({ message: 'Пароль другого администратора сменить нельзя' });
+
+  user.password = await hashPassword(req.body.password);
+  user.passwordReset = undefined;
+  await user.save();
+
+  // Свой текущий сеанс оставляем: сменил себе пароль — не выкидывать же.
+  const { deletedCount } = await mongoose.connection.collection('mySessions')
+    .deleteMany({ 'session.userId': String(user._id), _id: { $ne: req.sessionID } });
+
+  audit(req, 'admin.password.set', {
+    targetType: 'user', target: user,
+    targetLabel: user.login || user.email || '',
+    meta: { sessions: deletedCount },
+  });
   res.json({ ok: true, sessions: deletedCount });
 });
 

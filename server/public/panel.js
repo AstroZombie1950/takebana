@@ -509,6 +509,11 @@ VIEWS.person = {
           ? '<button type="button" class="tk-btn tk-btn--ok tk-btn--xs" data-act="unban" data-id="' + esc(p.id) + '">Снять ограничение</button>'
           : '<input type="text" class="tk-field" data-reason placeholder="Причина ограничения" maxlength="300">' +
             '<button type="button" class="tk-btn tk-btn--danger tk-btn--xs" data-act="ban" data-id="' + esc(p.id) + '">Ограничить</button>') +
+        // Пароль — только аккаунту со входом по паролю, и не чужому
+        // администратору: сервер откажет так же.
+        (IS_ADMIN && a.provider === 'password' && (p.role !== 'admin' || p.id === BOOT.me.id)
+          ? '<input type="password" class="tk-field" data-password placeholder="Новый пароль" minlength="6" maxlength="200" autocomplete="new-password">' +
+            '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="password" data-id="' + esc(p.id) + '">Сменить пароль</button>' : '') +
         (IS_ADMIN && a.sessions ? '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="kill-sessions" data-id="' + esc(p.id) + '">Закрыть сеансы (' + a.sessions + ')</button>' : '') +
         // Удалить нельзя себя и администратора — сервер откажет так же.
         (IS_ADMIN && p.role !== 'admin' && p.id !== BOOT.me.id
@@ -1117,6 +1122,17 @@ view.addEventListener('click', async (e) => {
       if (!await confirmDialog('Снять ограничение?', { okText: 'Снять' })) return;
       await send('POST', '/api/moderation/users/' + id + '/unban');
       toast('Ограничение снято', 'ok');
+      return show();
+    }
+
+    if (act === 'password') {
+      const field = el.closest('[data-card]').querySelector('[data-password]');
+      const password = field.value;
+      if (password.length < 6) return toast('Пароль — не короче 6 символов', 'error');
+      if (!await confirmDialog('Задать новый пароль? Открытые сеансы человека закроются, войти можно будет только с новым.', { okText: 'Сменить' })) return;
+      const r = await send('POST', '/api/admin/users/' + id + '/password', { password });
+      field.value = '';
+      toast('Пароль сменён' + (r.sessions ? ', сеансов закрыто: ' + r.sessions : ''), 'ok');
       return show();
     }
 

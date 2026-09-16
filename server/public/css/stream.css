@@ -602,8 +602,7 @@ html.tk-stage-open { overflow: hidden; }
 @media (max-width: 1023px) {
   /* Шапка сайта на эфире не нужна: картинке и чату важен каждый пиксель.
    * Назад — стрелкой браузера или жестом, меню — с других страниц. */
-  .tk-app--stage .tk-ahead,
-  .tk-app--stage .tk-msearch { display: none; }
+  .tk-app--stage .tk-ahead { display: none; }
 
   .tk-live {
     padding: 0;

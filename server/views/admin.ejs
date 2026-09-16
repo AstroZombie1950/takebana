@@ -4,7 +4,7 @@
 <%# Панель осознанно только на русском, переключателя языка в ней нет. %>
 <%- include('partials/tkHead', { title: title }) %>
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="/css/admin.css">
+<link rel="stylesheet" href="<%= asset('/css/admin.css') %>">
 <%# escapeHtml обязателен: таблицы собираются строками и уходят в innerHTML,
     а значения полей вводят посетители — от названия заведения до текста
     жалобы и сообщения об ошибке в чужом браузере. %>

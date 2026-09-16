@@ -22,10 +22,10 @@
 <head>
 <%- include('partials/tkHead', { titleKey: query ? 'page.search.query' : 'page.search.title', titleVars: query ? { q: query } : undefined }) %>
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="/css/app.css">
-<link rel="stylesheet" href="/css/catalog.css">
-<link rel="stylesheet" href="/css/profile.css">
-<link rel="stylesheet" href="/css/search.css">
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/catalog.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/profile.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/search.css') %>">
 </head>
 <body class="tk-app">
 

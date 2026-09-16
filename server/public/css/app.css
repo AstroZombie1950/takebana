@@ -231,6 +231,23 @@ body.tk-app {
 
 .tk-ahead__icon:hover { color: var(--tk-paper); }
 
+/* Счётчик пропущенных звонков у иконки сообщений. */
+.tk-ahead__count {
+  position: absolute;
+  top: 1px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  text-align: center;
+}
+
 /* Метка непрочитанного. */
 .tk-ahead__dot {
   position: absolute;
@@ -276,6 +293,8 @@ body.tk-app {
 }
 
 .tk-aside__me:hover { background: rgba(227, 66, 52, .08); }
+/* Свой профиль или его настройки открыты. */
+.tk-aside__me--on { background: rgba(227, 66, 52, .1); }
 
 .tk-aside__me-ava {
   width: 40px;
@@ -383,19 +402,6 @@ body.tk-app {
   font-weight: 500;
   color: var(--tk-beige);
   transition: background-color .18s ease, color .18s ease;
-}
-
-/* Счётчик пропущенных звонков. */
-.tk-aside__badge {
-  margin-left: auto;
-  min-width: 20px;
-  padding: 2px 6px;
-  background: var(--tk-accent);
-  color: var(--tk-ink);
-  font-family: Oswald, sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  text-align: center;
 }
 
 .tk-aside__item:hover { background: rgba(227, 66, 52, .08); color: var(--tk-paper); }
@@ -545,42 +551,25 @@ body.tk-app {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
- * Узкие экраны: поиск и меню отдельными панелями
- */
-.tk-msearch {
-  padding: 12px 20px;
-  background: var(--tk-ink);
-  border-bottom: 1px solid var(--tk-rule);
-  position: relative;
-  z-index: 39;
-}
-
-@media (min-width: 640px) {
-  .tk-ahead__msearch-btn,
-  .tk-msearch { display: none; }
-}
-
-/* Ниже 640 шапка не вмещает всё: на 320px она переполняла страницу почти
- * на 300px. Инлайн-поиск заменяется кнопкой (ради неё .tk-msearch и есть),
- * логотип и запуск эфира прячутся: эфир запускается из левой панели. */
+ * Узкие экраны
+ *
+ * Ниже 640 шапка не вмещает всё: на 320px она переполняла страницу почти
+ * на 300px. Поле поиска остаётся в шапке, как на десктопе, — место ему
+ * освобождают логотип и запуск эфира: эфир запускается из левой панели. */
 @media (max-width: 639px) {
   .tk-ahead {
     padding: 0 12px;
     gap: 10px;
   }
 
-  /* Поиск прячется только в шапке: выдвижная строка поиска под ней —
-   * тот же .tk-ahead__search, и без уточнения пряталась вместе с ним
-   * (кнопка лупы на телефоне открывала пустую полосу). */
-  .tk-ahead > .tk-ahead__search,
   .tk-ahead__brand,
   #startStreamButtonHeader { display: none; }
 
-  /* У гостя справа только «Войти» — логотипу место есть, и главной странице
-   * сайта он нужнее, чем кабинету. */
-  .tk-ahead--guest .tk-ahead__brand { display: block; }
+  /* На входе и регистрации поиска нет, и без логотипа шапка осталась бы
+   * одним бургером. */
+  .tk-ahead--auth .tk-ahead__brand { display: block; }
 
-  .tk-ahead__right { gap: 8px; }
+  .tk-ahead__right { gap: 4px; }
 }
 
 /* Скрипт Tailwind подгружается в рантайме и вставляет свой preflight в конец
@@ -591,7 +580,6 @@ body.tk-app {
  */
 .tk-ahead,
 .tk-aside,
-.tk-msearch,
 .tk-modal {
   font-family: 'Golos Text', Helvetica, sans-serif;
 }
