@@ -1,5 +1,6 @@
-// Страницы, которые рендерит сам сервер: главная, вход, регистрация, кабинет,
-// админка, выход. API и эфиры живут в соседних роутерах.
+// Страницы, которые рендерит сам сервер: «О нас», вход, регистрация, карта,
+// админка, выход. Главная — витрина эфиров (routes/streaming/catalog.js),
+// API и эфиры живут в соседних роутерах.
 
 const express = require('express');
 const router = express.Router();
@@ -9,39 +10,12 @@ const User = require('../models/User');
 const Establishments = require('../models/Establishments');
 const catalog = require('../config/catalog');
 const { commonDataMiddleware } = require('./streaming/shared');
+const { requireAuth } = require('../middleware/auth');
 const { readVenueFilters } = require('../utils/venueFilters');
 
-// Куда вести человека после входа. Значение в сессию кладёт /set-next,
-// читают его /, /login, /register и userRoutes. Блок был скопирован в трёх
-// местах этого файла слово в слово.
-function nextUrl(req) {
-  return req.session.next === 'service2' ? '/streaming' : '/main';
-}
-
-function checkLoggedIn(req, res, next) {
-  if (!req.session.login) {
-    res.redirect('/login');
-  } else {
-    next();
-  }
-}
-
-router.get('/set-next', (req, res) => {
-  const next = req.query.next || 'default'; // Получаем желаемый маршрут из параметров запроса
-  req.session.next = next; // Сохраняем его в сессии
-
-  // Перенаправляем на страницу входа или регистрации
-  res.redirect('/login'); // Или '/register' в зависимости от вашей логики
-});
-
-router.get('/', (req, res) => {
-  // Вошедшему главная не нужна — он идёт в кабинет.
-  if (req.session.login) return res.redirect(nextUrl(req));
-
-  res.render('home');
-});
-
-router.get('/about', async (req, res) => {
+// «О нас» — бывший лендинг главной. Вошедшему шапка и панель — свои,
+// поэтому commonDataMiddleware.
+router.get('/about', commonDataMiddleware, (req, res) => {
   res.render('about');
 });
 
@@ -57,16 +31,16 @@ router.get('/panel', async (req, res) => {
               isAdmin: user.role === 'admin'
           });
       } else {
-          res.redirect('/main'); // Редирект на домашнюю страницу
+          res.redirect('/');
       }
   } else {
-      res.redirect('/main'); // Редирект на домашнюю страницу
+      res.redirect('/');
   }
 });
 
 router.get('/login', (req, res) => {
   if (req.session && req.session.login) {
-    res.redirect(nextUrl(req));
+    res.redirect('/');
   } else {
     res.render('login');
   }
@@ -74,25 +48,26 @@ router.get('/login', (req, res) => {
 
 router.get('/register', (req, res) => {
   if (req.session && req.session.login) {
-    res.redirect(nextUrl(req));
+    res.redirect('/');
   } else {
     res.render('register');
   }
 });
 
 // Заявка на заведение — страница кабинета: без входа её всё равно не отправить.
-router.get('/company-register', checkLoggedIn, commonDataMiddleware, (req, res) => {
+router.get('/company-register', requireAuth, commonDataMiddleware, (req, res) => {
   res.render('newCompany', { catalog });
 });
 
 
 // Карта заведений — в каркасе кабинета, поэтому commonDataMiddleware:
-// шапке и левой панели нужны профиль, подписки и уведомления.
-router.get('/main', checkLoggedIn, commonDataMiddleware, async (req, res) => {
+// шапке и левой панели нужны профиль, подписки и уведомления. Гость карту
+// смотрит, камеру и оценку — после входа (tk-venues.js).
+router.get('/main', commonDataMiddleware, async (req, res) => {
   res.render('map', {
     catalog,
     filters: readVenueFilters(req.query),
-    hasEstablishments: !!(await Establishments.exists({ owner: req.session.userId })),
+    hasEstablishments: !!req.session.userId && !!(await Establishments.exists({ owner: req.session.userId })),
   });
 });
 

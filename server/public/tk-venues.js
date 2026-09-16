@@ -29,6 +29,14 @@
     return many;
   }
 
+  // Гость карту смотрит, а камеру и оценку — после входа: туда и отправляем,
+  // с возвратом на эту же карту. true — ушли на вход.
+  function needLogin() {
+    if (window.TK && window.TK.userId) return false;
+    location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
+    return true;
+  }
+
   // Ответ с ошибкой — исключение с текстом сервера: его и показываем.
   function api(url, opts) {
     return fetch(url, opts).then(async (r) => {
@@ -98,6 +106,8 @@
   let venues = [];
   let pending = null;
 
+  const venueParam = new URLSearchParams(location.search).get('venue') || '';
+
   const tip = document.createElement('div');
   tip.className = 'tk-venues__tip';
   tip.hidden = true;
@@ -115,7 +125,15 @@
       tip.style.left = at.x + 'px';
       tip.style.top = at.y + 'px';
     });
-    if (navigator.geolocation) {
+    // Ссылка на конкретное заведение — /main?venue=<id>: так на карту ведут
+    // результаты поиска по сайту. Тогда карта летит к нему, а не к посетителю.
+    const wanted = /^[a-f\d]{24}$/i.test(venueParam) ? venueParam : '';
+    if (wanted) {
+      api('/api/venues/' + wanted).then((v) => {
+        if (v.location && Number.isFinite(v.location.lat)) focusVenue(v);
+        openCard(wanted);
+      }).catch(() => {});
+    } else if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition((p) => m.flyTo(p.coords.longitude, p.coords.latitude, 12));
     }
   }).catch((e) => {
@@ -294,7 +312,7 @@
 
   rate.addEventListener('click', (e) => {
     const b = e.target.closest('[data-value]');
-    if (!b || !cardId) return;
+    if (!b || !cardId || needLogin()) return;
     const id = cardId;
     api('/rateEstablishment', {
       method: 'POST',
@@ -343,6 +361,7 @@
   onClose.set(liveModal, stopWatching);
 
   function watch(id, name) {
+    if (needLogin()) return;
     stopWatching();
     const media = new MediaStream();
     liveVideo.srcObject = media;

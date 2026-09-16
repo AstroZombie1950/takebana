@@ -1,28 +1,30 @@
+<%# Эфир или запись не найдены: завершён, удалён или адрес неверный. %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.ended.title' }) %>
 <meta name="robots" content="noindex">
+<link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="/css/status.css">
 </head>
-<body>
+<body class="tk-app">
 
-<div class="tk-shell">
-<%- include('partials/tkHeader') %>
+<%- include('partials/header') %>
 
-<main class="tk-status">
-  <span class="tk-status__kicker" data-i18n="ended.kicker"><%- t('ended.kicker') %></span>
-  <h1 class="tk-status__title" data-i18n="ended.title"><%- t('ended.title') %></h1>
-  <p class="tk-status__text" data-i18n="ended.text"><%- t('ended.text') %></p>
-</main>
+<div>
+  <%- include('partials/leftBar') %>
 
-<%- include('partials/tkFooter') %>
+  <main class="tk-app-main">
+    <div class="tk-status">
+      <span class="tk-status__kicker" data-i18n="ended.kicker"><%- t('ended.kicker') %></span>
+      <h1 class="tk-status__title" data-i18n="ended.title"><%- t('ended.title') %></h1>
+      <p class="tk-status__text" data-i18n="ended.text"><%- t('ended.text') %></p>
+
+      <div class="tk-status__acts">
+        <a href="/" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="age.back"><%- t('age.back') %></a>
+      </div>
+    </div>
+  </main>
 </div>
-
-<%- include('partials/tkMenu') %>
-
-<script defer src="/tk-i18n-<%= lang %>.js"></script>
-<script defer src="/tk-i18n.js"></script>
-<script defer src="/tk.js"></script>
 </body>
 </html>

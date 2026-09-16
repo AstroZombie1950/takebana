@@ -80,16 +80,20 @@
     });
   }
 
-  document.getElementById('chatForm').addEventListener('submit', function (e) {
-    e.preventDefault();
-    send();
-  });
-  input.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+  // Гость чат читает, а поля ввода у него нет — ссылка на вход (streamChat.ejs).
+  var chatForm = document.getElementById('chatForm');
+  if (chatForm) {
+    chatForm.addEventListener('submit', function (e) {
       e.preventDefault();
       send();
-    }
-  });
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+        e.preventDefault();
+        send();
+      }
+    });
+  }
 
   // ── Время в эфире — с выхода в эфир, а не с создания записи ──
   var durationEl = document.getElementById('streamDuration');

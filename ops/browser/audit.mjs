@@ -33,7 +33,11 @@ const SCREENS = [
 ];
 
 const PUBLIC = [
-  ['главная', '/'],
+  ['главная (витрина)', '/'],
+  ['каталог: бизнес', '/streaming/business'],
+  ['карта заведений', '/main'],
+  ['поиск', '/search?q=demo'],
+  ['авторы', '/authors'],
   ['вход', '/login'],
   ['регистрация', '/register'],
   ['о проекте', '/about'],
@@ -42,9 +46,9 @@ const PUBLIC = [
   ['персональные данные', '/personal_data_processing'],
 ];
 const PRIVATE = [
-  ['каталог эфиров', '/streaming'],
+  ['витрина вошедшему', '/'],
   ['каталог с фильтрами', '/streaming/business?sub=horeca&city=belgrade&sort=new'],
-  ['личная главная', '/main'],
+  ['карта вошедшему', '/main'],
   ['переписка', '/chatsPage'],
   ['журнал звонков', '/chatsPage?tab=calls'],
   ['настройки профиля', '/settings'],

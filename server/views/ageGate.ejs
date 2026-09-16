@@ -1,7 +1,6 @@
 <%#
-  Гейт 18+. Сюда попадает только вошедший зритель помеченного эфира, поэтому
-  каркас кабинетный, как на остальных страницах за входом: гостевая шапка
-  предлагала бы войти тому, кто уже вошёл.
+  Гейт 18+ помеченного эфира или записи. Подтверждение хранится в аккаунте:
+  вошедший подтверждает здесь же, гостя гейт зовёт войти и возвращает обратно.
 %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
@@ -25,13 +24,18 @@
       <p class="tk-status__text" data-i18n="age.text"><%- t('age.text') %></p>
 
       <div class="tk-status__acts">
+        <% if (currentUser) { %>
         <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="ageConfirm" data-i18n="age.confirm"><%- t('age.confirm') %></button>
-        <a href="/streaming" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="age.back"><%- t('age.back') %></a>
+        <% } else { %>
+        <a href="/login?next=<%= encodeURIComponent(url) %>" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="age.login"><%- t('age.login') %></a>
+        <% } %>
+        <a href="/" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="age.back"><%- t('age.back') %></a>
       </div>
     </div>
   </main>
 </div>
 
+<% if (currentUser) { %>
 <script>
   // Подтверждение уходит на сервер и запоминается в аккаунте, поэтому после
   // ответа страница просто перезагружается: маршрут эфира пропустит.
@@ -47,5 +51,6 @@
     }
   });
 </script>
+<% } %>
 </body>
 </html>

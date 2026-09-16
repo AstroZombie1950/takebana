@@ -1,4 +1,4 @@
-/* Каталог эфиров: фильтры, «Показать ещё» в рекомендациях, «Стать первым».
+/* Каталог эфиров: фильтры и плашка гостю.
  *
  * Фильтры — обычная GET-форма, и без скрипта она работает перезагрузкой
  * страницы. Скрипт перехватывает смену значения и подменяет только сетку:
@@ -78,14 +78,15 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // «Показать ещё» в рекомендациях: раскрывает тех, кого роут уже прислал.
-  var more = document.getElementById('showMoreUsers');
-  if (more) {
-    more.addEventListener('click', function () {
-      document.querySelectorAll('.tk-rec__item.hidden').forEach(function (item) {
-        item.classList.remove('hidden');
-      });
-      more.remove();
+  // Плашка «Что такое Takebana?» у гостя: закрыл — больше не показываем.
+  // Cookie, а не localStorage: её читает сервер и плашку просто не рисует.
+  var introClose = document.getElementById('tkIntroClose');
+  if (introClose) {
+    introClose.addEventListener('click', function () {
+      document.cookie = 'tk_intro=0; path=/; max-age=31536000; samesite=lax';
+      document.getElementById('tkIntro').remove();
     });
   }
+
 });
+

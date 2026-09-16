@@ -1,10 +1,11 @@
 <%# Шапка эфира — общая у пульта ведущего и страницы зрителя: название,
-    автор, описание. Зрителю — подписка и жалоба. На телефоне видно только
+    автор, описание. Зрителю — подписка и жалоба, гостю — ссылка на вход
+    вместо подписки. На телефоне видно только
     название: остальное раскрывается кнопкой «▾», чтобы чат получил экран. %>
 <div class="tk-live__info" id="streamInfo">
   <div class="tk-live__title-row">
     <%# Шапки сайта на телефоне у эфира нет — назад ведёт эта стрелка. %>
-    <a href="/streaming" class="tk-live__back" aria-label="<%= ta('stream.back') %>" data-i18n-aria="stream.back">
+    <a href="/" class="tk-live__back" aria-label="<%= ta('stream.back') %>" data-i18n-aria="stream.back">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
     </a>
     <h1 class="tk-live__title"><%= stream.title %></h1>
@@ -26,7 +27,11 @@
         <% } %>
       </div>
 
-      <% if (!isStreamer) { %>
+      <% if (!currentUser) { %>
+      <div class="tk-live__author-acts">
+        <a href="/login?next=<%= encodeURIComponent(url) %>" class="tk-btn tk-btn--primary tk-btn--xs" data-i18n="stream.subscribe"><%- t('stream.subscribe') %></a>
+      </div>
+      <% } else if (!isStreamer) { %>
       <div class="tk-live__author-acts">
         <% if (isSubscribed) { %>
           <button type="button" class="tk-btn tk-btn--outline tk-btn--xs js-unsubscribe" data-i18n="stream.unsubscribe"><%- t('stream.unsubscribe') %></button>

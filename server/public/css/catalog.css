@@ -1,4 +1,4 @@
-/* Каталог эфиров — /streaming и его категории.
+/* Каталог эфиров — главная (/) и разделы /streaming/:category.
  *
  * Раскладка одной страницы: сетки, отступы и медиазапросы под этот макет.
  * Общее (токены, шрифты, кнопки, поля) — tk.css, каркас кабинета — app.css.
@@ -12,6 +12,55 @@
   max-width: 1440px;
   padding: 40px;
 }
+
+/* ── Плашка гостю «Что такое Takebana?» ─────────────────────────────────
+ * Над всей страницей, киноварная планка слева — как у активного раздела
+ * в панели: заметно, но не рекламный баннер. */
+.tk-intro {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 40px;
+  padding: 18px 20px 18px 24px;
+  border: 1px solid var(--tk-rule);
+  border-left: 3px solid var(--tk-accent);
+  background: rgba(227, 66, 52, .06);
+}
+
+.tk-intro__body { flex: 1; min-width: 0; }
+
+.tk-intro__h {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--tk-paper);
+}
+
+.tk-intro__p {
+  margin: 4px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tk-beige);
+}
+
+.tk-intro__more { flex: none; white-space: nowrap; }
+
+.tk-intro__close {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--tk-muted);
+  cursor: pointer;
+}
+
+.tk-intro__close:hover { color: var(--tk-paper); }
 
 /* ── Шапка страницы ──────────────────────────────────────────────────────
  * Слева заголовок и метрики, справа рекомендации. Раскладка та же, что была
@@ -82,8 +131,11 @@
   flex-direction: column;
 }
 
+/* display только через :not(.hidden): иначе он перебивает .hidden из app.css,
+   скрытые рекомендации видны сразу, и «Показать ещё» раскрывать нечего. */
+.tk-rec__item:not(.hidden) { display: flex; }
+
 .tk-rec__item {
-  display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 0;
@@ -468,6 +520,10 @@
 
 @media (max-width: 767px) {
   .tk-cat { padding: 28px 20px 40px; }
+  .tk-intro { flex-wrap: wrap; gap: 14px; padding: 16px 8px 16px 18px; margin-bottom: 28px; }
+  .tk-intro__body { flex-basis: calc(100% - 60px); }
+  .tk-intro__close { align-self: flex-start; }
+  .tk-intro__more { order: 1; }
   .tk-cat__h1 { font-size: 30px; }
   .tk-cat__lede { font-size: 15px; }
   .tk-cat__h2 { font-size: 24px; }

@@ -1,0 +1,192 @@
+<%#
+  Страница поиска (/search). Сюда приводит Enter в строке поиска и ссылка
+  «Все результаты» из выпадашки; что ищется — utils/search.js, вкладки —
+  routes/search.js.
+
+  Карточки эфиров и записей — те же, что в каталоге и на странице автора,
+  поэтому подключены их стили: одинаковые вещи должны выглядеть одинаково,
+  а файлы уже лежат в кэше у любого, кто ходил по сайту.
+%>
+<%
+  var groups = [
+    { key: 'people',     items: results.people,     i18n: 'search.people' },
+    { key: 'streams',    items: results.streams,    i18n: 'search.streams' },
+    { key: 'recordings', items: results.recordings, i18n: 'search.recordings' },
+    { key: 'venues',     items: results.venues,     i18n: 'search.venues' }
+  ].filter(function (g) { return tab === 'all' || tab === g.key; });
+
+  var href = function (t) { return '/search?q=' + encodeURIComponent(query) + (t === 'all' ? '' : '&tab=' + t); };
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { titleKey: query ? 'page.search.query' : 'page.search.title', titleVars: query ? { q: query } : undefined }) %>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/catalog.css">
+<link rel="stylesheet" href="/css/profile.css">
+<link rel="stylesheet" href="/css/search.css">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-search">
+
+      <p class="tk-kicker" data-i18n="search.kicker"><%- t('search.kicker') %></p>
+      <%# Запрос выводится отдельным узлом и с экранированием. Подставлять его
+          в словарную строку нельзя: строки словаря вставляются как разметка
+          (public/tk-i18n.js), и тег из запроса исполнился бы. %>
+      <h1 class="tk-search__h1">
+        <% if (query) { %><span data-i18n="search.h1"><%- t('search.h1') %></span>: <span class="tk-search__q">«<%= query %>»</span>
+        <% } else { %><span data-i18n="search.h1empty"><%- t('search.h1empty') %></span><% } %>
+      </h1>
+
+      <%# Своё поле на странице: с телефона строка поиска в шапке спрятана
+          за кнопкой, а запрос уточняют чаще всего именно здесь. %>
+      <form class="tk-search__form" action="/search" method="get" role="search">
+        <input type="search" name="q" class="tk-field tk-search__field" value="<%= query %>"
+               placeholder="<%= ta('app.searchPh') %>" data-i18n-placeholder="app.searchPh"
+               autocomplete="off" aria-label="<%= ta('app.search') %>" data-i18n-aria="app.search">
+        <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="search.submit"><%- t('search.submit') %></button>
+      </form>
+
+      <% if (tooShort) { %>
+      <p class="tk-search__note" data-i18n="search.tooShort"><%- t('search.tooShort') %></p>
+      <% } else if (query) { %>
+
+      <nav class="tk-tabs" aria-label="<%= ta('search.tabsAria') %>" data-i18n-aria="search.tabsAria">
+        <% tabs.forEach(function (key) { var n = key === 'all' ? counts.total : counts[key]; %>
+        <a href="<%= href(key) %>" class="tk-tabs__item<%= tab === key ? ' tk-tabs__item--on' : '' %>"<%- tab === key ? ' aria-current="page"' : '' %>>
+          <span data-i18n="search.<%= key %>"><%- t('search.' + key) %></span>
+          <span class="tk-tabs__num"><%= n %></span>
+        </a>
+        <% }); %>
+      </nav>
+
+      <% if (!counts.total) { %>
+      <div class="tk-empty">
+        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+        <p class="tk-empty__h" data-i18n="search.emptyTitle"><%- t('search.emptyTitle') %></p>
+        <p class="tk-empty__p" data-i18n="search.emptyText"><%- t('search.emptyText') %></p>
+      </div>
+      <% } %>
+
+      <% groups.forEach(function (group) { if (!group.items.length) return; %>
+      <section class="tk-search__sec">
+        <div class="tk-search__head">
+          <h2 class="tk-search__h2" data-i18n="<%= group.i18n %>"><%- t(group.i18n) %></h2>
+          <span class="tk-note"><%= counts[group.key] %></span>
+          <%# На вкладке «Всё» показаны первые пять — остальные на своей вкладке. %>
+          <% if (tab === 'all' && counts[group.key] > group.items.length) { %>
+          <a href="<%= href(group.key) %>" class="tk-search__more" data-i18n="search.allOf"><%- t('search.allOf') %></a>
+          <% } %>
+        </div>
+
+        <% if (group.key === 'people') { %>
+        <div class="tk-people">
+          <% group.items.forEach(function (person) { %>
+          <a href="/userPage/<%= person._id %>" class="tk-person" data-presence-user="<%= person._id %>">
+            <span class="tk-person__ava"<% if (!person.avatarStyle.url) { %> data-bg="<%= person.avatarStyle.gradient %>"<% } %>>
+              <% if (person.avatarStyle.url) { %><img src="<%= person.avatarStyle.url %>" alt="" loading="lazy"><% } else { %><%= person.avatarStyle.initial %><% } %>
+              <span class="presence-dot <%= person.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
+            </span>
+            <span class="tk-person__body">
+              <span class="tk-person__name"><%= person.displayName %></span>
+              <span class="tk-person__meta">
+                <span data-i18n="authors.followers"><%- t('authors.followers') %></span>: <%= person.followersCount %>
+              </span>
+              <span class="tk-person__meta" data-presence-text>
+                <% var pk = person.isOnline ? 'common.online' : 'common.offline'; %>
+                <span data-i18n="<%= pk %>"><%- t(pk) %></span>
+              </span>
+            </span>
+          </a>
+          <% }); %>
+        </div>
+
+        <% } else if (group.key === 'streams') { %>
+        <div class="tk-grid">
+          <% group.items.forEach(function (stream, i) { %>
+          <a href="/stream/<%= stream._id %>" class="tk-card" style="animation-delay: <%= i * 70 %>ms">
+            <div class="tk-card__shot">
+              <% if (stream.thumbnail) { %><img src="<%= stream.thumbnail %>" alt="" loading="lazy">
+              <% } else { %><svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg><% } %>
+              <span class="tk-card__live">LIVE</span>
+              <span class="tk-card__eyes">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M1.5 12S5 5.5 12 5.5 22.5 12 22.5 12 19 18.5 12 18.5 1.5 12 1.5 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <%= stream.viewers %>
+              </span>
+            </div>
+            <div class="tk-card__body">
+              <div class="tk-card__ava"<% if (!stream.author.avatarStyle.url) { %> data-bg="<%= stream.author.avatarStyle.gradient %>"<% } %>>
+                <% if (stream.author.avatarStyle.url) { %><img src="<%= stream.author.avatarStyle.url %>" alt="" loading="lazy"><% } else { %><%= stream.author.avatarStyle.initial %><% } %>
+              </div>
+              <div class="tk-card__text">
+                <h3 class="tk-card__title"><%= stream.title %></h3>
+                <p class="tk-card__who"><%= stream.author.displayName %></p>
+                <% var cat = catalog.CATEGORIES[stream.category], city = catalog.CITY_NAME[stream.city]; %>
+                <% if (cat || city || stream.isAdult) { %>
+                <div class="tk-card__tags">
+                  <% if (stream.isAdult) { %><span class="tk-card__cat">18+</span><% } %>
+                  <% if (cat) { %><span class="tk-card__cat" data-i18n="<%= cat.i18n %>"><%= ta(cat.i18n, cat.name) %></span><% } %>
+                  <% if (city) { %><span class="tk-card__cat" data-i18n="city.<%= stream.city %>"><%= ta('city.' + stream.city, city) %></span><% } %>
+                </div>
+                <% } %>
+              </div>
+            </div>
+          </a>
+          <% }); %>
+        </div>
+
+        <% } else if (group.key === 'recordings') { %>
+        <div class="tk-recs">
+          <% group.items.forEach(function (rec) { %>
+          <a href="/recording/<%= rec._id %>" class="tk-recard">
+            <span class="tk-recard__thumb">
+              <% if (rec.thumb) { %><img src="<%= rec.thumb %>" alt="" loading="lazy"><% } %>
+              <% if (rec.duration) { %><span class="tk-recard__len"><%= clock(rec.duration) %></span><% } %>
+              <% if (rec.isAdult) { %><span class="tk-recard__adult">18+</span><% } %>
+            </span>
+            <span class="tk-recard__title"><%= rec.title %></span>
+            <span class="tk-recard__date"><%= rec.author.displayName %> · <%= date(rec.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></span>
+          </a>
+          <% }); %>
+        </div>
+
+        <% } else { %>
+        <%# Заведение живёт на карте: ссылка открывает её и сразу карточку. %>
+        <div class="tk-places">
+          <% group.items.forEach(function (venue) { %>
+          <a href="/main?venue=<%= venue._id %>" class="tk-place">
+            <span class="tk-place__shot">
+              <% if (venue.photo) { %><img src="<%= venue.photo %>" alt="" loading="lazy">
+              <% } else { %><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square" aria-hidden="true"><path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg><% } %>
+              <% if (venue.online) { %><span class="tk-place__live" data-i18n="venues.liveNow"><%- t('venues.liveNow') %></span><% } %>
+            </span>
+            <span class="tk-place__body">
+              <span class="tk-place__name"><%= venue.name %></span>
+              <span class="tk-place__meta">
+                <% if (venue.type) { %><span data-i18n="venue.<%= venue.type %>"><%= ta('venue.' + venue.type, catalog.VENUE_TYPE_NAME[venue.type] || venue.type) %></span><% } %>
+                <% if (venue.type && venue.city && catalog.CITY_NAME[venue.city]) { %> · <% } %>
+                <% if (catalog.CITY_NAME[venue.city]) { %><span data-i18n="city.<%= venue.city %>"><%= ta('city.' + venue.city, catalog.CITY_NAME[venue.city]) %></span><% } %>
+              </span>
+              <% if (venue.address) { %><span class="tk-place__meta"><%= venue.address %></span><% } %>
+            </span>
+          </a>
+          <% }); %>
+        </div>
+        <% } %>
+      </section>
+      <% }); %>
+
+      <% } %>
+    </div>
+  </main>
+</div>
+</body>
+</html>

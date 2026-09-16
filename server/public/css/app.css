@@ -105,14 +105,22 @@ body.tk-app {
 .tk-ahead__field::placeholder { color: var(--tk-muted); }
 .tk-ahead__field:focus { border-color: var(--tk-accent); }
 
+/* Лупа — кнопка отправки формы: с ней поиск работает и без скрипта. */
 .tk-ahead__loupe {
   position: absolute;
   left: 13px;
   top: 50%;
   transform: translateY(-50%);
-  pointer-events: none;
+  z-index: 1;
+  display: flex;
+  padding: 0;
+  background: none;
+  border: 0;
   color: var(--tk-muted);
+  cursor: pointer;
 }
+
+.tk-ahead__loupe:hover { color: var(--tk-paper); }
 
 /* Выпадающие результаты поиска. */
 .tk-ahead__results {
@@ -139,6 +147,45 @@ body.tk-app {
 .search-result-item:last-child { border-bottom: none; }
 .search-result-item:hover { background: rgba(227, 66, 52, .12); }
 
+/* Выдача сгруппирована по видам: люди, эфиры, записи, заведения. */
+.tk-found__group {
+  margin: 0;
+  padding: 10px 14px 6px;
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+  border-bottom: 1px solid rgba(144, 113, 99, .25);
+}
+
+/* Последняя строка выпадашки — переход на полную страницу результатов. */
+.tk-found__all {
+  display: block;
+  padding: 12px 14px;
+  text-align: center;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--tk-accent);
+  border-top: 1px solid var(--tk-rule);
+}
+
+.tk-found__all:hover { background: rgba(227, 66, 52, .12); color: var(--tk-paper); }
+
+/* Обложка эфира, записи или заведения в строке выдачи. */
+.tk-found__shot {
+  width: 56px;
+  height: 34px;
+  flex: none;
+  overflow: hidden;
+  background: #120E0C;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-found__shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
 /* Правая группа прижата к краю шапки, как бы ни был широк экран. */
 .tk-ahead__right {
   display: flex;
@@ -146,6 +193,25 @@ body.tk-app {
   gap: 16px;
   flex: none;
   margin-left: auto;
+}
+
+/* «Что такое Takebana?» — сразу за поиском, заметной кнопкой. На телефоне
+ * места нет: там тот же пункт в левой панели и плашка над витриной. */
+.tk-ahead__about { flex: none; white-space: nowrap; }
+.tk-ahead__about[aria-current="page"] { border-color: var(--tk-accent); color: var(--tk-paper); }
+
+/* Гостю: язык, вход и регистрация. У .tk-lang отступ под шапку лендинга. */
+.tk-ahead__lang { margin-left: 0; }
+.tk-ahead__login,
+.tk-ahead__signup { white-space: nowrap; }
+
+@media (max-width: 1199px) {
+  .tk-ahead__lang { display: none; }
+}
+
+@media (max-width: 767px) {
+  .tk-ahead__about,
+  .tk-ahead__signup { display: none; }
 }
 
 .tk-ahead__icon {
@@ -248,6 +314,30 @@ body.tk-app {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Гостю вместо профиля — приглашение войти. */
+.tk-aside__guest {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--tk-rule);
+  margin-bottom: 6px;
+}
+
+.tk-aside__guest-h {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+}
+
+.tk-aside__guest .tk-aside__sub-state { margin: 0; line-height: 1.45; }
+
+.tk-aside__guest-acts {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.tk-aside__lang { margin: 4px 18px 8px; }
 
 /* Контент страницы уходит вправо на ширину панели. Тот же порог, что был
  * у прежней вёрстки: ниже 1024 панель выезжает поверх. */
@@ -447,6 +537,15 @@ body.tk-app {
   .tk-ahead__burger { display: flex; }
 }
 
+/* Широкие страницы — «О нас», вход, документы: их вёрстка во всю ширину окна,
+ * поэтому панель на любой ширине не стоит слева, а выезжает по бургеру. */
+@media (min-width: 1024px) {
+  .tk-app--wide .tk-aside { transform: translateX(-100%); visibility: hidden; transition: transform .25s ease, visibility 0s .25s; }
+  .tk-app--wide .tk-aside.is-open { transform: none; visibility: visible; transition: transform .25s ease; }
+  .tk-app--wide .tk-ahead__burger { display: flex; }
+  .tk-app--wide .tk-aside__overlay:not([hidden]) { display: block; }
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
  * Узкие экраны: поиск и меню отдельными панелями
  */
@@ -478,6 +577,10 @@ body.tk-app {
   .tk-ahead > .tk-ahead__search,
   .tk-ahead__brand,
   #startStreamButtonHeader { display: none; }
+
+  /* У гостя справа только «Войти» — логотипу место есть, и главной странице
+   * сайта он нужнее, чем кабинету. */
+  .tk-ahead--guest .tk-ahead__brand { display: block; }
 
   .tk-ahead__right { gap: 8px; }
 }

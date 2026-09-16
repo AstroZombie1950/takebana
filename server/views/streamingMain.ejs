@@ -10,7 +10,31 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
+<% if (category === 'popular') { %>
+<%# «Популярное» — главная сайта: её адрес и пересылают, отсюда карточка
+    для соцсетей и мессенджеров. %>
+<%- include('partials/tkHead', { titleKey: 'page.home.title', descriptionKey: 'page.home.description' }) %>
+<link rel="canonical" href="https://takebana.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Takebana">
+<meta property="og:title" content="Takebana — платформа прямых эфиров для бизнеса">
+<meta property="og:description" content="Производители, заведения, блогеры и эксперты выходят в прямой эфир, чтобы продавать, вдохновлять и отвечать на вопросы без посредников.">
+<meta property="og:url" content="https://takebana.com/">
+<meta property="og:image" content="https://takebana.com/img/og-cover.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Takebana">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:locale:alternate" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Takebana — платформа прямых эфиров для бизнеса">
+<meta name="twitter:description" content="Производители, заведения, блогеры и эксперты выходят в прямой эфир, чтобы продавать, вдохновлять и отвечать на вопросы без посредников.">
+<meta name="twitter:image" content="https://takebana.com/img/og-cover.jpg">
+<meta name="twitter:image:alt" content="Takebana">
+<% } else { %>
 <%- include('partials/tkHead', { titleKey: 'page.' + category + '.title' }) %>
+<% } %>
 <link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="/css/catalog.css">
 </head>
@@ -23,6 +47,21 @@
 
   <main class="tk-app-main">
     <div class="tk-cat">
+
+      <% if (showIntro) { %>
+      <%# Гостю, который пришёл впервые, — что это за сервис. Крестик ставит
+          cookie tk_intro=0 (catalog.js), и сервер плашку больше не рисует. %>
+      <aside class="tk-intro" id="tkIntro" aria-labelledby="tkIntroTitle">
+        <div class="tk-intro__body">
+          <p class="tk-intro__h" id="tkIntroTitle" data-i18n="intro.title"><%- t('intro.title') %></p>
+          <p class="tk-intro__p" data-i18n="intro.text"><%- t('intro.text') %></p>
+        </div>
+        <a href="/about" class="tk-btn tk-btn--primary tk-btn--sm tk-intro__more" data-i18n="intro.more"><%- t('intro.more') %></a>
+        <button type="button" class="tk-intro__close" id="tkIntroClose" aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+        </button>
+      </aside>
+      <% } %>
 
       <!-- Шапка страницы -->
       <div class="tk-cat__hero">
@@ -48,16 +87,17 @@
           </div>
         </div>
 
-        <!-- Рекомендации -->
+        <!-- Авторы -->
+        <%# Трое авторов: сначала те, кто в эфире, потом популярные и новые
+            (utils/authors.js). Пустых аккаунтов и забаненных здесь больше нет,
+            как и кнопки «Показать ещё»: за остальными — страница /authors. %>
+        <% if (users.length) { %>
         <section>
-          <p class="tk-kicker" data-i18n="catalog.recommendations"><%- t('catalog.recommendations') %></p>
+          <p class="tk-kicker" data-i18n="authors.kicker"><%- t('authors.kicker') %></p>
 
-          <%# Роут отдаёт четверых, в макете показаны трое. Остальные лежат
-              скрытыми, их раскрывает «Показать ещё»: раньше эта кнопка
-              не делала ничего. %>
           <div class="tk-rec__list">
-            <% users.forEach(function (user, i) { %>
-            <a href="/userPage/<%= user._id %>" class="tk-rec__item<%= i > 2 ? ' hidden' : '' %>" data-presence-user="<%= user._id %>">
+            <% users.forEach(function (user) { %>
+            <a href="<%= user.stream ? '/stream/' + user.stream._id : '/userPage/' + user._id %>" class="tk-rec__item" data-presence-user="<%= user._id %>">
               <div class="tk-rec__ava"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
                 <% if (user.avatarStyle.url) { %>
                   <img src="<%= user.avatarStyle.url %>" alt="" loading="lazy">
@@ -71,21 +111,24 @@
               </div>
               <div class="tk-rec__body">
                 <p class="tk-rec__name"><%= user.displayName %></p>
+                <% if (user.stream) { %>
+                <p class="tk-rec__state"><span class="tk-person__live" data-i18n="authors.liveMark"><%- t('authors.liveMark') %></span> · <%= user.stream.viewers %></p>
+                <% } else { %>
                 <p class="tk-rec__state" data-presence-text>
                   <% if (user.isOnline) { %><span data-i18n="common.online"><%- t('common.online') %></span><% } else { %><span data-i18n="common.offline"><%- t('common.offline') %></span><% } %>
                 </p>
+                <% } %>
               </div>
             </a>
             <% }); %>
           </div>
 
-          <% if (users.length > 3) { %>
-          <button type="button" class="tk-rec__more" id="showMoreUsers">
-            <span data-i18n="catalog.showMore"><%- t('catalog.showMore') %></span>
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
-          </button>
-          <% } %>
+          <a href="/authors" class="tk-rec__more">
+            <span data-i18n="authors.all"><%- t('authors.all') %></span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+          </a>
         </section>
+        <% } %>
       </div>
 
       <%# Фильтры — обычная GET-форма: без скрипта она уходит перезагрузкой,

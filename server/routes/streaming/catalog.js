@@ -1,4 +1,5 @@
-// Витрина: список эфиров по категориям и страница пользователя.
+// Витрина: список эфиров по категориям и страница пользователя. «Популярное» —
+// главная сайта (/). Гость смотрит всё это без входа.
 
 const express = require('express');
 const router = express.Router();
@@ -8,9 +9,9 @@ const User = require('../../models/User');
 const Recording = require('../../models/Recording');
 const Stream = require('../../models/Stream');
 const Subscription = require('../../models/Subscription');
-const { requireAuthApi } = require('../../middleware/auth');
 const { SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
-const { commonDataMiddleware, getStreamUsers, getActiveStreamsCount } = require('./shared');
+const { commonDataMiddleware, getActiveStreamsCount } = require('./shared');
+const authors = require('../../utils/authors');
 const userView = require('../../utils/userView');
 
 // Вкладки каталога. popular — все категории разом, остальные совпадают
@@ -26,7 +27,11 @@ const PAGES = {
 // идущих эфиров десятки, а не тысячи.
 const PAGE_SIZE = 48;
 
-const baseUrl = (category) => (category === 'popular' ? '/streaming' : `/streaming/${category}`);
+const baseUrl = (category) => (category === 'popular' ? '/' : `/streaming/${category}`);
+
+// Плашка «Что такое Takebana?» над витриной у гостя. Закрыл — cookie
+// ставит catalog.js, сервер её читает, чтобы плашка не мигала при загрузке.
+const introClosed = (req) => /(?:^|;\s*)tk_intro=0(?:;|$)/.test(req.headers.cookie || '');
 
 // Фильтры приходят из адресной строки, то есть откуда угодно, а qs превращает
 // `?city[$ne]=x` в объект. Каждое значение сверяется со списком допустимых:
@@ -75,24 +80,15 @@ async function findStreams(category, filters) {
   });
 }
 
-router.get('/streaming/:category?', commonDataMiddleware, async (req, res) => {
+async function renderCatalog(req, res, category) {
   const _t0 = Date.now();
-
-  if (!req.session.userId) {
-    return res.redirect('/');
-  }
-
-  const category = req.params.category || 'popular';
   const page = PAGES[category];
-  if (!page) {
-    return res.redirect('/streaming');
-  }
-
   const filters = readFilters(category, req.query);
 
   // Запросы параллельно (ускоряет F5)
   const [users, totalStreamsCount, streams] = await Promise.all([
-    getStreamUsers(),
+    // Трое в колонку «Авторы»; кто это — utils/authors.js, остальные на /authors.
+    authors.featured(3),
     getActiveStreamsCount(),
     findStreams(category, filters),
   ]);
@@ -106,14 +102,28 @@ router.get('/streaming/:category?', commonDataMiddleware, async (req, res) => {
     users,
     streams,
     totalStreamsCount,
+    showIntro: !req.session.userId && !introClosed(req),
   });
-  console.log(`[perf] GET /streaming/${category} render in ${Date.now() - _t0}ms`);
+  console.log(`[perf] GET ${req.path} render in ${Date.now() - _t0}ms`);
+}
+
+router.get('/', commonDataMiddleware, (req, res) => renderCatalog(req, res, 'popular'));
+
+// Прежние адреса «Популярного» — на главную, с фильтрами: ими делились ссылками.
+router.get(['/streaming', '/streaming/popular'], (req, res) => {
+  const qs = req.originalUrl.indexOf('?');
+  res.redirect(qs === -1 ? '/' : '/' + req.originalUrl.slice(qs));
+});
+
+router.get('/streaming/:category', commonDataMiddleware, (req, res) => {
+  if (!PAGES[req.params.category]) return res.redirect('/');
+  return renderCatalog(req, res, req.params.category);
 });
 
 // Одна сетка, без страницы: её подгружает catalog.js при смене фильтра.
 // Без commonDataMiddleware — шапка, подписки и уведомления здесь не рисуются,
 // а это пять запросов к базе на каждое нажатие тега.
-router.get('/streaming/:category/grid', requireAuthApi, async (req, res) => {
+router.get('/streaming/:category/grid', async (req, res) => {
   const category = req.params.category;
   if (!PAGES[category]) {
     return res.sendStatus(404);
@@ -129,10 +139,6 @@ router.get('/streaming/:category/grid', requireAuthApi, async (req, res) => {
 
 
 router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
-  if (!req.session.userId) { // Проверка авторизации
-    return res.redirect('/');
-  }
-
   try {
     const userId = req.params.id; // ID пользователя, чей профиль просматривается
     const currentUserId = req.session.userId; // ID текущего пользователя из сессии

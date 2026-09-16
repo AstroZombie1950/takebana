@@ -12,6 +12,7 @@ const Subscription = require('../../models/Subscription');
 const User = require('../../models/User');
 const catalog = require('../../config/catalog');
 const { commonDataMiddleware } = require('./shared');
+const { requireAuth } = require('../../middleware/auth');
 const recording = require('../../utils/recording');
 const { randomUUID } = require('crypto');
 const userView = require('../../utils/userView');
@@ -59,9 +60,7 @@ function renderConsole(req, res, { stream, user, defaults, streamKey }) {
 
 // Студия: кнопки «Запустить эфир» в шапке и меню. Эфир уже есть — на его
 // пульт: второго эфира у одного человека не бывает.
-router.get('/studio', commonDataMiddleware, async (req, res) => {
-  if (!req.session.userId) return res.redirect('/');
-
+router.get('/studio', requireAuth, commonDataMiddleware, async (req, res) => {
   const existing = await Stream.findOne({ userId: req.session.userId }).select('_id').lean();
   if (existing) return res.redirect(`/stream/${existing._id}`);
 
@@ -75,9 +74,9 @@ router.get('/studio', commonDataMiddleware, async (req, res) => {
   renderConsole(req, res, { stream: null, user: null, defaults: owner.streamDefaults || {}, streamKey: owner.streamKey });
 });
 
+// Гость смотрит эфир и читает чат; писать, подписаться и пожаловаться —
+// после входа (streamInfo.ejs, streamChat.ejs).
 router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
-  if (!req.session.userId) return res.redirect('/');
-
   const page = await loadStream(req.params.streamId);
   if (!page) return res.status(404).render('streamNotFound');
 
@@ -85,7 +84,8 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
 
   // Гейт 18+ — до всего остального: страница помеченного эфира не должна
   // ни отдать плеер, ни записать зрителя в комнату, пока возраст не
-  // подтверждён. Вещателя не спрашиваем — метку он поставил сам.
+  // подтверждён. Вещателя не спрашиваем — метку он поставил сам. Гостю
+  // подтверждать нечем: возраст хранится в аккаунте, гейт зовёт войти.
   if (page.stream.isAdult && !isStreamer && !(res.locals.currentUser && res.locals.currentUser.adultConfirmedAt)) {
     return res.render('ageGate');
   }
@@ -94,7 +94,7 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
     return renderConsole(req, res, { ...page, defaults: page.stream, streamKey: page.stream.streamKey });
   }
 
-  const isSubscribed = !!(await Subscription.exists({
+  const isSubscribed = !!req.session.userId && !!(await Subscription.exists({
     subscriberId: req.session.userId,
     subscribedToId: page.user._id,
   }));

@@ -5,12 +5,15 @@
   title: 'Политика в отношении обработки персональных данных — Takebana',
   description: 'Политика Takebana в отношении обработки персональных данных.'
 }) %>
+<link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="/css/prose.css">
 </head>
-<body>
+<body class="tk-app tk-app--wide">
+
+<%- include('../partials/header') %>
+<%- include('../partials/leftBar') %>
 
 <div class="tk-shell">
-<%- include('../partials/tkHeader') %>
 
 <%# Документы — только на русском; шапка и подвал — на языке интерфейса. %>
 <main class="tk-prose" data-bg="paper" lang="ru">
@@ -138,10 +141,5 @@
 <%- include('../partials/tkFooter') %>
 </div>
 
-<%- include('../partials/tkMenu') %>
-
-<script defer src="/tk-i18n-<%= lang %>.js"></script>
-<script defer src="/tk-i18n.js"></script>
-<script defer src="/tk.js"></script>
 </body>
 </html>

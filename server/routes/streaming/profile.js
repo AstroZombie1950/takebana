@@ -140,48 +140,4 @@ router.delete('/profile/gallery/:name', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/search-users', requireAuth, async (req, res) => {
-  const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
-
-  // Если нет запроса, возвращаем пустой массив
-  if (!query) {
-      return res.json([]);
-  }
-
-  // Строка поиска — текст, а не регулярное выражение: без экранирования
-  // «(a+)+$» подвешивал бы процесс, а «.*» находил бы всех.
-  const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-
-  try {
-      // Ищем пользователей по имени или email (ограничиваем 7 результатами)
-      const users = await User.find({
-          $or: [
-              { login: pattern }, // Поиск по имени
-              { email: pattern }  // Поиск по email
-          ]
-      }).limit(7);
-
-      // Для каждого пользователя считаем количество подписчиков
-      const usersWithFollowers = await Promise.all(users.map(async user => {
-          const followersCount = await Subscription.countDocuments({ subscribedToId: user._id });
-          const displayName = userView.displayName(user);
-          const avatarStyle = userView.avatarStyle(user, displayName);
-
-          return {
-              _id: user._id,
-              displayName,
-              avatarStyle, // Аватарка или градиент с буквой
-              followersCount
-          };
-      }));
-
-      // Возвращаем результат на фронтенд
-      res.json(usersWithFollowers);
-  } catch (error) {
-      console.error('Ошибка при поиске пользователей:', error);
-      res.status(500).json({ message: 'Ошибка сервера при поиске пользователей' });
-  }
-});
-
-
 module.exports = router;

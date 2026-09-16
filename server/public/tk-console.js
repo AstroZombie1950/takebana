@@ -89,7 +89,7 @@
             toast(t('stream.saving'), 'ok');
             location.href = '/userPage/' + data.userId + '#recordings';
           } else {
-            location.href = '/streaming';
+            location.href = '/';
           }
         });
     }).catch(function (e) {

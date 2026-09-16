@@ -12,7 +12,7 @@ const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const mongoose = require('mongoose');
 const User = require('../../models/User');
-const { requireAuthApi, requireNotBanned } = require('../../middleware/auth');
+const { requireAuth, requireAuthApi, requireNotBanned } = require('../../middleware/auth');
 const Conversation = require('../../models/Conversation');
 const Message = require('../../models/Message');
 const Notification = require('../../models/Notification');
@@ -101,11 +101,7 @@ async function deliver(req, { conversation, sender, recipient, content, forwarde
   return out;
 }
 
-router.get('/chatsPage', commonDataMiddleware, async (req, res) => {
-  if (!req.session.userId || !res.locals.currentUser) {
-    return res.redirect('/');
-  }
-  const me = new ObjectId(String(res.locals.currentUser._id));
+router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => {  const me = new ObjectId(String(res.locals.currentUser._id));
 
   const conversations = await Conversation.find({
     $or: [{ userOne: me }, { userTwo: me }],

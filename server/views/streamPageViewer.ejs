@@ -20,13 +20,13 @@
       data-stream-id="<%= stream._id %>"
       data-stream-key="<%= streamKey %>"
       data-hls-base="<%= hlsBase %>"
-      data-user-id="<%= currentUser._id %>"
+      data-user-id="<%= currentUser ? currentUser._id : '' %>"
       data-streamer-id="<%= user._id %>"
       data-stream-type="<%= stream.streamType %>"
       data-stream-active="<%= stream.isActive ? '1' : '0' %>"
       data-started-at="<%= stream.isActive && stream.startedAt ? new Date(stream.startedAt).toISOString() : '' %>">
 
-<%- include('partials/header') %>
+<%- include('partials/header', { socket: true }) %>
 
 <div>
   <%- include('partials/leftBar') %>

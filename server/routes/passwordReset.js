@@ -123,7 +123,7 @@ if (mailConfigured) {
     await new Promise((resolve, reject) => req.session.regenerate((err) => (err ? reject(err) : resolve())));
     req.session.userId = user._id.toString();
     req.session.login = user.login || 'anon';
-    res.json({ message: 'Пароль изменён', redirectUrl: '/main' });
+    res.json({ message: 'Пароль изменён', redirectUrl: '/' });
   });
 }
 

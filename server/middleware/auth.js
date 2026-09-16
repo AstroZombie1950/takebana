@@ -5,14 +5,27 @@
 // PUT /updateEstablishment/:id позволял анониму переписать любое заведение,
 // зная только его идентификатор.
 
+// Куда вернуть человека после входа. Только путь своего сайта: «//evil.com»
+// и «/\\evil.com» браузер понял бы как чужой адрес, и ссылка на вход
+// уводила бы с сайта сразу после ввода пароля.
+function safeNext(value) {
+    return typeof value === 'string' && /^\/(?![\/\\])/.test(value) && value.length <= 500 ? value : '';
+}
+
+// Страница входа с возвратом туда, откуда человека на неё отправили.
+function loginUrl(req) {
+    const back = req.method === 'GET' ? safeNext(req.originalUrl) : '';
+    return back && back !== '/' ? '/login?next=' + encodeURIComponent(back) : '/login';
+}
+
 // Пускает только вошедшего пользователя.
-// Для обычных страниц отвечает редиректом на главную, для запросов из
-// JavaScript — кодом 401, чтобы фронтенд мог показать «войдите».
+// Для обычных страниц отвечает переходом на вход с возвратом обратно, для
+// запросов из JavaScript — кодом 401, чтобы фронтенд мог показать «войдите».
 function requireAuth(req, res, next) {
     if (req.session && req.session.userId) return next();
 
     if (req.accepts('html') && !req.xhr && req.method === 'GET') {
-        return res.redirect('/');
+        return res.redirect(loginUrl(req));
     }
     return res.status(401).json({ message: 'Необходима авторизация' });
 }
@@ -154,4 +167,4 @@ function wrap(handler) {
     };
 }
 
-module.exports = { requireAuth, requireAuthApi, requireOwner, canModerate, requireModerator, requireAdmin, requireNotBanned, wrap };
+module.exports = { safeNext, loginUrl, requireAuth, requireAuthApi, requireOwner, canModerate, requireModerator, requireAdmin, requireNotBanned, wrap };

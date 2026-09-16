@@ -1,4 +1,6 @@
-/* Каркас кабинета: шапка, левая панель, модальные окна, поиск и звонки.
+/* Каркас сайта: шапка, левая панель, модальные окна, поиск и звонки.
+ * У гостя (TK.userId пуст) окон и звонков на странице нет, присутствие
+ * на сокете не слушается — точки рисует сервер.
  *
  * Раньше жил инлайном в header.ejs — 1537 строк в шаблоне, которые заново
  * прилетали с каждой страницей и не кэшировались. Из EJS сюда приходит
@@ -42,6 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Растянули окно с открытой панелью — на десктопе она не выезжает, а
   // запрет прокрутки остался бы.
   matchMedia('(min-width: 1024px)').addEventListener('change', (e) => { if (e.matches) setOpen(false); });
+});
+
+// Ссылки без адреса: соцсети и телеграм в подвале — адресов пока нет.
+// Гасим только прыжок наверх страницы.
+document.addEventListener('click', (e) => {
+  if (e.target.closest && e.target.closest('a[href="#"]')) e.preventDefault();
 });
 
 // Apply gradients from data-bg (used across multiple pages)
@@ -202,218 +210,153 @@ document.addEventListener('DOMContentLoaded', () => {
 
 });
 
-// Поиск
-document.addEventListener('DOMContentLoaded', function() {
-  const searchInput = document.getElementById('searchInput');
-  const searchResults = document.getElementById('searchResults');
-  const mobileSearchInput = document.getElementById('mobileSearchInput');
-  const mobileSearchResults = document.getElementById('mobileSearchResults');
+// Поиск в шапке: быстрые результаты выпадашкой, полные — на /search.
+//
+// Поле лежит в обычной форме, поэтому Enter и кнопка лупы работают и без
+// скрипта. Скрипт добавляет к этому выпадашку: одна строка запроса — один
+// запрос к /api/search, ответ группами (люди, эфиры, записи, заведения).
+//
+// Прежняя версия искала только людей, на каждое нажатие клавиши, и после
+// отрисовки пересобирала строки клонированием узлов, чтобы навесить
+// обработчик, — ссылки перехватывались и открывались через setTimeout.
+// Теперь строка — просто ссылка.
+document.addEventListener('DOMContentLoaded', function () {
+  // Меньше двух символов не ищем: столько же требует сервер.
+  const MIN = 2;
+  const GROUPS = [
+    { key: 'people',     i18n: 'search.people',     href: (x) => '/userPage/' + encodeURIComponent(x._id) },
+    { key: 'streams',    i18n: 'search.streams',    href: (x) => '/stream/' + encodeURIComponent(x._id) },
+    { key: 'recordings', i18n: 'search.recordings', href: (x) => '/recording/' + encodeURIComponent(x._id) },
+    { key: 'venues',     i18n: 'search.venues',     href: (x) => '/main?venue=' + encodeURIComponent(x._id) }
+  ];
 
-  // Функция поиска (общая для десктопа и мобильного)
-  async function performSearch(query, resultsContainer) {
-    if (!query) {
-      resultsContainer.classList.add('hidden');
-      resultsContainer.innerHTML = '';
-      return;
-    }
-
-    try {
-      const response = await fetch(`/search-users?q=${encodeURIComponent(query)}`);
-      const users = await response.json();
-
-      if (users.length > 0) {
-        resultsContainer.classList.remove('hidden');
-        resultsContainer.innerHTML = users.map(user => {
-          // Исправляем градиент для аватарок - правильный формат
-          let gradientStyle = '';
-          if (user.avatarStyle && user.avatarStyle.gradient) {
-            // Если градиент уже в правильном формате
-            if (user.avatarStyle.gradient.includes('linear-gradient')) {
-              gradientStyle = user.avatarStyle.gradient;
-            } else {
-              // Если градиент в старом формате, преобразуем
-              gradientStyle = `linear-gradient(135deg, ${user.avatarStyle.gradient})`;
-            }
-          } else {
-            // Дефолтный градиент
-            gradientStyle = 'linear-gradient(135deg, #6366f1, #8b5cf6)';
-          }
-          
-          const avatarHtml = user.avatarStyle?.url
-            ? `<img class="tk-found__ava" src="${escapeHtml(user.avatarStyle.url)}" alt="" loading="lazy">`
-            : `<div class="tk-found__ava" style="background: ${escapeHtml(gradientStyle)};">${escapeHtml(user.avatarStyle?.initial || user.displayName?.charAt(0)?.toUpperCase() || '?')}</div>`;
-          
-          return `
-            <a href="/userPage/${encodeURIComponent(user._id)}" class="search-result-item" data-user-id="${escapeHtml(user._id)}" data-presence-user="${escapeHtml(user._id)}">
-              ${avatarHtml}
-              <span class="tk-found__body">
-                <span class="tk-found__name">${escapeHtml(user.displayName || t('app.noName'))}</span>
-                <span class="tk-found__meta">${escapeHtml(String(user.followersCount || 0))} ${escapeHtml(t('user.subscribers'))}</span>
-                <span class="tk-found__meta">
-                  <span class="presence-dot"></span>
-                  <span data-presence-text></span>
-                </span>
-              </span>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
-            </a>`;
-        }).join('');
-        
-        // Добавляем обработчики кликов для результатов поиска
-        addSearchResultClickHandlers(resultsContainer);
-        // Инициализируем presence для новых результатов
-        const ids = Array.from(resultsContainer.querySelectorAll('[data-presence-user]')).map(n => n.getAttribute('data-presence-user'));
-        // Люди из поиска появились на экране только что — подписываемся и на них.
-        if (window.subscribePresence) window.subscribePresence(ids.filter(Boolean));
-        if (ids.length) {
-          fetch('/api/presence?ids=' + encodeURIComponent(ids.join(',')))
-            .then(r => r.json())
-            .then(data => {
-              (data.users || []).forEach(u => {
-                // используем глобальную функцию, если доступна
-                if (typeof window !== 'undefined') {
-                  const ev = new CustomEvent('presence:init', { detail: u });
-                  window.dispatchEvent(ev);
-                }
-              });
-            })
-            .catch(() => {});
-        }
-      } else {
-        resultsContainer.classList.remove('hidden');
-        resultsContainer.innerHTML = `
-          <div class="tk-found__empty">
-            <p class="tk-found__name" data-i18n="app.searchEmpty">${escapeHtml(t('app.searchEmpty'))}</p>
-            <p class="tk-note" data-i18n="app.searchEmptyHint">${escapeHtml(t('app.searchEmptyHint'))}</p>
-          </div>`;
-      }
-    } catch (error) {
-      console.error('Ошибка поиска пользователей:', error);
-    }
-  }
-  
-  // Функция для добавления обработчиков кликов к результатам поиска
-  function addSearchResultClickHandlers(resultsContainer) {
-    // Убираем старые обработчики
-    const existingItems = resultsContainer.querySelectorAll('.search-result-item');
-    existingItems.forEach(item => {
-      const newItem = item.cloneNode(true);
-      item.parentNode.replaceChild(newItem, item);
-    });
-    
-    // Добавляем новые обработчики
-    const searchItems = resultsContainer.querySelectorAll('.search-result-item');
-    searchItems.forEach(item => {
-      item.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const href = this.getAttribute('href');
-        
-        // Скрываем результаты поиска
-        resultsContainer.classList.add('hidden');
-        
-        // Переходим на страницу пользователя
-        setTimeout(() => {
-          window.location.href = href;
-        }, 100);
-      });
-      
-      // Добавляем hover эффект
-      item.addEventListener('mouseenter', function() {
-        this.style.backgroundColor = '#f9fafb';
-      });
-      
-      item.addEventListener('mouseleave', function() {
-        this.style.backgroundColor = '';
-      });
-    });
+  // Аватар человека: фото или буква на своём градиенте.
+  function avatar(style, fallback) {
+    const s = style || {};
+    return s.url
+      ? `<img class="tk-found__ava" src="${escapeHtml(s.url)}" alt="" loading="lazy">`
+      : `<span class="tk-found__ava" style="background: ${escapeHtml(s.gradient || 'var(--tk-accent)')};">${escapeHtml(s.initial || fallback || '?')}</span>`;
   }
 
-  // Обработчики для десктопного поиска
-  if (searchInput && searchResults) {
+  // Обложка эфира или записи: без картинки — пустая рамка, чтобы строки
+  // не прыгали по высоте.
+  const shot = (url) => `<span class="tk-found__shot">${url ? `<img src="${escapeHtml(url)}" alt="" loading="lazy">` : ''}</span>`;
 
-    searchInput.addEventListener('input', async function() {
-      const query = searchInput.value.trim();
-      await performSearch(query, searchResults);
+  function row(key, item) {
+    const href = GROUPS.find((g) => g.key === key).href(item);
+    let media = '';
+    let name = '';
+    let meta = '';
+
+    if (key === 'people') {
+      media = avatar(item.avatarStyle, item.displayName);
+      name = item.displayName;
+      meta = `${t('authors.followers')}: ${item.followersCount}`;
+    } else if (key === 'streams') {
+      media = shot(item.thumbnail);
+      name = item.title;
+      meta = `${item.author.displayName} · ${item.viewers} ${t('search.viewers')}`;
+    } else if (key === 'recordings') {
+      media = shot(item.thumb);
+      name = item.title;
+      meta = item.author.displayName;
+    } else {
+      media = shot(item.photo);
+      name = item.name;
+      meta = [item.address, item.online ? t('venues.liveNow') : ''].filter(Boolean).join(' · ');
+    }
+
+    return `
+      <a href="${href}" class="search-result-item"${key === 'people' ? ` data-presence-user="${escapeHtml(item._id)}"` : ''}>
+        ${media}
+        <span class="tk-found__body">
+          <span class="tk-found__name">${escapeHtml(name)}</span>
+          <span class="tk-found__meta">${escapeHtml(meta)}</span>
+        </span>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+      </a>`;
+  }
+
+  function render(box, data) {
+    const parts = GROUPS
+      .filter((g) => (data[g.key] || []).length)
+      .map((g) => `<p class="tk-found__group" data-i18n="${g.i18n}">${escapeHtml(t(g.i18n))}</p>` +
+                  data[g.key].map((item) => row(g.key, item)).join(''));
+
+    box.innerHTML = parts.length
+      ? parts.join('') +
+        `<a href="/search?q=${encodeURIComponent(data.query)}" class="tk-found__all" data-i18n="search.allResults">${escapeHtml(t('search.allResults'))}</a>`
+      : `<div class="tk-found__empty">
+           <p class="tk-found__name" data-i18n="app.searchEmpty">${escapeHtml(t('app.searchEmpty'))}</p>
+           <p class="tk-note" data-i18n="app.searchEmptyHint">${escapeHtml(t('app.searchEmptyHint'))}</p>
+         </div>`;
+    box.classList.remove('hidden');
+
+    // Люди из выдачи появились на экране только что — точки присутствия
+    // ведёт тот же механизм, что и в панели подписок.
+    const ids = Array.from(box.querySelectorAll('[data-presence-user]'))
+      .map((el) => el.getAttribute('data-presence-user'));
+    if (ids.length && window.subscribePresence) {
+      window.subscribePresence(ids);
+      fetch('/api/presence?ids=' + encodeURIComponent(ids.join(',')))
+        .then((r) => (r.ok ? r.json() : { users: [] }))
+        .then((d) => (d.users || []).forEach((u) => window.dispatchEvent(new CustomEvent('presence:init', { detail: u }))))
+        .catch(() => {});
+    }
+  }
+
+  // Поле и его выпадашка: в шапке и в выдвижной строке на телефоне.
+  function attach(input, box) {
+    if (!input || !box) return;
+    let timer = null;
+    let ctrl = null;
+
+    const hide = () => { box.classList.add('hidden'); box.replaceChildren(); };
+
+    input.addEventListener('input', () => {
+      clearTimeout(timer);
+      const q = input.value.trim();
+      if (q.length < MIN) return hide();
+      // Задержка: иначе каждая буква — запрос с перебором по базе.
+      timer = setTimeout(() => {
+        if (ctrl) ctrl.abort();
+        const own = ctrl = new AbortController();
+        fetch('/api/search?q=' + encodeURIComponent(q), { signal: own.signal })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => { if (data) render(box, data); })
+          .catch((e) => { if (e.name !== 'AbortError') console.error('[search]', e); });
+      }, 200);
     });
 
-    document.addEventListener('click', function(event) {
-      if (!searchInput.contains(event.target) && !searchResults.contains(event.target)) {
-        searchResults.classList.add('hidden');
-      }
+    input.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
+    // Выпадашка — внутри формы: щелчок по ссылке не должен её отправлять.
+    box.addEventListener('mousedown', (e) => e.stopPropagation());
+    document.addEventListener('click', (e) => {
+      if (!input.contains(e.target) && !box.contains(e.target)) hide();
     });
   }
 
-  // Обработчики для выдвижного мобильного поиска
-  const mobileSearchToggle = document.getElementById('mobileSearchToggle');
-  const mobileSearchBar = document.getElementById('mobileSearchBar');
-  const mobileSearchField = document.getElementById('mobileSearchField');
-  const closeMobileSearch = document.getElementById('closeMobileSearch');
-  const mobileSearchFieldResults = document.getElementById('mobileSearchFieldResults');
-  
-  if (mobileSearchToggle && mobileSearchBar) {
-    // Открытие поиска
-    mobileSearchToggle.addEventListener('click', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      mobileSearchBar.classList.remove('hidden');
-      if (mobileSearchField) mobileSearchField.focus();
+  attach(document.getElementById('searchInput'), document.getElementById('searchResults'));
+  attach(document.getElementById('mobileSearchField'), document.getElementById('mobileSearchFieldResults'));
+
+  // Выдвижная строка поиска на телефоне: в шапке для поля места нет.
+  const toggle = document.getElementById('mobileSearchToggle');
+  const bar = document.getElementById('mobileSearchBar');
+  const field = document.getElementById('mobileSearchField');
+  const close = document.getElementById('closeMobileSearch');
+  if (toggle && bar) {
+    toggle.addEventListener('click', () => {
+      bar.classList.remove('hidden');
+      if (field) field.focus();
     });
-    
-    // Закрытие поиска
-    if (closeMobileSearch) {
-      closeMobileSearch.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        closeMobileSearchBar();
+    if (close) {
+      close.addEventListener('click', () => {
+        bar.classList.add('hidden');
+        if (field) field.value = '';
       });
     }
-    
-    // Функция закрытия мобильного поиска
-    function closeMobileSearchBar() {
-      mobileSearchBar.classList.add('hidden');
-      if (mobileSearchField) {
-        mobileSearchField.value = '';
-      }
-      if (mobileSearchFieldResults) {
-        mobileSearchFieldResults.classList.add('hidden');
-      }
-    }
-    
-    // Поиск в выдвижном поле
-    if (mobileSearchField && mobileSearchFieldResults) {
-      mobileSearchField.addEventListener('input', async function() {
-        const query = mobileSearchField.value.trim();
-        await performSearch(query, mobileSearchFieldResults);
-      });
-      
-      // Предотвращаем закрытие при клике на поле поиска
-      mobileSearchField.addEventListener('click', function(e) {
-        e.stopPropagation();
-      });
-      
-      // Предотвращаем закрытие при клике на результаты
-      mobileSearchFieldResults.addEventListener('click', function(e) {
-        e.stopPropagation();
-      });
-      
-      // Закрытие поиска при нажатии Escape
-      mobileSearchField.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-          closeMobileSearchBar();
-        }
-      });
-      
-      // Закрытие результатов при клике вне (но не закрываем весь поиск)
-      document.addEventListener('click', function(event) {
-        if (!mobileSearchBar.contains(event.target) && !mobileSearchToggle.contains(event.target)) {
-          // Только скрываем результаты, но оставляем поле поиска открытым
-          if (mobileSearchFieldResults) {
-            mobileSearchFieldResults.classList.add('hidden');
-          }
-        }
-      });
+    if (field) {
+      field.addEventListener('keydown', (e) => { if (e.key === 'Escape') bar.classList.add('hidden'); });
     }
   }
 });
@@ -422,7 +365,7 @@ document.addEventListener('DOMContentLoaded', function() {
 (function(){
   function initPresenceAndCalls(){
   try {
-    if (typeof io !== 'function') return; // socket.io клиент должен быть подключен
+    if (typeof io !== 'function' || !TK.userId) return; // socket.io — только вошедшему
     const socket = io(window.location.origin, { transports: ['websocket'] });
     window.callSocket = socket;
     console.log('[client] socket init');

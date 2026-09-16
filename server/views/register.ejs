@@ -2,12 +2,15 @@
 <html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.register.title', descriptionKey: 'page.register.description' }) %>
+<link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="/css/auth.css">
 </head>
-<body>
+<body class="tk-app tk-app--wide">
+
+<%- include('partials/header') %>
+<%- include('partials/leftBar') %>
 
 <div class="tk-shell">
-<%- include('partials/tkHeader') %>
 
 <main class="tk-auth">
   <div class="tk-auth__card">
@@ -56,12 +59,6 @@
 <%- include('partials/tkFooter') %>
 </div>
 
-<%- include('partials/tkMenu') %>
-
-<script defer src="/tk-i18n-<%= lang %>.js"></script>
-<script defer src="/tk-i18n.js"></script>
-<script defer src="/tk.js"></script>
-<script defer src="/toast.js"></script>
 <script defer src="/tk-auth.js"></script>
 </body>
 </html>

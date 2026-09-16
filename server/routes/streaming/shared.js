@@ -1,5 +1,5 @@
 // Данные, которые нужны сразу нескольким страницам: текущий пользователь,
-// его подписки, непрочитанные, список эфиров в шапке.
+// его подписки, непрочитанные.
 //
 // commonDataMiddleware кладёт всё это в res.locals, поэтому обработчику страницы
 // остаётся только отрисовать шаблон.
@@ -12,48 +12,13 @@ const Notification = require('../../models/Notification');
 const userView = require('../../utils/userView');
 const callLog = require('../../utils/callLog');
 
-/**
- * Функция для получения и обработки случайных пользователей
- * @returns {Array} - Массив модифицированных пользователей с количеством подписчиков
- */
-const getStreamUsers = async () => {
-  // Получение 4 случайных пользователей
-  const randomUsers = await User.aggregate([{ $sample: { size: 4 } }]);
-
-  // Преобразуем список ID пользователей в ObjectId
-  const userIds = randomUsers.map(user => new mongoose.Types.ObjectId(user._id.toString()));
-
-  // Получение количества подписчиков для каждого пользователя
-  const subscribersCount = await Subscription.aggregate([
-    { $match: { subscribedToId: { $in: userIds } } },
-    { $group: { _id: "$subscribedToId", count: { $sum: 1 } } }
-  ]);
-
-  // Преобразуем результат в удобный формат для быстрого поиска
-  const subscribersMap = {};
-  subscribersCount.forEach(sub => {
-    subscribersMap[sub._id.toString()] = sub.count;
-  });
-
-  // Модификация данных пользователей для шаблона
-  const modifiedUsers = randomUsers.map(user => {
-    const displayName = userView.displayName(user);
-    const avatarStyle = userView.avatarStyle(user, displayName);
-    const followersCount = subscribersMap[user._id.toString()] || 0; // Количество подписчиков для каждого пользователя
-
-    return { ...user, displayName, avatarStyle, followersCount };
-  });
-
-  return modifiedUsers;
-};
-
-
 const commonDataMiddleware = async (req, res, next) => {
   try {
       const currentUserId = req.session.userId; // Получаем текущий ID пользователя из сессии
 
+      // Гость: шапка и панель рисуются гостевыми по умолчаниям из app.js.
       if (!currentUserId) {
-          return next(); // Если пользователь не авторизован, пропускаем middleware
+          return next();
       }
 
       // Получение данных текущего пользователя
@@ -122,8 +87,7 @@ const commonDataMiddleware = async (req, res, next) => {
         hasUnread: unreadNotificationsCount > 0,
       };
 
-      // Левой панели: какая личная ссылка подсвечена и сколько пропущенных звонков.
-      res.locals.path = req.path;
+      // Левой панели: сколько пропущенных звонков.
       res.locals.missedCalls = missedCalls;
 
       next(); // Передаем управление следующему middleware или маршруту
@@ -137,4 +101,4 @@ async function getActiveStreamsCount() {
   return await Stream.countDocuments({ isActive: true });
 }
 
-module.exports = { getStreamUsers, commonDataMiddleware, getActiveStreamsCount };
+module.exports = { commonDataMiddleware, getActiveStreamsCount };

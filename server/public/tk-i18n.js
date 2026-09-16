@@ -149,7 +149,13 @@
   }
 
   function render() {
-    fill('data-i18n', function (el, v) { el.innerHTML = v; });
+    // В строках словаря бывает разметка (<strong>, <br>), поэтому innerHTML.
+    // Заголовок вкладки — исключение: в него подставляется поисковый запрос
+    // и другие чужие строки, и там нужен только текст.
+    fill('data-i18n', function (el, v) {
+      if (el.tagName === 'TITLE') el.textContent = strip(v);
+      else el.innerHTML = v;
+    });
     fill('data-i18n-placeholder', function (el, v) { el.placeholder = strip(v); });
     fill('data-i18n-title', function (el, v) { el.title = strip(v); });
     fill('data-i18n-aria', function (el, v) { el.setAttribute('aria-label', strip(v)); });

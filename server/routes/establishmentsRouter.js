@@ -138,14 +138,15 @@ router.get('/establishmentsLocation', wrap(async (req, res) => {
 // Раньше это были три запроса, /getRatings отдавал оценки вместе
 // с идентификаторами проголосовавших, а /getUserRating/:userId/… — чужую
 // оценку по идентификатору в адресе.
-router.get('/api/venues/:id', requireAuth, wrap(async (req, res) => {
+// Гостю тоже: карта открыта без входа, своей оценки у него просто нет.
+router.get('/api/venues/:id', wrap(async (req, res) => {
     if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Заведение не найдено' });
 
     const venue = await Establishments.findOne({ _id: req.params.id, status: true }).select(PUBLIC_FIELDS).lean();
     if (!venue) return res.status(404).json({ message: 'Заведение не найдено' });
 
     const ratings = await Rating.find({ establishment: venue._id }).select('user rating').lean();
-    const mine = ratings.find((r) => String(r.user) === String(req.session.userId));
+    const mine = req.session.userId && ratings.find((r) => String(r.user) === String(req.session.userId));
     const sum = ratings.reduce((s, r) => s + r.rating, 0);
 
     res.json({
@@ -160,7 +161,7 @@ router.get('/api/venues/:id', requireAuth, wrap(async (req, res) => {
 
 
 // Поиск по названию для панели карты.
-router.get('/searchEstablishments/:name', requireAuth, wrap(async (req, res) => {
+router.get('/searchEstablishments/:name', wrap(async (req, res) => {
     // Спецсимволы экранируются: строка вроде `(a+)+$` собирала регулярное
     // выражение с катастрофическим откатом и вешала процесс на одном запросе.
     const name = req.params.name.slice(0, 100);

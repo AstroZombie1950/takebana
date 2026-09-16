@@ -16,9 +16,10 @@
     }
   });
 
-  // Подписка на ведущего: одна кнопка, состояние — в её классе.
+  // Подписка на ведущего: одна кнопка, состояние — в её классе. У гостя
+  // вместо кнопки ссылка на вход (streamInfo.ejs).
   var subBtn = document.querySelector('.js-subscribe, .js-unsubscribe');
-  subBtn.addEventListener('click', function () {
+  if (subBtn) subBtn.addEventListener('click', function () {
     var subscribe = subBtn.classList.contains('js-subscribe');
     fetch(subscribe ? '/subscribe' : '/unsubscribe', {
       method: subscribe ? 'POST' : 'DELETE',

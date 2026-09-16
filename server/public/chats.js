@@ -680,9 +680,11 @@
     fwdRender(mine);
     if (q.length < 2) return;
     fwdTimer = setTimeout(function () {
-      fetch('/search-users?q=' + encodeURIComponent(q))
+      // Тот же поиск, что в шапке (utils/search.js); пересылке нужны только люди.
+      fetch('/api/search?type=people&limit=7&q=' + encodeURIComponent(q))
         .then(function (r) { return r.json(); })
-        .then(function (users) {
+        .then(function (found) {
+          var users = found.people || [];
           if (fwdSearch.value.trim() !== q) return;
           var seen = {};
           mine.forEach(function (p) { seen[p.id] = true; });

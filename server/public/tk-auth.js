@@ -37,6 +37,10 @@
       });
   }
 
+  // Куда вернуться после входа: ?next= ставят ссылки «Войти» в шапке, в эфире
+  // и на странице автора. Проверяет адрес сервер (middleware/auth.js, safeNext).
+  var next = new URLSearchParams(location.search).get("next") || "";
+
   function value(id) {
     var el = document.getElementById(id);
     return el ? el.value : "";
@@ -49,7 +53,7 @@
       e.preventDefault();
       submit(
         "/login",
-        { email: value("email"), password: value("password"), provider: "" },
+        { email: value("email"), password: value("password"), provider: "", next: next },
         form.querySelector('[type="submit"]')
       );
     });
@@ -66,7 +70,7 @@
       }
       submit(
         "/register",
-        { email: value("email"), password: value("password"), provider: "" },
+        { email: value("email"), password: value("password"), provider: "", next: next },
         form.querySelector('[type="submit"]')
       );
     });

@@ -23,9 +23,14 @@ const DEMO_DOMAIN = 'demo.takebana.local'; // по нему находим и ч
 const DEMO_PASSWORD = 'demo123456';
 const SALT_ROUNDS = 10;
 
+// Трое: у каждого не больше одного эфира. Двух эфиров у одного человека
+// не бывает — студия не даёт создать второй, — а стенд с ними ломал проверки:
+// эфиры одного пользователя делят ключ трансляции, и старт одного поднимал
+// поток в комнате другого.
 const USERS = [
   { login: 'anna',  email: 'anna@'  + DEMO_DOMAIN },
   { login: 'boris', email: 'boris@' + DEMO_DOMAIN },
+  { login: 'vera',  email: 'vera@'  + DEMO_DOMAIN },
 ];
 
 const PLACES = [
@@ -55,8 +60,9 @@ const PLACES = [
 // owner — индекс в USERS. Коды категорий и городов — из config/catalog.js:
 // прежние «Бары» / «Атмосфера» не попадали ни в одну вкладку каталога.
 const STREAMS = [
-  { owner: 0, title: 'Демо: вечер в баре', category: 'business', subcategory: 'horeca', city: 'belgrade', isActive: true, viewers: 14 },
+  { owner: 2, title: 'Демо: вечер в баре', category: 'business', subcategory: 'horeca', city: 'belgrade', isActive: true, viewers: 14 },
   { owner: 1, title: 'Демо: джем в клубе', category: 'entertainment', subcategory: 'music', city: 'novi-sad', isActive: true, viewers: 6 },
+  // Черновик anna — на нём зонды проверяют студию и выход в эфир.
   { owner: 0, title: 'Демо: трансляция с камеры', category: 'business', subcategory: 'horeca', city: 'belgrade', isActive: false },
 ];
 

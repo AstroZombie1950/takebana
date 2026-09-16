@@ -7,8 +7,15 @@
 
   <div class="messeg-box" aria-live="polite"></div>
 
+  <% if (currentUser) { %>
   <form class="input__messeng-box" id="chatForm">
     <textarea class="tk-field input__messeng" rows="1" data-i18n-placeholder="chats.messagePh" placeholder="<%= ta('chats.messagePh') %>" maxlength="140" aria-label="<%= ta('chats.messagePh') %>" data-i18n-aria="chats.messagePh"></textarea>
     <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm starting__buttone" data-i18n="chats.send"><%- t('chats.send') %></button>
   </form>
+  <% } else { %>
+  <%# Гость чат читает; писать — после входа, с возвратом в этот же эфир. %>
+  <p class="input__messeng-box tk-live__chat-guest">
+    <a href="/login?next=<%= encodeURIComponent(url) %>" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="chat.loginToWrite"><%- t('chat.loginToWrite') %></a>
+  </p>
+  <% } %>
 </aside>

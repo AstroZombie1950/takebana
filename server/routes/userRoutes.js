@@ -4,6 +4,7 @@ const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
 const { authLimiter, registerLimiter } = require('../middleware/rateLimit');
 const { validate } = require('../middleware/validate');
+const { safeNext } = require('../middleware/auth');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 
 const bcrypt = require('bcrypt');
@@ -16,6 +17,7 @@ router.post('/login', authLimiter, validate({
   // На входе длину не проверяем: пароли старых учёток могут быть короче
   // нынешнего минимума, и человек должен суметь войти и сменить его.
   password: { type: 'string', required: true, max: PASSWORD_MAX, trim: false, label: 'Пароль' },
+  next: { type: 'string', max: 500, default: '', label: 'Возврат' },
 }), async (req, res) => {
   const { email, password } = req.body;
   const provider = PASSWORD_PROVIDER;
@@ -33,19 +35,8 @@ router.post('/login', authLimiter, validate({
     req.session.userId = user._id.toString();
     req.session.login = user.login || 'anon';
 
-    // Получаем значение `next` из сессии
-    let nextRoute = req.session.next || 'default';
-    // req.session.next = null; // Очищаем `next` из сессии
-
-    // Определяем URL перенаправления
-    let redirectUrl = '/main'; // Значение по умолчанию
-    if (nextRoute === 'service1' || nextRoute === 'default') {
-      redirectUrl = '/main';
-    } else if (nextRoute === 'service2') {
-      redirectUrl = '/streaming';
-    }
-
-    // Отправляем JSON-ответ с URL перенаправления
+    // Туда, откуда пришёл на вход (?next= страницы входа), иначе на витрину.
+    const redirectUrl = safeNext(req.body.next) || '/';
     res.status(200).json({ message: 'Вход выполнен', redirectUrl });
   } catch (error) {
     console.error('Ошибка при входе:', error);
@@ -58,6 +49,7 @@ router.post('/register', registerLimiter, validate({
   email: { type: 'email', required: true, label: 'Почта' },
   password: { type: 'string', required: true, min: PASSWORD_MIN, max: PASSWORD_MAX, trim: false, label: 'Пароль' },
   login: { type: 'string', max: 64, default: '', label: 'Логин' },
+  next: { type: 'string', max: 500, default: '', label: 'Возврат' },
 }), async (req, res) => {
   const { email, password, login } = req.body;
   const provider = PASSWORD_PROVIDER; // см. комментарий выше
@@ -74,19 +66,8 @@ router.post('/register', registerLimiter, validate({
     req.session.userId = user._id.toString();
     req.session.login = user.login || 'anon';
 
-    // Получаем значение `next` из сессии
-    let nextRoute = req.session.next || 'default';
-    // req.session.next = null; // Очищаем `next` из сессии
-
-    // Определяем URL перенаправления
-    let redirectUrl = '/main'; // Значение по умолчанию
-    if (nextRoute === 'service1' || nextRoute === 'default') {
-      redirectUrl = '/main';
-    } else if (nextRoute === 'service2') {
-      redirectUrl = '/streaming';
-    }
-
-    // Отправляем JSON-ответ с URL перенаправления
+    // Туда, откуда пришёл на вход (?next= страницы входа), иначе на витрину.
+    const redirectUrl = safeNext(req.body.next) || '/';
     res.status(200).json({ message: 'Регистрация прошла успешно', redirectUrl });
   } catch (error) {
     console.error('Ошибка при регистрации:', error);

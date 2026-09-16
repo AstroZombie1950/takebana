@@ -128,10 +128,21 @@ app.locals.hlsBase = require('./utils/hls').hlsBase;
 app.locals.clock = require('./utils/recording').clock;
 // Категории и города: форма эфира живёт в шапке каждой страницы кабинета.
 app.locals.catalog = require('./config/catalog');
+// Гость по умолчанию. Шапка и левая панель (header.ejs, leftBar.ejs) есть и на
+// страницах без commonDataMiddleware — вход, документы; вошедшему эти поля
+// перекрывает он же (routes/streaming/shared.js).
+Object.assign(app.locals, { currentUser: null, subscriptions: [], notifications: null, missedCalls: 0 });
 // Страницы и сообщения в JSON-ответах — на языке интерфейса (cookie `lang`,
 // utils/i18n.js). До маршрутов: переводить нужно всё, что они ответят.
 const { localizeMessages, pageLocals } = require('./utils/i18n');
 app.use(localizeMessages, pageLocals);
+// Адрес страницы — шапке и панели: что подсветить и куда вернуть после входа.
+// Нужен всем страницам, а commonDataMiddleware стоит не на всех.
+app.use((req, res, next) => {
+  res.locals.path = req.path;
+  res.locals.url = req.originalUrl;
+  next();
+});
 app.use(googleRouter);
 
 require('./db');
@@ -142,6 +153,8 @@ app.use(require('./routes/passwordReset'));
 app.use(require('./routes/establishmentsRouter'));
 app.use(require('./routes/adminRouter'));
 app.use(require('./routes/streaming'));
+app.use(require('./routes/search'));
+app.use(require('./routes/authors'));
 app.use(require('./routes/moderation'));
 
 // Daily.co: комнаты веб-эфира и камеры заведений

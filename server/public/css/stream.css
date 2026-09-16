@@ -142,8 +142,12 @@
   50% { opacity: .35; }
 }
 
-/* Время в эфире — только когда эфир идёт. */
-.tk-live__badges:has([data-state="paused"], [data-state="wait"]) .tk-live__badge--time { display: none; }
+/* Время в эфире — только когда эфир идёт. Заставка вместо картинки означает
+ * то же самое: зритель ничего не смотрит, и часы над заставкой только
+ * занимают строку — на телефоне метки из-за них переносились на вторую
+ * и наезжали на текст. */
+.tk-live__badges:has([data-state="paused"], [data-state="wait"]) .tk-live__badge--time,
+.tk-live__player:has(.tk-live__hint--paused) .tk-live__badge--time { display: none; }
 
 .tk-live__fs {
   position: absolute;
@@ -419,6 +423,9 @@
   align-items: stretch;
 }
 
+/* Гостю вместо поля — кнопка входа во всю ширину полосы. */
+.tk-live__chat-guest > .tk-btn { flex: 1; }
+
 .input__messeng {
   flex: 1;
   min-width: 0;
@@ -610,6 +617,10 @@ html.tk-stage-open { overflow: hidden; }
     height: 100%;
     gap: 0;
   }
+
+  /* Метки стоят поверх картинки в её левом верхнем углу; на узком экране
+   * заставка низкая, и её текст попадал под них. Отводим место сверху. */
+  .tk-live__hint { padding-top: 46px; }
 
   .tk-live__col { flex: none; border: 0; }
 

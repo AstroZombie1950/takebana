@@ -143,6 +143,7 @@ const EN = {
     'Подкатегория': 'Subcategory',
     'Пользователь': 'User',
     'Почта': 'Email',
+    'Возврат': 'Return address',
     'Прежняя обложка': 'Previous cover',
     'Причина': 'Reason',
     'Решение': 'Decision',

@@ -86,7 +86,7 @@ expect() {
 # ═════════════════════════════════════════════════════════════════════════════
 step "Доступность"
 
-expect "главная отвечает"        "200"     GET /
+expect "главная (витрина) отвечает" "200"   GET /
 expect "/healthz отвечает"       "200"     GET /healthz
 
 HEALTH=$("${CURL[@]}" "${BASE}/healthz" 2>/dev/null || echo "")
@@ -100,7 +100,13 @@ fi
 
 expect "страница входа"          "200"     GET /login
 expect "условия использования"   "200"     GET /terms_of_service
-expect "каталог эфиров"          "200|302" GET /streaming   # анониму отдаёт редирект — это штатно
+expect "о нас"                    "200"     GET /about
+expect "раздел каталога"         "200"     GET /streaming/business   # гость смотрит без входа
+expect "старый адрес популярного" "302"    GET /streaming           # ведёт на главную
+expect "карта заведений"         "200"     GET /main
+expect "страница поиска"         "200"     GET "/search?q=ab"
+expect "авторы"                  "200"     GET /authors
+expect "переписка без входа"     "302"     GET /chatsPage           # на вход с возвратом
 expect "несуществующий путь 404" "404"     GET /такого-точно-нет-$RANDOM
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -172,9 +178,11 @@ expect "POST /terminate-stream"           "401"     POST /terminate-stream      
 expect "DELETE /recording/:id"            "401"     DELETE /recording/000000000000000000000000
 expect "DELETE /profile/avatar"           "401"     DELETE /profile/avatar
 expect "POST /chat/message"               "401"     POST /chat/message               -H 'Content-Type: application/json' -d '{}'
-expect "GET /search-users"                "401|302" GET  /search-users               -H 'X-Requested-With: XMLHttpRequest'
 expect "GET /api/presence"                "401"     GET  /api/presence?ids=000000000000000000000000
-expect "GET /streaming/:category/grid"    "401"     GET  /streaming/popular/grid
+# Витрина, поиск людей и карта открыты гостю с 15 сентября 2026: смотреть
+# и искать можно без входа. Поиск по почте при этом убран (profile.js).
+expect "GET /streaming/:category/grid"    "200"     GET  /streaming/popular/grid
+expect "GET /api/search"                  "200"     GET  "/api/search?q=ab"
 # Маршрут открыт намеренно — эфир смотрят без входа. Проверяем не код ответа,
 # а то, что в нём нет полей пользователя: populate отдавал сюда email,
 # хеш пароля и streamKey любому желающему.

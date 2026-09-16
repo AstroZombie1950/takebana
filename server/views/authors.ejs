@@ -1,0 +1,93 @@
+<%#
+  Авторы (/authors). Четыре группы, пустые не рисуются: на старте авторов мало,
+  и пустой заголовок хуже его отсутствия. Кого показывать — utils/authors.js.
+
+  Карточка человека — та же, что в результатах поиска (css/search.css),
+  поэтому файл подключён здесь же.
+%>
+<%
+  var blocks = [
+    { key: 'live',     items: groups.live,     i18n: 'authors.live',     note: 'authors.liveNote' },
+    { key: 'popular',  items: groups.popular,  i18n: 'authors.popular',  note: 'authors.popularNote' },
+    { key: 'fresh',    items: groups.fresh,    i18n: 'authors.fresh',    note: 'authors.freshNote' },
+    { key: 'recorded', items: groups.recorded, i18n: 'authors.recorded', note: 'authors.recordedNote' }
+  ].filter(function (b) { return b.items.length; });
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { titleKey: 'page.authors.title', descriptionKey: 'page.authors.description' }) %>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/catalog.css">
+<link rel="stylesheet" href="/css/search.css">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-search">
+
+      <p class="tk-kicker" data-i18n="authors.kicker"><%- t('authors.kicker') %></p>
+      <h1 class="tk-search__h1" data-i18n="authors.h1"><%- t('authors.h1') %></h1>
+      <p class="tk-search__note" data-i18n="authors.lede"><%- t('authors.lede') %></p>
+
+      <% if (!blocks.length) { %>
+      <%# Никто ещё не выходил в эфир: советовать некого, зато можно позвать. %>
+      <div class="tk-empty">
+        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
+        <p class="tk-empty__h" data-i18n="authors.emptyTitle"><%- t('authors.emptyTitle') %></p>
+        <p class="tk-empty__p" data-i18n="authors.emptyText"><%- t('authors.emptyText') %></p>
+        <a href="/studio" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="catalog.emptyCta"><%- t('catalog.emptyCta') %></a>
+      </div>
+      <% } %>
+
+      <% blocks.forEach(function (block) { %>
+      <section class="tk-search__sec">
+        <div class="tk-search__head">
+          <h2 class="tk-search__h2" data-i18n="<%= block.i18n %>"><%- t(block.i18n) %></h2>
+          <span class="tk-note" data-i18n="<%= block.note %>"><%- t(block.note) %></span>
+        </div>
+
+        <div class="tk-people">
+          <% block.items.forEach(function (person) { %>
+          <%# У тех, кто в эфире, строка ведёт прямо в эфир — за этим сюда
+              и приходят; у остальных — на страницу автора. %>
+          <a href="<%= person.stream ? '/stream/' + person.stream._id : '/userPage/' + person._id %>" class="tk-person" data-presence-user="<%= person._id %>">
+            <span class="tk-person__ava"<% if (!person.avatarStyle.url) { %> data-bg="<%= person.avatarStyle.gradient %>"<% } %>>
+              <% if (person.avatarStyle.url) { %><img src="<%= person.avatarStyle.url %>" alt="" loading="lazy"><% } else { %><%= person.avatarStyle.initial %><% } %>
+              <span class="presence-dot <%= person.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
+            </span>
+            <span class="tk-person__body">
+              <span class="tk-person__name"><%= person.displayName %></span>
+
+              <% if (person.stream) { %>
+              <span class="tk-person__meta tk-person__meta--live">
+                <span class="tk-person__live" data-i18n="authors.liveMark"><%- t('authors.liveMark') %></span>
+                · <%= person.stream.viewers %> <span data-i18n="search.viewers"><%- t('search.viewers') %></span>
+              </span>
+              <span class="tk-person__meta"><%= person.stream.title %></span>
+              <% } else { %>
+              <span class="tk-person__meta">
+                <span data-i18n="authors.followers"><%- t('authors.followers') %></span>: <%= person.followersCount %>
+              </span>
+              <span class="tk-person__meta">
+                <% if (person.recordings) { %><span data-i18n="authors.recordings"><%- t('authors.recordings') %></span>: <%= person.recordings %>
+                <% } else { %><% var pk = person.isOnline ? 'common.online' : 'common.offline'; %><span data-presence-text><span data-i18n="<%= pk %>"><%- t(pk) %></span></span><% } %>
+              </span>
+              <% } %>
+            </span>
+          </a>
+          <% }); %>
+        </div>
+      </section>
+      <% }); %>
+
+    </div>
+  </main>
+</div>
+</body>
+</html>

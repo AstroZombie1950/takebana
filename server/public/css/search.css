@@ -1,0 +1,269 @@
+/* Страница поиска (/search): поле, вкладки, группы результатов.
+ *
+ * Карточки эфиров и записей берутся как есть из catalog.css и profile.css —
+ * здесь только то, чего нет больше нигде: вкладки, люди и заведения списком.
+ */
+
+.tk-search {
+  max-width: 1440px;
+  padding: 40px;
+}
+
+.tk-search__h1 {
+  margin: 10px 0 0;
+  font-size: 40px;
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+  overflow-wrap: anywhere;
+}
+
+/* Сам запрос в заголовке — киноварью: видно, что именно искали. */
+.tk-search__q { color: var(--tk-accent); }
+
+.tk-search__form {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  margin: 24px 0 0;
+  max-width: 640px;
+}
+
+.tk-search__field { flex: 1; min-width: 0; }
+
+.tk-search__note {
+  margin: 20px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  color: var(--tk-beige);
+}
+
+/* ── Вкладки ──────────────────────────────────────────────────────────────
+ * Активная помечена киноварной линейкой снизу — тем же приёмом, что раздел
+ * в левой панели. Ниже 640 строка вкладок прокручивается вбок сама, чтобы
+ * не переносить их в два этажа и не растить шапку страницы.
+ */
+.tk-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 28px 0 0;
+  border-bottom: 1px solid var(--tk-rule);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tk-tabs::-webkit-scrollbar { display: none; }
+
+.tk-tabs__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.tk-tabs__item:hover { color: var(--tk-paper); }
+
+.tk-tabs__item--on {
+  border-bottom-color: var(--tk-accent);
+  color: var(--tk-paper);
+}
+
+.tk-tabs__num {
+  font-size: 12px;
+  color: var(--tk-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-tabs__item--on .tk-tabs__num { color: var(--tk-accent); }
+
+/* ── Группа результатов ── */
+.tk-search__sec { margin-top: 40px; }
+
+.tk-search__head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.tk-search__h2 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -.01em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+.tk-search__more {
+  margin-left: auto;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--tk-accent);
+}
+
+.tk-search__more:hover { color: var(--tk-paper); }
+
+/* ── Люди ── */
+.tk-people {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.tk-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--tk-rule);
+  transition: border-color .18s ease, background-color .18s ease;
+}
+
+.tk-person:hover {
+  border-color: var(--tk-accent);
+  background: rgba(227, 66, 52, .06);
+}
+
+.tk-person__ava {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.tk-person__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-person__ava .presence-dot {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  border: 2px solid var(--tk-ink);
+}
+
+.tk-person__body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.tk-person__name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-person__meta {
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  color: var(--tk-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Метка «в эфире» у автора: та же киноварь, что у карточки эфира. */
+.tk-person__meta--live { color: var(--tk-beige); }
+
+.tk-person__live {
+  color: var(--tk-accent);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* ── Заведения ── */
+.tk-places {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.tk-place {
+  display: flex;
+  gap: 14px;
+  border: 1px solid var(--tk-rule);
+  transition: border-color .18s ease, background-color .18s ease;
+}
+
+.tk-place:hover {
+  border-color: var(--tk-accent);
+  background: rgba(227, 66, 52, .06);
+}
+
+.tk-place__shot {
+  position: relative;
+  width: 108px;
+  flex: none;
+  align-self: stretch;
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #120E0C;
+  color: var(--tk-muted);
+}
+
+.tk-place__shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-place__live {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  padding: 3px 7px;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font-family: Oswald, sans-serif;
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.tk-place__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px 12px 0;
+}
+
+.tk-place__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tk-paper);
+}
+
+.tk-place__meta {
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 767px) {
+  .tk-search { padding: 28px 20px 40px; }
+  .tk-search__h1 { font-size: 28px; }
+  .tk-search__form { flex-wrap: wrap; }
+  .tk-search__sec { margin-top: 32px; }
+  .tk-places { grid-template-columns: 1fr; }
+}
