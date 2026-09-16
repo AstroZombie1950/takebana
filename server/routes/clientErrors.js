@@ -44,6 +44,10 @@ router.post('/api/client-error', clientErrorLimiter, express.json({ limit: '16kb
                 source: cut(body.source, 200),
                 line: Number(body.line) || 0,
                 column: Number(body.column) || 0,
+                // Подробности построчно — отчёт о несоединившемся звонке
+                // (public/tk-daily.js): хронология длиннее стека, который
+                // журнал режет до двенадцати строк.
+                ...(Array.isArray(body.details) ? { details: body.details.slice(0, 120).map((x) => cut(x, 300)) } : {}),
             },
         });
     }

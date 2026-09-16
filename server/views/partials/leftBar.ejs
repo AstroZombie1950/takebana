@@ -8,8 +8,8 @@
   //
   // Гостю вместо профиля — вход и регистрация, из личного — карта и «Что такое
   // Takebana», подписок и выхода нет, язык — внизу панели (в шапке на телефоне
-  // ему места нет). Вошедшему «Что такое Takebana» не нужна: он уже знает,
-  // куда пришёл.
+  // ему места нет). Вошедшему «Что такое Takebana» — только на телефоне:
+  // на широком экране она кнопкой в шапке, а на узком в шапке ей нет места.
   //
   // Активный раздел каталога: страницу рендерит catalog.js и передаёт category.
   // Активная личная ссылка — по адресу страницы (commonDataMiddleware).
@@ -25,7 +25,7 @@
   var myPage = guest ? '' : '/userPage/' + currentUser._id;
   var venues = { href: '/main', i18n: 'app.venues', icon: '<path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle>' };
   var about = { href: '/about', i18n: 'nav.whatIs', icon: '<circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5v.01"></path>' };
-  var links = guest ? [venues, about] : [venues];
+  var links = guest ? [venues, about] : [venues, Object.assign({ phone: true }, about)];
   var online = (subscriptions || []).filter(function (x) { return x.status === 'online'; }).length;
 %>
 <div class="tk-aside__overlay" id="sidebarOverlay" hidden></div>
@@ -54,7 +54,7 @@
   <%# Заявка заведения подсвечивает «Карту». %>
   <% var parentOf = { '/company-register': '/main' }; %>
   <% links.forEach(function (item) { %>
-  <a href="<%= item.href %>" class="tk-aside__item<%= (parentOf[here] || here) === item.href ? ' tk-aside__item--on' : '' %>">
+  <a href="<%= item.href %>" class="tk-aside__item<%= item.phone ? ' tk-aside__item--phone' : '' %><%= (parentOf[here] || here) === item.href ? ' tk-aside__item--on' : '' %>">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><%- item.icon %></svg>
     <span data-i18n="<%= item.i18n %>"><%- t(item.i18n) %></span>
   </a>

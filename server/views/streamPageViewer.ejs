@@ -4,7 +4,7 @@
   (utils/webLive.js) — в комнату зритель не входит.
 
   Сцена — картинка и чат. На широком экране чат справа, на телефоне под
-  картинкой, во весь экран — картинка и чат, больше ничего. Общее
+  картинкой, во весь экран — картинка и чат (на телефоне чат по кнопке). Общее
   с пультом ведущего — в partials и /tk-stream.js, своё — /tk-viewer.js.
 %>
 <% var playable = stream.isActive && (stream.streamType === 'obs-stream' || stream.streamType === 'daily-stream'); %>
@@ -56,6 +56,10 @@
             <button type="button" class="tk-live__fs" data-fullscreen aria-pressed="false" aria-label="<%= ta('stream.fullscreen') %>" data-i18n-aria="stream.fullscreen" title="<%= ta('stream.fullscreen') %>" data-i18n-title="stream.fullscreen">
               <svg class="tk-live__fs-on" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M4.5 15v4.5H9M15 19.5h4.5V15"></path></svg>
               <svg class="tk-live__fs-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 4.5V9H4.5M19.5 9H15V4.5M9 19.5V15H4.5M15 19.5V15h4.5"></path></svg>
+            </button>
+            <%# Чат поверх картинки во весь экран на телефоне — по кнопке (stream.css). %>
+            <button type="button" class="tk-live__fs tk-live__chatbtn" data-chat-toggle aria-pressed="false" aria-label="<%= ta('stream.chatShow') %>" data-i18n-aria="stream.chatShow" title="<%= ta('stream.chatShow') %>" data-i18n-title="stream.chatShow">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M21 11a8 8 0 01-11.5 7.2L4 20l1.8-5.5A8 8 0 1121 11Z"></path></svg>
             </button>
           </div>
 

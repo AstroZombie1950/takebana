@@ -381,7 +381,7 @@ body.tk-app {
   font-size: 11px;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--tk-green);
+  color: var(--tk-green-live);
 }
 
 /* Раздел. Активный помечен киноварной планкой слева — это и есть приём
@@ -415,6 +415,11 @@ body.tk-app {
 }
 
 .tk-aside__item--on svg { color: var(--tk-accent); }
+
+/* Пункт только для узкого экрана: с 768px он кнопкой в шапке. */
+@media (min-width: 768px) {
+  .tk-aside__item--phone { display: none; }
+}
 
 .tk-aside__rule {
   height: 1px;
@@ -463,7 +468,7 @@ body.tk-app {
 /* Цвет — только точке. Скрипт присутствия вешает эти же классы на строку
  * целиком (на элемент с data-presence-user), и без уточнения .presence-dot
  * зелёным заливало всю строку подписки и рекомендации. */
-.presence-dot.presence-online { background: var(--tk-green); }
+.presence-dot.presence-online { background: var(--tk-green-live); }
 .presence-dot.presence-offline { background: rgba(144, 113, 99, .7); }
 
 .tk-aside__sub-name {
@@ -536,6 +541,16 @@ body.tk-app {
 }
 
 @media (max-width: 1023px) {
+  /* Выезжающая панель плотнее: карта, подписки и разделы помещаются
+   * на экран телефона без прокрутки. */
+  .tk-aside__me { padding: 12px 18px; margin-bottom: 0; }
+  .tk-aside__item { padding: 8px 18px; }
+  .tk-aside__rule { margin: 4px 0; }
+  .tk-aside__title { padding: 6px 18px 2px; }
+  .tk-aside__empty { padding: 4px 18px 8px; }
+  .tk-aside__sub { padding: 6px 18px; }
+  .tk-aside__cta { padding: 10px 18px; }
+
   .tk-aside { transform: translateX(-100%); visibility: hidden; transition: transform .25s ease, visibility 0s .25s; }
   .tk-aside.is-open { transform: none; visibility: visible; transition: transform .25s ease; }
   .tk-ahead__burger { display: flex; }
@@ -1196,16 +1211,20 @@ body.tk-app {
   background: #000;
 }
 
+/* Своя картинка: двигается и меняет размер пальцами (tk-app.js), поэтому
+ * жесты браузера на ней выключены. На телефоне — вертикальная, как камера. */
 .pip-local {
   position: absolute;
   right: 8px;
   bottom: 8px;
-  width: 100px;
-  height: 70px;
+  width: 112px;
+  height: 150px;
   border: 1px solid var(--tk-rule);
   object-fit: cover;
   background: #000;
   z-index: 10;
+  touch-action: none;
+  cursor: grab;
 }
 
 /* Картинки собеседника нет — ещё не пришла, он выключил камеру или
@@ -1226,11 +1245,11 @@ body.tk-app {
 .tk-call__stage--nolocal .pip-local { visibility: hidden; }
 
 @media (min-width: 640px) {
-  .pip-local { width: 140px; height: 90px; right: 12px; bottom: 12px; }
+  .pip-local { width: 180px; height: 112px; right: 12px; bottom: 12px; }
 }
 
 @media (min-width: 1024px) {
-  .pip-local { width: 180px; height: 110px; right: 16px; bottom: 16px; }
+  .pip-local { width: 224px; height: 140px; right: 16px; bottom: 16px; }
 }
 
 /* ── Результаты поиска в шапке ── */

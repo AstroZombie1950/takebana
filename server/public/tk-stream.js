@@ -174,20 +174,33 @@
   // растягивается на окно (класс is-full, stream.css).
   var stage = document.getElementById('stage');
   var fsButtons = document.querySelectorAll('[data-fullscreen]');
+  var chatButtons = document.querySelectorAll('[data-chat-toggle]');
 
   function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement; }
 
+  // Подпись кнопки по состоянию: ключи словаря для «вкл» и «выкл».
+  function label(b, on, keyOn, keyOff) {
+    var key = on ? keyOn : keyOff;
+    b.setAttribute('aria-pressed', String(on));
+    b.setAttribute('data-i18n-aria', key);
+    b.setAttribute('data-i18n-title', key);
+    b.setAttribute('aria-label', t(key));
+    b.title = t(key);
+  }
+
+  // Чат поверх картинки во весь экран — на телефоне по кнопке: картинка
+  // должна быть видна целиком, а чат закрывал бы и её, и кнопки плеера.
+  function markChat(on) {
+    stage.classList.toggle('chat-open', on);
+    chatButtons.forEach(function (b) { label(b, on, 'stream.chatHide', 'stream.chatShow'); });
+    if (on) toNewest();
+  }
+
   function markFull(on) {
     stage.classList.toggle('is-full', on);
+    if (!on) markChat(false);
     document.documentElement.classList.toggle('tk-stage-open', on);
-    fsButtons.forEach(function (b) {
-      b.setAttribute('aria-pressed', String(on));
-      var key = on ? 'stream.exitFullscreen' : 'stream.fullscreen';
-      b.setAttribute('data-i18n-aria', key);
-      b.setAttribute('data-i18n-title', key);
-      b.setAttribute('aria-label', t(key));
-      b.title = t(key);
-    });
+    fsButtons.forEach(function (b) { label(b, on, 'stream.exitFullscreen', 'stream.fullscreen'); });
     toNewest();
   }
 
@@ -206,6 +219,9 @@
   }
 
   fsButtons.forEach(function (b) { b.addEventListener('click', toggleFull); });
+  chatButtons.forEach(function (b) {
+    b.addEventListener('click', function () { markChat(!stage.classList.contains('chat-open')); });
+  });
   // Вышли клавишей Esc или жестом системы — сцена возвращается на место.
   ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) {
     document.addEventListener(ev, function () {

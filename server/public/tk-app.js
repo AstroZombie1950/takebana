@@ -598,17 +598,27 @@ document.addEventListener('DOMContentLoaded', function(){
     s.net.classList.add('hidden');
     s.stage.classList.add('hidden');
     s.voice.classList.add('hidden');
-    s.voice.setAttribute('aria-pressed', 'false');
-    tkText(s.voice, 'call.voiceOnly');
+    s.video = false;
+    s.remoteOn = false;
+  }
+
+  // Видео в разговоре: своя камера (s.video) и картинка собеседника. Сцена
+  // видна, если есть хоть одна из них: в аудиозвонке собеседник включил
+  // камеру — его видно и без своей. Кнопка рядом с «Завершить» переключает
+  // свою: «Только голос» ↔ «Включить видео».
+  function paintVideo(s) {
+    s.stage.classList.toggle('hidden', !(s.video || s.remoteOn));
+    tkText(s.voice, s.video ? 'call.voiceOnly' : 'call.videoOn');
   }
 
   // Окно переходит в разговор: «Отменить» и «Принять» становятся «Завершить»,
-  // у видеозвонка рядом встаёт «Только голос».
+  // рядом встаёт кнопка видео — и у видео-, и у аудиозвонка.
   function goLive(s, isVideo) {
-    s.stage.classList.toggle('hidden', !isVideo);
+    s.video = isVideo;
     s.stage.classList.add('tk-call__stage--empty', 'tk-call__stage--nolocal');
-    s.voice.classList.toggle('hidden', !isVideo);
-    s.actions.classList.toggle('tk-call__actions--pair', isVideo);
+    s.voice.classList.remove('hidden');
+    s.actions.classList.add('tk-call__actions--pair');
+    paintVideo(s);
     if (s === OUT) {
       tkText(outCancel, 'call.end');
       outCancel.classList.remove('tk-btn--danger');
@@ -656,6 +666,7 @@ document.addEventListener('DOMContentLoaded', function(){
     window._call = TKDaily.connect({
       send: true,
       video: isVideo,
+      diag: isVideo ? 'видеозвонок' : 'аудиозвонок',
       access: () => {
         if (!firstAccess) return window.requestCallToken(callId);
         const a = firstAccess;
@@ -666,6 +677,7 @@ document.addEventListener('DOMContentLoaded', function(){
         if (track.kind === 'video') {
           TKDaily.attach(p.local ? s.localVideo : s.remoteVideo, on && track);
           s.stage.classList.toggle(p.local ? 'tk-call__stage--nolocal' : 'tk-call__stage--empty', !on);
+          if (!p.local) { s.remoteOn = on; paintVideo(s); }
         }
         else if (!p.local) TKDaily.attach(s.remoteAudio, on && track);
       },
@@ -700,17 +712,91 @@ document.addEventListener('DOMContentLoaded', function(){
 
   [OUT, IN].forEach((s) => s.voice.addEventListener('click', () => {
     if (!window._call) return;
-    const on = s.voice.getAttribute('aria-pressed') !== 'true';
-    window._call.setVoiceOnly(on);
-    s.voice.setAttribute('aria-pressed', String(on));
-    tkText(s.voice, on ? 'call.videoBack' : 'call.voiceOnly');
-    s.stage.classList.toggle('hidden', on);
+    s.video = !s.video;
+    window._call.setVideo(s.video);
+    // Только голос — чужое видео тоже не принимается (tk-daily.js).
+    if (!s.video) s.remoteOn = false;
+    paintVideo(s);
   }));
+
+  // Своя картинка в углу: пальцем или мышью двигается, двумя пальцами или
+  // колесом мыши меняет размер (пропорции те же). Не выходит за сцену и не
+  // заезжает на кнопки, которые на телефоне лежат поверх картинки.
+  [OUT, IN].forEach((s) => {
+    const el = s.localVideo;
+    const box = el.parentElement;
+    const MIN = 72;
+    const points = new Map();
+    let from = null;
+
+    function begin() {
+      const r = el.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      const p = [...points.values()];
+      from = {
+        left: r.left - b.left, top: r.top - b.top, w: r.width, h: r.height,
+        p, dist: p.length > 1 ? Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) : 0,
+      };
+    }
+
+    function place(left, top, w) {
+      const b = box.getBoundingClientRect();
+      const floor = Math.min(b.bottom, s.actions.getBoundingClientRect().top - 8) - b.top;
+      const width = Math.max(MIN, Math.min(w, b.width * 0.7, (floor * from.w) / from.h));
+      const height = (width * from.h) / from.w;
+      const cx = left + w / 2;
+      const cy = top + (w * from.h) / from.w / 2;
+      Object.assign(el.style, {
+        width: width + 'px',
+        height: height + 'px',
+        left: Math.max(0, Math.min(cx - width / 2, b.width - width)) + 'px',
+        top: Math.max(0, Math.min(cy - height / 2, floor - height)) + 'px',
+        right: 'auto',
+        bottom: 'auto',
+      });
+    }
+
+    el.addEventListener('pointerdown', (e) => {
+      el.setPointerCapture(e.pointerId);
+      points.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      begin();
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!points.has(e.pointerId)) return;
+      points.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const p = [...points.values()];
+      if (p.length > 1 && from.dist) {
+        const k = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) / from.dist;
+        const dx = (p[0].x + p[1].x - from.p[0].x - from.p[1].x) / 2;
+        const dy = (p[0].y + p[1].y - from.p[0].y - from.p[1].y) / 2;
+        const w = from.w * k;
+        place(from.left + dx + (from.w - w) / 2, from.top + dy + (from.h - (w * from.h) / from.w) / 2, w);
+      } else {
+        place(from.left + p[0].x - from.p[0].x, from.top + p[0].y - from.p[0].y, from.w);
+      }
+    });
+    const end = (e) => { points.delete(e.pointerId); if (points.size) begin(); };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      begin();
+      const w = from.w * (e.deltaY < 0 ? 1.1 : 1 / 1.1);
+      place(from.left + (from.w - w) / 2, from.top + (from.h - (w * from.h) / from.w) / 2, w);
+    }, { passive: false });
+  });
+  // Поворот телефона или новый размер окна: картинка возвращается в угол,
+  // иначе могла бы оказаться за краем сцены.
+  window.addEventListener('resize', () => [OUT, IN].forEach((s) => s.localVideo.removeAttribute('style')));
 
   function stopMedia() {
     if (window._call) { window._call.leave(); window._call = null; }
     clearInterval(window._callTick);
-    [OUT, IN].forEach((s) => [s.remoteVideo, s.localVideo, s.remoteAudio].forEach((el) => TKDaily.attach(el, null)));
+    [OUT, IN].forEach((s) => {
+      [s.remoteVideo, s.localVideo, s.remoteAudio].forEach((el) => TKDaily.attach(el, null));
+      // Своя картинка — снова в углу к следующему звонку.
+      s.localVideo.removeAttribute('style');
+    });
   }
 
   window.showOutgoingCall = function(opts){

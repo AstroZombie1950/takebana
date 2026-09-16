@@ -4,7 +4,8 @@
  * эфира, справа чат. Телефон и планшет (до 1023px, как у левой панели):
  * одна колонка на весь экран без шапки сайта — картинка, шапка эфира одной
  * строкой, чат с полем ввода сверху. Во весь экран (класс is-full) —
- * только картинка, кнопки и чат.
+ * картинка и кнопки, чат справа; на телефоне чат поверх картинки по кнопке
+ * (класс chat-open).
  *
  * Прежняя вёрстка: чат ниже 1100px уезжал в выдвижную панель по ярлычку.
  */
@@ -167,6 +168,9 @@
 }
 
 .tk-live__fs:hover { color: var(--tk-paper); border-color: var(--tk-beige); }
+/* Кнопка чата — только во весь экран на телефоне, левее кнопки экрана. */
+.tk-live__chatbtn { display: none; right: 58px; }
+.tk-live__chatbtn[aria-pressed="true"] { color: var(--tk-paper); border-color: var(--tk-accent); }
 .tk-live__fs-off,
 .tk-live__fs[aria-pressed="true"] .tk-live__fs-on { display: none; }
 .tk-live__fs[aria-pressed="true"] .tk-live__fs-off { display: block; }
@@ -610,9 +614,13 @@ html.tk-stage-open { overflow: hidden; }
     height: 100dvh;
   }
 
+  /* stretch обязателен: на широком экране у сетки align-items: start, и во
+   * flex-колонке он сжимал картинку и чат до ширины содержимого — на айфоне
+   * вертикально всё съезжало в левые три четверти экрана. */
   .tk-live__grid {
     display: flex;
     flex-direction: column;
+    align-items: stretch;
     height: 100%;
     gap: 0;
   }
@@ -668,8 +676,10 @@ html.tk-stage-open { overflow: hidden; }
 
   .messeg-box { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
 
-  /* Во весь экран вертикально: картинка на весь экран, кнопки ведущего
-   * сверху, чат полупрозрачно поверх нижней части картинки. */
+  /* Во весь экран: картинка на весь экран, кнопки ведущего сверху, чат —
+   * по кнопке, полупрозрачно поверх нижней части картинки (горизонтально —
+   * поверх правой). Раньше чат был открыт всегда и закрывал кнопки плеера,
+   * а горизонтально полный экран почти не отличался от обычного. */
   .tk-live__grid.is-full { display: block; }
 
   .is-full .tk-live__col { position: absolute; inset: 0; }
@@ -684,7 +694,7 @@ html.tk-stage-open { overflow: hidden; }
     position: absolute;
     top: 0;
     left: 0;
-    right: 60px;
+    right: 108px;
     z-index: 5;
     border: 0;
     padding-top: calc(8px + env(safe-area-inset-top));
@@ -692,15 +702,18 @@ html.tk-stage-open { overflow: hidden; }
   }
 
   .is-full .tk-live__fs { top: calc(10px + env(safe-area-inset-top)); }
+  .is-full .tk-live__chatbtn { display: flex; }
+  .is-full:not(.chat-open) .tk-live__chat { display: none; }
 
   /* У ведущего сверху кнопки — метки опускаются под них. */
   body[data-phase="console"] .is-full .tk-live__badges { top: calc(64px + env(safe-area-inset-top)); }
 
+  /* Снизу остаётся полоса под кнопки плеера: звук включают ими. */
   .is-full .tk-live__chat {
     position: absolute;
     left: 0;
     right: 0;
-    bottom: 0;
+    bottom: calc(52px + env(safe-area-inset-bottom));
     z-index: 4;
     height: 44%;
     border: 0;
@@ -737,28 +750,18 @@ html.tk-stage-open { overflow: hidden; }
   .tk-live__grid:not(.is-full) .tk-live__chat { border-top: 0; border-left: 1px solid var(--tk-rule); }
 }
 
-/* Во весь экран горизонтально: картинка слева, чат колонкой справа. */
+/* Во весь экран горизонтально: чат — колонкой поверх правой части картинки. */
 @media (max-width: 1023px) and (orientation: landscape) {
-  .tk-live__grid.is-full {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 38%;
-  }
-
-  .is-full .tk-live__col { position: relative; inset: auto; display: flex; flex-direction: column; }
-  .is-full .tk-live__player { position: relative; inset: auto; flex: 1; }
-  .is-full .tk-live__bar { position: static; background: var(--tk-ink); padding-top: 8px; }
-  .is-full .tk-live__fs { top: 10px; }
-  body[data-phase="console"] .is-full .tk-live__badges { top: 12px; }
-
   .is-full .tk-live__chat {
-    position: static;
+    top: 60px;
+    left: auto;
+    width: 40%;
     height: auto;
-    background: var(--tk-ink);
-    border-left: 1px solid var(--tk-rule);
+    background: linear-gradient(to right, rgba(10, 10, 10, 0), rgba(10, 10, 10, .78) 14%);
   }
 
-  .is-full .input__messeng { background: transparent; }
-  .is-full .chat-message { background: none; }
+  .is-full .input__messeng-box { padding-top: 10px; padding-left: 32px; }
+  .is-full .messeg-box { padding-left: 32px; }
 }
 
 @media (max-width: 560px) {

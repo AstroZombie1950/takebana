@@ -61,12 +61,13 @@
   //   access()   → Promise<{ url, token }> — свежий токен на каждый вход;
   //                ошибка с err.final прекращает попытки
   //   send       — отправлять свои звук и видео (зритель — нет)
-  //   video      — включить камеру сразу
+  //   video      — включить камеру сразу (дальше — setVideo)
   //   onTrack(track, participant, on)  — дорожка появилась или ушла
   //   onState(state) — 'connecting' | 'live' | 'reconnecting' | 'ended'
   //   onNetwork(state) — 'good' | 'low' | 'bad', оценка самого Daily
   //   onPeers(n) — сколько видимых участников, кроме себя
   //   onMediaError(e) — камера или микрофон недоступны
+  //   diag       — подпись для отчёта о несоединившемся звонке (см. ниже)
   function connect(opts) {
     var call = null;
     var dying = Promise.resolve();
@@ -78,8 +79,64 @@
     // ручную переходим с первым включением «только голос» и дальше
     // подписываем каждого участника сами — и после повторного входа тоже.
     var manual = false;
+    // Видео переключили до входа в комнату — применить при входе.
+    var pending = false;
 
     function emit(name, value) { if (opts[name]) opts[name](value); }
+
+    // ── Отчёт о звонке, который не соединился ──
+    // У части людей из России звонок без VPN висит на «Подключаемся…», а
+    // у нас всё работает — гадать, что режет провайдер, бесполезно. Если
+    // за 15 секунд не вошли в комнату, или собеседник в комнате, а звука
+    // от него нет, или звонок оборвался, — в журнал ошибок панели
+    // (/api/client-error) уходят хронология событий Daily и его же проверка
+    // соединения с серверами. Один отчёт каждого вида за звонок; об обрыве
+    // и брошенной трубке — только если других отчётов ещё не было.
+    var diag = opts.diag ? { t0: Date.now(), log: [], sent: {}, joined: false, remote: false } : null;
+    var WAIT_MS = 15000;
+
+    function note(what) {
+      if (diag && diag.log.length < 100) diag.log.push(((Date.now() - diag.t0) / 1000).toFixed(1) + ' с  ' + what);
+    }
+
+    function report(kind, onlyFirst) {
+      if (!diag || diag.sent[kind] || (onlyFirst && Object.keys(diag.sent).length)) return;
+      diag.sent[kind] = true;
+      var c = call;
+      var net = navigator.connection || {};
+      var test = c ? Promise.race([
+        c.testWebsocketConnectivity().then(function (r) { return 'ответ ' + JSON.stringify(r); }),
+        new Promise(function (resolve) { setTimeout(resolve, 15000, 'нет ответа за 15 с'); })
+      ]).catch(function (e) { return 'ошибка ' + ((e && (e.message || e.errorMsg)) || e); }) : Promise.resolve('объекта звонка нет');
+      test.then(function (ws) {
+        var details = [
+          opts.diag + ': ' + kind,
+          'состояние Daily: ' + (c ? c.meetingState() : '—') + ', попытка входа: ' + (attempt + 1),
+          'сеть браузера: ' + (net.type || '?') + ' / ' + (net.effectiveType || '?'),
+          'проверка соединения с серверами Daily: ' + ws,
+          '— хронология —'
+        ].concat(diag.log);
+        fetch('/api/client-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ page: location.pathname, name: 'CallDiag', message: 'Звонок не соединился: ' + kind, details: details }),
+          keepalive: true
+        }).catch(noop);
+      });
+    }
+
+    // Подпись события Daily для хронологии.
+    function describe(name, e) {
+      e = e || {};
+      if (name === 'network-connection') return name + ' ' + e.type + ' ' + e.event;
+      if (name === 'track-started' || name === 'track-stopped') return name + ' ' + (e.track && e.track.kind) + (e.participant && e.participant.local ? ' свой' : ' собеседника');
+      if (name === 'error' || name === 'nonfatal-error' || name === 'load-attempt-failed') return name + ' ' + (e.type || '') + ' ' + (e.errorMsg || (e.error && (e.error.msg || e.error.type)) || '');
+      return name;
+    }
+
+    if (diag) {
+      setTimeout(function () { if (!closed && !diag.joined) report('за 15 с не вошли в комнату'); }, WAIT_MS);
+    }
 
     function subscribe(c, sessionId) {
       c.updateParticipant(sessionId, {
@@ -88,7 +145,7 @@
     }
 
     function applyVoiceOnly(c) {
-      if (opts.send && opts.video) c.setLocalVideo(!voiceOnly);
+      if (opts.send) c.setLocalVideo(!!opts.video && !voiceOnly);
       if (!manual) {
         manual = true;
         c.setSubscribeToTracksAutomatically(false);
@@ -108,12 +165,15 @@
       if (closed) return;
       // Причина в консоль: иначе отказ Daily виден только как вечное «переподключаемся».
       if (err) console.warn('[daily]', err.errorMsg || err.message || err.action || err, err.error || '');
-      drop();
+      note('сбой: ' + ((err && (err.errorMsg || err.message || err.action)) || err));
       if ((err && err.final) || attempt >= RETRY_MS.length) {
+        report('звонок оборвался, попытки кончились', true);
+        drop();
         closed = true;
         emit('onState', 'ended');
         return;
       }
+      drop();
       emit('onState', 'reconnecting');
       setTimeout(run, RETRY_MS[attempt++]);
     }
@@ -137,6 +197,21 @@
         function mine(fn) { return function (e) { if (c === call) fn(e); }; }
         function peers() { emit('onPeers', Math.max(0, Object.keys(c.participants()).length - 1)); }
 
+        if (diag) {
+          note('объект звонка создан' + (attempt ? ' (повторный вход)' : ''));
+          ['loading', 'loaded', 'load-attempt-failed', 'joining-meeting', 'joined-meeting', 'participant-joined', 'participant-left',
+           'track-started', 'track-stopped', 'network-connection', 'nonfatal-error', 'error', 'left-meeting'].forEach(function (name) {
+            c.on(name, mine(function (e) {
+              note(describe(name, e));
+              if (name === 'joined-meeting') diag.joined = true;
+              if (name === 'track-started' && e.participant && !e.participant.local) diag.remote = true;
+              // Собеседник вошёл: ждём от него звук или видео.
+              if (name === 'participant-joined') {
+                setTimeout(function () { if (!closed && !diag.remote) report('собеседник в комнате, но звук и видео от него не пришли'); }, WAIT_MS);
+              }
+            }));
+          });
+        }
         c.on('track-started', mine(function (e) { if (opts.onTrack && e.participant) opts.onTrack(e.track, e.participant, true); }));
         c.on('track-stopped', mine(function (e) { if (opts.onTrack && e.participant) opts.onTrack(e.track, e.participant, false); }));
         c.on('participant-joined', mine(function (e) {
@@ -159,12 +234,19 @@
         return c.join({ url: access.url, token: access.token }).then(function () {
           if (c !== call) return;
           attempt = 0;
-          if (manual) applyVoiceOnly(c);
+          // Кнопку видео могли нажать, пока шло подключение: применяем здесь.
+          if (manual || pending) { pending = false; applyVoiceOnly(c); }
           peers();
           emit('onState', 'live');
           // Событие о сети Daily шлёт только при смене оценки: при хорошей
           // сети с первой секунды его не будет вовсе. Начальную берём сами.
           c.getNetworkStats().then(mine(function (s) { emit('onNetwork', netState(s)); })).catch(noop);
+        }).catch(function (e) {
+          // Тот же сбой Daily шлёт и событием error: оно уже сняло объект
+          // и назначило повтор. Второй повтор поверх первого создавал второй
+          // объект звонка («Duplicate DailyIframe instances») и тратил попытки
+          // вдвое быстрее.
+          if (c === call) throw e;
         });
       });
     }
@@ -174,13 +256,21 @@
 
     return {
       get call() { return call; },
-      // Только голос: своя камера выключается, чужое видео не принимается —
-      // на слабой сети это освобождает почти весь канал под звук.
-      setVoiceOnly: function (on) {
-        voiceOnly = !!on;
-        if (call) applyVoiceOnly(call);
+      // Видео в звонке. Выключено — только голос: своя камера гаснет, чужое
+      // видео не принимается, на слабой сети это освобождает почти весь канал
+      // под звук. Включено — камера и чужое видео, и в аудиозвонке тоже.
+      setVideo: function (on) {
+        opts.video = !!on;
+        voiceOnly = !on;
+        // До входа в комнату Daily не даёт менять подписку и бросает
+        // исключение — так и было, когда «Только голос» нажимали во время
+        // «Подключаемся…». Тогда настройка применится при входе.
+        if (call && call.meetingState() === 'joined-meeting') applyVoiceOnly(call);
+        else pending = true;
       },
       leave: function () {
+        // Положили трубку, так и не дождавшись входа: это тоже случай.
+        if (diag && !diag.joined && Date.now() - diag.t0 > 8000) report('положили трубку, не дождавшись входа в комнату', true);
         closed = true;
         var dead = call;
         call = null;
