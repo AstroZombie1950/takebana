@@ -12,6 +12,8 @@ const catalog = require('../config/catalog');
 const { commonDataMiddleware } = require('./streaming/shared');
 const { requireAuth } = require('../middleware/auth');
 const { readVenueFilters } = require('../utils/venueFilters');
+const { audit, ACTIONS } = require('../utils/audit');
+const userView = require('../utils/userView');
 
 // «О нас» — бывший лендинг главной. Вошедшему шапка и панель — свои,
 // поэтому commonDataMiddleware.
@@ -28,7 +30,12 @@ router.get('/panel', async (req, res) => {
           // отвечает «Access denied» на каждое действие, хуже отсутствующей.
           res.render('admin', {
               title: 'Панель администрирования',
-              isAdmin: user.role === 'admin'
+              isAdmin: user.role === 'admin',
+              // Панель подписывает действия человеческими названиями и из них
+              // же строит фильтр журнала — список один, в utils/audit.js.
+              actions: ACTIONS,
+              me: { id: String(user._id), displayName: userView.displayName(user) },
+              catalog,
           });
       } else {
           res.redirect('/');
@@ -73,6 +80,8 @@ router.get('/main', commonDataMiddleware, async (req, res) => {
 
 
 router.get('/logout', (req, res) => {
+  // До destroy: после него в сессии уже некого записывать.
+  audit(req, 'auth.logout');
   req.session.destroy(err => {
     if (err) {
       return res.redirect('/');

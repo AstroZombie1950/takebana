@@ -60,6 +60,12 @@ function requireOwner(Model, options = {}) {
             if (!id) {
                 return res.status(400).json({ message: 'Не указан идентификатор' });
             }
+            // Негодный идентификатор — «такой записи нет», а не поломка:
+            // иначе findById бросает CastError, и любой кривой адрес
+            // оседает в журнале ошибок как 500.
+            if (!/^[a-f\d]{24}$/i.test(String(id))) {
+                return res.status(404).json({ message: 'Запись не найдена' });
+            }
 
             const doc = await Model.findById(id);
             if (!doc) {
@@ -109,6 +115,9 @@ function requireModerator(req, res, next) {
             if (!canModerate(user)) {
                 return res.status(403).json({ message: 'Нет прав модератора' });
             }
+            // Роль дальше по цепочке: панель показывает модератору не всё,
+            // что администратору, и лишний запрос к базе за этим не нужен.
+            req.userRole = user.role;
             return next();
         })
         .catch(next);
@@ -128,6 +137,7 @@ function requireAdmin(req, res, next) {
             if (!user || user.role !== 'admin') {
                 return res.status(403).json({ message: 'Нужны права администратора' });
             }
+            req.userRole = user.role;
             return next();
         })
         .catch(next);

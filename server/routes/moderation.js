@@ -9,7 +9,6 @@ const router = express.Router();
 const Report = require('../models/Report');
 const User = require('../models/User');
 const Stream = require('../models/Stream');
-const ChatMessage = require('../models/ChatMessage');
 const Establishments = require('../models/Establishments');
 const { validate } = require('../middleware/validate');
 const daily = require('../utils/daily');
@@ -27,8 +26,11 @@ function dropPublisher(streamKey) {
 // выгоняет из неё и вещателя, и зрителей.
 function dropDailyRoom(roomName) {
     if (!roomName) return;
-    daily.deleteRoom(roomName).catch(err => console.error('[moderation] daily', err.message));
+    daily.deleteRoom(roomName).catch((err) => errorLog.external(err, 'daily.deleteRoom', { roomName, by: 'moderation' }));
 }
+const { audit, forget } = require('../utils/audit');
+const streamLog = require('../utils/streamLog');
+const errorLog = require('../utils/errorLog');
 const {
     requireAuthApi,
     requireModerator,
@@ -66,6 +68,7 @@ router.post('/api/reports', requireAuthApi, requireNotBanned, validate({
             reason,
             comment: comment || ''
         });
+        audit(req, 'report.create', { targetType, targetId, meta: { reason } });
         return res.status(201).json({ id: report._id });
     } catch (err) {
         // Уникальный индекс reporter+target: повтор — это не ошибка сервера,
@@ -75,45 +78,6 @@ router.post('/api/reports', requireAuthApi, requireNotBanned, validate({
         }
         throw err;
     }
-}));
-
-// ── Разбор: список ───────────────────────────────────────────────────────────
-// validate() разбирает только тело запроса, а здесь фильтр приходит строкой
-// запроса — поэтому статус сверяется со списком прямо тут.
-const STATUSES = ['new', 'resolved', 'rejected'];
-
-router.get('/api/moderation/reports', requireModerator, wrap(async (req, res) => {
-    const status = STATUSES.includes(req.query.status) ? req.query.status : 'new';
-
-    const reports = await Report.find({ status })
-        .sort({ createdAt: -1 })
-        .limit(100)
-        .populate('reporter', 'login email')
-        .lean();
-
-    // Цель жалобы лежит в разных коллекциях, поэтому populate тут не работает.
-    // Добираем одним запросом на тип, а не по запросу на жалобу: сотня жалоб
-    // на один эфир иначе означала бы сотню одинаковых чтений.
-    const ids = { user: [], stream: [], message: [] };
-    for (const r of reports) ids[r.targetType].push(r.targetId);
-
-    const [users, streams, messages] = await Promise.all([
-        ids.user.length ? User.find({ _id: { $in: ids.user } }).select('login email banned').lean() : [],
-        ids.stream.length ? Stream.find({ _id: { $in: ids.stream } }).select('title isActive userId stoppedByModeration').lean() : [],
-        ids.message.length ? ChatMessage.find({ _id: { $in: ids.message } }).select('message userId').lean() : []
-    ]);
-
-    const byId = new Map();
-    for (const u of users) byId.set(u._id.toString(), { kind: 'user', title: u.login || u.email, banned: !!u.banned });
-    for (const st of streams) byId.set(st._id.toString(), { kind: 'stream', title: st.title, isActive: !!st.isActive, ownerId: st.userId, stopped: !!st.stoppedByModeration });
-    for (const msg of messages) byId.set(msg._id.toString(), { kind: 'message', title: msg.message, ownerId: msg.userId });
-
-    for (const r of reports) {
-        // Цели может уже не быть: эфир закончился, сообщение удалили.
-        r.target = byId.get(r.targetId.toString()) || null;
-    }
-
-    return res.json({ reports });
 }));
 
 // ── Разбор: закрыть жалобу ───────────────────────────────────────────────────
@@ -133,28 +97,14 @@ router.post('/api/moderation/reports/:id/close', requireModerator, validate({
     );
 
     if (!report) return res.status(404).json({ message: 'Жалоба не найдена' });
+
+    audit(req, 'report.close', {
+        targetType: 'report',
+        target: report,
+        targetLabel: report.reason,
+        meta: { status: req.body.status, action: req.body.action || '', about: report.targetType },
+    });
     return res.json({ ok: true });
-}));
-
-// ── Поиск людей ──────────────────────────────────────────────────────────────
-//
-// Модератору он нужен не меньше администратора: ограничить можно и того,
-// на кого жалобы ещё не написали.
-router.get('/api/moderation/users', requireModerator, wrap(async (req, res) => {
-    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-
-    // Экранируем ввод: строка идёт в регулярное выражение, и «(» без этого
-    // роняет запрос ошибкой разбора, а не пустым результатом.
-    const needle = q ? new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : null;
-    const filter = needle ? { $or: [{ login: needle }, { email: needle }] } : {};
-
-    const users = await User.find(filter)
-        .select('login email role banned banReason bannedAt')
-        .sort({ banned: -1, login: 1 })
-        .limit(50)
-        .lean();
-
-    return res.json({ users });
 }));
 
 // ── Смена роли ───────────────────────────────────────────────────────────────
@@ -169,6 +119,13 @@ router.post('/api/moderation/users/:id/role', requireAdmin, validate({
 
     const updated = await User.findByIdAndUpdate(req.params.id, { role: req.body.role });
     if (!updated) return res.status(404).json({ message: 'Пользователь не найден' });
+
+    // Роль в подписи журнала кэшируется на пять минут — после её смены кэш
+    // надо сбросить, иначе следующие записи подпишут человека прежней ролью.
+    forget(req.params.id);
+    // findByIdAndUpdate без new возвращает документ до правки — из него и
+    // берётся прежняя роль.
+    audit(req, 'mod.role', { targetType: 'user', target: updated, meta: { was: updated.role, now: req.body.role } });
 
     return res.json({ ok: true });
 }));
@@ -214,6 +171,7 @@ router.post('/api/moderation/users/:id/ban', requireModerator, validate({
         for (const s of live) {
             dropPublisher(s.streamKey);
             dropDailyRoom(s.dailyRoomName);
+            await streamLog.close(s.streamKey, { endedBy: 'moderation', reason: req.body.reason, by: req.session.userId });
         }
     }
 
@@ -225,6 +183,12 @@ router.post('/api/moderation/users/:id/ban', requireModerator, validate({
         for (const v of venues) dropDailyRoom(venueRoom(v._id));
     }
 
+    audit(req, 'mod.ban', {
+        targetType: 'user',
+        target,
+        targetLabel: target.login || target.email || '',
+        meta: { reason: req.body.reason, streamsStopped: live.length, venuesStopped: venues.length },
+    });
     return res.json({ ok: true, streamsStopped: live.length, venuesStopped: venues.length });
 }));
 
@@ -237,6 +201,9 @@ router.post('/api/moderation/users/:id/unban', requireModerator, wrap(async (req
     });
 
     if (!updated) return res.status(404).json({ message: 'Пользователь не найден' });
+
+    // updated — документ до снятия ограничения, поэтому в нём ещё видна причина.
+    audit(req, 'mod.unban', { targetType: 'user', target: updated, meta: { was: updated.banReason || '' } });
     return res.json({ ok: true });
 }));
 
@@ -275,6 +242,20 @@ router.post('/api/moderation/streams/:id/stop', requireAuthApi, validate({
     const wasLive = dropPublisher(stream.streamKey);
     dropDailyRoom(stream.dailyRoomName);
 
+    // Отрезок эфира закрывается в обоих случаях, но с разной причиной:
+    // в журнале должно быть видно, сам ведущий ушёл или его погасили.
+    await streamLog.close(stream.streamKey, {
+        endedBy: isOwner ? 'owner' : 'moderation',
+        reason: isOwner ? '' : (req.body.reason || ''),
+        by: isOwner ? null : req.session.userId,
+        streamId: stream._id,
+    });
+    audit(req, isOwner ? 'stream.pause' : 'mod.stream.stop', {
+        targetType: 'stream',
+        target: stream,
+        meta: { reason: req.body.reason || '', wasLive },
+    });
+
     return res.json({ ok: true, byModeration: !isOwner, wasLive });
 }));
 
@@ -283,10 +264,12 @@ router.post('/api/moderation/streams/:id/stop', requireAuthApi, validate({
 // Спрашиваем один раз и запоминаем. Повторное подтверждение дату не сдвигает:
 // важно, когда человек подтвердил впервые.
 router.post('/api/age/confirm', requireAuthApi, wrap(async (req, res) => {
-    await User.updateOne(
+    const done = await User.updateOne(
         { _id: req.session.userId, adultConfirmedAt: null },
         { adultConfirmedAt: new Date() }
     );
+    // Только первое подтверждение: повтор даты не сдвигает и записи не стоит.
+    if (done.modifiedCount) audit(req, 'age.confirm');
     return res.json({ ok: true });
 }));
 

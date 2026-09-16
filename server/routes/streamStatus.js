@@ -18,24 +18,17 @@ router.use('/api/check-stream', (req, res, next) => {
 
 // API эндпоинт для проверки статуса стрима который через обс
 router.get('/api/check-stream/:streamKey', (req, res) => {
-  try {
-      const { streamKey } = req.params;
-      
-      // Проверяем есть ли активный стрим с таким ключом
-      const isStreamActive = activeStreams.has(streamKey);
-      
-      res.json({
-          isLive: isStreamActive,
-          streamKey: streamKey,
-          timestamp: new Date()
-      });
+  const { streamKey } = req.params;
+  
+  // Проверяем есть ли активный стрим с таким ключом
+  const isStreamActive = activeStreams.has(streamKey);
+  
+  res.json({
+      isLive: isStreamActive,
+      streamKey: streamKey,
+      timestamp: new Date()
+  });
 
-  } catch (error) {
-      console.error('Error checking stream status:', error);
-      res.status(500).json({
-          message: 'Ошибка сервера'
-      });
-  }
 });
 
 module.exports = router;

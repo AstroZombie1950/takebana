@@ -26,6 +26,8 @@ const User = require('../models/User');
 const { PASSWORD_PROVIDER, PASSWORD_MIN, PASSWORD_MAX, hashPassword } = require('../utils/password');
 const { mailConfigured, siteUrl, sendMail } = require('../utils/mail');
 const { langOf, tr } = require('../utils/i18n');
+const { audit } = require('../utils/audit');
+const errorLog = require('../utils/errorLog');
 
 const LINK_TTL_MS = 60 * 60 * 1000;
 const RESEND_AFTER_MS = 60 * 1000;
@@ -92,7 +94,10 @@ if (mailConfigured) {
     email: { type: 'email', required: true, label: 'Почта' },
   }), (req, res) => {
     res.json({ message: 'Если учётная запись с этой почтой есть, мы отправили на неё письмо со ссылкой' });
-    sendResetLetter(req.body.email, langOf(req)).catch((err) => console.error('[password-reset] письмо не ушло:', err));
+    // Ответ одинаков и для несуществующей почты — в журнале же видно,
+    // на какие адреса заказывают письма: это первый признак перебора.
+    audit(req, 'auth.password.reset.request', { actorLogin: req.body.email });
+    sendResetLetter(req.body.email, langOf(req)).catch((err) => errorLog.external(err, 'mail.passwordReset'));
   });
 
   // Токен в адресе: страница не кэшируется, а Referer наружу не уходит —
@@ -108,6 +113,7 @@ if (mailConfigured) {
   }), async (req, res) => {
     const user = await findByToken(req.body.token);
     if (!user) {
+      audit(req, 'auth.password.reset.done', { result: 'fail', meta: { reason: 'bad-token' } });
       return res.status(400).json({ message: 'Ссылка устарела или уже использована. Запросите новую' });
     }
 
@@ -123,6 +129,7 @@ if (mailConfigured) {
     await new Promise((resolve, reject) => req.session.regenerate((err) => (err ? reject(err) : resolve())));
     req.session.userId = user._id.toString();
     req.session.login = user.login || 'anon';
+    audit(req, 'auth.password.reset.done', { actor: user });
     res.json({ message: 'Пароль изменён', redirectUrl: '/' });
   });
 }

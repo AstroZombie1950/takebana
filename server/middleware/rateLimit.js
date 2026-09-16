@@ -5,6 +5,19 @@
 // служебных маршрутов, и общий счётчик отрубал бы обычных зрителей.
 
 const rateLimit = require('express-rate-limit');
+const { audit } = require('../utils/audit');
+
+// Срабатывание лимита — это событие для журнала, а не только отказ в ответе:
+// подбор пароля и накрутка регистраций видны именно по нему. Ответ остаётся
+// прежним, обработчик только добавляет запись.
+const hit = (what) => (req, res, next, options) => {
+    audit(req, 'auth.ratelimit', {
+        result: 'denied',
+        actorLogin: (req.body && typeof req.body.email === 'string') ? req.body.email : '',
+        meta: { what },
+    });
+    res.status(options.statusCode).json(options.message);
+};
 
 // Пределы вынесены в переменные окружения: при отладке удобно поднять,
 // чтобы не заблокировать самому себе вход десятком опечаток.
@@ -20,6 +33,7 @@ const authLimiter = rateLimit({
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { message: 'Слишком много попыток. Попробуйте через 15 минут.' },
+    handler: hit('login'),
 });
 
 // Регистрация: 5 аккаунтов с адреса в час.
@@ -29,6 +43,7 @@ const registerLimiter = rateLimit({
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { message: 'Слишком много регистраций с этого адреса. Попробуйте позже.' },
+    handler: hit('register'),
 });
 
 // Письмо восстановления пароля: 5 запросов с адреса за 15 минут. Считаются
@@ -40,6 +55,7 @@ const resetLimiter = rateLimit({
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { message: 'Слишком много запросов. Попробуйте через 15 минут.' },
+    handler: hit('password-reset'),
 });
 
 // Поиск адреса (routes/geocode.js): за нашим маршрутом стоит чужой

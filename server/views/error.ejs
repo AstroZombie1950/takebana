@@ -1,0 +1,36 @@
+<%# Ошибка на стороне сервера. Страница намеренно простая: она показывается
+    именно тогда, когда что-то сломалось, и не должна зависеть ни от данных
+    кабинета, ни от скриптов. %>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { titleKey: 'page.fail.title' }) %>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/status.css">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-status">
+      <span class="tk-status__kicker" data-i18n="fail.kicker"><%- t('fail.kicker') %></span>
+      <h1 class="tk-status__title" data-i18n="fail.title"><%- t('fail.title') %></h1>
+      <p class="tk-status__text" data-i18n="fail.text"><%- t('fail.text') %></p>
+
+      <%# Отпечаток той же ошибки, что записана в журнале: по нему её
+          находят в панели, не переспрашивая, что именно человек делал. %>
+      <% if (code) { %><p class="tk-status__text"><small>#<%= code %></small></p><% } %>
+
+      <div class="tk-status__acts">
+        <a href="/" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="age.back"><%- t('age.back') %></a>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

@@ -10,6 +10,7 @@ const { requireAuth, requireOwner, requireNotBanned } = require('../middleware/a
 const { validate } = require('../middleware/validate');
 const daily = require('../utils/daily');
 const Stream = require('../models/Stream');
+const errorLog = require('../utils/errorLog');
 
 // В комнате эфира только ведущий. Второе место — на повторный вход после
 // обрыва, пока Daily ещё держит прежнее подключение.
@@ -26,7 +27,7 @@ router.param('streamId', (req, res, next, id) => (
 
 // Подробности — в лог: ни тело ответа Daily, ни текст исключения наружу не уходят.
 function dailyFailure(res, err) {
-    console.error('[daily]', err.message);
+    errorLog.external(err, 'daily.api');
     const message = err.status === 429
         ? 'Сервис видео перегружен запросами, попробуйте через несколько секунд'
         : 'Сервис видео недоступен, попробуйте позже';

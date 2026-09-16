@@ -151,11 +151,13 @@ app.use(express.json());
 app.use(require('./routes/userRoutes'));
 app.use(require('./routes/passwordReset'));
 app.use(require('./routes/establishmentsRouter'));
-app.use(require('./routes/adminRouter'));
+app.use(require('./routes/admin'));
 app.use(require('./routes/streaming'));
 app.use(require('./routes/search'));
 app.use(require('./routes/authors'));
 app.use(require('./routes/moderation'));
+// Ошибки в браузере посетителя — в общий журнал ошибок
+app.use(require('./routes/clientErrors'));
 
 // Daily.co: комнаты веб-эфира и камеры заведений
 app.use('/api', require('./routes/dailyApiRoutes'));
@@ -196,12 +198,23 @@ app.use(express.static(path.join(__dirname, 'public')));
 require('./jobs/streamCleanup').startStreamCleanup();
 // Записи, чью склейку оборвал перезапуск процесса, — в «не сохранилась».
 require('./utils/recording').sweep();
+// Отрезки эфиров, оставшиеся открытыми от прошлого процесса, — закрыть,
+// иначе они навсегда останутся «в эфире» и испортят сумму часов.
+require('./utils/streamLog').sweep();
 
 app.use(require('./routes/presence'));
 app.use(require('./routes/calls'));
 app.use(require('./routes/recordings'));
 app.use(require('./routes/pages'));
 app.use(require('./routes/streamStatus'));
+
+// Обработчик ошибок — последним, после всех маршрутов: он ловит то, что
+// до него не поймал никто. Без него ошибка уходила во встроенный обработчик
+// Express и оставалась только в stderr под pm2.
+const { errorHandler, installShutdown } = require('./middleware/errors');
+app.use(errorHandler);
+// Дописать журналы перед остановкой процесса: pm2 при деплое шлёт SIGINT.
+installShutdown();
 
 
 async function startServer() {

@@ -10,6 +10,7 @@
 const daily = require('./daily');
 const { buildObsStreamKey } = require('./rtmpAuth');
 const Stream = require('../models/Stream');
+const errorLog = require('./errorLog');
 
 // Выход сразу таким, каким его отдаёт наш транскод: 720p30, 2500 кбит/с —
 // по умолчанию Daily шлёт 1080p30 на 5 Мбит/с, и мы бы гоняли лишнее.
@@ -84,7 +85,7 @@ function ended(streamKey) {
   const out = outputs.get(streamKey);
   if (!out) return;
   if (out.restarts >= MAX_RESTARTS) {
-    console.error(`[webLive ${streamKey}] выход Daily обрывается подряд ${MAX_RESTARTS} раза, больше не запускаем`);
+    errorLog.external(new Error(`выход Daily обрывается подряд ${MAX_RESTARTS} раза, больше не запускаем`), 'webLive.restarts', { streamKey });
     outputs.delete(streamKey);
     return;
   }
@@ -100,7 +101,7 @@ function ended(streamKey) {
       console.warn(`[webLive ${streamKey}] выход Daily оборвался, запуск ${out.restarts}/${MAX_RESTARTS}`);
       await launch(out.room, out.rtmpUrl);
     } catch (err) {
-      console.error(`[webLive ${streamKey}] выход Daily не перезапустился:`, err.message);
+      errorLog.external(err, 'webLive.restart', { streamKey });
     }
   }, RESTART_DELAY_MS).unref();
 }

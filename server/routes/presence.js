@@ -12,18 +12,16 @@ const User = require('../models/User');
 // Без проверки любой желающий мог опрашивать присутствие произвольных
 // идентификаторов и снимать, кто когда в сети.
 router.get('/api/presence', requireAuthApi, async (req, res) => {
-  try {
-    const ids = (req.query.ids || '')
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean);
-    if (!ids.length) return res.json({ users: [] });
-    const users = await User.find({ _id: { $in: ids } }, { _id: 1, isOnline: 1, lastSeen: 1 }).lean();
-    res.json({ users });
-  } catch (e) {
-    console.error('presence api error', e);
-    res.status(500).json({ error: 'presence_failed' });
-  }
+  const ids = (req.query.ids || '')
+    .split(',')
+    .map(s => s.trim())
+    // Список приходит из адреса: негодный идентификатор ронял весь запрос
+    // CastError-ом. Отсеиваем, как это делает presence:subscribe в сокетах.
+    .filter((s) => /^[a-f\d]{24}$/i.test(s))
+    .slice(0, 200);
+  if (!ids.length) return res.json({ users: [] });
+  const users = await User.find({ _id: { $in: ids } }, { _id: 1, isOnline: 1, lastSeen: 1 }).lean();
+  res.json({ users });
 });
 
 module.exports = router;

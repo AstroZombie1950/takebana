@@ -562,6 +562,9 @@
   "ended.kicker": "Stream",
   "ended.title": "The stream has ended",
   "ended.text": "This stream is over. Go to the <a href=\"/streaming\">main page</a> to watch something else.",
+  "fail.kicker": "Error",
+  "fail.title": "Something broke",
+  "fail.text": "The page failed to open because of an error on our side. It has been logged and we will see it. Try reloading the page or going back to the <a href=\"/\">home page</a>.",
   // Заголовки и описания страниц (partials/tkHead)
   "page.home.title": "Takebana — live streaming platform for business",
   "page.home.description": "Takebana is a platform where producers, venues, bloggers and experts go live to sell, show how things are made and answer questions directly.",
@@ -583,6 +586,7 @@
   "page.authors.title": "Creators — Takebana",
   "page.authors.description": "Who goes live on Takebana: producers, venues, bloggers and experts.",
   "page.ended.title": "Stream ended — Takebana",
+  "page.fail.title": "Error — Takebana",
   "page.forgot.title": "Password reset — Takebana",
   "page.reset.title": "New password — Takebana",
   "page.studio.title": "New stream — Takebana",

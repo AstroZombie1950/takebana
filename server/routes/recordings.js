@@ -11,6 +11,7 @@ const { requireAuth, requireOwner } = require('../middleware/auth');
 const { commonDataMiddleware } = require('./streaming/shared');
 const recording = require('../utils/recording');
 const userView = require('../utils/userView');
+const { audit } = require('../utils/audit');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
@@ -44,6 +45,11 @@ router.delete('/recording/:id', requireAuth,
     return res.status(409).json({ message: 'Запись ещё сохраняется, удалить можно после' });
   }
   await recording.remove(req.resource);
+  audit(req, 'recording.delete', {
+    targetType: 'recording',
+    target: req.resource,
+    meta: { duration: req.resource.duration, size: req.resource.size },
+  });
   res.json({ success: true });
 });
 

@@ -7,6 +7,9 @@
 
 const Stream = require('../models/Stream');
 const recording = require('../utils/recording');
+const streamLog = require('../utils/streamLog');
+const { audit } = require('../utils/audit');
+const errorLog = require('../utils/errorLog');
 
 const ACTIVE_TTL_MINUTES = Number(process.env.STREAM_CLEANUP_ACTIVE_TTL_MINUTES || 5);
 const INACTIVE_TTL_DAYS = Number(process.env.STREAM_CLEANUP_INACTIVE_TTL_DAYS || 30);
@@ -31,11 +34,20 @@ const cleanupAbandonedStreams = async () => {
 
     console.log(`[cleanup] deleting abandoned streams: count=${toDelete.length} activeTTL=${ACTIVE_TTL_MINUTES}m inactiveTTL=${INACTIVE_TTL_DAYS}d`);
 
+    // Отрезки брошенных эфиров закрываем до удаления: после него ни ключа,
+    // ни владельца уже не узнать, и такой эфир остался бы «идущим» навсегда.
+    for (const s of toDelete) {
+      if (s.isActive) {
+        await streamLog.close(s.streamKey, { endedBy: 'cleanup', streamId: s._id });
+        audit(null, 'stream.cleanup', { actor: s.userId, targetType: 'stream', targetId: s._id, targetLabel: s.streamKey });
+      }
+    }
+
     await Stream.deleteMany({ _id: { $in: toDelete.map(s => s._id) } });
     // Брошенный эфир так и не сказал, сохранять ли запись, — куски удаляются.
     await Promise.all(toDelete.map((s) => recording.discard(s.streamKey).catch(() => {})));
   } catch (error) {
-    console.error('[cleanup] error while deleting abandoned streams:', error);
+    errorLog.server(error, 'streamCleanup');
   }
 };
 

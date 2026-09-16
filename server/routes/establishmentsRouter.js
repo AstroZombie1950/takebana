@@ -4,6 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
+const { audit } = require('../utils/audit');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 
 const Establishments = require('../models/Establishments');
@@ -51,6 +52,7 @@ const PHOTO_URL = /^\/uploads\/establishments\/[\w.-]+$/;
 // Часы, координаты, город и тип — в utils/venueFields.js: те же схемы
 // нужны админке, и разъезжаться им нельзя.
 const { HOURS, LOCATION, CITY, TYPE } = require('../utils/venueFields');
+const errorLog = require('../utils/errorLog');
 
 // То, что видит любой вошедший: карточка на карте и поиск. Почта, телефон
 // и владелец — только самому владельцу, в /user-establishments.
@@ -94,13 +96,9 @@ router.post('/register-establishment', requireAuth, validate({
         owner: req.session.userId // добавляем владельца
     });
 
-    try {
-        const savedEstablishment = await establishment.save();
-        res.json({ message: 'Заявка отправлена', establishment: savedEstablishment });
-    } catch (err) {
-        console.error('Ошибка при сохранении заявки:', err);
-        res.status(500).json({ message: 'Ошибка сервера' });
-    }
+    const savedEstablishment = await establishment.save();
+    audit(req, 'venue.apply', { targetType: 'venue', target: savedEstablishment, meta: { city: savedEstablishment.city, type: savedEstablishment.type } });
+    res.json({ message: 'Заявка отправлена', establishment: savedEstablishment });
 }));
 
 
@@ -234,13 +232,9 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
         photos: uploadedPhotos.concat(req.files.map(file => `/uploads/establishments/${file.filename}`)).slice(0, 6)
     };
 
-    try {
-        const updatedEstablishment = await Establishments.findByIdAndUpdate(req.params.id, establishment, { new: true });
-        res.json(updatedEstablishment);
-    } catch (err) {
-        console.error(err); // Логируем ошибку
-        res.status(500).json({ message: 'Ошибка сервера' });
-    }
+    const updatedEstablishment = await Establishments.findByIdAndUpdate(req.params.id, establishment, { new: true });
+    audit(req, 'venue.update', { targetType: 'venue', target: updatedEstablishment, meta: { fields: Object.keys(establishment) } });
+    res.json(updatedEstablishment);
 }));
 
 
@@ -252,7 +246,7 @@ router.post('/updateEstablishmentsOnlineStatus', requireAuth, async (req, res) =
     const live = await Establishments.find({ owner: userId, online: true }).select('_id').lean();
     await Establishments.updateMany({ owner: userId }, { $set: { online: false } });
     for (const { _id } of live) {
-        daily.deleteRoom(venueRoomName(_id)).catch(err => console.error('[venue-live]', err.message));
+        daily.deleteRoom(venueRoomName(_id)).catch((err) => errorLog.external(err, 'daily.deleteRoom', { venue: String(_id) }));
     }
     res.json({ ok: true });
 });
@@ -270,7 +264,7 @@ router.delete('/establishment/:id', requireAuth, requireOwner(Establishments), w
     // Камера могла идти в этот момент: комната в Daily живёт своей жизнью
     // и без записи в базе её потом не найти и не удалить.
     if (venue.online) {
-        await daily.deleteRoom(venueRoomName(venue._id)).catch((err) => console.error('[venue-live]', err.message));
+        await daily.deleteRoom(venueRoomName(venue._id)).catch((err) => errorLog.external(err, 'daily.deleteRoom', { venue: String(venue._id) }));
     }
 
     await Rating.deleteMany({ establishment: venue._id });
@@ -285,6 +279,7 @@ router.delete('/establishment/:id', requireAuth, requireOwner(Establishments), w
     }
 
     await venue.deleteOne();
+    audit(req, 'venue.delete', { targetType: 'venue', target: venue, meta: { city: venue.city, byOwner: true } });
     res.json({ ok: true });
 }));
 
@@ -306,6 +301,7 @@ router.post('/rateEstablishment', requireAuth, validate({
         { $set: { rating } },
         { upsert: true, new: true }
     );
+    audit(req, 'venue.rate', { targetType: 'venue', targetId: establishmentId, meta: { rating } });
     res.json({ rating: userRating.rating });
 }));
 

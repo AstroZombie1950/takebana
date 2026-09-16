@@ -11,6 +11,7 @@ const Stream = require('../../models/Stream');
 const Notification = require('../../models/Notification');
 const userView = require('../../utils/userView');
 const callLog = require('../../utils/callLog');
+const errorLog = require('../../utils/errorLog');
 
 const commonDataMiddleware = async (req, res, next) => {
   try {
@@ -92,7 +93,7 @@ const commonDataMiddleware = async (req, res, next) => {
 
       next(); // Передаем управление следующему middleware или маршруту
   } catch (error) {
-      console.error('Ошибка в middleware получения общих данных:', error);
+      errorLog.server(error, 'commonData', { path: req.path });
       next(error); // Передаем ошибку обработчику ошибок
   }
 };

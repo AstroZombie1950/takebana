@@ -192,9 +192,14 @@ if [[ "$leak" == *'$2a$'* || "$leak" == *'$2b$'* || "$leak" == *'"email"'* || "$
 else
   pass "чат не отдаёт email и хеш пароля"
 fi
-expect "POST /admin/establishments"       "403"     POST /admin/establishments       -H 'Content-Type: application/json' -d '{}'
-expect "PUT /admin/updEstablishment/:id"  "403"     PUT  /admin/updEstablishment/000000000000000000000000
-expect "POST /admin/updatePassword"       "403"     POST /admin/updatePassword       -H 'Content-Type: application/json' -d '{}'
+# API панели (routes/admin): без входа — 401, у каждой вкладки своя проверка прав.
+expect "GET /api/admin/summary"           "401"     GET  /api/admin/summary
+expect "GET /api/admin/users"             "401"     GET  /api/admin/users
+expect "GET /api/admin/audit"             "401"     GET  /api/admin/audit
+expect "GET /api/admin/audit.csv"         "401"     GET  /api/admin/audit.csv
+expect "GET /api/admin/system"            "401"     GET  /api/admin/system
+expect "PUT /api/admin/venues/:id"        "401"     PUT  /api/admin/venues/000000000000000000000000
+expect "POST /api/client-error"           "204"     POST /api/client-error           -H 'Content-Type: application/json' -d '{}'
 
 step "Удалённые маршруты: их не должно быть"
 expect "/stream"        "404" GET /stream
@@ -203,6 +208,11 @@ expect "/test-callback" "404" GET /test-callback
 # Конвейер под wrtc вырезан целиком вместе с папкой server/streams.
 # Ответ 200 здесь означал бы, что старый код вернулся.
 expect "/segments"      "404" GET /segments
+# Прежняя админка (16 сентября 2026): список заведений по POST и смена пароля
+# администратора — переехали в /api/admin или убраны.
+expect "POST /admin/establishments" "404" POST /admin/establishments -H 'Content-Type: application/json' -d '{}'
+expect "POST /admin/updatePassword" "404" POST /admin/updatePassword -H 'Content-Type: application/json' -d '{}'
+expect "GET /api/moderation/reports" "404" GET /api/moderation/reports
 expect "/clear-segments" "404" POST /clear-segments -H 'Content-Type: application/json' -d '{}'
 expect "/streams/x"     "404" GET /streams/x
 # Комнаты Daily закрыты токенами: ни адрес, ни настройки комнаты больше не

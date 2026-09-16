@@ -15,6 +15,9 @@ const fs = require('fs');
 const path = require('path');
 const { isPlainFileName } = require('./safePath');
 const storage = require('./storage');
+const streamLog = require('./streamLog');
+const { audit } = require('./audit');
+const errorLog = require('./errorLog');
 const Recording = require('../models/Recording');
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
@@ -35,7 +38,7 @@ function newPart(streamKey) {
   try {
     fs.mkdirSync(dir, { recursive: true });
   } catch (e) {
-    console.error(`[rec ${streamKey}] не создать каталог: ${e.message}`);
+    errorLog.media(e, 'recording.dir', { streamKey });
     return null;
   }
   return path.join(dir, `part-${Date.now()}.ts`);
@@ -89,7 +92,7 @@ async function finalize(rec, dir) {
     // Кадр не с нуля — первая секунда часто чёрная, пока камера просыпается.
     await run(FFMPEG, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
       '-ss', String(Math.min(3, Math.max(0, duration / 2))), '-i', video, '-frames:v', '1', '-vf', 'scale=640:-2', thumb])
-      .catch((e) => console.warn(`[rec ${rec._id}] обложка не снялась: ${e.message}`));
+      .catch((e) => errorLog.media(e, 'recording.thumb', { recording: String(rec._id) }));
 
     const base = `recordings/${rec.userId}/${rec._id}`;
     const { size } = await fs.promises.stat(video);
@@ -106,8 +109,15 @@ async function finalize(rec, dir) {
     });
     if (!saved) await Promise.all([storage.remove(`${base}.mp4`), storage.remove(`${base}.jpg`)]);
     console.log(`[rec ${rec._id}] готова: ${duration} с, ${(size / 1048576).toFixed(1)} МБ`);
+
+    // Склейка идёт в стороне от запроса, поэтому действие системное — req нет.
+    // Размер уходит и в отрезок эфира: на вкладке расходов гигабайты должны
+    // сходиться с эфиром, который их породил.
+    audit(null, 'recording.ready', { actor: rec.userId, targetType: 'recording', target: rec, meta: { duration, size } });
+    streamLog.recordingSize(rec._id, size);
   } catch (e) {
-    console.error(`[rec ${rec._id}] не сохранилась: ${e.message}`);
+    errorLog.media(e, 'recording.finalize', { recording: String(rec._id) });
+    audit(null, 'recording.fail', { actor: rec.userId, result: 'fail', targetType: 'recording', target: rec, meta: { error: e.message } });
     await Recording.updateOne({ _id: rec._id }, { $set: { status: 'failed' } }).catch(() => {});
   } finally {
     await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
@@ -135,7 +145,8 @@ async function save(stream) {
     await fs.promises.rename(dir, detached);
   } catch (e) {
     await Recording.updateOne({ _id: rec._id }, { $set: { status: 'failed' } });
-    console.error(`[rec ${rec._id}] кусков нет: ${e.message}`);
+    errorLog.media(e, 'recording.parts', { recording: String(rec._id) });
+    audit(null, 'recording.fail', { actor: rec.userId, result: 'fail', targetType: 'recording', target: rec, meta: { error: 'нет кусков' } });
     return rec;
   }
   finalize(rec, detached);

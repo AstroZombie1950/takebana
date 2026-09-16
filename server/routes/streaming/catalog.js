@@ -139,67 +139,64 @@ router.get('/streaming/:category/grid', async (req, res) => {
 
 
 router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
-  try {
-    const userId = req.params.id; // ID пользователя, чей профиль просматривается
-    const currentUserId = req.session.userId; // ID текущего пользователя из сессии
+  const userId = req.params.id; // ID пользователя, чей профиль просматривается
+  // Кривой адрес — страница «не найдено», а не 500 в журнале ошибок.
+  if (!/^[a-f\d]{24}$/i.test(userId)) return res.status(404).send('Пользователь не найден');
+  const currentUserId = req.session.userId; // ID текущего пользователя из сессии
 
-    // Получаем данные пользователя, чей профиль просматривается
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).send('Пользователь не найден');
-    }
-
-    const displayName = userView.displayName(user);
-    const avatarStyle = userView.avatarStyle(user, displayName);
-
-    // Получаем количество подписчиков и подписок для отображаемого пользователя
-    const followersCount = await Subscription.countDocuments({ subscribedToId: userId });
-    const followingCount = await Subscription.countDocuments({ subscriberId: userId });
-
-    // Проверяем активный стрим пользователя
-    const activeStream = await Stream.findOne({ userId: userId, isActive: true });
-
-    // Проверяем, подписан ли текущий пользователь на просматриваемого
-    let isSubscribed = false;
-    if (currentUserId) {
-      const existingSubscription = await Subscription.findOne({
-        subscriberId: currentUserId,
-        subscribedToId: userId
-      });
-      if (existingSubscription) {
-        isSubscribed = true;
-      }
-    }
-
-    // Записи эфиров: чужому — только готовые, автору — и те, что ещё
-    // сохраняются или не сохранились.
-    const isSelf = String(userId) === String(currentUserId);
-    const recordings = await Recording.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
-      .sort({ createdAt: -1 })
-      .select('title status duration thumb isAdult createdAt')
-      .lean();
-
-    // Передача данных в шаблон
-    res.render('userPage', {
-      recordings,
-      user: {
-        displayName,
-        avatarStyle,
-        _id: user._id,
-        followersCount,
-        followingCount,
-        isSubscribed, // Передаем статус подписки
-        isStreaming: !!activeStream,
-        activeStreamId: activeStream ? activeStream._id : null,
-        gallery: Array.isArray(user.gallery) ? user.gallery : [],
-        isOnline: !!user.isOnline,
-        lastSeen: user.lastSeen || null
-      }
-    });
-  } catch (error) {
-    console.error('Ошибка получения данных пользователя:', error);
-    res.status(500).send('Ошибка сервера');
+  // Получаем данные пользователя, чей профиль просматривается
+  const user = await User.findById(userId);
+  if (!user) {
+    return res.status(404).send('Пользователь не найден');
   }
+
+  const displayName = userView.displayName(user);
+  const avatarStyle = userView.avatarStyle(user, displayName);
+
+  // Получаем количество подписчиков и подписок для отображаемого пользователя
+  const followersCount = await Subscription.countDocuments({ subscribedToId: userId });
+  const followingCount = await Subscription.countDocuments({ subscriberId: userId });
+
+  // Проверяем активный стрим пользователя
+  const activeStream = await Stream.findOne({ userId: userId, isActive: true });
+
+  // Проверяем, подписан ли текущий пользователь на просматриваемого
+  let isSubscribed = false;
+  if (currentUserId) {
+    const existingSubscription = await Subscription.findOne({
+      subscriberId: currentUserId,
+      subscribedToId: userId
+    });
+    if (existingSubscription) {
+      isSubscribed = true;
+    }
+  }
+
+  // Записи эфиров: чужому — только готовые, автору — и те, что ещё
+  // сохраняются или не сохранились.
+  const isSelf = String(userId) === String(currentUserId);
+  const recordings = await Recording.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
+    .sort({ createdAt: -1 })
+    .select('title status duration thumb isAdult createdAt')
+    .lean();
+
+  // Передача данных в шаблон
+  res.render('userPage', {
+    recordings,
+    user: {
+      displayName,
+      avatarStyle,
+      _id: user._id,
+      followersCount,
+      followingCount,
+      isSubscribed, // Передаем статус подписки
+      isStreaming: !!activeStream,
+      activeStreamId: activeStream ? activeStream._id : null,
+      gallery: Array.isArray(user.gallery) ? user.gallery : [],
+      isOnline: !!user.isOnline,
+      lastSeen: user.lastSeen || null
+    }
+  });
 });
 // Добавьте другие маршруты, связанные с функционалом стриминга
 

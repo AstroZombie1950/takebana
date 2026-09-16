@@ -13,6 +13,7 @@ const { requireAuthApi } = require('../middleware/auth');
 const { geocodeLimiter } = require('../middleware/rateLimit');
 const { CITY_NAME } = require('../config/catalog');
 const geocode = require('../utils/geocode');
+const errorLog = require('../utils/errorLog');
 
 // Поставщик — чужой и общественный: он может ответить 403, 429 или не
 // ответить вовсе. Это не ошибка сервера: форма без поиска работает, метку
@@ -20,7 +21,7 @@ const geocode = require('../utils/geocode');
 const UNAVAILABLE = { message: 'Поиск адресов сейчас недоступен — поставьте метку на карте' };
 
 function fail(res, err) {
-    console.error('[geocode]', err.message);
+    errorLog.external(err, 'geocode');
     return res.status(503).json(UNAVAILABLE);
 }
 

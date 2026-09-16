@@ -15,6 +15,8 @@ const { requireAuth, requireOwner, requireNotBanned } = require('../middleware/a
 const daily = require('../utils/daily');
 const Establishments = require('../models/Establishments');
 const User = require('../models/User');
+const { audit } = require('../utils/audit');
+const errorLog = require('../utils/errorLog');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 const DAILY_MAX_PARTICIPANTS = Number(process.env.DAILY_MAX_PARTICIPANTS) || 20;
@@ -27,7 +29,7 @@ router.param('id', (req, res, next, id) => (
 ));
 
 function dailyFailure(res, err) {
-  console.error('[venue-live]', err.message);
+  errorLog.external(err, 'daily.venueLive');
   res.status(502).json({ message: 'Сервис видео недоступен, попробуйте позже' });
 }
 
@@ -46,12 +48,14 @@ router.post('/api/venues/:id/live', requireAuth, requireNotBanned, ownVenue, asy
     return dailyFailure(res, err);
   }
   await Establishments.updateOne({ _id: req.params.id }, { $set: { online: true } });
+  audit(req, 'venue.live.on', { targetType: 'venue', target: req.resource });
   res.json({ url: daily.roomUrl(name), token });
 });
 
 // Выключить: удаление комнаты заодно отключает всех гостей.
 router.delete('/api/venues/:id/live', requireAuth, ownVenue, async (req, res) => {
   await Establishments.updateOne({ _id: req.params.id }, { $set: { online: false } });
+  audit(req, 'venue.live.off', { targetType: 'venue', target: req.resource });
   try {
     await daily.deleteRoom(roomName(req.params.id));
   } catch (err) {

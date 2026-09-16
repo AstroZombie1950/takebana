@@ -6,6 +6,9 @@ const path = require('path');
 const { isPublishAuthEnabled, getSecret } = require('./utils/rtmpAuth');
 const hls = require('./utils/hls');
 const webLive = require('./utils/webLive');
+const streamLog = require('./utils/streamLog');
+const { audit } = require('./utils/audit');
+const errorLog = require('./utils/errorLog');
 
 // Право публиковать проверяется подписью, а не знанием ключа: ключ трансляции
 // уходит каждому зрителю в исходнике страницы — по нему собирается адрес
@@ -81,9 +84,21 @@ async function markObsStreamStarted(streamKey) {
         startedAt: now
       });
     }
+
+    // Отрезок эфира открывается именно здесь: эфир с OBS начинается приходом
+    // потока на 1935, а не нажатием на сайте, и /set-active для него не зовут.
+    if (updated) {
+      streamLog.open(updated);
+      audit(null, 'stream.rtmp.start', {
+        actor: updated.userId,
+        targetType: 'stream',
+        targetId: updated._id,
+        targetLabel: updated.title,
+      });
+    }
     return updated;
   } catch (e) {
-    console.error('[mediaServer] markObsStreamStarted error:', e?.message || e);
+    errorLog.media(e, 'rtmp.obsStarted', { streamKey });
     return null;
   }
 }
@@ -106,9 +121,19 @@ async function markObsStreamEnded(streamKey) {
         isActive: false
       });
     }
+
+    if (updated) {
+      streamLog.close(streamKey, { endedBy: 'owner', streamId: updated._id });
+      audit(null, 'stream.rtmp.end', {
+        actor: updated.userId,
+        targetType: 'stream',
+        targetId: updated._id,
+        targetLabel: updated.title,
+      });
+    }
     return updated;
   } catch (e) {
-    console.error('[mediaServer] markObsStreamEnded error:', e?.message || e);
+    errorLog.media(e, 'rtmp.obsEnded', { streamKey });
     return null;
   }
 }
@@ -144,14 +169,29 @@ async function rejectUnknownStreamKey(id, streamKey) {
             .select('userId stoppedByModeration')
             .lean();
 
-        if (!stream) return dropSession(id, `ключ ${streamKey} не найден`);
-        if (stream.stoppedByModeration) return dropSession(id, `эфир ${streamKey} погашен модерацией`);
+        // Отклонения пишутся в журнал: попытка вещать неизвестным ключом —
+        // это либо чужая программа с подобранным ключом, либо наш же сбой,
+        // и отличить одно от другого можно только по их частоте и адресу.
+        const reject = (why, meta) => {
+            audit(null, 'stream.rtmp.reject', {
+                actor: stream ? stream.userId : null,
+                result: 'denied',
+                targetType: 'stream',
+                targetId: stream ? stream._id : null,
+                targetLabel: streamKey,
+                meta,
+            });
+            return dropSession(id, why);
+        };
+
+        if (!stream) return reject(`ключ ${streamKey} не найден`, { reason: 'unknown-key' });
+        if (stream.stoppedByModeration) return reject(`эфир ${streamKey} погашен модерацией`, { reason: 'stopped' });
 
         const owner = await User.findById(stream.userId).select('banned').lean();
-        if (owner && owner.banned) return dropSession(id, `вещатель эфира ${streamKey} ограничен`);
+        if (owner && owner.banned) return reject(`вещатель эфира ${streamKey} ограничен`, { reason: 'banned' });
     } catch (e) {
         // База недоступна — не роняем приём: подпись остаётся основной защитой
-        console.error('[mediaServer] проверка ключа не удалась:', e?.message || e);
+        errorLog.media(e, 'rtmp.prePublish', { streamKey });
     }
 }
 
@@ -209,7 +249,7 @@ nms.on('donePublish', (id, streamPath, args) => {
 });
 
 nms.on('error', (err) => {
-    console.error(`[ERROR] ${err.message}`);
+    errorLog.media(err, 'rtmp');
 });
 
 nms.run();
@@ -227,7 +267,12 @@ nms.run();
 // Отклонённые промисы сюда тоже попадают: с Node 15 режим по умолчанию — throw.
 process.on('uncaughtException', (err) => {
     console.error('[fatal] необработанное исключение, процесс завершается:', err);
-    process.exit(1);
+    // Записать причину падения до выхода: иначе о нём известно только из
+    // логов pm2. Жёсткий предел обязателен — недоступная база не должна
+    // превратить падение в зависание, ради чего этот обработчик и стоит.
+    errorLog.record({ scope: 'server', err, route: 'process:uncaughtException', status: 500 });
+    const kill = setTimeout(() => process.exit(1), 1000);
+    errorLog.flush().finally(() => { clearTimeout(kill); process.exit(1); });
 });
 
 // Экспортируем необходимые объекты

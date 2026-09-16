@@ -13,6 +13,7 @@ const GoogleStrategy = require('passport-google-oauth2').Strategy;
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const User = require('../models/User');
+const { audit } = require('../utils/audit');
 
 // Учётке из Google пароль не нужен: вход по паролю ищет по provider: '' и такую
 // запись не найдёт никогда. Но поле в схеме есть, и раньше в него клали id
@@ -97,6 +98,8 @@ router.get('/auth/google/callback',
     req.session.userId = user._id.toString();
     req.session.login = user.login || 'anon'; // Если login не существует, используйте 'anon'
 
+    audit(req, 'auth.google', { actor: user });
+
     // Успешная аутентификация, перенаправляем домой.
     res.redirect('/');
 });
@@ -109,6 +112,7 @@ router.get('/auth/google/callback',
 // перестал бы считать его обработчиком ошибок.
 router.use('/auth/google/callback', function (err, req, res, next) {
   console.warn('[google oauth] вход не состоялся:', err && err.message ? err.message : err);
+  audit(req, 'auth.google', { result: 'fail', meta: { error: err && err.message ? String(err.message).slice(0, 200) : '' } });
   res.redirect('/login');
 });
 

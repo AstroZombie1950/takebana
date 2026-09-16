@@ -7,8 +7,11 @@
 
 const User = require('../models/User');
 const Message = require('../models/Message');
+const Stream = require('../models/Stream');
+const streamLog = require('../utils/streamLog');
 const daily = require('../utils/daily');
 const callLog = require('../utils/callLog');
+const errorLog = require('../utils/errorLog');
 
 // Список подписок приходит от клиента, поэтому и формат, и длина проверяются.
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -56,7 +59,7 @@ function registerSockets(io) {
     activeCalls.delete(callId);
     bothSides(call).emit(event, { callId });
     if (call.roomName) {
-      daily.deleteRoom(call.roomName).catch((e) => console.error('[call] room delete', e.message));
+      daily.deleteRoom(call.roomName).catch((e) => errorLog.external(e, 'daily.deleteRoom', { call: callId }));
     }
   }
 
@@ -105,12 +108,12 @@ function registerSockets(io) {
               io.to(`presence:${userId}`).emit('presence:update', { userId, isOnline: true });
               console.log('[presence] user online', userId);
             })
-            .catch((e) => console.error('presence connect error:', e));
-          markDelivered(userId).catch((e) => console.error('[messages] delivered', e.message));
+            .catch((e) => errorLog.server(e, 'socket.presence'));
+          markDelivered(userId).catch((e) => errorLog.server(e, 'socket.delivered'));
         }
       }
     } catch (e) {
-      console.error('presence connect error:', e);
+      errorLog.server(e, 'socket.presence');
     }
 
     // Подписка на присутствие. Раньше presence:update уходил через io.emit —
@@ -153,7 +156,7 @@ function registerSockets(io) {
           socket.data.ownStreamKey = streamKey;
         }
       } catch (e) {
-        console.error('[socket] owner check', e.message);
+        errorLog.server(e, 'socket.ownerCheck');
       }
 
       socket.join(roomName);
@@ -202,7 +205,7 @@ function registerSockets(io) {
           }
         }
       } catch (e) {
-        console.error('presence disconnect error:', e);
+        errorLog.server(e, 'socket.disconnect');
       }
 
     });
@@ -241,7 +244,7 @@ function registerSockets(io) {
         io.to(`user:${call.callerId}`).emit('call:accepted', { callId, type: call.type, url, token: callerToken });
         socket.emit('call:accepted', { callId, type: call.type, url, token: calleeToken });
       } catch (e) {
-        console.error('[call] room create', e.message);
+        errorLog.external(e, 'daily.callRoom');
         finishCall(callId, 'call:failed');
       }
     });
@@ -278,11 +281,41 @@ function registerSockets(io) {
         const token = await daily.meetingToken({ room: call.roomName, userId, canSend: true });
         ack({ url: daily.roomUrl(call.roomName), token });
       } catch (e) {
-        console.error('[call] token', e.message);
+        errorLog.external(e, 'daily.callToken');
         ack({ error: 'token_failed' });
       }
     });
   });
+
+  // ── Сэмплер зрителей ───────────────────────────────────────────────────────
+  //
+  // Счёт зрителей живёт только в памяти этого процесса и уходит в браузер
+  // событием. В базу его не писал никто: Stream.viewers всегда оставался
+  // нулём, хотя витрина и поиск по нему сортируют, а после эфира число
+  // зрителей пропадало вместе с самим эфиром.
+  //
+  // Раз в полминуты снимаем счёт по всем идущим эфирам сразу: одна запись
+  // в базу на все эфиры, а не на каждый вход и выход зрителя.
+  const SAMPLE_MS = 30000;
+
+  setInterval(() => {
+    const samples = [];
+    for (const room of io.sockets.adapter.rooms.keys()) {
+      if (!room.startsWith('stream:')) continue;
+      const streamKey = room.slice('stream:'.length);
+      samples.push({ streamKey, viewers: viewersIn(room, streamKey) });
+    }
+    if (!samples.length) return;
+
+    Stream.bulkWrite(
+      samples.map(({ streamKey, viewers }) => ({
+        updateOne: { filter: { streamKey, isActive: true }, update: { $set: { viewers } } },
+      })),
+      { ordered: false }
+    ).catch((e) => errorLog.server(e, 'socket.viewers'));
+
+    streamLog.sample(samples, SAMPLE_MS / 1000);
+  }, SAMPLE_MS).unref();
 
   return { userConnections, userRooms, pendingCalls, activeCalls };
 }

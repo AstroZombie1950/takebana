@@ -15,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const { isPlainFileName } = require('./safePath');
 const recording = require('./recording');
+const errorLog = require('./errorLog');
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 
@@ -139,7 +140,7 @@ function spawnFfmpeg(streamKey, job) {
 
     // ENOENT здесь означает «ffmpeg не установлен» — перезапуск не поможет.
     proc.on('error', (err) => {
-        console.error(`[hls ${streamKey}] ffmpeg не запустился (${FFMPEG}): ${err.message}`);
+        errorLog.media(err, 'hls.spawn', { streamKey, ffmpeg: FFMPEG });
         job.restarts = MAX_RESTARTS;
     });
 
@@ -152,7 +153,7 @@ function spawnFfmpeg(streamKey, job) {
 
         // Эфир идёт, а ffmpeg вышел — обрыв связи с RTMP или сбой кодека.
         if (job.restarts >= MAX_RESTARTS) {
-            console.error(`[hls ${streamKey}] ffmpeg падает подряд ${MAX_RESTARTS} раз, останавливаемся`);
+            errorLog.media(new Error(`ffmpeg падает подряд ${MAX_RESTARTS} раз, транскод остановлен`), 'hls.restarts', { streamKey, code });
             finish(streamKey, job);
             return;
         }
@@ -175,7 +176,7 @@ function start(streamKey) {
     try {
         fs.mkdirSync(dir, { recursive: true });
     } catch (e) {
-        console.error(`[hls ${streamKey}] не создать каталог ${dir}: ${e.message}`);
+        errorLog.media(e, 'hls.dir', { streamKey });
         return;
     }
     // Сегменты прошлого эфира: плеер иначе подхватит их как начало текущего.

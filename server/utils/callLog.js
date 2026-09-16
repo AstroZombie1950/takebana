@@ -11,11 +11,12 @@
 const Call = require('../models/Call');
 const Notification = require('../models/Notification');
 const userView = require('./userView');
+const errorLog = require('./errorLog');
 
 const MISSED = ['missed', 'canceled'];
 
 function quiet(promise) {
-  return promise.catch((e) => console.error('[calls] журнал:', e.message));
+  return promise.catch((e) => errorLog.server(e, 'callLog'));
 }
 
 // Запись о звонке ещё может сохраняться, когда его уже приняли или отменили:

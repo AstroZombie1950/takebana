@@ -15,6 +15,7 @@ const { UPLOADS, uploadAvatar, uploadGallery } = require('./uploads');
 const { commonDataMiddleware } = require('./shared');
 const { PASSWORD_PROVIDER } = require('../../utils/password');
 const userView = require('../../utils/userView');
+const { audit } = require('../../utils/audit');
 
 // Страница настроек: имя, фото, язык, галерея, пароль. Раньше — окно поверх
 // любой страницы кабинета, и его разметка со скриптом ехали с каждой из них.
@@ -55,6 +56,7 @@ router.post('/profile/avatar', requireAuth, uploadAvatar.single('avatar'), async
   await user.save();
   removeAvatarFile(old);
 
+  audit(req, 'profile.avatar', { targetType: 'user', target: user });
   res.json({ success: true, url: user.avatar, avatar: avatarOf(user) });
 });
 
@@ -68,76 +70,69 @@ router.delete('/profile/avatar', requireAuth, async (req, res) => {
   await user.save();
   removeAvatarFile(old);
 
+  audit(req, 'profile.avatar.delete', { targetType: 'user', target: user });
   res.json({ success: true, avatar: avatarOf(user) });
 });
 
 // Загрузка фотографий в галерею (до 100 суммарно).
 // requireAuth перед multer — см. комментарий у /profile/avatar.
 router.post('/profile/gallery', requireAuth, uploadGallery.array('photos', 100), async (req, res) => {
-  try {
-    if (!req.session || !req.session.userId) {
-      return res.status(401).json({ success: false, message: 'Необходима авторизация' });
-    }
-    const user = await User.findById(req.session.userId);
-    if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
-
-    const existing = Array.isArray(user.gallery) ? user.gallery.length : 0;
-    const incoming = (req.files || []).length;
-    if (existing >= 100) return res.status(400).json({ success: false, message: 'Лимит 100 фото уже достигнут' });
-    if (existing + incoming > 100) {
-      // Обрезаем до допустимого
-      req.files = req.files.slice(0, 100 - existing);
-    }
-
-    const basePath = `/uploads/gallery/${req.session.userId}/`;
-    const urls = (req.files || []).map(f => basePath + f.filename);
-    user.gallery = [...(user.gallery || []), ...urls];
-    await user.save();
-
-    return res.json({ success: true, urls: urls, total: user.gallery.length });
-  } catch (err) {
-    console.error('Ошибка загрузки галереи:', err);
-    return res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  if (!req.session || !req.session.userId) {
+    return res.status(401).json({ success: false, message: 'Необходима авторизация' });
   }
+  const user = await User.findById(req.session.userId);
+  if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+
+  const existing = Array.isArray(user.gallery) ? user.gallery.length : 0;
+  const incoming = (req.files || []).length;
+  if (existing >= 100) return res.status(400).json({ success: false, message: 'Лимит 100 фото уже достигнут' });
+  if (existing + incoming > 100) {
+    // Обрезаем до допустимого
+    req.files = req.files.slice(0, 100 - existing);
+  }
+
+  const basePath = `/uploads/gallery/${req.session.userId}/`;
+  const urls = (req.files || []).map(f => basePath + f.filename);
+  user.gallery = [...(user.gallery || []), ...urls];
+  await user.save();
+
+  audit(req, 'profile.gallery.add', { targetType: 'user', target: user, meta: { added: urls.length, total: user.gallery.length } });
+  return res.json({ success: true, urls: urls, total: user.gallery.length });
 });
 
 // Удаление фото из галереи
 router.delete('/profile/gallery/:name', requireAuth, async (req, res) => {
-  try {
-    if (!req.session || !req.session.userId) {
-      return res.status(401).json({ success: false, message: 'Необходима авторизация' });
-    }
-    const user = await User.findById(req.session.userId);
-    if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
-
-    const fileName = req.params.name; // ожидается имя файла, без папок
-
-    // Express раскодирует %2F в параметре маршрута, поэтому сюда приходило
-    // `../../app.js`, и unlinkSync сносил любой файл, до которого дотягивался
-    // процесс. Воспроизводилось обычным пользователем.
-    if (!isPlainFileName(fileName)) {
-      return res.status(400).json({ success: false, message: 'Некорректное имя файла' });
-    }
-
-    const urlPrefix = `/uploads/gallery/${req.session.userId}/`;
-    const fullUrl = urlPrefix + fileName;
-
-    // Удаляем из массива
-    user.gallery = (user.gallery || []).filter(u => u !== fullUrl);
-    await user.save();
-
-    // Удаляем из файловой системы — строго из папки галереи этого пользователя
-    const galleryDir = path.join(UPLOADS, 'gallery', String(req.session.userId));
-    const filePath = resolveWithin(galleryDir, fileName);
-    if (filePath && fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-
-    return res.json({ success: true });
-  } catch (err) {
-    console.error('Ошибка удаления фото из галереи:', err);
-    return res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  if (!req.session || !req.session.userId) {
+    return res.status(401).json({ success: false, message: 'Необходима авторизация' });
   }
+  const user = await User.findById(req.session.userId);
+  if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+
+  const fileName = req.params.name; // ожидается имя файла, без папок
+
+  // Express раскодирует %2F в параметре маршрута, поэтому сюда приходило
+  // `../../app.js`, и unlinkSync сносил любой файл, до которого дотягивался
+  // процесс. Воспроизводилось обычным пользователем.
+  if (!isPlainFileName(fileName)) {
+    return res.status(400).json({ success: false, message: 'Некорректное имя файла' });
+  }
+
+  const urlPrefix = `/uploads/gallery/${req.session.userId}/`;
+  const fullUrl = urlPrefix + fileName;
+
+  // Удаляем из массива
+  user.gallery = (user.gallery || []).filter(u => u !== fullUrl);
+  await user.save();
+
+  // Удаляем из файловой системы — строго из папки галереи этого пользователя
+  const galleryDir = path.join(UPLOADS, 'gallery', String(req.session.userId));
+  const filePath = resolveWithin(galleryDir, fileName);
+  if (filePath && fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+
+  audit(req, 'profile.gallery.delete', { targetType: 'user', target: user, meta: { file: fileName } });
+  return res.json({ success: true });
 });
 
 module.exports = router;

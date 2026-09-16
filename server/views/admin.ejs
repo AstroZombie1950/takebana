@@ -5,100 +5,53 @@
 <%- include('partials/tkHead', { title: title }) %>
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="/css/admin.css">
-<%# escapeHtml обязателен: таблица собирается строкой и уходит в innerHTML,
-    а значения полей вводит владелец заведения. %>
+<%# escapeHtml обязателен: таблицы собираются строками и уходят в innerHTML,
+    а значения полей вводят посетители — от названия заведения до текста
+    жалобы и сообщения об ошибке в чужом браузере. %>
 <script src="/escape-html.js"></script>
 <script src="/toast.js"></script>
 </head>
-<body>
+<body class="tk-panel">
 
-<div class="tk-panel-page">
+<aside class="tk-panel__side">
+  <a class="tk-panel__brand" href="/">Takebana</a>
+  <p class="tk-panel__kicker">Панель</p>
 
-  <div class="tk-adm__top">
+  <%# Что показывать, решает сервер: вкладки журнала, ошибок, расходов,
+      системы и заведений отдают 403 модератору, и рисовать их ему — значит
+      обещать то, чего он не получит. %>
+  <nav class="tk-panel__nav" id="nav"></nav>
+
+  <div class="tk-panel__me">
+    <p class="tk-panel__me-name"><%= me.displayName %></p>
+    <p class="tk-panel__me-role"><%= isAdmin ? 'администратор' : 'модератор' %></p>
+    <a class="tk-panel__exit" href="/">На сайт</a>
+  </div>
+</aside>
+
+<main class="tk-panel__main">
+  <header class="tk-panel__head">
     <div>
-      <p class="tk-kicker">Takebana</p>
-      <h1 class="tk-adm__h1">Панель администрирования</h1>
+      <h1 class="tk-panel__h1" id="viewTitle">Сводка</h1>
+      <p class="tk-panel__sub" id="viewSub"></p>
     </div>
+    <div class="tk-panel__tools" id="viewTools"></div>
+  </header>
 
-    <div class="tk-adm__tools">
-      <%# Фильтры заведений живут только на своей вкладке: на жалобах у них
-          нет смысла, а скрывать их скриптом — значит держать в разметке то,
-          чего половина посетителей панели никогда не увидит. %>
-      <% if (isAdmin) { %>
-      <select id="statusFilter" class="tk-field tk-select" data-view="establishments">
-        <option value="all">Все заведения</option>
-        <option value="active">Только активные</option>
-        <option value="inactive">Только неактивные</option>
-      </select>
+  <div class="tk-panel__view" id="view"></div>
+</main>
 
-      <input type="search" id="searchInput" class="tk-field tk-field--search" placeholder="Поиск по названию" autocomplete="off" data-view="establishments">
-      <% } %>
-
-      <select id="reportStatus" class="tk-field tk-select" data-view="reports"<% if (isAdmin) { %> hidden<% } %>>
-        <option value="new">Новые жалобы</option>
-        <option value="resolved">Разобранные</option>
-        <option value="rejected">Отклонённые</option>
-      </select>
-
-      <input type="search" id="peopleSearch" class="tk-field tk-field--search" placeholder="Поиск по имени или почте" autocomplete="off" data-view="people" hidden>
-
-      <% if (isAdmin) { %>
-      <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" id="openRepass">Сменить пароль</button>
-      <% } %>
-    </div>
-  </div>
-
-  <%# Заведения — только администратору: adminRouter всё равно отобьёт
-      модератора по isAdmin. Жалобы и люди доступны обоим. %>
-  <nav class="tk-adm__tabs">
-    <% if (isAdmin) { %>
-    <button type="button" class="tk-adm__tab tk-adm__tab--on" data-tab="establishments">Заведения</button>
-    <% } %>
-    <button type="button" class="tk-adm__tab<% if (!isAdmin) { %> tk-adm__tab--on<% } %>" data-tab="reports">Жалобы<span class="tk-adm__badge" id="reportsBadge" hidden></span></button>
-    <button type="button" class="tk-adm__tab" data-tab="people">Люди</button>
-  </nav>
-
-  <% if (isAdmin) { %>
-  <div class="tk-adm__grid" id="fields" data-view="establishments"></div>
-  <% } %>
-
-  <div class="tk-adm__reports" id="reports" data-view="reports"<% if (isAdmin) { %> hidden<% } %>></div>
-
-  <%# data-grant решает сервер: селектор роли рисуется только администратору,
-      прятать нарисованное на клиенте поздно. %>
-  <div class="tk-adm__reports" id="people" data-view="people" data-grant="<%= isAdmin ? '1' : '0' %>" hidden></div>
-</div>
-
-<!-- Смена пароля администратора -->
-<% if (isAdmin) { %>
-<div class="tk-adm__modal hidden" id="repassModal">
-  <div class="tk-adm__modal-card">
-    <div class="tk-adm__modal-head">
-      <h2>Смена пароля</h2>
-      <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" id="closeRepass" aria-label="Закрыть">Закрыть</button>
-    </div>
-
-    <form class="tk-adm__form" id="repassForm">
-      <%# type="password", а не text: прежде все три пароля показывались
-          на экране открытым текстом. %>
-      <input type="password" id="oldPassword" class="tk-field" placeholder="Текущий пароль" autocomplete="current-password">
-      <input type="password" id="newPassword" class="tk-field" placeholder="Новый пароль" autocomplete="new-password">
-      <input type="password" id="confirmPassword" class="tk-field" placeholder="Повторите новый пароль" autocomplete="new-password">
-      <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm tk-btn--block" id="updatePasswordButton">Сохранить пароль</button>
-    </form>
-  </div>
-</div>
-
-<% } %>
-
-<%# admin.js целиком про заведения. Модератору он не нужен и не грузится:
-    иначе его первый же обработчик упал бы на отсутствующем #fields.
-    Города и типы приходят со страницей из config/catalog.js: в клиенте
-    списков нет, иначе админка разошлась бы с фильтрами карты. %>
-<% if (isAdmin) { %>
-<script>window.TKCatalog = <%- JSON.stringify({ cities: catalog.CITIES, types: catalog.VENUE_TYPES }) %>;</script>
-<script src="/admin.js"></script>
-<% } %>
-<script src="/panel-moderation.js"></script>
+<%# Всё, что панели нужно знать заранее: её права, закрытые списки каталога
+    (иначе она разойдётся с фильтрами карты) и подписи действий журнала —
+    они же список для его фильтра. %>
+<script>
+window.TKPanel = <%- JSON.stringify({
+  isAdmin: isAdmin,
+  me: me,
+  catalog: { cities: catalog.CITIES, types: catalog.VENUE_TYPES, categories: catalog.CATEGORIES },
+  actions: actions
+}) %>;
+</script>
+<script src="/panel.js"></script>
 </body>
 </html>

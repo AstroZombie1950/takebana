@@ -18,22 +18,21 @@ const daily = require('../../utils/daily');
 const webLive = require('../../utils/webLive');
 const hls = require('../../utils/hls');
 const recording = require('../../utils/recording');
+const streamLog = require('../../utils/streamLog');
+const { audit } = require('../../utils/audit');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
 const { randomUUID: uuidv4 } = require('crypto');
+const errorLog = require('../../utils/errorLog');
 
 router.get('/stream-status/:streamId', async (req, res) => {
-  try {
-    const stream = await Stream.findById(req.params.streamId);
+  if (!/^[a-f\d]{24}$/i.test(req.params.streamId)) return res.status(404).json({ message: 'Стрим не найден' });
+  const stream = await Stream.findById(req.params.streamId);
 
-    if (!stream) {
-      return res.status(404).json({ message: 'Стрим не найден' });
-    }
-
-    res.status(200).json({ isActive: stream.isActive });
-  } catch (error) {
-    console.error('Ошибка при проверке статуса стрима:', error);
-    res.status(500).json({ message: 'Ошибка сервера' });
+  if (!stream) {
+    return res.status(404).json({ message: 'Стрим не найден' });
   }
+
+  res.status(200).json({ isActive: stream.isActive });
 });
 
 
@@ -41,14 +40,9 @@ router.get('/stream-status/:streamId', async (req, res) => {
 router.post('/stream/active/:streamId', requireAuth, requireOwner(Stream, { param: 'streamId', field: 'userId' }), async (req, res) => {
   const { streamId } = req.params;
 
-  try {
-      // Обновляем время последней активности стримера
-      await Stream.findByIdAndUpdate(streamId, { updatedAt: Date.now() });
-      res.sendStatus(200); // Возвращаем успех
-  } catch (error) {
-      console.error('Ошибка при обновлении активности стримера:', error);
-      res.sendStatus(500);
-  }
+  // Обновляем время последней активности стримера
+  await Stream.findByIdAndUpdate(streamId, { updatedAt: Date.now() });
+  res.sendStatus(200); // Возвращаем успех
 });
 
 
@@ -101,7 +95,7 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
   if (stream) {
     // Сменили веб на OBS — комната Daily черновику больше не нужна.
     if (source === 'obs' && stream.dailyRoomName) {
-      await daily.deleteRoom(stream.dailyRoomName).catch((err) => console.error('[daily] комната черновика', err.message));
+      await daily.deleteRoom(stream.dailyRoomName).catch((err) => errorLog.external(err, 'daily.deleteRoom', { draft: String(stream._id) }));
       stream.dailyRoomName = null;
       stream.dailyRoom = undefined;
     }
@@ -113,6 +107,7 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
     stream = await Stream.create({ userId, streamKey: user.streamKey, ...fields, ...SOURCES[source], isActive: false });
   }
 
+  audit(req, 'stream.setup', { targetType: 'stream', target: stream, meta: { source, category, subcategory, city: city || '', isAdult: !!isAdult } });
   res.json({ streamId: String(stream._id), streamKey: stream.streamKey });
 });
 
@@ -127,66 +122,66 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
     return res.status(400).json({ message: 'streamKey обязателен' });
   }
 
-  try {
-    // userId в фильтре обязателен: streamKey знают и зрители (по нему идёт
-    // подписка на комнату сокета), поэтому без него любой вошедший мог
-    // включать и гасить чужой эфир. Чужой стрим просто не найдётся — 404.
-    const current = await Stream.findOne({ streamKey, userId: req.session.userId })
-      .select('streamKey streamType dailyRoomName').lean();
-    if (!current) {
-      return res.status(404).json({ message: 'Стрим не найден' });
-    }
-
-    // Веб-эфир зрители смотрят в HLS: до отметки «в эфире» комната должна
-    // пойти на наш приём (utils/webLive.js). Не пошла — эфира для зрителей
-    // нет, и ведущему об этом говорим сразу, а не молчаливым чёрным экраном.
-    if (current.streamType === 'daily-stream') {
-      if (!current.dailyRoomName) {
-        return res.status(409).json({ message: 'Комната эфира не создана' });
-      }
-      try {
-        await webLive.start(current, req.hostname);
-      } catch (err) {
-        console.error('[webLive] выход Daily не запустился:', err.message);
-        return res.status(502).json({ message: 'Сервис видео не запустил трансляцию, попробуйте ещё раз' });
-      }
-    }
-
-    // В эфире с этой секунды; первый выход запоминается навсегда (firstLiveAt).
-    const now = new Date();
-    const stream = await Stream.findOneAndUpdate(
-      { streamKey, userId: req.session.userId },
-      [{ $set: { isActive: true, startedAt: now, updatedAt: now, firstLiveAt: { $ifNull: ['$firstLiveAt', now] } } }],
-      { new: true }
-    );
-
-    if (!stream) {
-      return res.status(404).json({ message: 'Стрим не найден' });
-    }
-
-    // notify viewers (e.g. WEB stream started -> reconnect)
-    try {
-      const io = req.app && req.app.get ? req.app.get('io') : null;
-      if (io && stream && stream.streamKey) {
-        io.to(`stream:${stream.streamKey}`).emit('stream:update', {
-          streamKey: stream.streamKey,
-          streamType: stream.streamType,
-          streamProvider: stream.streamProvider,
-          isActive: true,
-          startedAt: stream.startedAt
-        });
-      }
-    } catch (_) {}
-
-    res.status(200).json({
-      message: 'Стрим активирован',
-      streamId: stream._id,
-      isActive: stream.isActive,
-    });
-  } catch (err) {
-    console.error('Ошибка при активации стрима:', err);
-    res.status(500).json({ message: 'Ошибка сервера' });
+  // userId в фильтре обязателен: streamKey знают и зрители (по нему идёт
+  // подписка на комнату сокета), поэтому без него любой вошедший мог
+  // включать и гасить чужой эфир. Чужой стрим просто не найдётся — 404.
+  const current = await Stream.findOne({ streamKey, userId: req.session.userId })
+    .select('streamKey streamType dailyRoomName').lean();
+  if (!current) {
+    return res.status(404).json({ message: 'Стрим не найден' });
   }
+
+  // Веб-эфир зрители смотрят в HLS: до отметки «в эфире» комната должна
+  // пойти на наш приём (utils/webLive.js). Не пошла — эфира для зрителей
+  // нет, и ведущему об этом говорим сразу, а не молчаливым чёрным экраном.
+  if (current.streamType === 'daily-stream') {
+    if (!current.dailyRoomName) {
+      return res.status(409).json({ message: 'Комната эфира не создана' });
+    }
+    try {
+      await webLive.start(current, req.hostname);
+    } catch (err) {
+      errorLog.external(err, 'webLive.start', { stream: String(current._id) });
+      return res.status(502).json({ message: 'Сервис видео не запустил трансляцию, попробуйте ещё раз' });
+    }
+  }
+
+  // В эфире с этой секунды; первый выход запоминается навсегда (firstLiveAt).
+  const now = new Date();
+  const stream = await Stream.findOneAndUpdate(
+    { streamKey, userId: req.session.userId },
+    [{ $set: { isActive: true, startedAt: now, updatedAt: now, firstLiveAt: { $ifNull: ['$firstLiveAt', now] } } }],
+    { new: true }
+  );
+
+  if (!stream) {
+    return res.status(404).json({ message: 'Стрим не найден' });
+  }
+
+  // Отрезок эфира в журнале: сам Stream после завершения удаляется, и без
+  // этой записи «сколько человек отвещал» посчитать было бы не из чего.
+  await streamLog.open(stream);
+  audit(req, 'stream.live', { targetType: 'stream', target: stream, meta: { source: stream.streamProvider === 'obs' ? 'obs' : 'web' } });
+
+  // notify viewers (e.g. WEB stream started -> reconnect)
+  try {
+    const io = req.app && req.app.get ? req.app.get('io') : null;
+    if (io && stream && stream.streamKey) {
+      io.to(`stream:${stream.streamKey}`).emit('stream:update', {
+        streamKey: stream.streamKey,
+        streamType: stream.streamType,
+        streamProvider: stream.streamProvider,
+        isActive: true,
+        startedAt: stream.startedAt
+      });
+    }
+  } catch (_) {}
+
+  res.status(200).json({
+    message: 'Стрим активирован',
+    streamId: stream._id,
+    isActive: stream.isActive,
+  });
 });
 
 // // Роут для деактивации стрима (isActive: false)
@@ -199,48 +194,48 @@ router.post('/set-inactive', requireAuth, validate({
     return res.status(400).json({ message: 'streamKey обязателен' });
   }
 
-  try {
-    // Находим стрим по streamKey и обновляем isActive на false, сбрасываем время начала.
-    // userId в фильтре — чтобы гасить можно было только свой эфир (см. /set-active).
-    const stream = await Stream.findOneAndUpdate(
-      { streamKey, userId: req.session.userId },
-      { 
-        isActive: false,
-        startedAt: null // Сбрасываем время начала при деактивации
-      },
-      { new: true } // Возвращаем обновлённый документ
-    );
+  // Находим стрим по streamKey и обновляем isActive на false, сбрасываем время начала.
+  // userId в фильтре — чтобы гасить можно было только свой эфир (см. /set-active).
+  const stream = await Stream.findOneAndUpdate(
+    { streamKey, userId: req.session.userId },
+    { 
+      isActive: false,
+      startedAt: null // Сбрасываем время начала при деактивации
+    },
+    { new: true } // Возвращаем обновлённый документ
+  );
 
-    if (!stream) {
-      return res.status(404).json({ message: 'Стрим не найден' });
-    }
-
-    if (stream.streamType === 'daily-stream') {
-      await webLive.stop(stream).catch((err) => console.error('[webLive] выход Daily не остановлен:', err.message));
-    }
-
-    // notify viewers
-    try {
-      const io = req.app && req.app.get ? req.app.get('io') : null;
-      if (io && stream && stream.streamKey) {
-        io.to(`stream:${stream.streamKey}`).emit('stream:update', {
-          streamKey: stream.streamKey,
-          streamType: stream.streamType,
-          streamProvider: stream.streamProvider,
-          isActive: false
-        });
-      }
-    } catch (_) {}
-
-    res.status(200).json({
-      message: 'Стрим деактивирован',
-      streamId: stream._id,
-      isActive: stream.isActive,
-    });
-  } catch (err) {
-    console.error('Ошибка при деактивации стрима:', err);
-    res.status(500).json({ message: 'Ошибка сервера' });
+  if (!stream) {
+    return res.status(404).json({ message: 'Стрим не найден' });
   }
+
+  // Пауза закрывает отрезок: следующий выход в эфир откроет новый.
+  // Иначе час эфира с получасовым перерывом считался бы полутора часами.
+  await streamLog.close(stream.streamKey, { endedBy: 'owner', streamId: stream._id });
+  audit(req, 'stream.pause', { targetType: 'stream', target: stream });
+
+  if (stream.streamType === 'daily-stream') {
+    await webLive.stop(stream).catch((err) => errorLog.external(err, 'webLive.stop', { stream: String(stream._id) }));
+  }
+
+  // notify viewers
+  try {
+    const io = req.app && req.app.get ? req.app.get('io') : null;
+    if (io && stream && stream.streamKey) {
+      io.to(`stream:${stream.streamKey}`).emit('stream:update', {
+        streamKey: stream.streamKey,
+        streamType: stream.streamType,
+        streamProvider: stream.streamProvider,
+        isActive: false
+      });
+    }
+  } catch (_) {}
+
+  res.status(200).json({
+    message: 'Стрим деактивирован',
+    streamId: stream._id,
+    isActive: stream.isActive,
+  });
 });
 
 // Маршрут для загрузки заглавной картинки (thumbnail).
@@ -256,44 +251,40 @@ router.post('/upload-thumbnail', requireAuth, upload.single('thumbnail'), valida
       return res.status(400).json({ message: 'Недостаточно данных' });
   }
 
-  try {
-      // Найдем стрим и проверим, что он принадлежит текущему пользователю
-      const stream = await Stream.findOne({ _id: streamId, userId: userId });
+  // Найдем стрим и проверим, что он принадлежит текущему пользователю
+  const stream = await Stream.findOne({ _id: streamId, userId: userId });
 
-      if (!stream) {
-          return res.status(404).json({ message: 'Стрим не найден' });
+  if (!stream) {
+      return res.status(404).json({ message: 'Стрим не найден' });
+  }
+
+  if (req.file) {
+      // Удаляем старое изображение, если оно существует
+      // oldThumbnailPath приходит из тела запроса. Без проверки границ
+      // сюда подставлялось `../что-угодно` и удалялся произвольный файл.
+      // Старую обложку ищем только внутри папки обложек и только по имени.
+      const thumbsDir = path.join(UPLOADS, 'thumbnails');
+      const oldName = oldThumbnailPath ? path.basename(String(oldThumbnailPath)) : null;
+      const fullOldPath = isPlainFileName(oldName) ? resolveWithin(thumbsDir, oldName) : null;
+
+      if (fullOldPath) {
+          fs.unlink(fullOldPath, (err) => {
+              if (err) {
+                  console.error('Ошибка при удалении старого изображения:', err);
+              } else {
+                  console.log('Старое изображение успешно удалено.');
+              }
+          });
       }
 
-      if (req.file) {
-          // Удаляем старое изображение, если оно существует
-          // oldThumbnailPath приходит из тела запроса. Без проверки границ
-          // сюда подставлялось `../что-угодно` и удалялся произвольный файл.
-          // Старую обложку ищем только внутри папки обложек и только по имени.
-          const thumbsDir = path.join(UPLOADS, 'thumbnails');
-          const oldName = oldThumbnailPath ? path.basename(String(oldThumbnailPath)) : null;
-          const fullOldPath = isPlainFileName(oldName) ? resolveWithin(thumbsDir, oldName) : null;
+      // Обновляем поле thumbnail в документе Stream
+      stream.thumbnail = `/uploads/thumbnails/${req.file.filename}`;
+      await stream.save();
 
-          if (fullOldPath) {
-              fs.unlink(fullOldPath, (err) => {
-                  if (err) {
-                      console.error('Ошибка при удалении старого изображения:', err);
-                  } else {
-                      console.log('Старое изображение успешно удалено.');
-                  }
-              });
-          }
-
-          // Обновляем поле thumbnail в документе Stream
-          stream.thumbnail = `/uploads/thumbnails/${req.file.filename}`;
-          await stream.save();
-
-          res.status(200).json({ message: 'Заглавная картинка загружена.', thumbnailPath: stream.thumbnail });
-      } else {
-          res.status(400).json({ message: 'Изображение не загружено.' });
-      }
-  } catch (error) {
-      console.error('Ошибка при загрузке заглавной картинки:', error);
-      res.status(500).json({ message: 'Ошибка сервера' });
+      audit(req, 'stream.thumbnail', { targetType: 'stream', target: stream });
+      res.status(200).json({ message: 'Заглавная картинка загружена.', thumbnailPath: stream.thumbnail });
+  } else {
+      res.status(400).json({ message: 'Изображение не загружено.' });
   }
 });
 
@@ -318,7 +309,7 @@ router.post('/terminate-stream', requireAuth, validate({
   // и её RTMP-выход пережили бы запись, а HLS писался бы для эфира, которого нет.
   if (stream.dailyRoomName) {
     webLive.stop(stream).catch(() => {});
-    daily.deleteRoom(stream.dailyRoomName).catch((err) => console.error('[daily] комната завершённого эфира', err.message));
+    daily.deleteRoom(stream.dailyRoomName).catch((err) => errorLog.external(err, 'daily.deleteRoom', { ended: String(stream._id) }));
   }
   const media = require('../../mediaServer');
   media.dropPublisher(stream.streamKey, 'эфир завершён');
@@ -330,10 +321,21 @@ router.post('/terminate-stream', requireAuth, validate({
   const io = req.app.get('io');
   if (io) io.to(`stream:${stream.streamKey}`).emit('stream:update', { streamKey: stream.streamKey, isActive: false, ended: true });
 
+  // Закрываем отрезок до сохранения записи: привязка записи ищет последний,
+  // и он к этому моменту должен быть уже закрыт.
+  const session = await streamLog.close(stream.streamKey, { endedBy: 'owner', streamId: stream._id });
+  audit(req, 'stream.end', {
+    targetType: 'stream',
+    target: stream,
+    meta: { save: !!save, duration: session ? session.duration : 0, peakViewers: session ? session.peakViewers : 0 },
+  });
+
   if (save && recording.enabled && stream.firstLiveAt && !stream.stoppedByModeration) {
     const owner = await User.findById(userId).select('banned').lean();
     if (owner && !owner.banned) {
       const rec = await recording.save(stream);
+      streamLog.attachRecording(stream.streamKey, rec);
+      audit(req, 'recording.save', { targetType: 'recording', target: rec });
       return res.json({ message: 'Эфир завершён, запись сохраняется', recordingId: String(rec._id) });
     }
   }

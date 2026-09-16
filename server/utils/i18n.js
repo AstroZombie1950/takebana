@@ -102,6 +102,7 @@ const EN = {
 
     // Заведения и адреса
     'Заведение не найдено': 'Establishment not found',
+    'Ошибка не найдена': 'Error not found',
     'Заведение сейчас не показывает камеру': 'The establishment is not showing its camera right now',
     'Заявка отправлена': 'Application submitted',
     'Пожалуйста, укажите хотя бы одно поле для обновления': 'Please specify at least one field to update',
