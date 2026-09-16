@@ -1,5 +1,4 @@
-// Поведение, которое есть только на главной: счётчики, форма подписки
-// и карта заведений. Язык, бургер и ссылки-заглушки живут в tk.js — они нужны
+// Поведение, которое есть только на «О нас»: счётчики и карта заведений. Язык, бургер и ссылки-заглушки живут в tk.js — они нужны
 // всем страницам.
 (function () {
   "use strict";
@@ -38,39 +37,6 @@
       io.observe(el);
     } else {
       runCount();
-    }
-  }
-
-  /* ---------- форма подписки ---------- */
-  function initSubscribe() {
-    var input = document.getElementById("tkEmailInput");
-    var btn = document.getElementById("tkEmailSubmit");
-    var errorBox = document.getElementById("tkEmailError");
-    var sentBox = document.getElementById("tkEmailSent");
-    if (!input || !btn) return;
-
-    function valid(v) {
-      return /^[a-z0-9._+-]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(v);
-    }
-
-    function setState(state) {
-      var bad = state === "error";
-      var sent = state === "sent";
-      input.style.border = "1px solid " + (bad ? "#E34234" : "rgba(144,113,99,.7)");
-      input.style.borderRight = "none";
-      if (errorBox) errorBox.style.display = bad ? "flex" : "none";
-      if (sentBox) sentBox.style.display = sent ? "flex" : "none";
-    }
-
-    input.addEventListener("input", function () { setState("idle"); });
-    input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") { e.preventDefault(); submit(); }
-    });
-    btn.addEventListener("click", submit);
-
-    function submit() {
-      var v = input.value.trim();
-      setState(valid(v) ? "sent" : "error");
     }
   }
 
@@ -148,7 +114,6 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     initStats();
-    initSubscribe();
     initMap();
   });
 })();

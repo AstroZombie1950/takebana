@@ -69,8 +69,10 @@ const ACTIONS = {
   'mod.role': 'Смена роли',
   'mod.stream.stop': 'Эфир погашен модерацией',
 
-  'admin.view': 'Просмотр досье',
-  'admin.export': 'Выгрузка журнала',
+  'admin.view': 'Просмотр профиля',
+  'admin.export': 'Выгрузка из панели',
+  'admin.user.delete': 'Удаление аккаунта',
+  'admin.audit.clear': 'Очистка журнала',
   'admin.session.kill': 'Сеанс завершён администратором',
   'admin.error.resolve': 'Ошибка отмечена разобранной',
 };

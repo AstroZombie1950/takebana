@@ -15,13 +15,13 @@ const Report = require('../../models/Report');
 const User = require('../../models/User');
 const Stream = require('../../models/Stream');
 const ChatMessage = require('../../models/ChatMessage');
-const { requireModerator, paging, list, period, namesFor } = require('./shared');
+const { requireModerator, paging, list, period, namesFor, csvRoute, nameOf } = require('./shared');
 
 const STATUSES = ['new', 'resolved', 'rejected'];
 const REASONS = ['spam', 'abuse', 'adult', 'violence', 'copyright', 'other'];
 const TARGETS = ['stream', 'user', 'message'];
 
-router.get('/reports', requireModerator, async (req, res) => {
+async function loadReports(req) {
   const p = paging(req);
   const filter = { ...period(req, 'createdAt') };
 
@@ -59,7 +59,7 @@ router.get('/reports', requireModerator, async (req, res) => {
 
   const total4 = new Map(sameTarget.map((t) => [String(t._id), t.n]));
 
-  res.json({
+  return {
     ...list(reports.map((r) => ({
       id: String(r._id),
       createdAt: r.createdAt,
@@ -77,7 +77,23 @@ router.get('/reports', requireModerator, async (req, res) => {
       resolvedBy: names.get(String(r.resolvedBy)) || null,
     })), total, p),
     counts: counts.reduce((acc, row) => ({ ...acc, [row._id]: row.n }), {}),
-  });
-});
+  };
+}
+
+router.get('/reports', requireModerator, async (req, res) => res.json(await loadReports(req)));
+csvRoute(router, '/reports', requireModerator, 'reports', loadReports, [
+  ['Подана', (r) => r.createdAt],
+  ['Состояние', (r) => ({ new: 'новая', resolved: 'разобрана', rejected: 'отклонена' }[r.status])],
+  ['Причина', (r) => r.reason],
+  ['Комментарий', (r) => r.comment],
+  ['Объект', (r) => r.targetType],
+  ['Идентификатор объекта', (r) => r.targetId],
+  ['Название объекта', (r) => (r.target ? r.target.title : 'удалён')],
+  ['Жалоб на объект', (r) => r.onTarget],
+  ['Кто пожаловался', (r) => nameOf(r.reporter)],
+  ['Решение', (r) => r.action],
+  ['Разобрал', (r) => nameOf(r.resolvedBy)],
+  ['Когда разобрал', (r) => r.resolvedAt],
+]);
 
 module.exports = router;

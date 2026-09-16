@@ -5,8 +5,10 @@
   // эфира, внизу документы и выход. Настройки профиля и язык — на странице
   // /settings, звонки — вкладкой в сообщениях. Поведение — tk-app.js.
   //
-  // Гостю вместо профиля — вход и регистрация, из личного — только карта,
-  // подписок и выхода нет, язык — внизу панели (в шапке на телефоне ему места нет).
+  // Гостю вместо профиля — вход и регистрация, из личного — карта и «Что такое
+  // Takebana», подписок и выхода нет, язык — внизу панели (в шапке на телефоне
+  // ему места нет). Вошедшему «Что такое Takebana» не нужна: он уже знает,
+  // куда пришёл.
   //
   // Активный раздел каталога: страницу рендерит catalog.js и передаёт category.
   // Активная личная ссылка — по адресу страницы (commonDataMiddleware).
@@ -25,8 +27,7 @@
   var links = guest ? [venues, about] : [
     { href: myPage,       i18n: 'app.myProfile', icon: '<circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path>' },
     { href: '/chatsPage', i18n: 'app.messages',  icon: '<path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path>', badge: true },
-    venues,
-    about
+    venues
   ];
   var online = (subscriptions || []).filter(function (x) { return x.status === 'online'; }).length;
   var missed = typeof missedCalls !== 'undefined' ? missedCalls : 0;
@@ -37,7 +38,6 @@
   <% if (guest) { %>
   <div class="tk-aside__guest">
     <p class="tk-aside__guest-h" data-i18n="side.guestTitle"><%- t('side.guestTitle') %></p>
-    <p class="tk-aside__sub-state" data-i18n="side.guestText"><%- t('side.guestText') %></p>
     <div class="tk-aside__guest-acts">
       <a href="/register" class="tk-btn tk-btn--primary tk-btn--sm tk-btn--block" data-i18n="nav.signup"><%- t('nav.signup') %></a>
       <a href="/login" class="tk-btn tk-btn--outline tk-btn--sm tk-btn--block" data-i18n="nav.login"><%- t('nav.login') %></a>
@@ -55,7 +55,7 @@
   </a>
   <% } %>
 
-  <%# Настройки открываются с «Моей страницы» и подсвечивают её, заявка
+  <%# Настройки открываются с «Профиля» и подсвечивают его, заявка
       заведения — «Карту». Счётчик у «Сообщений» — пропущенные звонки:
       звонки — вкладка переписки. %>
   <% var parentOf = { '/settings': myPage, '/company-register': '/main' }; %>

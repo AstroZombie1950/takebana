@@ -20,8 +20,9 @@ const Establishments = require('../../models/Establishments');
 const Call = require('../../models/Call');
 const AuditLog = require('../../models/AuditLog');
 const ErrorLog = require('../../models/ErrorLog');
-const { requireAdmin, requireModerator } = require('./shared');
+const { requireAdmin, requireModerator, sendCsv } = require('./shared');
 const usage = require('../../utils/usage');
+const health = require('../../utils/health');
 
 const DAY = 86400000;
 const since = (ms) => new Date(Date.now() - ms);
@@ -104,20 +105,13 @@ router.get('/summary/daily', requireModerator, async (req, res) => {
     { $group: { _id: dayKey(field), n: { $sum: 1 }, ...extra } },
   ]);
 
-  const [users, streams, active, calls, reports, fails] = await Promise.all([
+  const [users, streams, calls, reports, fails] = await Promise.all([
     // Регистрация — время внутри ObjectId, отдельного поля в схеме нет.
     User.aggregate([
       { $match: { _id: { $gte: idSince(days * DAY) } } },
       { $group: { _id: dayKey({ $toDate: '$_id' }), n: { $sum: 1 } } },
     ]),
     byDay(StreamSession, { startedAt: { $gte: from } }, '$startedAt', { seconds: { $sum: '$duration' }, viewerSeconds: { $sum: '$viewerSeconds' } }),
-    // Активные — разные люди, сделавшие за сутки хоть что-то записанное в
-    // журнал. Не посещаемость: просмотр витрины без входа сюда не попадает.
-    AuditLog.aggregate([
-      { $match: { at: { $gte: from }, actor: { $ne: null } } },
-      { $group: { _id: { d: dayKey('$at'), a: '$actor' } } },
-      { $group: { _id: '$_id.d', n: { $sum: 1 } } },
-    ]),
     byDay(Call, { startedAt: { $gte: from } }, '$startedAt'),
     byDay(Report, { createdAt: { $gte: from } }, '$createdAt'),
     isAdmin ? byDay(AuditLog, { at: { $gte: from }, action: 'auth.login.fail' }, '$at') : [],
@@ -137,7 +131,6 @@ router.get('/summary/daily', requireModerator, async (req, res) => {
     days: axis,
     series: {
       registrations: series(users),
-      active: series(active),
       streams: series(streams),
       streamHours: series(streams, (r) => Math.round((r.seconds / 3600) * 10) / 10),
       viewerHours: series(streams, (r) => Math.round((r.viewerSeconds / 3600) * 10) / 10),
@@ -212,6 +205,10 @@ router.get('/system', requireAdmin, async (req, res) => {
   });
 });
 
+// Проверка сервисов — отдельным запросом: внешние отвечают до пяти секунд,
+// а состояние процесса и базы вкладка должна показать сразу.
+router.get('/system/checks', requireAdmin, async (req, res) => res.json(await health.run()));
+
 // ── Расходы ──────────────────────────────────────────────────────────────────
 //
 // Считаем своими метриками. Daily берёт деньги за участнико-минуты: у звонка
@@ -222,8 +219,9 @@ router.get('/system', requireAdmin, async (req, res) => {
 // Что посчитать своими силами нельзя, так и помечено: трафик CDN знает только
 // Bunny, а сколько человек смотрело камеру заведения — только Daily. Сверка
 // по их API — следующим заходом, здесь для неё оставлено место.
-router.get('/costs', requireAdmin, async (req, res) => {
-  const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
+const costDays = (req) => Math.min(365, Math.max(1, Number(req.query.days) || 30));
+
+async function loadCosts(days) {
   const from = since(days * DAY);
 
   const [calls, web, obs, recordings, fresh, venueSwitches] = await Promise.all([
@@ -253,7 +251,7 @@ router.get('/costs', requireAdmin, async (req, res) => {
   const wsec = one(web).seconds || 0;
   const callSec = c.seconds || 0;
 
-  res.json({
+  return {
     days,
     daily: {
       // Участнико-минуты: звонок — двое, веб-эфир — ведущий и RTMP-выход.
@@ -279,20 +277,64 @@ router.get('/costs', requireAdmin, async (req, res) => {
     unknown: [
       'Письма Resend — журнал отправки не ведётся',
     ],
-  });
-});
+  };
+}
+
+router.get('/costs', requireAdmin, async (req, res) => res.json(await loadCosts(costDays(req))));
 
 // ── Сверка с поставщиками ───────────────────────────────────────────────────
 //
 // Отдельным запросом, а не частью /costs: Daily и Bunny отвечают секунды,
 // изредка — дольше, и свои цифры вкладка должна показать, не дожидаясь их.
-router.get('/costs/providers', requireAdmin, async (req, res) => {
-  const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
-  const to = new Date();
-  const from = since(days * DAY);
+const loadProviders = (days) => Promise.all([usage.daily(since(days * DAY), new Date()), usage.bunny(since(days * DAY), new Date())]);
 
-  const [daily, bunny] = await Promise.all([usage.daily(from, to), usage.bunny(from, to)]);
+router.get('/costs/providers', requireAdmin, async (req, res) => {
+  const days = costDays(req);
+  const [daily, bunny] = await loadProviders(days);
   res.json({ days, daily, bunny });
+});
+
+// Выгрузка — те же цифры, что на вкладке, строками «раздел — показатель —
+// значение»: и своя оценка, и ответ поставщиков. Не ответил поставщик —
+// в файле так и написано, а не пустая строка.
+router.get('/costs.csv', requireAdmin, async (req, res) => {
+  const days = costDays(req);
+  const [c, [daily, bunny]] = await Promise.all([loadCosts(days), loadProviders(days)]);
+
+  const rows = [
+    ['Период', 'дней', days, ''],
+    ['Daily (наша оценка)', 'Звонки', c.daily.callMinutes, 'участнико-минут'],
+    ['Daily (наша оценка)', 'Разговоров', c.daily.calls, ''],
+    ['Daily (наша оценка)', 'Веб-эфиры', c.daily.streamMinutes, 'участнико-минут'],
+    ['Daily (наша оценка)', 'Веб-эфиров', c.daily.webStreams, ''],
+    ['Daily (наша оценка)', 'Включений камер заведений', c.daily.venueSwitchOns, ''],
+    ['Bunny (наша оценка)', 'Лежит записей', c.bunny.storedCount, ''],
+    ['Bunny (наша оценка)', 'Объём записей', c.bunny.storedBytes, 'байт'],
+    ['Bunny (наша оценка)', 'Добавилось записей', c.bunny.addedCount, ''],
+    ['Bunny (наша оценка)', 'Добавилось объёма', c.bunny.addedBytes, 'байт'],
+    ['Своё железо', 'Эфиров с OBS', c.obs.streams, ''],
+    ['Своё железо', 'Транскод OBS', c.obs.hours, 'часов'],
+  ];
+
+  if (!daily.configured) rows.push(['Daily (по API)', 'ключ не задан', '', '']);
+  else if (daily.error) rows.push(['Daily (по API)', 'не ответил', daily.error, '']);
+  else {
+    rows.push(['Daily (по API)', 'Всего', daily.minutes, 'участнико-минут']);
+    if (daily.usd != null) rows.push(['Daily (по API)', 'Стоимость', daily.usd, 'USD']);
+    for (const [kind, v] of Object.entries(daily.kinds)) rows.push(['Daily (по API)', `Комнаты ${kind}`, v.minutes, 'участнико-минут']);
+  }
+
+  if (!bunny.configured) rows.push(['Bunny (по API)', 'ключ не задан', '', '']);
+  else if (bunny.error) rows.push(['Bunny (по API)', 'не ответил', bunny.error, '']);
+  else {
+    rows.push(['Bunny (по API)', 'Трафик', bunny.bandwidthBytes, 'байт']);
+    rows.push(['Bunny (по API)', 'Запросов', bunny.requests, '']);
+    if (bunny.storage) rows.push(['Bunny (по API)', 'Хранилище', bunny.storage.bytes, 'байт']);
+    if (bunny.spentUsd != null) rows.push(['Bunny (по API)', 'Списано', bunny.spentUsd, 'USD']);
+    if (bunny.balanceUsd != null) rows.push(['Bunny (по API)', 'На счёте', bunny.balanceUsd, 'USD']);
+  }
+
+  sendCsv(req, res, 'costs', ['Раздел', 'Показатель', 'Значение', 'Единица'], rows);
 });
 
 module.exports = router;

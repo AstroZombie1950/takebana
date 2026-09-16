@@ -329,8 +329,6 @@ body.tk-app {
   color: var(--tk-paper);
 }
 
-.tk-aside__guest .tk-aside__sub-state { margin: 0; line-height: 1.45; }
-
 .tk-aside__guest-acts {
   display: grid;
   gap: 8px;

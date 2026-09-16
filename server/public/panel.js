@@ -117,7 +117,7 @@ async function send(method, path, body) {
 const note = (text) => '<p class="tk-panel__note">' + esc(text) + '</p>';
 
 // Человек одинаково выглядит везде: в списке, в строке журнала, в жалобе.
-// Кликается — открывает досье.
+// Кликается — открывает профиль.
 function person(p, extra) {
   if (!p) return '<span class="tk-panel__gone">нет аккаунта</span>';
   const style = p.avatar && p.avatar.url
@@ -141,7 +141,8 @@ const META = {
   reason: 'причина', was: 'было', now: 'стало', status: 'статус', fields: 'поля', save: 'с записью',
   duration: 'длительность', peakViewers: 'пик', size: 'размер', rows: 'строк', sessions: 'сеансов',
   source: 'источник', rating: 'оценка', added: 'добавлено', total: 'всего', file: 'файл', error: 'ошибка',
-  what: 'лимит', byAdmin: 'из панели', streamsStopped: 'погашено эфиров', venuesStopped: 'погашено камер',
+  what: 'лимит', streams: 'эфиров', venues: 'заведений', recordings: 'записей', reports: 'жалоб', messages: 'сообщений',
+  subscriptions: 'подписок', calls: 'звонков', byAdmin: 'из панели', streamsStopped: 'погашено эфиров', venuesStopped: 'погашено камер',
   resolved: 'разобрано', count: 'случаев', action: 'сделано', about: 'на что', city: 'город', type: 'тип',
   category: 'раздел', isAdult: '18+', wasLive: 'шёл', login: 'логин',
 };
@@ -330,7 +331,7 @@ VIEWS.summary = {
     html += '</div>';
     html += '<h2 class="tk-panel__h2">По дням</h2><div id="trends">' + note('Собираем ряды…') + '</div>';
 
-    return { html, sub: 'Всё, на что стоит посмотреть первым делом' };
+    return { html };
   },
 
   async after(params) {
@@ -347,7 +348,6 @@ VIEWS.summary = {
     const hours = (v) => String(v).replace('.', ',') + ' ч';
     const CHARTS = [
       ['registrations', 'Регистрации'],
-      ['active', 'Активные люди', null, 'разные люди с хотя бы одним действием в журнале'],
       ['streams', 'Отрезки эфиров'],
       ['streamHours', 'Часы в эфире', hours],
       ['viewerHours', 'Зрителе-часы', hours],
@@ -366,7 +366,6 @@ VIEWS.summary = {
         d.days.map((day, i) => '<tr><td>' + esc(dayLabel(day)) + '</td>' +
           CHARTS.map(([key]) => '<td class="tk-num">' + esc(String(d.series[key][i])) + '</td>').join('') + '</tr>').reverse()) +
       '</details>';
-    html += '<p class="tk-panel__why">Активные люди — те, кто хоть что-то сделал с входом: вошёл, написал, вышел в эфир. Просмотры без входа сюда не попадают.</p>';
 
     box.innerHTML = html;
   },
@@ -414,6 +413,7 @@ VIEWS.live = {
 VIEWS.streams = {
   title: 'Эфиры',
   api: '/streams',
+  csv: true,
   filters: [
     { name: 'q', type: 'search', placeholder: 'Название эфира' },
     { name: 'source', options: [{ value: '', title: 'Любой источник' }, { value: 'web', title: 'Веб' }, { value: 'obs', title: 'OBS' }] },
@@ -453,6 +453,7 @@ VIEWS.streams = {
 VIEWS.people = {
   title: 'Люди',
   api: '/users',
+  csv: true,
   filters: [
     { name: 'q', type: 'search', placeholder: 'Имя или почта' },
     { name: 'role', options: [
@@ -480,13 +481,13 @@ VIEWS.people = {
     '<td>' + (p.isOnline ? dot(true) + 'на связи' : '—') + (p.banned ? '<span class="tk-tag tk-tag--bad">ограничен</span>' : '') + '</td>' +
     '<td>' + esc(when(p.createdAt)) + '</td>' +
     '<td>' + esc(ago(p.lastSeen)) + '</td>' +
-    '<td class="tk-acts"><a class="tk-btn tk-btn--outline tk-btn--xs" href="' + href('person', { id: p.id }) + '">Досье</a></td>' +
+    '<td class="tk-acts"><a class="tk-btn tk-btn--outline tk-btn--xs" href="' + href('person', { id: p.id }) + '">Инфо</a></td>' +
   '</tr>',
 };
 
-// ── Досье ────────────────────────────────────────────────────────────────────
+// ── Профиль ──────────────────────────────────────────────────────────────────
 VIEWS.person = {
-  title: 'Досье',
+  title: 'Профиль',
   hidden: true,
   async render(params) {
     if (!params.id) return { html: note('Человек не выбран') };
@@ -496,16 +497,22 @@ VIEWS.person = {
 
     let html = '<a class="tk-panel__back" href="' + href('people') + '">← ко всем людям</a>';
 
+    // Причина ограничения — поле рядом с кнопкой: сервер без неё не ограничит,
+    // а спрашивать её после нажатия нечем.
     html += '<div class="tk-dossier__head">' + person(p) +
-      '<div class="tk-dossier__acts">' +
+      '<div class="tk-dossier__acts" data-card="' + esc(p.id) + '">' +
         (IS_ADMIN ? '<select class="tk-field tk-select" data-act="role" data-id="' + esc(p.id) + '">' +
           ['user', 'moderator', 'admin'].map((r) => '<option value="' + r + '"' + (p.role === r ? ' selected' : '') + '>' +
             ({ user: 'пользователь', moderator: 'модератор', admin: 'администратор' })[r] + '</option>').join('') +
           '</select>' : '') +
         (p.banned
           ? '<button type="button" class="tk-btn tk-btn--ok tk-btn--xs" data-act="unban" data-id="' + esc(p.id) + '">Снять ограничение</button>'
-          : '<button type="button" class="tk-btn tk-btn--danger tk-btn--xs" data-act="ban" data-id="' + esc(p.id) + '">Ограничить</button>') +
+          : '<input type="text" class="tk-field" data-reason placeholder="Причина ограничения" maxlength="300">' +
+            '<button type="button" class="tk-btn tk-btn--danger tk-btn--xs" data-act="ban" data-id="' + esc(p.id) + '">Ограничить</button>') +
         (IS_ADMIN && a.sessions ? '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="kill-sessions" data-id="' + esc(p.id) + '">Закрыть сеансы (' + a.sessions + ')</button>' : '') +
+        // Удалить нельзя себя и администратора — сервер откажет так же.
+        (IS_ADMIN && p.role !== 'admin' && p.id !== BOOT.me.id
+          ? '<button type="button" class="tk-btn tk-btn--danger tk-btn--xs" data-act="user-delete" data-id="' + esc(p.id) + '" data-name="' + esc(p.displayName) + '">Удалить</button>' : '') +
       '</div></div>';
 
     if (p.banned) {
@@ -565,7 +572,7 @@ VIEWS.person = {
       html += '<p class="tk-panel__more"><a href="' + href('audit', { actor: p.id }) + '">Весь журнал этого человека →</a></p>';
     }
 
-    return { html, title: p.displayName, sub: 'Досье' };
+    return { html, title: p.displayName, sub: 'Профиль' };
   },
 };
 
@@ -579,6 +586,7 @@ const TARGETS = { stream: 'эфир', user: 'пользователь', message:
 VIEWS.reports = {
   title: 'Жалобы',
   api: '/reports',
+  csv: true,
   filters: [
     { name: 'status', options: [
       { value: 'new', title: 'Новые' }, { value: 'resolved', title: 'Разобранные' }, { value: 'rejected', title: 'Отклонённые' },
@@ -653,6 +661,7 @@ VIEWS.venues = {
   title: 'Заведения',
   admin: true,
   api: '/venues',
+  csv: true,
   filters: [
     { name: 'q', type: 'search', placeholder: 'Название или адрес' },
     { name: 'status', options: [{ value: '', title: 'Все' }, { value: 'active', title: 'Активные' }, { value: 'inactive', title: 'Неактивные' }] },
@@ -711,6 +720,7 @@ VIEWS.venues = {
 VIEWS.recordings = {
   title: 'Записи',
   api: '/recordings',
+  csv: true,
   filters: [
     { name: 'q', type: 'search', placeholder: 'Название' },
     { name: 'status', options: [
@@ -769,9 +779,10 @@ VIEWS.audit = {
     ] },
     { name: 'period', options: PERIOD },
   ],
+  csv: true,
   sub: (d) => (d.total >= 10000 ? 'больше 10 000' : num(d.total)) + ' записей',
-  tools: (params) => '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/api/admin/audit.csv?' +
-    new URLSearchParams(serverParams(params)).toString() + '">Выгрузить CSV</a>',
+  // Очищает то, что отобрано фильтрами, — без отбора весь журнал.
+  tools: () => '<button type="button" class="tk-btn tk-btn--danger tk-btn--xs" data-act="audit-clear">Очистить</button>',
   head: [{ title: 'Когда' }, { title: 'Кто' }, { title: 'Действие' }, { title: 'Объект' }, { title: 'Адрес' }, { title: 'Подробности' }],
   row: (r) => '<tr>' +
     '<td class="tk-nowrap">' + esc(when(r.at)) + '</td>' +
@@ -780,7 +791,9 @@ VIEWS.audit = {
       (r.result !== 'ok' ? '<span class="tk-tag tk-tag--bad">' + esc(r.result === 'denied' ? 'отказано' : 'не вышло') + '</span>' : '') + '</td>' +
     '<td>' + esc(r.targetLabel || r.targetType || '—') + '</td>' +
     '<td class="tk-nowrap">' + (r.ip ? '<a href="' + href('audit', { ip: r.ip }) + '">' + esc(r.ip) + '</a>' : '—') + '</td>' +
-    '<td class="tk-panel__why">' + meta(r.meta) + '</td>' +
+    // Подпись — в span: у ячейки таблицы свой display, и block с .tk-panel__why
+    // сбивал линию под строкой.
+    '<td><span class="tk-panel__why">' + meta(r.meta) + '</span></td>' +
   '</tr>',
 };
 
@@ -791,6 +804,7 @@ VIEWS.errors = {
   title: 'Ошибки',
   admin: true,
   api: '/errors',
+  csv: true,
   filters: [
     { name: 'q', type: 'search', placeholder: 'Текст или маршрут' },
     { name: 'scope', options: [{ value: '', title: 'Везде' }].concat(
@@ -833,6 +847,7 @@ VIEWS.errors = {
 VIEWS.costs = {
   title: 'Расходы',
   admin: true,
+  csv: true,
   filters: [{ name: 'days', options: [
     { value: '30', title: 'За 30 дней' }, { value: '7', title: 'За неделю' },
     { value: '1', title: 'За сутки' }, { value: '90', title: 'За 90 дней' },
@@ -934,23 +949,44 @@ VIEWS.system = {
       '</dl></section>';
 
     html += '<section><h2 class="tk-panel__h2">Настройки окружения</h2><dl class="tk-facts">' +
-      d.env.map((e) => '<dt>' + esc(e.title) + '</dt><dd>' + (e.set
+      d.env.map((e) => '<dt>' + esc(e.title) + '</dt><dd data-env="' + esc(e.key) + '">' + (e.set
         ? '<span class="tk-tag tk-tag--on">задана</span>'
         : '<span class="tk-tag tk-tag--bad">не задана</span>') + '</dd>').join('') +
-      '</dl><p class="tk-panel__why">Показан только факт: значения переменных панель не запрашивает и не получает.</p></section></div>';
+      '</dl><p class="tk-panel__why" id="envChecked">Проверяем сервисы…</p></section></div>';
 
     return { html, sub: 'Состояние процесса, базы и диска' };
+  },
+
+  // Заданная переменная ещё не значит рабочая: сервер делает по запросу
+  // к каждому сервису, и отказ показывается третьим состоянием — «ошибка».
+  async after() {
+    const status = document.getElementById('envChecked');
+    let d;
+    try {
+      d = await api('/system/checks');
+    } catch (err) {
+      if (status) status.textContent = 'Проверка не удалась: ' + err.message;
+      return;
+    }
+    if (!status || !status.isConnected) return;
+
+    Object.entries(d.env).forEach(([key, r]) => {
+      const cell = view.querySelector('[data-env="' + key + '"]');
+      if (!cell || r.ok) return;
+      cell.innerHTML = '<span class="tk-tag tk-tag--bad">ошибка</span><span class="tk-panel__why">' + esc(r.error) + '</span>';
+    });
+    status.textContent = 'Сервисы проверены ' + when(d.checkedAt) + '. Значения переменных панель не запрашивает и не получает.';
   },
 };
 
 // ── Каркас ───────────────────────────────────────────────────────────────────
 
 // «За неделю» в фильтре — это from= для сервера. Отдельная функция, потому
-// что тем же набором пользуется ссылка на выгрузку журнала.
+// что тем же набором пользуются выгрузка и очистка журнала.
 function serverParams(params) {
   const out = {};
   Object.entries(params).forEach(([k, v]) => {
-    if (v === '' || v == null) return;
+    if (v === '' || v == null || k === 'page') return;
     if (k === 'period') { const f = periodFrom(v); if (f) out.from = f; return; }
     out[k] = v;
   });
@@ -994,7 +1030,11 @@ async function show() {
   drawNav(name);
   viewTitle.textContent = v.title;
   viewSub.textContent = '';
-  viewTools.innerHTML = filtersHtml(v.filters, params) + (v.tools ? v.tools(params) : '');
+  viewTools.innerHTML = filtersHtml(v.filters, params) +
+    // Выгрузка — тем же отбором, что на экране: сервер читает те же параметры.
+    (v.csv ? '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/api/admin/' + (v.api ? v.api.slice(1) : name) + '.csv?' +
+      new URLSearchParams(serverParams(params)).toString() + '">CSV</a>' : '') +
+    (v.tools ? v.tools(params) : '');
   view.innerHTML = note('Загружаем…');
 
   try {
@@ -1087,6 +1127,13 @@ view.addEventListener('click', async (e) => {
       return show();
     }
 
+    if (act === 'user-delete') {
+      if (!await confirmDialog('Удалить ' + el.dataset.name + ' насовсем? Уйдут эфиры, записи, заведения, переписка и подписки. Вернуть нельзя.', { okText: 'Удалить' })) return;
+      await send('DELETE', '/api/admin/users/' + id);
+      toast('Аккаунт удалён', 'ok');
+      return go('people');
+    }
+
     if (act === 'close-report') {
       await send('POST', '/api/moderation/reports/' + id + '/close', { status: el.dataset.status, action: reasonOf(el) });
       toast(el.dataset.status === 'resolved' ? 'Жалоба разобрана' : 'Жалоба отклонена', 'ok');
@@ -1128,6 +1175,23 @@ view.addEventListener('click', async (e) => {
       toast('Заведение удалено', 'ok');
       return show();
     }
+  } catch (err) {
+    toast(err.message || 'Не получилось', 'error');
+  }
+});
+
+// Очистка журнала — кнопка в шапке вкладки, рядом с фильтрами.
+viewTools.addEventListener('click', async (e) => {
+  if (!e.target.closest('[data-act="audit-clear"]')) return;
+  const params = serverParams(route().params);
+  const filtered = Object.keys(params).length > 0;
+  if (!await confirmDialog(filtered
+    ? 'Удалить из журнала все записи по текущему отбору? Вернуть нельзя.'
+    : 'Очистить весь журнал? Вернуть нельзя.', { okText: 'Очистить' })) return;
+  try {
+    const r = await send('DELETE', '/api/admin/audit?' + new URLSearchParams(params).toString());
+    toast('Удалено записей: ' + num(r.rows), 'ok');
+    show();
   } catch (err) {
     toast(err.message || 'Не получилось', 'error');
   }

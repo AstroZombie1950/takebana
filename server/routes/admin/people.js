@@ -1,8 +1,8 @@
-// Вкладка «Люди»: список с фильтрами и досье на человека.
+// Вкладка «Люди»: список с фильтрами, профиль человека, удаление аккаунта.
 //
 // Список намеренно лёгкий — имя, роль, состояние, последний выход на связь.
 // Всё тяжёлое (часы эфира, гигабайты записей, переписка) считается только
-// в досье и только для одного человека: те же подсчёты на каждую строку
+// в профиле и только для одного человека: те же подсчёты на каждую строку
 // списка означали бы десяток обращений к базе на страницу.
 
 const express = require('express');
@@ -23,7 +23,8 @@ const Call = require('../../models/Call');
 const AuditLog = require('../../models/AuditLog');
 const Stream = require('../../models/Stream');
 const { audit } = require('../../utils/audit');
-const { requireModerator, requireAdmin, paging, list, needle, personBrief } = require('./shared');
+const { removeUser } = require('../../utils/userDelete');
+const { requireModerator, requireAdmin, paging, list, needle, personBrief, csvRoute } = require('./shared');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
@@ -39,7 +40,7 @@ const SORTS = {
   banned: { banned: -1, _id: -1 },
 };
 
-router.get('/users', requireModerator, async (req, res) => {
+async function loadUsers(req) {
   const p = paging(req);
   const filter = {};
 
@@ -58,16 +59,38 @@ router.get('/users', requireModerator, async (req, res) => {
   const sort = SORTS[req.query.sort] || SORTS.new;
 
   const [users, total] = await Promise.all([
-    User.find(filter).select('login email role banned isOnline lastSeen avatar').sort(sort).skip(p.skip).limit(p.perPage).lean(),
+    User.find(filter).select('login email role banned isOnline lastSeen avatar provider adultConfirmedAt').sort(sort).skip(p.skip).limit(p.perPage).lean(),
     User.countDocuments(filter),
   ]);
 
-  res.json(list(users.map(personBrief), total, p));
-});
+  // Почта в списке не нужна никому (shared.js, personBrief), а в выгрузке
+  // администратору — нужна: ради неё выгрузку людей и делают.
+  const withMail = req.csv && req.userRole === 'admin';
+  return list(users.map((u) => ({
+    ...personBrief(u),
+    ...(req.csv ? { provider: u.provider === 'google' ? 'Google' : 'пароль', adult: !!u.adultConfirmedAt } : {}),
+    ...(withMail ? { email: u.email || '' } : {}),
+  })), total, p);
+}
 
-// ── Досье ────────────────────────────────────────────────────────────────────
+router.get('/users', requireModerator, async (req, res) => res.json(await loadUsers(req)));
+csvRoute(router, '/users', requireModerator, 'people', loadUsers, (req) => [
+  ['Идентификатор', (u) => u.id],
+  ['Имя', (u) => u.displayName],
+  ['Логин', (u) => u.login],
+  ...(req.userRole === 'admin' ? [['Почта', (u) => u.email]] : []),
+  ['Роль', (u) => ({ admin: 'администратор', moderator: 'модератор' }[u.role] || 'пользователь')],
+  ['Вход', (u) => u.provider],
+  ['Ограничен', (u) => (u.banned ? 'да' : '')],
+  ['18+', (u) => (u.adult ? 'да' : '')],
+  ['На связи', (u) => (u.isOnline ? 'да' : '')],
+  ['Заведён', (u) => u.createdAt],
+  ['Был на связи', (u) => u.lastSeen],
+]);
+
+// ── Профиль ──────────────────────────────────────────────────────────────────
 //
-// Открытие досье пишется в журнал: панель, показывающая чужую жизнь, обязана
+// Открытие профиля пишется в журнал: панель, показывающая чужую жизнь, обязана
 // сама оставлять след — иначе она дыра в приватность, а не инструмент.
 router.get('/users/:id', requireModerator, async (req, res) => {
   if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Пользователь не найден' });
@@ -225,6 +248,30 @@ router.post('/users/:id/sessions/kill', requireAdmin, async (req, res) => {
   });
 
   res.json({ ok: true, sessions: deletedCount });
+});
+
+// ── Удаление ─────────────────────────────────────────────────────────────────
+//
+// Насовсем: эфиры, записи в хранилище, заведения, переписка, подписки,
+// файлы (utils/userDelete.js). Только администратору. Себя и другого
+// администратора удалить нельзя — как и ограничить: иначе панель
+// разбирается изнутри одним нажатием. Сначала роль снимают отдельно.
+router.delete('/users/:id', requireAdmin, async (req, res) => {
+  if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Пользователь не найден' });
+  if (req.params.id === String(req.session.userId)) return res.status(400).json({ message: 'Себя удалить нельзя' });
+
+  const user = await User.findById(req.params.id).select('login email role avatar').lean();
+  if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
+  if (user.role === 'admin') return res.status(403).json({ message: 'Администратора удалить нельзя — сначала смените роль' });
+
+  const removed = await removeUser(user, req.app.get('io'));
+
+  audit(req, 'admin.user.delete', {
+    targetType: 'user', target: user,
+    targetLabel: user.login || user.email || '',
+    meta: removed,
+  });
+  res.json({ ok: true, removed });
 });
 
 module.exports = router;

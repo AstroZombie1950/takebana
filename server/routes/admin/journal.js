@@ -10,14 +10,14 @@ asyncify(router); // ошибки async-обработчиков уходят в
 
 const AuditLog = require('../../models/AuditLog');
 const ErrorLog = require('../../models/ErrorLog');
-const { audit, ACTIONS } = require('../../utils/audit');
-const { requireAdmin, paging, list, needle, period, namesFor } = require('./shared');
+const { audit, flush, ACTIONS } = require('../../utils/audit');
+const { requireAdmin, paging, list, needle, period, namesFor, csvRoute, nameOf } = require('./shared');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
-// Фильтр журнала собирается в двух местах — в списке и в выгрузке, — поэтому
-// живёт отдельной функцией: разойдись они, выгрузка отдавала бы не то,
-// что человек видит на экране.
+// Фильтр журнала один на список, выгрузку и очистку: разойдись они,
+// выгрузка отдавала бы, а очистка стирала бы не то, что человек видит
+// на экране.
 function auditFilter(req) {
   const filter = { ...period(req, 'at') };
 
@@ -37,7 +37,7 @@ function auditFilter(req) {
   return filter;
 }
 
-router.get('/audit', requireAdmin, async (req, res) => {
+async function loadAudit(req) {
   const p = paging(req);
   const filter = auditFilter(req);
 
@@ -45,12 +45,12 @@ router.get('/audit', requireAdmin, async (req, res) => {
     AuditLog.find(filter).sort({ at: -1 }).skip(p.skip).limit(p.perPage).lean(),
     // Точный счёт по большому журналу стоит дорого, поэтому он ограничен:
     // панели хватает «больше 10 000», а не точного числа за полгода.
-    AuditLog.countDocuments(filter, { limit: 10000 }),
+    req.csv ? 0 : AuditLog.countDocuments(filter, { limit: 10000 }),
   ]);
 
   const names = await namesFor(rows.map((r) => r.actor));
 
-  res.json(list(rows.map((r) => ({
+  return list(rows.map((r) => ({
     id: String(r._id),
     at: r.at,
     action: r.action,
@@ -68,42 +68,39 @@ router.get('/audit', requireAdmin, async (req, res) => {
     ip: r.ip || '',
     ua: r.ua || '',
     meta: r.meta || null,
-  })), total, p));
-});
+  })), total, p);
+}
 
-// ── Выгрузка ─────────────────────────────────────────────────────────────────
-//
-// Тем же фильтром, что на экране. Потолок обязателен: журнал за полгода
-// в один ответ не помещается ни у нас, ни у того, кто его откроет.
-const CSV_LIMIT = 5000;
+router.get('/audit', requireAdmin, async (req, res) => res.json(await loadAudit(req)));
+csvRoute(router, '/audit', requireAdmin, 'audit', loadAudit, [
+  ['Время', (r) => r.at],
+  ['Действие', (r) => r.label],
+  ['Код', (r) => r.action],
+  ['Результат', (r) => r.result],
+  ['Кто', (r) => r.actorLogin || nameOf(r.actorNow)],
+  ['Роль', (r) => r.actorRole],
+  ['Объект', (r) => r.targetType],
+  ['Название', (r) => r.targetLabel],
+  ['Адрес', (r) => r.ip],
+  ['Браузер', (r) => r.ua],
+  ['Подробности', (r) => r.meta],
+]);
 
-const cell = (v) => {
-  const s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
-  return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-};
-
-router.get('/audit.csv', requireAdmin, async (req, res) => {
+// Очистка — тем же фильтром, что на экране: без отбора уходит весь журнал.
+// Буфер сбрасывается до удаления, иначе записи последней секунды легли бы
+// в базу уже после очистки. Сама очистка пишется следом и остаётся в журнале
+// первой строкой: след того, кто и сколько стёр, стирать нельзя.
+router.delete('/audit', requireAdmin, async (req, res) => {
   const filter = auditFilter(req);
-  const rows = await AuditLog.find(filter).sort({ at: -1 }).limit(CSV_LIMIT).lean();
+  await flush();
+  const { deletedCount } = await AuditLog.deleteMany(filter);
 
-  audit(req, 'admin.export', { meta: { rows: rows.length, filter: Object.keys(filter) } });
-
-  const head = ['Время', 'Действие', 'Код', 'Результат', 'Кто', 'Роль', 'Объект', 'Название', 'Адрес', 'Браузер', 'Подробности'];
-  const lines = rows.map((r) => [
-    new Date(r.at).toISOString(), ACTIONS[r.action] || r.action, r.action, r.result,
-    r.actorLogin, r.actorRole, r.targetType, r.targetLabel, r.ip, r.ua, r.meta,
-  ].map(cell).join(';'));
-
-  // Точка с запятой и BOM: иначе Excel открывает кириллицу кракозябрами
-  // и сваливает все столбцы в один.
-  res
-    .type('text/csv; charset=utf-8')
-    .set('Content-Disposition', `attachment; filename="takebana-audit-${new Date().toISOString().slice(0, 10)}.csv"`)
-    .send('﻿' + [head.join(';'), ...lines].join('\r\n'));
+  audit(req, 'admin.audit.clear', { meta: { rows: deletedCount, filter: Object.keys(filter) } });
+  res.json({ ok: true, rows: deletedCount });
 });
 
 // ── Ошибки ───────────────────────────────────────────────────────────────────
-router.get('/errors', requireAdmin, async (req, res) => {
+async function loadErrors(req) {
   const p = paging(req);
   const filter = { ...period(req, 'lastAt') };
 
@@ -127,7 +124,7 @@ router.get('/errors', requireAdmin, async (req, res) => {
 
   const names = await namesFor(rows.map((r) => r.lastUser));
 
-  res.json({
+  return {
     ...list(rows.map((r) => ({
       id: String(r._id),
       fingerprint: r.fingerprint,
@@ -147,8 +144,26 @@ router.get('/errors', requireAdmin, async (req, res) => {
       lastUser: names.get(String(r.lastUser)) || null,
     })), total, p),
     byScope: byScope.reduce((acc, row) => ({ ...acc, [row._id]: { groups: row.n, cases: row.cases } }), {}),
-  });
-});
+  };
+}
+
+router.get('/errors', requireAdmin, async (req, res) => res.json(await loadErrors(req)));
+csvRoute(router, '/errors', requireAdmin, 'errors', loadErrors, [
+  ['Где', (e) => e.scope],
+  ['Ошибка', (e) => e.name],
+  ['Код', (e) => e.status],
+  ['Сообщение', (e) => e.message],
+  ['Маршрут', (e) => e.route],
+  ['Случаев', (e) => e.count],
+  ['Впервые', (e) => e.firstAt],
+  ['Последний раз', (e) => e.lastAt],
+  ['Разобрана', (e) => (e.resolved ? 'да' : '')],
+  ['Последний у', (e) => nameOf(e.lastUser)],
+  ['Адрес', (e) => e.lastIp],
+  ['Браузер', (e) => e.lastUa],
+  ['Отпечаток', (e) => e.fingerprint],
+  ['Стек', (e) => e.stack],
+]);
 
 router.post('/errors/:id/resolve', requireAdmin, async (req, res) => {
   if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Ошибка не найдена' });

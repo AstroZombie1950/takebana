@@ -14,7 +14,7 @@ const Stream = require('../../models/Stream');
 const StreamSession = require('../../models/StreamSession');
 const Recording = require('../../models/Recording');
 const Establishments = require('../../models/Establishments');
-const { requireModerator, paging, list, needle, period, namesFor } = require('./shared');
+const { requireModerator, paging, list, needle, period, namesFor, csvRoute, nameOf } = require('./shared');
 
 // ── Сейчас в эфире ───────────────────────────────────────────────────────────
 router.get('/live', requireModerator, async (req, res) => {
@@ -65,7 +65,7 @@ router.get('/live', requireModerator, async (req, res) => {
 });
 
 // ── Архив эфиров ─────────────────────────────────────────────────────────────
-router.get('/streams', requireModerator, async (req, res) => {
+async function loadStreams(req) {
   const p = paging(req);
   const filter = { endedAt: { $ne: null }, ...period(req, 'startedAt') };
 
@@ -91,7 +91,7 @@ router.get('/streams', requireModerator, async (req, res) => {
   const names = await namesFor(sessions.map((s) => s.user));
   const sum = totals[0] || {};
 
-  res.json({
+  return {
     ...list(sessions.map((s) => ({
       id: String(s._id),
       title: s.title || '',
@@ -112,14 +112,35 @@ router.get('/streams', requireModerator, async (req, res) => {
       owner: names.get(String(s.user)) || null,
     })), total, p),
     totals: { seconds: sum.seconds || 0, viewerSeconds: sum.viewerSeconds || 0, peak: sum.peak || 0 },
-  });
-});
+  };
+}
+
+const ENDED_BY = { owner: 'завершён', moderation: 'погашен', cleanup: 'брошен', restart: 'перезапуск' };
+
+router.get('/streams', requireModerator, async (req, res) => res.json(await loadStreams(req)));
+csvRoute(router, '/streams', requireModerator, 'streams', loadStreams, [
+  ['Эфир', (s) => s.title],
+  ['Кто', (s) => nameOf(s.owner)],
+  ['Источник', (s) => (s.source === 'obs' ? 'OBS' : 'веб')],
+  ['Раздел', (s) => s.category],
+  ['Город', (s) => s.city],
+  ['18+', (s) => (s.isAdult ? 'да' : '')],
+  ['Начало', (s) => s.startedAt],
+  ['Конец', (s) => s.endedAt],
+  ['Длительность, с', (s) => s.duration],
+  ['Пик зрителей', (s) => s.peakViewers],
+  ['Зрителе-секунды', (s) => s.viewerSeconds],
+  ['Сообщений в чате', (s) => s.chatMessages],
+  ['Итог', (s) => ENDED_BY[s.endedBy] || ''],
+  ['Причина', (s) => s.stopReason],
+  ['Запись', (s) => s.recording || ''],
+]);
 
 // ── Записи ───────────────────────────────────────────────────────────────────
 //
 // Удаление записи отдельного маршрута здесь не требует: DELETE /recording/:id
 // пускает владельца и администратора (requireOwner) и пишет в журнал.
-router.get('/recordings', requireModerator, async (req, res) => {
+async function loadRecordings(req) {
   const p = paging(req);
   const filter = { ...period(req, 'createdAt') };
 
@@ -142,7 +163,7 @@ router.get('/recordings', requireModerator, async (req, res) => {
   const names = await namesFor(recordings.map((r) => r.userId));
   const sum = totals[0] || {};
 
-  res.json({
+  return {
     ...list(recordings.map((r) => ({
       id: String(r._id),
       title: r.title || '',
@@ -160,7 +181,22 @@ router.get('/recordings', requireModerator, async (req, res) => {
       owner: names.get(String(r.userId)) || null,
     })), total, p),
     totals: { bytes: sum.bytes || 0, seconds: sum.seconds || 0 },
-  });
-});
+  };
+}
+
+router.get('/recordings', requireModerator, async (req, res) => res.json(await loadRecordings(req)));
+csvRoute(router, '/recordings', requireModerator, 'recordings', loadRecordings, [
+  ['Запись', (r) => r.title],
+  ['Кто', (r) => nameOf(r.owner)],
+  ['Состояние', (r) => ({ ready: 'готова', processing: 'склеивается', failed: 'не вышла' }[r.status] || r.status)],
+  ['Раздел', (r) => r.category],
+  ['Город', (r) => r.city],
+  ['18+', (r) => (r.isAdult ? 'да' : '')],
+  ['Длительность, с', (r) => r.duration],
+  ['Размер, байт', (r) => r.size],
+  ['Записан', (r) => r.recordedAt || r.createdAt],
+  ['Ключ в хранилище', (r) => r.key],
+  ['Адрес', (r) => r.url],
+]);
 
 module.exports = router;

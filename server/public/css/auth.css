@@ -6,8 +6,10 @@
  * не придумано, размеры перенесены.
  */
 
+/* Поля сверху и снизу — с расчётом, чтобы вход целиком, с футером,
+ * помещался в экран 1920×1080 без прокрутки. */
 .tk-auth {
-  padding: 96px 56px 104px;
+  padding: 40px 56px 48px;
   display: flex;
   justify-content: center;
 }
@@ -128,18 +130,22 @@
 
 /* ── Подписи под формой ── */
 .tk-auth__row {
-  margin-top: 18px;
+  margin: 18px 0 0;
   font-family: Oswald, sans-serif;
   font-size: 15px;
   color: var(--tk-beige);
 }
 
 .tk-auth__note {
-  margin-top: 28px;
+  margin: 14px 0 0;
   font-family: Oswald, sans-serif;
   font-size: 14px;
   line-height: 1.55;
   color: var(--tk-label);
+}
+
+.tk-auth__note + .tk-auth__row {
+  margin-top: 9px;
 }
 
 .tk-auth__lede {
@@ -183,13 +189,13 @@
 
 @media (max-width: 1023px) {
   .tk-auth {
-    padding: 72px 28px 80px;
+    padding: 40px 28px 48px;
   }
 }
 
 @media (max-width: 767px) {
   .tk-auth {
-    padding: 48px 20px 64px;
+    padding: 28px 20px 40px;
   }
 
   .tk-auth__h1 {

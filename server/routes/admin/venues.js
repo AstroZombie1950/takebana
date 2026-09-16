@@ -15,12 +15,13 @@ const Rating = require('../../models/Rating');
 const { validate } = require('../../middleware/validate');
 const { audit } = require('../../utils/audit');
 const { HOURS, LOCATION, CITY, TYPE } = require('../../utils/venueFields');
-const { requireAdmin, paging, list, needle, namesFor } = require('./shared');
+const { removeVenue } = require('../../utils/userDelete');
+const { requireAdmin, paging, list, needle, namesFor, csvRoute, nameOf } = require('./shared');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 const byId = (req, res, next) => (OBJECT_ID.test(req.params.id) ? next() : res.status(404).json({ message: 'Заведение не найдено' }));
 
-router.get('/venues', requireAdmin, async (req, res) => {
+async function loadVenues(req) {
   const p = paging(req);
   const filter = {};
 
@@ -49,7 +50,7 @@ router.get('/venues', requireAdmin, async (req, res) => {
   ]);
   const rating = new Map(ratings.map((r) => [String(r._id), { avg: Math.round(r.avg * 10) / 10, count: r.n }]));
 
-  res.json(list(venues.map((v) => ({
+  return list(venues.map((v) => ({
     id: String(v._id),
     name: v.name || '',
     type: v.type || '',
@@ -67,8 +68,27 @@ router.get('/venues', requireAdmin, async (req, res) => {
     photo: (v.photos || [])[0] || '',
     rating: rating.get(String(v._id)) || { avg: 0, count: 0 },
     owner: names.get(String(v.owner)) || null,
-  })), total, p));
-});
+  })), total, p);
+}
+
+router.get('/venues', requireAdmin, async (req, res) => res.json(await loadVenues(req)));
+csvRoute(router, '/venues', requireAdmin, 'venues', loadVenues, [
+  ['Название', (v) => v.name],
+  ['Тип', (v) => v.type],
+  ['Страна', (v) => v.country],
+  ['Город', (v) => v.city],
+  ['Адрес', (v) => v.address],
+  ['Почта', (v) => v.email],
+  ['Телефон', (v) => v.phone],
+  ['Активно', (v) => (v.status ? 'да' : 'нет')],
+  ['Камера', (v) => (v.online ? 'включена' : '')],
+  ['Широта', (v) => (v.location ? v.location.lat : '')],
+  ['Долгота', (v) => (v.location ? v.location.lng : '')],
+  ['Оценка', (v) => (v.rating.count ? v.rating.avg : '')],
+  ['Оценок', (v) => v.rating.count],
+  ['Фото', (v) => v.photos],
+  ['Владелец', (v) => nameOf(v.owner)],
+]);
 
 // Город и тип — списками каталога: правка свободной строкой выводила
 // заведение из фильтров карты, а типа панель не знала вовсе.
@@ -116,8 +136,12 @@ router.put('/venues/:id/status', requireAdmin, byId, validate({
 });
 
 router.delete('/venues/:id', requireAdmin, byId, async (req, res) => {
-  const venue = await Establishments.findByIdAndDelete(req.params.id);
+  const venue = await Establishments.findById(req.params.id);
   if (!venue) return res.status(404).json({ message: 'Заведение не найдено' });
+
+  // Тем же порядком, что у владельца: без этого камера, оценки и фото
+  // переживали удаление из панели.
+  await removeVenue(venue);
 
   audit(req, 'venue.delete', { targetType: 'venue', target: venue, meta: { byAdmin: true } });
   res.json({ ok: true });

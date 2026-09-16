@@ -8,13 +8,20 @@
 
 const { requireAdmin, requireModerator } = require('../../middleware/auth');
 const userView = require('../../utils/userView');
+const { audit } = require('../../utils/audit');
 
 // Размер страницы приходит из запроса, поэтому у него есть потолок: без него
 // perPage=100000 выгружает коллекцию целиком одним запросом.
 const PER_PAGE_MAX = 100;
 const PER_PAGE_DEFAULT = 25;
+// Потолок выгрузки: полгода журнала в один ответ не помещается ни у нас,
+// ни у того, кто его откроет.
+const CSV_LIMIT = 5000;
 
 function paging(req) {
+  // Выгрузка идёт тем же загрузчиком, что и список, но одной «страницей»
+  // с собственным потолком (csvRoute ниже).
+  if (req.csv) return { page: 1, perPage: CSV_LIMIT, skip: 0 };
   const page = Math.max(1, Number(req.query.page) || 1);
   const perPage = Math.min(PER_PAGE_MAX, Math.max(1, Number(req.query.perPage) || PER_PAGE_DEFAULT));
   return { page, perPage, skip: (page - 1) * perPage };
@@ -79,4 +86,42 @@ async function namesFor(ids) {
   return new Map(users.map((u) => [String(u._id), personBrief(u)]));
 }
 
-module.exports = { requireAdmin, requireModerator, paging, list, needle, period, personBrief, namesFor, PER_PAGE_MAX };
+// ── Выгрузка CSV ─────────────────────────────────────────────────────────────
+//
+// Выгрузка вкладки — тот же загрузчик, что у списка, и тот же фильтр из
+// адреса: разойдись они, в файле было бы не то, что человек видит на экране.
+// Столбцы — пары [заголовок, значение из строки]; функцией, если набор
+// зависит от прав.
+
+const cell = (v) => {
+  const s = v == null ? '' : v instanceof Date ? v.toISOString() : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+
+// Человек в выгрузке — имя, а не объект со ссылкой на аватар.
+const nameOf = (p) => (p ? p.displayName : '');
+
+function sendCsv(req, res, file, head, lines) {
+  audit(req, 'admin.export', { meta: { file, rows: lines.length } });
+
+  // Точка с запятой и BOM: иначе Excel открывает кириллицу кракозябрами
+  // и сваливает все столбцы в один.
+  res
+    .type('text/csv; charset=utf-8')
+    .set('Content-Disposition', `attachment; filename="takebana-${file}-${new Date().toISOString().slice(0, 10)}.csv"`)
+    .send('\uFEFF' + [head.map(cell).join(';'), ...lines.map((l) => l.map(cell).join(';'))].join('\r\n'));
+}
+
+function csvRoute(router, path, guard, file, load, columns) {
+  router.get(path + '.csv', guard, async (req, res) => {
+    req.csv = true;
+    const data = await load(req);
+    const cols = typeof columns === 'function' ? columns(req) : columns;
+    sendCsv(req, res, file, cols.map((c) => c[0]), data.items.map((row) => cols.map((c) => c[1](row))));
+  });
+}
+
+module.exports = {
+  requireAdmin, requireModerator, paging, list, needle, period, personBrief, namesFor,
+  csvRoute, sendCsv, nameOf,
+};

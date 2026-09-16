@@ -119,6 +119,8 @@ const EN = {
     'Жалоба не найдена': 'Report not found',
     'Свою роль менять нельзя': 'You cannot change your own role',
     'Нельзя ограничить модератора': 'A moderator cannot be restricted',
+    'Себя удалить нельзя': 'You cannot delete yourself',
+    'Администратора удалить нельзя — сначала смените роль': 'An administrator cannot be deleted — change the role first',
     'Нет прав остановить этот эфир': 'You have no rights to stop this stream',
 
     // Подписи полей в схемах validate

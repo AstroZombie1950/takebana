@@ -11,6 +11,7 @@ const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
 const daily = require('../utils/daily');
 const { roomName: venueRoomName } = require('./venueLive');
+const { removeVenue } = require('../utils/userDelete');
 const { readVenueFilters } = require('../utils/venueFilters');
 const multer = require('multer');
 const path = require('path');
@@ -41,7 +42,6 @@ const storage = multer.diskStorage({
 })
 
 const { requireAuth, requireOwner, wrap } = require('../middleware/auth');
-const { resolveWithin } = require('../utils/safePath');
 const { validate } = require('../middleware/validate');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -261,24 +261,8 @@ router.post('/updateEstablishmentsOnlineStatus', requireAuth, async (req, res) =
 router.delete('/establishment/:id', requireAuth, requireOwner(Establishments), wrap(async (req, res) => {
     const venue = req.resource; // requireOwner уже нашёл документ
 
-    // Камера могла идти в этот момент: комната в Daily живёт своей жизнью
-    // и без записи в базе её потом не найти и не удалить.
-    if (venue.online) {
-        await daily.deleteRoom(venueRoomName(venue._id)).catch((err) => errorLog.external(err, 'daily.deleteRoom', { venue: String(venue._id) }));
-    }
-
-    await Rating.deleteMany({ establishment: venue._id });
-
-    // Фотографии лежат файлами: без этого они остаются на диске навсегда.
-    // Путь через resolveWithin, даже при проверенном образце в схеме —
-    // на диск ходим только внутри своей папки.
-    for (const url of venue.photos || []) {
-        const file = resolveWithin(ESTABLISHMENT_UPLOAD_DIR, path.basename(url));
-        if (!file) continue;
-        fs.promises.unlink(file).catch(() => {}); // файла может уже не быть
-    }
-
-    await venue.deleteOne();
+    // Камера, оценки и фото уходят вместе с ним: utils/userDelete.js.
+    await removeVenue(venue);
     audit(req, 'venue.delete', { targetType: 'venue', target: venue, meta: { city: venue.city, byOwner: true } });
     res.json({ ok: true });
 }));
