@@ -63,10 +63,30 @@ async function put(file, key, contentType) {
   throw new Error('хранилище записей не настроено');
 }
 
+// Удаление из хранилища CDN не касается: pull zone записей держит файл
+// в кэше месяц, и удалённая запись по прямой ссылке продолжала бы играть
+// (проверено 16.09.2026). Поэтому следом — сброс кэша по адресу, ключом
+// аккаунта (BUNNY_API_KEY): у пароля зоны на это прав нет. Кэш у pull zone
+// один на все её адреса, сброс по одному снимает файл и с остальных.
+async function purge(key) {
+  if (!process.env.BUNNY_API_KEY) {
+    console.warn(`[storage] BUNNY_API_KEY не задан: ${key} удалён из хранилища, но остаётся в кэше CDN`);
+    return;
+  }
+  const q = new URLSearchParams({ url: `${bunny.cdn}/${key}`, async: 'false' });
+  const res = await fetch(`https://api.bunny.net/purge?${q}`, {
+    method: 'POST',
+    headers: { AccessKey: process.env.BUNNY_API_KEY },
+    signal: AbortSignal.timeout(15000),
+  });
+  await checked(res, 'PURGE');
+}
+
 async function remove(key) {
   if (!key) return;
   if (driver === 'bunny') {
     await checked(await fetch(objectUrl(key), { method: 'DELETE', headers: { AccessKey: bunny.key } }), 'DELETE');
+    await purge(key);
   } else if (driver === 'local') {
     await fs.promises.rm(path.join(LOCAL_ROOT, key), { force: true });
   }
