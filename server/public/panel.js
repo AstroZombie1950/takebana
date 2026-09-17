@@ -80,6 +80,13 @@ function bytes(n) {
 
 const num = (n) => String(Number(n) || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
+// Число со словом в нужной форме: 1 запись, 2 записи, 5 записей.
+function count(n, one, few, many) {
+  const a = Math.abs(n) % 100, b = a % 10;
+  const word = a > 10 && a < 20 ? many : b === 1 ? one : b > 1 && b < 5 ? few : many;
+  return num(n) + ' ' + word;
+}
+
 // Ссылка на вкладку: единственное место, где собирается адрес в хеше.
 function href(name, params) {
   const q = new URLSearchParams();
@@ -870,17 +877,16 @@ VIEWS.costs = {
     const d = await api('/costs?days=' + encodeURIComponent(params.days || 30));
 
     let html = '<h2 class="tk-panel__h2">Daily — участнико-минуты</h2><div class="tk-tiles">';
-    html += tile('Звонки', num(d.daily.callMinutes) + ' мин', num(d.daily.calls) + ' разговоров, по двое');
-    html += tile('Веб-эфиры', num(d.daily.streamMinutes) + ' мин', num(d.daily.webStreams) + ' эфиров: ведущий и выход в HLS');
-    html += tile('Всего', num(d.daily.callMinutes + d.daily.streamMinutes) + ' мин', 'за ' + d.days + ' дней');
+    html += tile('Звонки', num(d.daily.callMinutes) + ' мин', count(d.daily.calls, 'разговор', 'разговора', 'разговоров') + ', по двое');
+    html += tile('Веб-эфиры', num(d.daily.streamMinutes) + ' мин', count(d.daily.webStreams, 'эфир', 'эфира', 'эфиров') + ': ведущий и выход в HLS');
+    html += tile('Всего', num(d.daily.callMinutes + d.daily.streamMinutes) + ' мин', 'за ' + count(d.days, 'день', 'дня', 'дней'));
     html += tile('Камеры заведений', num(d.daily.venueSwitchOns), 'включений — минуты знает только Daily');
-    html += tile('Звонки мимо Daily', num(d.ownCalls.minutes) + ' мин', num(d.ownCalls.calls) + ' разговоров через свой сервер');
+    html += tile('Звонки мимо Daily', num(d.ownCalls.minutes) + ' мин', count(d.ownCalls.calls, 'разговор', 'разговора', 'разговоров') + ' через свой сервер');
     html += '</div>';
 
     html += '<h2 class="tk-panel__h2">Bunny — хранение записей</h2><div class="tk-tiles">';
-    html += tile('Лежит сейчас', bytes(d.bunny.storedBytes), num(d.bunny.storedCount) + ' записей');
-    html += tile('Добавилось', bytes(d.bunny.addedBytes), num(d.bunny.addedCount) + ' записей за ' + d.days + ' дней');
-    html += tile('Трафик', '—', 'знает только Bunny');
+    html += tile('Лежит сейчас', bytes(d.bunny.storedBytes), count(d.bunny.storedCount, 'запись', 'записи', 'записей'));
+    html += tile('Добавилось', bytes(d.bunny.addedBytes), count(d.bunny.addedCount, 'запись', 'записи', 'записей') + ' за ' + count(d.days, 'день', 'дня', 'дней'));
     html += '</div>';
 
     html += '<h2 class="tk-panel__h2">Своё железо</h2><div class="tk-tiles">';
@@ -917,7 +923,7 @@ VIEWS.costs = {
       html += '<div class="tk-tiles">';
       html += tile('Daily всего', num(d.daily.minutes) + ' мин', d.daily.usd != null ? '≈ $' + d.daily.usd : 'цена минуты не задана');
       Object.entries(d.daily.kinds).forEach(([k, v]) => {
-        html += tile(KIND[k] || k, num(v.minutes) + ' мин', num(v.meetings) + ' встреч, до ' + v.peak + ' участников');
+        html += tile(KIND[k] || k, num(v.minutes) + ' мин', count(v.meetings, 'встреча', 'встречи', 'встреч') + ', до ' + count(v.peak, 'участника', 'участников', 'участников'));
       });
       html += '</div>';
       if (!d.daily.complete) html += '<p class="tk-panel__why">Встреч больше пяти тысяч — посчитаны не все, сузьте период.</p>';
@@ -928,9 +934,9 @@ VIEWS.costs = {
     else if (d.bunny.error) html += note('Bunny не ответил: ' + d.bunny.error);
     else {
       html += '<div class="tk-tiles">';
-      html += tile('Трафик Bunny', bytes(d.bunny.bandwidthBytes), num(d.bunny.requests) + ' запросов' +
+      html += tile('Трафик Bunny', bytes(d.bunny.bandwidthBytes), count(d.bunny.requests, 'запрос', 'запроса', 'запросов') +
         (d.bunny.cacheHitRate != null ? ', из кэша ' + d.bunny.cacheHitRate + '%' : ''));
-      if (d.bunny.storage) html += tile('Хранилище Bunny', bytes(d.bunny.storage.bytes), num(d.bunny.storage.files) + ' файлов');
+      if (d.bunny.storage) html += tile('Хранилище Bunny', bytes(d.bunny.storage.bytes), count(d.bunny.storage.files, 'файл', 'файла', 'файлов'));
       if (d.bunny.spentUsd != null) html += tile('Списано Bunny', '$' + d.bunny.spentUsd, 'на счёте $' + d.bunny.balanceUsd);
       html += '</div>';
     }
@@ -966,7 +972,8 @@ VIEWS.system = {
     html += '<section><h2 class="tk-panel__h2">Настройки окружения</h2><dl class="tk-facts">' +
       d.env.map((e) => '<dt>' + esc(e.title) + '</dt><dd data-env="' + esc(e.key) + '">' + (e.set
         ? '<span class="tk-tag tk-tag--on">задана</span>'
-        : '<span class="tk-tag tk-tag--bad">не задана</span>') + '</dd>').join('') +
+        : '<span class="tk-tag tk-tag--bad">не задана</span>' +
+          (e.missing.length ? '<span class="tk-panel__why">нет ' + e.missing.map(esc).join(', ') + '</span>' : '')) + '</dd>').join('') +
       '</dl><p class="tk-panel__why" id="envChecked">Проверяем сервисы…</p></section></div>';
 
     return { html, sub: 'Состояние процесса, базы и диска' };

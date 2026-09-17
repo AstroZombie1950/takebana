@@ -14,7 +14,10 @@
 // согласования.
 (function () {
   function noop() {}
-  // Связи нет столько — звонок кончился: и до первого соединения, и после обрыва.
+  // Связи нет столько — звонок кончился. До первого соединения ждём дольше:
+  // на слабом мобильном сигналы через сокет идут секундами (17.09.2026 у
+  // заказчика ответ на перезапуск ICE не дошёл за 11 с).
+  var CONNECT_MS = 45000;
   var GIVE_UP_MS = 30000;
   // Пока собеседник не ответил, привет повторяется: его вкладка могла ещё
   // не перейти на этот путь.
@@ -48,6 +51,19 @@
     var t0 = Date.now();
     var log = [];
     var sent = false;
+    // Для отчёта: какие пути вообще нашлись — свои кандидаты, кандидаты
+    // собеседника, ошибки TURN. Без этого «не соединились» не объяснить.
+    var found = { mine: {}, theirs: {}, errors: {} };
+
+    function count(bag, key) { bag[key] = (bag[key] || 0) + 1; }
+    function kind(line) {
+      var m = / (udp|tcp) .* typ (\w+)/i.exec(line || '');
+      return m ? m[2] + '/' + m[1].toLowerCase() : '?';
+    }
+    function list(bag) {
+      var keys = Object.keys(bag);
+      return keys.length ? keys.map(function (k) { return k + ' ' + bag[k]; }).join(', ') : 'нет';
+    }
 
     function emit(name) { if (opts[name]) opts[name].apply(null, [].slice.call(arguments, 1)); }
     function every(fn, ms) { timers.push(setInterval(fn, ms)); }
@@ -135,7 +151,12 @@
     };
 
     // ── Сигналы ──
-    pc.onicecandidate = function (e) { if (e.candidate) send({ t: 'ice', c: e.candidate.toJSON() }); };
+    pc.onicecandidate = function (e) {
+      if (!e.candidate) return note('свои кандидаты собраны: ' + list(found.mine));
+      count(found.mine, kind(e.candidate.candidate) + (e.candidate.relayProtocol ? ' через ' + e.candidate.relayProtocol : ''));
+      send({ t: 'ice', c: e.candidate.toJSON() });
+    };
+    pc.onicecandidateerror = function (e) { count(found.errors, e.errorCode + ' ' + (e.url || '') + ' ' + (e.errorText || '')); };
 
     function offer(restart) {
       return pc.createOffer({ iceRestart: !!restart }).then(function (o) {
@@ -191,14 +212,22 @@
             if (!pc.remoteDescription) return offer(false);
             return;
           case 'offer':
-            if (!opts.offerer) return onOffer(d.sdp);
-            return;
+            if (opts.offerer) return;
+            // Звонящий повторяет предложение, пока не дойдёт наш ответ: на
+            // медленном сокете одно и то же приходит по нескольку раз.
+            // Повтор — не новое согласование, а повод повторить ответ.
+            if (pc.remoteDescription && pc.remoteDescription.sdp === d.sdp.sdp) {
+              if (pc.localDescription) send({ t: 'answer', sdp: pc.localDescription.toJSON() });
+              return;
+            }
+            return onOffer(d.sdp);
           case 'answer':
             if (opts.offerer && pc.signalingState === 'have-local-offer') {
               return pc.setRemoteDescription(d.sdp).then(flush).then(announce);
             }
             return;
           case 'ice':
+            count(found.theirs, kind(d.c && d.c.candidate));
             if (pc.remoteDescription) return pc.addIceCandidate(d.c).catch(noop);
             pending.push(d.c);
             return;
@@ -271,6 +300,10 @@
           details: [
             opts.diag + ' через свой сервер: ' + kind,
             'соединение: ' + pc.connectionState + ', ICE: ' + pc.iceConnectionState + ', сигналы: ' + pc.signalingState,
+            'свои кандидаты: ' + list(found.mine),
+            'кандидаты собеседника: ' + list(found.theirs),
+            'ошибки TURN: ' + list(found.errors),
+            'сеть браузера: ' + ((navigator.connection || {}).type || '?') + ' / ' + ((navigator.connection || {}).effectiveType || '?'),
             'роль: ' + (opts.offerer ? 'звонящий' : 'отвечающий'),
             '— хронология —'
           ].concat(log),
@@ -299,11 +332,13 @@
       }).catch(noop);
     }, STATS_MS);
 
-    // Сдаёмся, если связи нет GIVE_UP_MS. Привет повторяется, пока не
+    // Сдаёмся, если связи нет CONNECT_MS до первого соединения или GIVE_UP_MS
+    // после обрыва. Привет повторяется, пока не
     // обменялись описаниями.
     every(function () {
-      if (lostAt && Date.now() - lostAt > GIVE_UP_MS) {
-        report(connected ? 'связь пропала и не вернулась за ' + GIVE_UP_MS / 1000 + ' с' : 'не соединились за ' + GIVE_UP_MS / 1000 + ' с');
+      var limit = connected ? GIVE_UP_MS : CONNECT_MS;
+      if (lostAt && Date.now() - lostAt > limit) {
+        report((connected ? 'связь пропала и не вернулась за ' : 'не соединились за ') + limit / 1000 + ' с');
         leave();
         emit('onState', 'ended');
         return;

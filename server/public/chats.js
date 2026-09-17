@@ -186,8 +186,11 @@
 
   // Прокрутили к началу — дозагрузка старых. Высоту запоминаем до отрисовки,
   // иначе лента прыгает.
+  // Пока первая страница не пришла, сообщений нет и дозагружать не от чего:
+  // открытие диалога очищает ленту, и прокрутка срабатывала раньше истории
+  // (TypeError 'sentAt' из журнала ошибок, 17.09).
   feed.addEventListener('scroll', function () {
-    if (!peer || loadingOld || allLoaded || feed.scrollTop > 40) return;
+    if (!peer || loadingOld || allLoaded || !messages.length || feed.scrollTop > 40) return;
     loadingOld = true;
     var id = peer.id;
     load(id, messages[0].sentAt).then(function (page) {

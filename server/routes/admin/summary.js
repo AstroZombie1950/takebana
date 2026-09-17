@@ -146,19 +146,26 @@ router.get('/summary/daily', requireModerator, async (req, res) => {
 // Значения переменных окружения наружу не отдаются никогда — только факт,
 // задана она или нет. Панель за ключами не ходит, и держать их в ответе,
 // который уйдёт в браузер, незачем.
+//
+// Функция работает, только когда заданы все её переменные: вход через Google
+// без CALLBACKURL отвечает 503, хотя ключ на месте. Поэтому строка — набор
+// переменных, и «задана» — когда заданы все; недостающие называются по имени.
+// Первая переменная набора — та, по которой health.js проверяет сервис.
 const ENV_FLAGS = [
-  ['SESSION_SECRET', 'Подпись сессий'],
-  ['DAILY_API_KEY', 'Ключ Daily'],
-  ['DAILY_DOMAIN', 'Домен Daily'],
-  ['GOOGLE_CLIENT_ID', 'Вход через Google'],
-  ['RESEND_API_KEY', 'Почта (Resend)'],
-  ['RTMP_PUBLISH_SECRET', 'Подпись RTMP'],
-  ['BUNNY_STORAGE_KEY', 'Хранилище записей'],
-  ['BUNNY_API_KEY', 'Статистика Bunny'],
-  ['DAILY_USD_PER_MINUTE', 'Цена минуты Daily'],
-  ['RECORDINGS_CDN_URL', 'Раздача записей'],
-  ['HLS_BASE_URL', 'CDN для эфиров'],
-  ['GEOCODER_URL', 'Поиск адресов'],
+  [['SESSION_SECRET'], 'Подпись сессий'],
+  [['DAILY_API_KEY'], 'Ключ Daily'],
+  [['DAILY_DOMAIN'], 'Домен Daily'],
+  [['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'CALLBACKURL'], 'Вход через Google'],
+  [['RESEND_API_KEY', 'MAIL_FROM', 'PUBLIC_URL'], 'Почта (Resend)'],
+  [['RTMP_PUBLISH_SECRET'], 'Подпись RTMP'],
+  [['BUNNY_STORAGE_KEY', 'BUNNY_STORAGE_ZONE', 'BUNNY_STORAGE_ENDPOINT'], 'Хранилище записей'],
+  [['BUNNY_API_KEY'], 'Статистика Bunny'],
+  [['DAILY_USD_PER_MINUTE'], 'Цена минуты Daily'],
+  [['RECORDINGS_CDN_URL'], 'Раздача записей'],
+  [['HLS_BASE_URL'], 'CDN для эфиров'],
+  // GEOCODER_URL пустой — рабочий случай (общественный Nominatim), а без
+  // контакта Nominatim вправе ответить 403. Смотрим поэтому на контакт.
+  [['GEOCODER_CONTACT'], 'Поиск адресов'],
 ];
 
 router.get('/system', requireAdmin, async (req, res) => {
@@ -201,7 +208,10 @@ router.get('/system', requireAdmin, async (req, res) => {
       sessions,
     },
     disk,
-    env: ENV_FLAGS.map(([key, title]) => ({ key, title, set: !!process.env[key] })),
+    env: ENV_FLAGS.map(([keys, title]) => {
+      const missing = keys.filter((k) => !process.env[k]);
+      return { key: keys[0], title, set: !missing.length, missing: missing.length < keys.length ? missing : [] };
+    }),
   });
 });
 

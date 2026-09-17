@@ -99,9 +99,11 @@ const CHECKS = {
   hls: () => reachable(process.env.HLS_BASE_URL),
 
   // Nominatim закрывает доступ ответом 403 — ровно то, что стоит увидеть здесь.
+  // Запрос — с тем же User-Agent, что у utils/geocode.js.
   async geocoder() {
-    const res = await request(process.env.GEOCODER_URL.replace(/\/+$/, '') + '/status', {
-      headers: { 'User-Agent': 'Takebana/1.0', Accept: 'application/json' },
+    const base = (process.env.GEOCODER_URL || 'https://nominatim.openstreetmap.org').replace(/\/+$/, '');
+    const res = await request(base + '/status', {
+      headers: { 'User-Agent': `Takebana/1.0 (${process.env.GEOCODER_CONTACT})`, Accept: 'application/json' },
     });
     if (res.status === 401 || res.status === 403) throw new Error(`доступ закрыт (HTTP ${res.status})`);
     if (res.status >= 500) throw new Error(`HTTP ${res.status}`);
@@ -119,7 +121,7 @@ const CHECK_OF = {
   BUNNY_API_KEY: 'bunnyApi',
   RECORDINGS_CDN_URL: 'cdn',
   HLS_BASE_URL: 'hls',
-  GEOCODER_URL: 'geocoder',
+  GEOCODER_CONTACT: 'geocoder',
 };
 
 async function run() {
