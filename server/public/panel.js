@@ -805,6 +805,17 @@ VIEWS.audit = {
 // ── Ошибки ───────────────────────────────────────────────────────────────────
 const SCOPES = { server: 'сервер', client: 'браузер', media: 'медиа', external: 'внешние' };
 
+// Раскрывашка карточки ошибки: стек, подробности, браузер. У отчёта о
+// звонке (CallDiag) стека нет — его суть в lastMeta.details, построчно.
+function errorMore(e) {
+  const meta = Object.assign({}, e.lastMeta);
+  const lines = Array.isArray(meta.details) ? meta.details : [];
+  delete meta.details;
+  Object.keys(meta).forEach((k) => { if (!meta[k]) delete meta[k]; });
+  return [e.stack, lines.join('\n'), Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '', e.lastUa]
+    .filter(Boolean).join('\n\n');
+}
+
 VIEWS.errors = {
   title: 'Ошибки',
   admin: true,
@@ -823,7 +834,7 @@ VIEWS.errors = {
   render2(d) {
     if (!d.items.length) return note('Ошибок нет — или все разобраны');
 
-    return '<div class="tk-cards tk-cards--wide">' + d.items.map((e) =>
+    return '<div class="tk-cards tk-cards--wide">' + d.items.map((e) => { const more = errorMore(e); return (
       '<article class="tk-card tk-card--error' + (e.resolved ? ' is-done' : '') + '" data-card="' + esc(e.id) + '">' +
         '<div class="tk-card__head">' +
           '<p class="tk-card__name"><span class="tk-tag">' + esc(SCOPES[e.scope] || e.scope) + '</span> ' +
@@ -835,16 +846,14 @@ VIEWS.errors = {
         '<p class="tk-card__from">' + esc(e.route || 'без маршрута') + ' · впервые ' + esc(when(e.firstAt)) +
           (e.lastUser ? ' · последний раз у ' + person(e.lastUser) : '') +
           (e.lastIp ? ' · ' + esc(e.lastIp) : '') + '</p>' +
-        (e.stack ? '<details class="tk-card__more"><summary>Стек и подробности</summary><pre>' + esc(e.stack) +
-          (e.lastMeta ? '\n\n' + esc(JSON.stringify(e.lastMeta, null, 2)) : '') +
-          (e.lastUa ? '\n\n' + esc(e.lastUa) : '') + '</pre></details>' : '') +
+        (more ? '<details class="tk-card__more"><summary>Стек и подробности</summary><pre>' + esc(more) + '</pre></details>' : '') +
         '<div class="tk-card__acts">' +
           '<button type="button" class="tk-btn tk-btn--' + (e.resolved ? 'outline' : 'ok') + ' tk-btn--xs" ' +
             'data-act="error-resolve" data-id="' + esc(e.id) + '" data-resolved="' + (e.resolved ? '0' : '1') + '">' +
             (e.resolved ? 'Вернуть в работу' : 'Разобрано') + '</button>' +
           '<span class="tk-panel__why">отпечаток ' + esc(e.fingerprint) + '</span>' +
         '</div>' +
-      '</article>').join('') + '</div>';
+      '</article>'); }).join('') + '</div>';
   },
 };
 

@@ -163,6 +163,8 @@ csvRoute(router, '/errors', requireAdmin, 'errors', loadErrors, [
   ['Браузер', (e) => e.lastUa],
   ['Отпечаток', (e) => e.fingerprint],
   ['Стек', (e) => e.stack],
+  // Хронология несоединившегося звонка и прочие подробности из браузера.
+  ['Подробности', (e) => (e.lastMeta ? JSON.stringify(e.lastMeta, null, 2) : '')],
 ]);
 
 router.post('/errors/:id/resolve', requireAdmin, async (req, res) => {

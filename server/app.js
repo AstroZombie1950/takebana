@@ -206,6 +206,8 @@ require('./utils/streamLog').sweep();
 
 app.use(require('./routes/presence'));
 app.use(require('./routes/calls'));
+// Временно: проверка своего TURN перед запасным путём звонков.
+app.use(require('./routes/turnProbe'));
 app.use(require('./routes/recordings'));
 app.use(require('./routes/pages'));
 app.use(require('./routes/streamStatus'));
