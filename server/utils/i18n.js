@@ -39,6 +39,10 @@ const EN = {
     'Пользователь не найден': 'User not found',
     'Профиль успешно обновлен': 'Profile updated',
     'Неверный старый пароль': 'The old password is incorrect',
+    'Неверный пароль': 'Incorrect password',
+    'Аккаунт входит через Google, пароля у него нет': 'This account signs in with Google and has no password',
+    'Пароль другого администратора сменить нельзя': 'You cannot change another administrator\u2019s password',
+    'Аккаунт администратора удаляется только из панели': 'An administrator account can only be deleted from the admin panel',
     'Неверный текущий пароль': 'The current password is incorrect',
     'Слишком много запросов. Попробуйте через 15 минут.': 'Too many requests. Try again in 15 minutes.',
 
@@ -161,6 +165,7 @@ const EN = {
     'Телефон': 'Phone',
     'Тип заведения': 'Establishment type',
     'Тип звонка': 'Call type',
+    'Свой путь': 'Own path',
     'Тип объекта': 'Target type',
     'Фотографии': 'Photos',
     'Часы по будням': 'Weekday hours',

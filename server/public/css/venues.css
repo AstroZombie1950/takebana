@@ -587,6 +587,10 @@
 .tk-rate button:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
 
 /* ── Окна ──────────────────────────────────────────────────────────────── */
+/* Обёртка нужна ради водяного знака: ему не на что опереться, пока плеер
+ * лежит в окне сам по себе. */
+.tk-vlive__box { position: relative; }
+
 .tk-vlive {
   display: block;
   width: 100%;

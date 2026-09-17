@@ -150,7 +150,12 @@
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
       </button>
     </div>
-    <video class="tk-vlive" id="venueLiveVideo" autoplay playsinline controls></video>
+    <%# Знак поверх плеера: картинку камеры собирает Daily у зрителя,
+        положить его в кадр, как в эфире, нечем. %>
+    <div class="tk-vlive__box">
+      <video class="tk-vlive" id="venueLiveVideo" autoplay playsinline controls></video>
+      <span class="tk-wm" aria-hidden="true"></span>
+    </div>
   </div>
 </div>
 

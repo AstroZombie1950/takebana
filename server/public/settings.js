@@ -178,6 +178,27 @@
       });
   });
 
+  // ── Удаление аккаунта ─────────────────────────────────────────────────
+  // Подтверждение — пароль (у входа через Google его нет) и вопрос в диалоге:
+  // отменить удаление нельзя, случайное нажатие стоит слишком дорого.
+  var deleteForm = $('deleteForm');
+  if (deleteForm) {
+    deleteForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var pass = $('deletePassword');
+      if (pass && !pass.value) return toast(t('settings.delete.needPassword'), 'error');
+      confirmDialog(t('settings.delete.ask'), { okText: t('settings.delete.btn') }).then(function (yes) {
+        if (!yes) return;
+        send('/profile/delete', json(pass ? { password: pass.value } : {}))
+          .then(function () { location.href = '/'; })
+          .catch(function (err) {
+            if (pass) pass.value = '';
+            toast(t('app.errorPrefix', { message: err.message }), 'error');
+          });
+      });
+    });
+  }
+
   // ── Пароль ────────────────────────────────────────────────────────────
   var passwordForm = $('passwordForm');
   if (passwordForm) {

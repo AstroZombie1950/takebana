@@ -113,6 +113,21 @@
       <% } %>
 
       <a href="/logout" class="tk-set__exit" data-i18n="settings.logout"><%- t('settings.logout') %></a>
+
+      <%# Удаление аккаунта. У администратора его нет: панель осталась бы
+          без владельца, маршрут такую попытку тоже отклоняет. %>
+      <% if (canDelete) { %>
+      <section class="tk-panel tk-set__zone">
+        <p class="tk-panel__title" data-i18n="settings.delete.title"><%- t('settings.delete.title') %></p>
+        <p class="tk-note" data-i18n="settings.delete.what"><%- t('settings.delete.what') %></p>
+        <form class="tk-form tk-set__pass" id="deleteForm">
+          <% if (hasPassword) { %>
+          <input class="tk-field" type="password" placeholder="<%= ta('settings.delete.password') %>" id="deletePassword" data-i18n-placeholder="settings.delete.password" autocomplete="current-password">
+          <% } %>
+          <button type="submit" class="tk-btn tk-btn--danger tk-btn--sm" data-i18n="settings.delete.btn"><%- t('settings.delete.btn') %></button>
+        </form>
+      </section>
+      <% } %>
     </div>
   </main>
 </div>

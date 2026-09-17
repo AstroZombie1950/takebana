@@ -132,6 +132,18 @@
   border-bottom-color: currentColor;
 }
 
+/* Дата редакции над текстом документа: видно сразу, не сливается с первым
+ * абзацем. */
+.tk-prose__lead {
+  margin: 0 0 22px;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-ink-soft);
+  opacity: .75;
+}
+
 /* Длинный текст даёт длинные таблицы — пусть прокручиваются внутри себя,
  * а не растягивают страницу вбок. */
 .tk-prose__body table {

@@ -1211,6 +1211,23 @@ body.tk-app {
   background: #000;
 }
 
+/* Водяной знак поверх плеера — для звонков и камер заведений. В эфирах
+ * и записях знак лежит в самом кадре (utils/hls.js); там, где картинку
+ * собирает Daily в браузере зрителя, положить его в кадр нечем, и это
+ * наложение — сознательный минимум: оно снимается вместе со страницей.
+ * pointer-events: none — знак не должен перехватывать нажатия на плеере. */
+.tk-wm {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 92px;
+  height: 36px;
+  background: url("/img/watermark.png") no-repeat center / contain;
+  opacity: .75;
+  pointer-events: none;
+  z-index: 11;
+}
+
 /* Своя картинка: двигается и меняет размер пальцами (tk-app.js), поэтому
  * жесты браузера на ней выключены. На телефоне — вертикальная, как камера. */
 .pip-local {
@@ -1241,7 +1258,10 @@ body.tk-app {
   font-size: 14px;
   color: var(--tk-muted);
 }
+/* Картинки собеседника нет — прятать надо и знак: над подписью «видео нет»
+ * он висел бы просто так. */
 .tk-call__stage--empty .pip-remote,
+.tk-call__stage--empty .tk-wm,
 .tk-call__stage--nolocal .pip-local { visibility: hidden; }
 
 @media (min-width: 640px) {

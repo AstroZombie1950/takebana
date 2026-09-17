@@ -47,9 +47,31 @@ const MAX_RESTARTS = 5;        // дальше молчим: чинить над
 
 // Транскод 1080p60 → 720p30 на vCPU сервера (KVM 4) — 0,78 ядра на один эфир,
 // три одновременно — 2,04 ядра, все в реальном времени (замер 15.09.2026).
-// Три эфира оставляют Node, Mongo и nginx два ядра из четырёх. Сверх лимита
-// видео копируется.
-const MAX_TRANSCODES = 3;
+// Три эфира оставляют Node, Mongo и nginx два ядра из четырёх.
+//
+// Сверх этого числа видео раньше копировалось. Так больше нельзя: копия идёт
+// мимо фильтров, то есть без водяного знака, а знак обязателен на всяком
+// видео (требование по товарному знаку, 17.09.2026). Поэтому четвёртый и
+// дальнейшие эфиры кодируются облегчённо — 480p и меньше битрейт: хуже
+// картинка, но знак на месте и сервер жив. Цена профиля на сервере
+// не замерена, замер — вместе со следующим нагрузочным прогоном.
+const MAX_FULL_TRANSCODES = 3;
+
+const PROFILES = {
+    full: { height: 720, bitrate: '2500k', preset: 'veryfast', watermarkHeight: 54 },
+    lite: { height: 480, bitrate: '1200k', preset: 'ultrafast', watermarkHeight: 38 },
+};
+
+// Знак — готовый PNG с прозрачностью, собран из public/img/logo.svg. Кладём
+// в кадр при кодировании: наложение поверх плеера снималось бы вместе
+// со страницей, а из кадра его так просто не убрать. Правый верхний угол:
+// там реже всего оказывается лицо ведущего и подписи.
+//
+// Файл лежит в public/img: тот же самый знак браузер кладёт поверх плеера
+// там, где в кадр его положить нечем, — в звонках и камерах заведений,
+// которые собирает Daily на стороне зрителя (класс .tk-wm в app.css).
+const WATERMARK = path.join(__dirname, '..', 'public', 'img', 'watermark.png');
+const WATERMARK_MARGIN = 24;
 
 // streamKey -> { proc, restarts, stopping, timer, transcode }
 const jobs = new Map();
@@ -75,20 +97,34 @@ function clean(dir) {
     }
 }
 
-// Видео пережимаем, потому что при копировании сегмент режется только по
-// ключевому кадру OBS: при интервале «авто» это 8,3 с вместо двух — задержка
-// под полминуты. Заодно выход не зависит от настроек вещателя: не больше 720p
-// и 30 кадров (вниз, без растяжения), 2500 кбит/с — на эту цифру посчитан
-// трафик CDN. -fpsmax есть с ffmpeg 4.4, на сервере 4.4.2 из apt.
+// Видео пережимаем всегда. Во-первых, при копировании сегмент режется только
+// по ключевому кадру OBS: при интервале «авто» это 8,3 с вместо двух —
+// задержка под полминуты. Во-вторых, водяной знак кладётся в кадр, а это
+// возможно только при кодировании. Выход заодно не зависит от настроек
+// вещателя: не больше 720p и 30 кадров (вниз, без растяжения), 2500 кбит/с —
+// на эту цифру посчитан трафик CDN. -fpsmax есть с ffmpeg 4.4, на сервере
+// 4.4.2 из apt.
+//
+// Знак — второй вход ffmpeg. Высота у него в пикселях, а не долей кадра:
+// доля потребовала бы scale2ref, а его в новых сборках ffmpeg уже нет,
+// и конвейер сломался бы при следующем обновлении сервера.
 //
 // Звук пережимаем в AAC всегда — HLS на iOS другой не принимает, а
 // перекодирование одной аудиодорожки стоит доли процента ядра.
-const VIDEO_TRANSCODE = [
-    '-vf', "scale=-2:'min(720,ih)'", '-fpsmax', '30',
-    '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p',
-    '-b:v', '2500k', '-maxrate', '2500k', '-bufsize', '5000k',
-    '-force_key_frames', `expr:gte(t,n_forced*${SEGMENT_SECONDS})`, '-sc_threshold', '0',
-];
+function videoArgs(profile) {
+    const p = PROFILES[profile];
+    return [
+        '-i', WATERMARK,
+        '-filter_complex',
+        `[0:v]scale=-2:'min(${p.height},ih)'[v];` +
+        `[1:v]scale=-1:${p.watermarkHeight}[wm];` +
+        `[v][wm]overlay=W-w-${WATERMARK_MARGIN}:${WATERMARK_MARGIN}[out]`,
+        '-fpsmax', '30',
+        '-c:v', 'libx264', '-preset', p.preset, '-tune', 'zerolatency', '-pix_fmt', 'yuv420p',
+        '-b:v', p.bitrate, '-maxrate', p.bitrate, '-bufsize', String(parseInt(p.bitrate, 10) * 2) + 'k',
+        '-force_key_frames', `expr:gte(t,n_forced*${SEGMENT_SECONDS})`, '-sc_threshold', '0',
+    ];
+}
 
 // Выход — tee: один раз закодированный поток уходит и в HLS, и в кусок
 // записи эфира (utils/recording.js). Отдельный второй выход ffmpeg кодировал
@@ -102,7 +138,7 @@ const VIDEO_TRANSCODE = [
 // (браузер, CDN), и с нуля новый эфир или перезапуск ffmpeg писали бы
 // seg00000.ts под тем же адресом — зритель получал бы кусок прошлого эфира.
 // Номер в плейлисте заодно только растёт.
-function ffmpegArgs(streamKey, dir, transcode, part) {
+function ffmpegArgs(streamKey, dir, profile, part) {
     const hlsOut = '[f=hls' +
         `:hls_time=${SEGMENT_SECONDS}` +
         `:hls_list_size=${PLAYLIST_SEGMENTS}` +
@@ -117,11 +153,12 @@ function ffmpegArgs(streamKey, dir, transcode, part) {
         '-fflags', 'nobuffer',
         '-i', `rtmp://127.0.0.1:1935/live/${streamKey}`,
 
-        ...(transcode ? VIDEO_TRANSCODE : ['-c:v', 'copy']),
+        ...videoArgs(profile),
         '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
 
         // tee сам потоки не выбирает: без -map ffmpeg не знает, что ему отдать.
-        '-map', '0:v?', '-map', '0:a?',
+        // Видео берём с выхода фильтра — там оно уже со знаком.
+        '-map', '[out]', '-map', '0:a?',
         '-f', 'tee',
         part ? `${hlsOut}|[f=mpegts:onfail=ignore]${part}` : hlsOut,
     ];
@@ -131,7 +168,7 @@ function spawnFfmpeg(streamKey, job) {
     const dir = dirFor(streamKey);
     // Каждый запуск — новый кусок записи: после паузы и перезапуска тоже.
     const part = recording.newPart(streamKey);
-    const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.transcode, part), { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.profile, part), { stdio: ['ignore', 'ignore', 'pipe'] });
     job.proc = proc;
 
     proc.stderr.on('data', (chunk) => {
@@ -182,16 +219,23 @@ function start(streamKey) {
     // Сегменты прошлого эфира: плеер иначе подхватит их как начало текущего.
     clean(dir);
 
-    // Останавливаемый конвейер уже не в счёте: его ffmpeg выходит до 5 с.
-    let transcoding = 0;
-    for (const j of jobs.values()) if (j.transcode && !j.stopping) transcoding++;
-    const transcode = transcoding < MAX_TRANSCODES;
+    // Без файла знака эфир не начинаем: видео без знака отдавать нельзя,
+    // а молча продолжить — значит нарушить это правило незаметно.
+    if (!fs.existsSync(WATERMARK)) {
+        errorLog.media(new Error(`нет файла водяного знака ${WATERMARK}`), 'hls.watermark', { streamKey });
+        return;
+    }
 
-    const job = { proc: null, restarts: 0, stopping: false, timer: null, transcode };
+    // Останавливаемый конвейер уже не в счёте: его ffmpeg выходит до 5 с.
+    let full = 0;
+    for (const j of jobs.values()) if (j.profile === 'full' && !j.stopping) full++;
+    const profile = full < MAX_FULL_TRANSCODES ? 'full' : 'lite';
+
+    const job = { proc: null, restarts: 0, stopping: false, timer: null, profile };
     job.done = new Promise((resolve) => { job.resolve = resolve; });
     jobs.set(streamKey, job);
     spawnFfmpeg(streamKey, job);
-    console.log(`[hls ${streamKey}] ${transcode ? 'транскод' : 'копирование видео, лимит транскодов'} → /live/${streamKey}/index.m3u8`);
+    console.log(`[hls ${streamKey}] транскод ${PROFILES[profile].height}p со знаком${profile === 'lite' ? ' (лимит полных транскодов)' : ''} → /live/${streamKey}/index.m3u8`);
 }
 
 function stop(streamKey) {

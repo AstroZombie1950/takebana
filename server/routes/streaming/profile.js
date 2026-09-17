@@ -13,15 +13,25 @@ const { requireAuth } = require('../../middleware/auth');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
 const { UPLOADS, uploadAvatar, uploadGallery } = require('./uploads');
 const { commonDataMiddleware } = require('./shared');
-const { PASSWORD_PROVIDER } = require('../../utils/password');
+const bcrypt = require('bcrypt');
+const { PASSWORD_PROVIDER, PASSWORD_MAX } = require('../../utils/password');
+const { authLimiter } = require('../../middleware/rateLimit');
+const { validate } = require('../../middleware/validate');
+const { removeUser } = require('../../utils/userDelete');
 const userView = require('../../utils/userView');
 const { audit } = require('../../utils/audit');
 
 // Страница настроек: имя, фото, язык, галерея, пароль. Раньше — окно поверх
 // любой страницы кабинета, и его разметка со скриптом ехали с каждой из них.
 router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
-  const user = await User.findById(req.session.userId).select('provider').lean();
-  res.render('settings', { hasPassword: !!user && (user.provider || '') === PASSWORD_PROVIDER });
+  // Роль — ради блока удаления аккаунта: у администратора его нет. Общий
+  // commonDataMiddleware роль не тянет, и ради одной страницы добавлять её
+  // в выборку каждой страницы кабинета незачем.
+  const user = await User.findById(req.session.userId).select('provider role').lean();
+  res.render('settings', {
+    hasPassword: !!user && (user.provider || '') === PASSWORD_PROVIDER,
+    canDelete: !!user && user.role !== 'admin',
+  });
 });
 
 // Файл аватара удаляем, только если он наш: у входа через Google в поле
@@ -133,6 +143,44 @@ router.delete('/profile/gallery/:name', requireAuth, async (req, res) => {
 
   audit(req, 'profile.gallery.delete', { targetType: 'user', target: user, meta: { file: fileName } });
   return res.json({ success: true });
+});
+
+// Удаление своего аккаунта. Право на удаление данных человек применяет сам,
+// а не письмом в поддержку: удаляется ровно то же, что при удалении из панели
+// (utils/userDelete.js) — эфиры, записи, заведения, переписка, файлы.
+// В журнале действий остаётся строка о самом удалении: она нужна на случай
+// спора и живёт столько же, сколько остальной журнал.
+router.post('/profile/delete', authLimiter, requireAuth, validate({
+  // Пароля нет у входа через Google: там подтверждением служит сам сеанс.
+  password: { type: 'string', max: PASSWORD_MAX, trim: false, label: 'Пароль' },
+}), async (req, res) => {
+  const user = await User.findById(req.session.userId);
+  if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+
+  // Администратор себя не удаляет: панель осталась бы без владельца, а вместе
+  // с аккаунтом ушли бы чужие жалобы и разборы. Сначала сменить роль.
+  if (user.role === 'admin') {
+    return res.status(403).json({ success: false, message: 'Аккаунт администратора удаляется только из панели' });
+  }
+
+  if ((user.provider || '') === PASSWORD_PROVIDER) {
+    const match = req.body.password ? await bcrypt.compare(req.body.password, user.password) : false;
+    if (!match) {
+      audit(req, 'profile.delete', { result: 'fail', targetType: 'user', target: user });
+      return res.status(400).json({ success: false, message: 'Неверный пароль' });
+    }
+  }
+
+  // Запись до удаления: после него имени и почты для журнала уже не будет.
+  audit(req, 'profile.delete', { targetType: 'user', target: user });
+  const removed = await removeUser(user, req.app.get('io'));
+
+  // Сеансы человека removeUser уже удалил из коллекции, но при resave: true
+  // express-session записал бы нынешний обратно в конце запроса — и браузер
+  // ходил бы с ключом на удалённого пользователя. Поэтому явный destroy.
+  await new Promise((resolve) => req.session.destroy(resolve));
+  res.clearCookie('connect.sid');
+  res.json({ success: true, removed });
 });
 
 module.exports = router;

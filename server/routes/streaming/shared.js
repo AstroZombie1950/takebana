@@ -27,7 +27,15 @@ const commonDataMiddleware = async (req, res, next) => {
       const currentUser = await User.findById(currentUserId)
         .select('login email avatar gallery streamKey isStreaming banned banReason adultConfirmedAt')
         .lean();
-      if (!currentUser) throw new Error('Пользователь не найден');
+      // Пользователя уже нет: он удалил себя сам или его удалил администратор,
+      // а вкладка осталась открытой. Это не ошибка сервера — гасим сеанс
+      // и показываем страницу гостю, вместо 500 на каждой странице кабинета.
+      if (!currentUser) {
+        return req.session.destroy(() => {
+          res.clearCookie('connect.sid');
+          next();
+        });
+      }
 
       // Определение отображаемой информации для текущего пользователя
       const currentUserDisplayName = userView.displayName(currentUser);

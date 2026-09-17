@@ -36,6 +36,7 @@ const ACTIONS = {
   'profile.avatar.delete': 'Удаление фото',
   'profile.gallery.add': 'Фото в галерею',
   'profile.gallery.delete': 'Удаление из галереи',
+  'profile.delete': 'Удаление своего аккаунта',
   'age.confirm': 'Подтверждение 18+',
 
   'stream.setup': 'Настройки эфира',

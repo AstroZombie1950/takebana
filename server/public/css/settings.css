@@ -76,3 +76,8 @@
   .tk-set__photo { align-items: flex-start; }
   .tk-set__ava { width: 72px; height: 72px; font-size: 26px; }
 }
+
+/* Удаление аккаунта: отделено от остальных настроек и подписано красным —
+   действие необратимо, и его не должно быть видно «заодно». */
+.tk-set__zone { border-color: rgba(227, 66, 52, .45); }
+.tk-set__zone .tk-panel__title { color: var(--tk-accent); }
