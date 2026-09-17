@@ -444,11 +444,24 @@ document.addEventListener('DOMContentLoaded', function () {
     // Сервер будит собеседника сокетом, после приёма создаёт закрытую комнату
     // Daily и каждому участнику выдаёт свой токен. Вход, переподключение
     // и качество сети — в tk-daily.js; окна звонка — ниже по файлу.
+    //
+    // Запасной путь — через свой сервер (tk-peer.js). Туда звонок уходит
+    // посреди разговора, если Daily застрял, а браузер, у которого застрял,
+    // запоминает это на OWN_DAYS: следующие звонки сразу идут своим путём.
+    // Через месяц — снова попытка через Daily: сеть могла смениться.
     const closeCall = (callId) => (window.closeCall ? window.closeCall(callId) : false);
+    const OWN_KEY = 'tk.call.own';
+    const OWN_DAYS = 30;
+    const ownPath = () => {
+      try { return Date.now() - Number(localStorage.getItem(OWN_KEY) || 0) < OWN_DAYS * 864e5; } catch (e) { return false; }
+    };
+    window.rememberOwnCallPath = () => {
+      try { localStorage.setItem(OWN_KEY, String(Date.now())); } catch (e) {}
+    };
 
     async function startCall(calleeId, type) {
       try {
-        const res = await fetch('/api/calls/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calleeId, type }) });
+        const res = await fetch('/api/calls/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calleeId, type, own: ownPath() }) });
         const data = await res.json();
         if (!data.success) throw new Error(data.message || data.error || 'call_create_failed');
         window.currentCallId = data.callId;
@@ -471,7 +484,7 @@ document.addEventListener('DOMContentLoaded', function () {
         displayName: from.displayName,
         avatarUrl: from.avatarUrl,
         callType: type,
-        onAccept: () => { window.currentCallId = callId; socket.emit('call:accept', { callId }); },
+        onAccept: () => { window.currentCallId = callId; socket.emit('call:accept', { callId, own: ownPath() }); },
         onDecline: () => socket.emit('call:decline', { callId })
       });
     });
@@ -479,9 +492,18 @@ document.addEventListener('DOMContentLoaded', function () {
     // Разговор идёт в одной вкладке с каждой стороны: у звонящего — там, где
     // нажали «позвонить», у собеседника — там, где приняли. Остальные вкладки
     // в комнату на двоих не ломятся.
-    socket.on('call:accepted', ({ callId, type, url, token }) => {
-      if (callId !== window.currentCallId || window._call) return;
-      window.startCallMedia && window.startCallMedia(callId, type, { url, token });
+    // access — { url, token } комнаты Daily или { engine: 'own', ice, offerer }.
+    socket.on('call:accepted', (access) => {
+      if (access.callId !== window.currentCallId || window._call) return;
+      window.startCallMedia && window.startCallMedia(access.callId, access.type, access);
+    });
+
+    // Daily застрял у одного из двоих — сервер переводит обоих на свой путь.
+    socket.on('call:switch', (access) => {
+      if (access.callId === window.currentCallId && window._call) window.switchCallToOwn(access);
+    });
+    socket.on('call:signal', ({ callId, data }) => {
+      if (callId === window.currentCallId && window._call && window._call.signal) window._call.signal(data);
     });
 
     // Повторный вход после обрыва: свежий токен у сервера, пока звонок жив.
@@ -663,16 +685,9 @@ document.addEventListener('DOMContentLoaded', function(){
 
     goLive(s, isVideo);
     paint();
-    window._call = TKDaily.connect({
-      send: true,
-      video: isVideo,
-      diag: isVideo ? 'видеозвонок' : 'аудиозвонок',
-      access: () => {
-        if (!firstAccess) return window.requestCallToken(callId);
-        const a = firstAccess;
-        firstAccess = null;
-        return Promise.resolve(a);
-      },
+    // Окну всё равно, каким путём идёт разговор: и Daily, и свой путь
+    // сообщают о дорожках, собеседнике, состоянии и сети одинаково.
+    const view = {
       onTrack: (track, p, on) => {
         if (track.kind === 'video') {
           TKDaily.attach(p.local ? s.localVideo : s.remoteVideo, on && track);
@@ -707,7 +722,49 @@ document.addEventListener('DOMContentLoaded', function(){
         s.net.title = s.net.getAttribute('aria-label');
         s.net.classList.remove('hidden');
       }
-    });
+    };
+    const diag = isVideo ? 'видеозвонок' : 'аудиозвонок';
+
+    const viaDaily = () => TKDaily.connect(Object.assign({
+      send: true,
+      video: s.video,
+      diag,
+      access: () => {
+        if (!firstAccess) return window.requestCallToken(callId);
+        const a = firstAccess;
+        firstAccess = null;
+        return Promise.resolve(a);
+      },
+      // Пороги ухода на свой путь: вход в комнату у Daily обычно 2–4 с,
+      // дорожки собеседника — 1–2 с после его входа.
+      joinMs: 10000,
+      mediaMs: 5000,
+      onStuck: (reason) => window.callSocket.emit('call:fallback', { callId, reason }),
+    }, view));
+
+    const viaOwn = (access) => TKPeer.connect(Object.assign({
+      video: s.video,
+      diag,
+      ice: access.ice,
+      offerer: access.offerer,
+      signal: (data) => window.callSocket.emit('call:signal', { callId, data }),
+    }, view));
+
+    window._call = first.engine === 'own' ? viaOwn(first) : viaDaily();
+
+    // Переход посреди звонка: Daily — прочь, сцена — пустая до первых
+    // дорожек своего пути. Запоминает путь только тот, у кого Daily застрял:
+    // у собеседника он, возможно, работает.
+    window.switchCallToOwn = (access) => {
+      const stuck = window._call.stuck;
+      window._call.leave();
+      [s.remoteVideo, s.localVideo, s.remoteAudio].forEach((el) => TKDaily.attach(el, null));
+      s.stage.classList.add('tk-call__stage--empty', 'tk-call__stage--nolocal');
+      s.remoteOn = false;
+      paintVideo(s);
+      if (stuck) window.rememberOwnCallPath();
+      window._call = viaOwn(access);
+    };
   };
 
   [OUT, IN].forEach((s) => s.voice.addEventListener('click', () => {

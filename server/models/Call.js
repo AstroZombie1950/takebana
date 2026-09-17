@@ -21,7 +21,12 @@ const callSchema = new Schema({
   endedAt: { type: Date, default: null },
   // Пропущенный увиден: получатель открыл журнал. Счётчик в левой панели —
   // по неувиденным.
-  seen: { type: Boolean, default: false }
+  seen: { type: Boolean, default: false },
+  // Каким путём шёл разговор: daily — через Daily; own — через свой сервер
+  // (utils/turn.js): сразу, если кто-то из двоих уже на нём, или переходом
+  // посреди звонка. fallback — почему перешли, со слов браузера.
+  path: { type: String, enum: ['daily', 'own'], default: 'daily' },
+  fallback: { type: String, default: null }
 });
 
 callSchema.index({ caller: 1, startedAt: -1 });

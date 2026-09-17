@@ -227,7 +227,9 @@ async function loadCosts(days) {
   const [calls, web, obs, recordings, fresh, venueSwitches] = await Promise.all([
     Call.aggregate([
       { $match: { startedAt: { $gte: from }, status: 'answered' } },
-      { $group: { _id: null, n: { $sum: 1 }, seconds: { $sum: { $cond: [
+      // Разговоры через свой сервер Daily не стоят; ушедший туда посреди
+      // звонка считается целиком своим — минуты до перехода не видны.
+      { $group: { _id: { $ifNull: ['$path', 'daily'] }, n: { $sum: 1 }, seconds: { $sum: { $cond: [
         { $and: ['$answeredAt', '$endedAt'] },
         { $divide: [{ $subtract: ['$endedAt', '$answeredAt'] }, 1000] },
         0,
@@ -247,7 +249,8 @@ async function loadCosts(days) {
   ]);
 
   const one = (rows) => (rows && rows[0]) || {};
-  const c = one(calls);
+  const c = calls.find((r) => r._id === 'daily') || {};
+  const own = calls.find((r) => r._id === 'own') || {};
   const wsec = one(web).seconds || 0;
   const callSec = c.seconds || 0;
 
@@ -272,6 +275,7 @@ async function loadCosts(days) {
       trafficBytes: null, // знает только Bunny
     },
     obs: { streams: one(obs).n || 0, hours: hours(one(obs).seconds) },
+    ownCalls: { calls: own.n || 0, minutes: Math.round((own.seconds || 0) / 60) },
     // Что мы не измеряем у себя и почему — чтобы цифры не выглядели полными,
     // когда они оценочные.
     unknown: [
@@ -308,6 +312,8 @@ router.get('/costs.csv', requireAdmin, async (req, res) => {
     ['Daily (наша оценка)', 'Веб-эфиры', c.daily.streamMinutes, 'участнико-минут'],
     ['Daily (наша оценка)', 'Веб-эфиров', c.daily.webStreams, ''],
     ['Daily (наша оценка)', 'Включений камер заведений', c.daily.venueSwitchOns, ''],
+    ['Свой сервер', 'Звонки мимо Daily', c.ownCalls.minutes, 'минут разговора'],
+    ['Свой сервер', 'Разговоров мимо Daily', c.ownCalls.calls, ''],
     ['Bunny (наша оценка)', 'Лежит записей', c.bunny.storedCount, ''],
     ['Bunny (наша оценка)', 'Объём записей', c.bunny.storedBytes, 'байт'],
     ['Bunny (наша оценка)', 'Добавилось записей', c.bunny.addedCount, ''],

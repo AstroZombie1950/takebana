@@ -96,5 +96,5 @@
 <script src="/tk-i18n-<%= lang %>.js"></script>
 <script src="/tk-i18n.js"></script>
 <% if (!guest || typeof socket !== 'undefined') { %><script src="/socket.io/socket.io.js"></script><% } %>
-<% if (!guest) { %><script src="/tk-daily.js"></script><% } %>
+<% if (!guest) { %><script src="/tk-daily.js"></script><script src="/tk-peer.js"></script><% } %>
 <script src="/tk-app.js"></script>

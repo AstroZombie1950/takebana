@@ -874,6 +874,7 @@ VIEWS.costs = {
     html += tile('Веб-эфиры', num(d.daily.streamMinutes) + ' мин', num(d.daily.webStreams) + ' эфиров: ведущий и выход в HLS');
     html += tile('Всего', num(d.daily.callMinutes + d.daily.streamMinutes) + ' мин', 'за ' + d.days + ' дней');
     html += tile('Камеры заведений', num(d.daily.venueSwitchOns), 'включений — минуты знает только Daily');
+    html += tile('Звонки мимо Daily', num(d.ownCalls.minutes) + ' мин', num(d.ownCalls.calls) + ' разговоров через свой сервер');
     html += '</div>';
 
     html += '<h2 class="tk-panel__h2">Bunny — хранение записей</h2><div class="tk-tiles">';

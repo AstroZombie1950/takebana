@@ -24,9 +24,11 @@ router.post('/api/calls/create', requireAuthApi, requireNotBanned, validate({
   calleeId: { type: 'objectId', required: true, label: 'Собеседник' },
   // Ровно то, что шлёт шапка (views/partials/header.ejs): аудио или видео.
   type: { type: 'string', required: true, values: ['audio', 'video'], label: 'Тип звонка' },
+  // Браузер звонящего помнит, что Daily у него не соединялся (tk-app.js).
+  own: { type: 'bool', label: 'Свой путь' },
 }), async (req, res) => {
   const callerId = String(req.session.userId);
-  const { calleeId, type } = req.body;
+  const { calleeId, type, own } = req.body;
   if (calleeId === callerId) return res.status(400).json({ error: 'self_call' });
   const callId = uuidv4();
   // Общие хранилища кладёт app.js после запуска сокетов.
@@ -34,7 +36,7 @@ router.post('/api/calls/create', requireAuthApi, requireNotBanned, validate({
   const pendingCalls = req.app.get('pendingCalls');
   console.log('[call] create', callId, { callerId, calleeId, type, hasIO: !!io, hasStore: !!pendingCalls });
   if (pendingCalls) {
-    pendingCalls.set(callId, { callerId, calleeId: String(calleeId), type, createdAt: Date.now() });
+    pendingCalls.set(callId, { callerId, calleeId: String(calleeId), type, own: own === true, createdAt: Date.now() });
   }
   callLog.created(callId, { callerId, calleeId, type });
   // user info

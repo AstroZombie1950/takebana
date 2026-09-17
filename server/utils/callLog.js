@@ -31,8 +31,13 @@ function created(callId, { callerId, calleeId, type }) {
   return p;
 }
 
-function answered(callId) {
-  return after(callId, () => Call.updateOne({ callId, status: 'ringing' }, { $set: { status: 'answered', answeredAt: new Date() } }));
+function answered(callId, path) {
+  return after(callId, () => Call.updateOne({ callId, status: 'ringing' }, { $set: { status: 'answered', answeredAt: new Date(), path } }));
+}
+
+// Разговор ушёл с Daily на свой сервер.
+function switched(callId, reason) {
+  return after(callId, () => Call.updateOne({ callId }, { $set: { path: 'own', fallback: reason } }));
 }
 
 // Звонок кончился. Статус «звонит» превращается в итог без ответа, у
@@ -121,4 +126,4 @@ async function between(a, b, { from, to } = {}) {
   return calls.map(view);
 }
 
-module.exports = { created, answered, ended, missedCount, journal, between, MISSED };
+module.exports = { created, answered, switched, ended, missedCount, journal, between, MISSED };

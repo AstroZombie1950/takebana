@@ -12,17 +12,22 @@ const streamLog = require('../utils/streamLog');
 const daily = require('../utils/daily');
 const callLog = require('../utils/callLog');
 const errorLog = require('../utils/errorLog');
+const turn = require('../utils/turn');
 
 // Список подписок приходит от клиента, поэтому и формат, и длина проверяются.
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 const PRESENCE_SUBSCRIBE_LIMIT = 200;
 
 // Сколько ждать возвращения человека, прежде чем считать обрыв сокета концом
-// звонка. Звук и видео идут через Daily, а не через сокет: смена сети на
+// звонка. Звук и видео идут не через сокет (Daily или свой путь): смена сети на
 // телефоне рвёт сокет на секунды, а разговор при этом продолжается. Раньше
 // любой такой обрыв завершал звонок у обоих. 20 секунд — столько же Daily
 // сам ждёт восстановления своей сигнализации, прежде чем выкинуть участника.
 const CALL_GRACE_MS = 20000;
+
+// Сигналы своего пути (SDP, кандидаты) — объект от браузера. SDP звонка —
+// единицы килобайт; больше — не сигнал.
+const SIGNAL_MAX = 32000;
 
 // Возвращает общие хранилища, чтобы app.js положил их в app.set(...):
 // маршрут /api/calls/create достаёт их оттуда.
@@ -30,7 +35,7 @@ function registerSockets(io) {
   const userConnections = new Map(); // userId -> count
   const userRooms = new Map(); // userId -> Set(socketIds)
   const pendingCalls = new Map(); // callId -> {callerId, calleeId, type, createdAt}
-  const activeCalls = new Map(); // callId -> {callerId, calleeId, type, roomName, startedAt}
+  const activeCalls = new Map(); // callId -> {callerId, calleeId, type, engine: 'daily'|'own', roomName, startedAt}
 
   // Зрители эфира — все сокеты в его комнате, кроме вкладок самого ведущего.
   // Раньше ведущий считал и себя: «1 зритель», когда не смотрит никто.
@@ -47,6 +52,18 @@ function registerSockets(io) {
 
   const bothSides = (call) => io.to(`user:${call.callerId}`).to(`user:${call.calleeId}`);
   const isParty = (call, userId) => !!call && (userId === call.callerId || userId === call.calleeId);
+
+  // Звонок через свой сервер (public/tk-peer.js): браузеры соединяются между
+  // собой, сокет только передаёт сигналы. Каждому — свои ключи TURN;
+  // предложение соединения делает звонящий, отвечает собеседник.
+  function goOwn(callId, call, event) {
+    call.engine = 'own';
+    for (const userId of [call.callerId, call.calleeId]) {
+      io.to(`user:${userId}`).emit(event, {
+        callId, type: call.type, engine: 'own', ice: turn.iceServers(userId), offerer: userId === call.callerId,
+      });
+    }
+  }
 
   // Комнату звонка удаляем сразу: иначе она жила бы до своего exp,
   // и в неё можно было бы вернуться с ещё действующим токеном.
@@ -213,26 +230,32 @@ function registerSockets(io) {
     // Звонки. Каждое действие проверяет, кто его совершает: раньше принять,
     // отклонить или завершить чужой звонок мог любой сокет, знающий callId.
 
-    socket.on('call:accept', async ({ callId } = {}) => {
+    // own — браузер принявшего помнит, что Daily у него не соединялся.
+    // Хоть у одного из двоих так — звонок сразу идёт через свой сервер.
+    socket.on('call:accept', async ({ callId, own } = {}) => {
       const call = pendingCalls.get(callId);
       if (!call || call.calleeId !== socket.data.userId) return;
       pendingCalls.delete(callId);
 
+      const ownPath = turn.configured() && (call.own || own === true);
       // В активные — до запроса к Daily, чтобы отмена или обрыв во время
       // создания комнаты нашли звонок и завершили его.
       const roomName = `call_${callId}`;
-      const active = { ...call, roomName, startedAt: Date.now() };
+      const active = { ...call, engine: ownPath ? 'own' : 'daily', roomName: ownPath ? null : roomName, startedAt: Date.now() };
       activeCalls.set(callId, active);
-      callLog.answered(callId);
+      callLog.answered(callId, active.engine);
 
       // Остальные вкладки того, кому звонят, перестают звонить: разговор
       // идёт в той, где приняли. Иначе в комнату на двоих ломились бы все.
       socket.to(`user:${call.calleeId}`).emit('call:canceled', { callId });
 
+      if (ownPath) return goOwn(callId, active, 'call:accepted');
+
       try {
         if (!daily.configured()) throw new Error('DAILY_API_KEY или DAILY_DOMAIN не заданы');
         await daily.createRoom(roomName, { max_participants: 2 });
-        if (!activeCalls.has(callId)) {
+        // Звонок кончился или ушёл на свой сервер, пока создавалась комната.
+        if (!activeCalls.has(callId) || active.engine !== 'daily') {
           await daily.deleteRoom(roomName);
           return;
         }
@@ -276,7 +299,7 @@ function registerSockets(io) {
       if (typeof ack !== 'function') return;
       const call = activeCalls.get(callId);
       const userId = socket.data.userId;
-      if (!isParty(call, userId)) return ack({ error: 'not_found' });
+      if (!isParty(call, userId) || call.engine !== 'daily') return ack({ error: 'not_found' });
       try {
         const token = await daily.meetingToken({ room: call.roomName, userId, canSend: true });
         ack({ url: daily.roomUrl(call.roomName), token });
@@ -284,6 +307,30 @@ function registerSockets(io) {
         errorLog.external(e, 'daily.callToken');
         ack({ error: 'token_failed' });
       }
+    });
+
+    // Daily у одного из двоих не соединился (tk-daily.js, onStuck): оба
+    // переходят на свой сервер. Повтор от второго участника не нужен —
+    // звонок уже там. Без TURN переходить некуда: Daily пробует дальше.
+    socket.on('call:fallback', ({ callId, reason } = {}) => {
+      const call = activeCalls.get(callId);
+      if (!isParty(call, socket.data.userId) || call.engine !== 'daily' || !turn.configured()) return;
+      const room = call.roomName;
+      call.roomName = null;
+      callLog.switched(callId, String(reason || '').slice(0, 200));
+      goOwn(callId, call, 'call:switch');
+      if (room) daily.deleteRoom(room).catch((e) => errorLog.external(e, 'daily.deleteRoom', { call: callId }));
+    });
+
+    // Сигналы своего пути — собеседнику как есть. Сервер их не разбирает:
+    // проверяет только, что шлёт участник звонка, идущего этим путём.
+    socket.on('call:signal', ({ callId, data } = {}) => {
+      const call = activeCalls.get(callId);
+      const userId = socket.data.userId;
+      if (!isParty(call, userId) || call.engine !== 'own' || !data || typeof data !== 'object') return;
+      if (JSON.stringify(data).length > SIGNAL_MAX) return;
+      const other = userId === call.callerId ? call.calleeId : call.callerId;
+      io.to(`user:${other}`).emit('call:signal', { callId, data });
     });
   });
 
