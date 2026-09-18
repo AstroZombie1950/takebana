@@ -1,4 +1,4 @@
-/* Настройки профиля: имя, фото, галерея, пароль. Язык переключает общий
+/* Настройки профиля: имя, фото, пароль, удаление аккаунта. Язык переключает общий
  * tk-i18n.js по кнопкам с data-lang — здесь для него ничего не нужно.
  *
  * Раньше жило в tk-app.js и грузилось с каждой страницей кабинета вместе
@@ -10,7 +10,12 @@
   var $ = function (id) { return document.getElementById(id); };
 
   // Ответ сервера — JSON с message; не 2xx — ошибка с этим текстом.
+  // Accept — чтобы и общий обработчик ошибок (middleware/errors.js) ответил
+  // JSON, а не страницей: иначе отказ загрузки («Только изображения JPEG…»)
+  // доходил до человека как безликое «HTTP 400».
   function send(url, options) {
+    options = options || {};
+    options.headers = Object.assign({ Accept: 'application/json' }, options.headers);
     return fetch(url, options).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (data) {
         if (!r.ok || data.success === false) throw new Error(data.message || 'HTTP ' + r.status);
@@ -64,7 +69,7 @@
     var file = avatarInput.files[0];
     avatarInput.value = ''; // тот же файл ещё раз — снова change
     if (!file) return;
-    if (!/^image\/(png|jpeg)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
       return tkText(avatarHint, 'app.fileBad');
     }
     var form = new FormData();
@@ -91,91 +96,6 @@
         })
         .finally(function () { busy(false); });
     }).catch(function (err) { toast(t('app.deleteError', { message: err.message }), 'error'); });
-  });
-
-  // ── Галерея ───────────────────────────────────────────────────────────
-  var dropzone = $('galleryDropzone');
-  var galleryInput = $('galleryInput');
-  var uploadGallery = $('uploadGalleryBtn');
-  var galleryHint = $('galleryHint');
-  var preview = $('galleryPreview');
-  var persisted = $('galleryPersisted');
-  var files = [];
-
-  var CROSS = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>';
-
-  function thumb(src, attr, labelKey) {
-    return '<div class="tk-thumb"><img src="' + escapeHtml(src) + '" alt="" loading="lazy">' +
-      '<button type="button" ' + attr + ' class="tk-thumb__del" aria-label="' + escapeHtml(t(labelKey)) + '" data-i18n-aria="' + labelKey + '">' + CROSS + '</button></div>';
-  }
-
-  function renderPreview() {
-    preview.querySelectorAll('img').forEach(function (img) { URL.revokeObjectURL(img.src); });
-    preview.innerHTML = files.map(function (file, i) {
-      return thumb(URL.createObjectURL(file), 'data-idx="' + i + '"', 'common.remove');
-    }).join('');
-    $('galleryCount').textContent = String(files.length);
-    uploadGallery.disabled = !files.length;
-    tkText(galleryHint, files.length ? 'settings.gallery.ready' : 'settings.gallery.noFiles');
-  }
-
-  function addFiles(list) {
-    var fit = Array.prototype.filter.call(list, function (f) {
-      return /^image\/(png|jpeg)$/.test(f.type) && f.size <= 10 * 1024 * 1024;
-    });
-    files = files.concat(fit).slice(0, 30);
-    renderPreview();
-  }
-
-  dropzone.addEventListener('click', function () { galleryInput.click(); });
-  galleryInput.addEventListener('change', function () { addFiles(galleryInput.files); galleryInput.value = ''; });
-  dropzone.addEventListener('dragover', function (e) { e.preventDefault(); dropzone.classList.add('is-over'); });
-  dropzone.addEventListener('dragleave', function () { dropzone.classList.remove('is-over'); });
-  dropzone.addEventListener('drop', function (e) {
-    e.preventDefault();
-    dropzone.classList.remove('is-over');
-    addFiles(e.dataTransfer.files);
-  });
-
-  preview.addEventListener('click', function (e) {
-    var btn = e.target.closest('[data-idx]');
-    if (!btn) return;
-    files.splice(Number(btn.getAttribute('data-idx')), 1);
-    renderPreview();
-  });
-
-  uploadGallery.addEventListener('click', function () {
-    if (!files.length) return;
-    var form = new FormData();
-    files.forEach(function (f) { form.append('photos', f); });
-    uploadGallery.disabled = true;
-    tkText(galleryHint, 'app.uploading');
-    send('/profile/gallery', { method: 'POST', body: form })
-      .then(function (data) {
-        files = [];
-        renderPreview();
-        tkText(galleryHint, 'app.galleryDone', { total: data.total });
-        persisted.insertAdjacentHTML('afterbegin', (data.urls || []).map(function (url) {
-          return thumb(url, 'data-name="' + escapeHtml(url.split('/').pop()) + '"', 'common.delete');
-        }).join(''));
-      })
-      .catch(function (err) {
-        uploadGallery.disabled = false;
-        galleryHint.removeAttribute('data-i18n');
-        galleryHint.textContent = t('app.errorShort', { message: err.message });
-      });
-  });
-
-  persisted.addEventListener('click', function (e) {
-    var btn = e.target.closest('[data-name]');
-    if (!btn) return;
-    btn.disabled = true;
-    send('/profile/gallery/' + encodeURIComponent(btn.getAttribute('data-name')), { method: 'DELETE' })
-      .then(function () { btn.closest('.tk-thumb').remove(); })
-      .catch(function (err) {
-        btn.disabled = false;
-        toast(t('app.deleteError', { message: err.message }), 'error');
-      });
   });
 
   // ── Удаление аккаунта ─────────────────────────────────────────────────

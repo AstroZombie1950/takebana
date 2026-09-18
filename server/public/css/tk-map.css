@@ -94,6 +94,23 @@
   flex-wrap: wrap;
 }
 
+/* Адрес над картой: поле и «Найти» одной строкой — так видно, что кнопка
+ * ищет именно то, что написано в поле. */
+.tk-pick__addr {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tk-pick__addr-line {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.tk-pick__addr-line .tk-field { flex: 1; min-width: 0; }
+.tk-pick__addr-line .tk-btn { flex: none; }
+
 .tk-pick__map {
   height: 260px;
   border: 1px solid rgba(144, 113, 99, .5);

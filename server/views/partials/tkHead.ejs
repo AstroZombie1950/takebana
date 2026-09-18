@@ -52,10 +52,19 @@
 <% } %>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
-<%# Кириллические файлы обеих гарнитур: их видно в первом экране любой
-    страницы. Без preload браузер находит их только после разбора tk.css,
-    и заголовок успевает моргнуть системным шрифтом. %>
+<%# Шрифты первого экрана. Без preload браузер находит их только после
+    разбора tk.css — PageSpeed показывал цепочку «страница → tk.css → шрифт»
+    длиной 592 мс, и заголовок успевал моргнуть системным.
+
+    Латиница нужна всегда, на любом языке: в её диапазон (U+0000–00FF) попадают
+    пробел, цифры и знаки препинания. Кириллица — только на русской странице;
+    английской она если и понадобится, то под чужим именем или названием
+    эфира, и браузер догрузит её сам. %>
+<link rel="preload" as="font" type="font/woff2" href="/fonts/golos-text-latin.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="/fonts/oswald-latin.woff2" crossorigin>
+<% if (lang === 'ru') { %>
 <link rel="preload" as="font" type="font/woff2" href="/fonts/golos-text-cyrillic.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="/fonts/oswald-cyrillic.woff2" crossorigin>
+<% } %>
 
 <link rel="stylesheet" href="<%= asset('/css/tk.css') %>">

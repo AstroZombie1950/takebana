@@ -123,7 +123,8 @@
 }
 
 .tk-prose__body a {
-  border-bottom: 1px solid rgba(227, 66, 52, .4);
+  /* Та же киноварь, что у самой ссылки на бумаге (--tk-link), но прозрачнее. */
+  border-bottom: 1px solid rgba(196, 50, 31, .45);
   transition: border-color .18s ease;
 }
 

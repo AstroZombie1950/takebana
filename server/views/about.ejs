@@ -11,7 +11,7 @@
 
 <link rel="canonical" href="https://takebana.com/about">
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
-<link rel="stylesheet" href="<%= asset('/css/home.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/about.css') %>">
 </head>
 <body class="tk-app tk-app--wide">
 
@@ -22,62 +22,46 @@
 
 <main>
 
-    <section data-r="hero" style="min-height: 812px; display: grid; grid-template-columns: 1fr 560px;">
-      <div data-r="heroText" style="padding: 44px 48px 40px 56px; display: flex; flex-direction: column;">
-        <p class="tk-kicker" style="margin: 0;" data-i18n="hero.kicker"><%- t('hero.kicker') %></p>
-        <%# Межстрочие 1.16 и трекинг без сжатия: при .9 и -.045em кратка
-            «Й» из «свой» врезалась в «А» строкой выше, а буквы жирного
-            начертания слипались. Так же, чуть плотнее, — заголовки секций. %>
-        <h1 data-r="h1" style="margin: 30px 0 0; font-size: 68px; line-height: 1.16; letter-spacing: 0; font-weight: 900; text-transform: uppercase; text-wrap: pretty;" data-i18n="hero.h1"><%- t('hero.h1') %></h1>
-        <div style="flex: 1 1 24px; min-height: 24px;"></div>
-        <p data-r="lede" style="margin: 34px 0 0; font-family: Oswald, sans-serif; font-size: 19px; line-height: 1.5; color: #C9C2B7; max-width: 560px; border-left: 2px solid #679267; padding-left: 20px; text-wrap: pretty;" data-i18n="hero.lede"><%- t('hero.lede') %></p>
-        <div data-r="btnRow" style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 32px;">
+    <section class="tk-about__hero">
+      <div class="tk-about__hero-text">
+        <p class="tk-kicker tk-about__kicker" data-i18n="hero.kicker"><%- t('hero.kicker') %></p>
+        <h1 class="tk-about__h1" data-i18n="hero.h1"><%- t('hero.h1') %></h1>
+        <div class="tk-about__hero-gap"></div>
+        <p class="tk-about__lede" data-i18n="hero.lede"><%- t('hero.lede') %></p>
+        <div class="tk-about__btns">
           <a href="<%= currentUser ? '/studio' : '/register' %>" class="tk-btn tk-btn--primary" data-i18n="hero.cta1"><%- t('hero.cta1') %></a>
           <a href="/" class="tk-btn tk-btn--ghost" data-i18n="hero.cta2"><%- t('hero.cta2') %></a>
         </div>
       </div>
-      <div data-r="heroShot" style="position: relative; min-height: 520px; background: repeating-linear-gradient(112deg, #1A1210 0 14px, #241713 14px 28px); border-left: 1px solid rgba(144,113,99,.5);">
-        <div style="position: absolute; inset: 0; background: linear-gradient(200deg, rgba(227,66,52,.42), rgba(10,10,10,.72));"></div>
-        <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
-          <span data-i18n="hero.shotPlaceholder" style="font-family: Oswald, sans-serif; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: rgba(245,241,234,.6); text-align: center; line-height: 1.9;"><%- t('hero.shotPlaceholder') %></span>
+      <div class="tk-about__shot">
+        <div class="tk-about__shot-tint"></div>
+        <div class="tk-about__shot-center">
+          <span class="tk-about__shot-ph" data-i18n="hero.shotPlaceholder"><%- t('hero.shotPlaceholder') %></span>
         </div>
-        <div style="position: absolute; top: 28px; left: 28px; display: flex; align-items: center; gap: 8px; background: #E34234; padding: 7px 12px;">
-          <span style="width: 7px; height: 7px; border-radius: 50%; background: #0A0A0A; animation: tkPulse 1.6s ease-in-out infinite;"></span>
-          <span style="font-size: 12px; font-weight: 700; letter-spacing: .2em; color: #0A0A0A;">LIVE</span>
+        <div class="tk-about__live">
+          <span class="tk-about__live-dot"></span>
+          <span class="tk-about__live-text">LIVE</span>
         </div>
-        <div style="position: absolute; left: 28px; right: 28px; bottom: 32px; display: flex; flex-direction: column; gap: 8px;">
-          <span data-i18n="hero.liveNow" style="font-family: Oswald, sans-serif; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: rgba(245,241,234,.75);"><%- t('hero.liveNow') %></span>
-          <span data-i18n="hero.hostName" style="font-size: 32px; font-weight: 900; letter-spacing: -.03em; line-height: 1.05; text-transform: uppercase;"><%- t('hero.hostName') %></span>
-          <span data-i18n="hero.hostRole" style="font-family: Oswald, sans-serif; font-size: 16px; color: #F5F1EA;"><%- t('hero.hostRole') %></span>
+        <div class="tk-about__host">
+          <span class="tk-about__host-kicker" data-i18n="hero.liveNow"><%- t('hero.liveNow') %></span>
+          <span class="tk-about__host-name" data-i18n="hero.hostName"><%- t('hero.hostName') %></span>
+          <span class="tk-about__host-role" data-i18n="hero.hostRole"><%- t('hero.hostRole') %></span>
         </div>
       </div>
     </section>
 
-    <section data-bg="paper" data-r="sec pad" style="background: #F5F1EA; color: #0A0A0A; padding: 96px 56px 104px;">
-      <div data-r="secHead" style="display: flex; align-items: flex-end; gap: 32px; border-bottom: 2px solid #0A0A0A; padding-bottom: 22px;">
-        <h2 data-r="h2" style="margin: 0; font-size: 56px; line-height: 1.1; letter-spacing: -.01em; font-weight: 900; text-transform: uppercase;" data-i18n="feat.h2"><%- t('feat.h2') %></h2>
+    <section class="tk-about__sec tk-about__sec--paper" data-bg="paper">
+      <div class="tk-about__head tk-about__head--ink">
+        <h2 class="tk-about__h2" data-i18n="feat.h2"><%- t('feat.h2') %></h2>
       </div>
-      <div data-r="g4" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 48px;">
-        <div style="padding: 0 28px 0 0; border-right: 1px solid rgba(10,10,10,.18); display: flex; flex-direction: column; gap: 18px;">
-          <span style="font-size: 64px; font-weight: 900; letter-spacing: -.05em; color: #E34234; line-height: .8;">01</span>
-          <h3 data-i18n="feat.01.title" style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -.02em; text-transform: uppercase;"><%- t('feat.01.title') %></h3>
-          <p data-i18n="feat.01.body" style="margin: 0; font-family: Oswald, sans-serif; font-size: 17px; line-height: 1.55; color: #3A3733;"><%- t('feat.01.body') %></p>
+      <div class="tk-about__feats">
+        <% ['01', '02', '03', '04'].forEach(function (n, i, all) { %>
+        <div class="tk-about__feat<%= i === 0 ? ' tk-about__feat--first' : '' %><%= i === all.length - 1 ? ' tk-about__feat--last' : '' %>">
+          <span class="tk-about__feat-num"><%= n %></span>
+          <h3 class="tk-about__feat-title" data-i18n="feat.<%= n %>.title"><%- t('feat.' + n + '.title') %></h3>
+          <p class="tk-about__feat-body" data-i18n="feat.<%= n %>.body"><%- t('feat.' + n + '.body') %></p>
         </div>
-        <div style="padding: 0 28px; border-right: 1px solid rgba(10,10,10,.18); display: flex; flex-direction: column; gap: 18px;">
-          <span style="font-size: 64px; font-weight: 900; letter-spacing: -.05em; color: #E34234; line-height: .8;">02</span>
-          <h3 data-i18n="feat.02.title" style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -.02em; text-transform: uppercase;"><%- t('feat.02.title') %></h3>
-          <p data-i18n="feat.02.body" style="margin: 0; font-family: Oswald, sans-serif; font-size: 17px; line-height: 1.55; color: #3A3733;"><%- t('feat.02.body') %></p>
-        </div>
-        <div style="padding: 0 28px; border-right: 1px solid rgba(10,10,10,.18); display: flex; flex-direction: column; gap: 18px;">
-          <span style="font-size: 64px; font-weight: 900; letter-spacing: -.05em; color: #E34234; line-height: .8;">03</span>
-          <h3 data-i18n="feat.03.title" style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -.02em; text-transform: uppercase;"><%- t('feat.03.title') %></h3>
-          <p data-i18n="feat.03.body" style="margin: 0; font-family: Oswald, sans-serif; font-size: 17px; line-height: 1.55; color: #3A3733;"><%- t('feat.03.body') %></p>
-        </div>
-        <div style="padding: 0 0 0 28px; display: flex; flex-direction: column; gap: 18px;">
-          <span style="font-size: 64px; font-weight: 900; letter-spacing: -.05em; color: #E34234; line-height: .8;">04</span>
-          <h3 data-i18n="feat.04.title" style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -.02em; text-transform: uppercase;"><%- t('feat.04.title') %></h3>
-          <p data-i18n="feat.04.body" style="margin: 0; font-family: Oswald, sans-serif; font-size: 17px; line-height: 1.55; color: #3A3733;"><%- t('feat.04.body') %></p>
-        </div>
+        <% }); %>
       </div>
     </section>
 
@@ -85,127 +69,110 @@
         Библиотеку карты (~300 КБ) tk-landing.js грузит, только когда секция
         подходит к экрану. Метка ведёт ко входу: карточка заведения — для
         вошедших. %>
-    <section data-r="sec pad" style="padding: 96px 56px 104px;">
-      <h2 data-r="h2" style="margin: 0; font-size: 56px; line-height: 1.1; letter-spacing: -.01em; font-weight: 900; text-transform: uppercase;" data-i18n="map.h2"><%- t('map.h2') %></h2>
-      <div data-r="secHead" style="display: flex; align-items: flex-end; gap: 32px; margin-top: 28px; border-bottom: 1px solid rgba(144,113,99,.5); padding-bottom: 28px;">
-        <p data-i18n="map.body" style="margin: 0; max-width: 560px; font-family: Oswald, sans-serif; font-size: 18px; line-height: 1.55; color: #C9C2B7; border-left: 2px solid #679267; padding-left: 18px;"><%- t('map.body') %></p>
-        <div data-r="grow" style="flex: 1;"></div>
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-          <div style="display: flex; align-items: center; gap: 12px;"><span style="width: 9px; height: 9px; background: #E34234; animation: tkPulse 1.6s ease-in-out infinite;"></span><span style="font-family: Oswald, sans-serif; font-size: 15px; color: #F5F1EA;" data-i18n="map.statLive"><%- t('map.statLive') %></span></div>
-          <div style="display: flex; align-items: center; gap: 12px;"><span style="width: 9px; height: 9px; background: #679267;"></span><span style="font-family: Oswald, sans-serif; font-size: 15px; color: #C9C2B7;" data-i18n="map.statVerified"><%- t('map.statVerified') %></span></div>
+    <section class="tk-about__sec">
+      <h2 class="tk-about__h2" data-i18n="map.h2"><%- t('map.h2') %></h2>
+      <div class="tk-about__head tk-about__head--map">
+        <p class="tk-about__note" data-i18n="map.body"><%- t('map.body') %></p>
+        <div class="tk-about__grow"></div>
+        <div class="tk-about__legend">
+          <div class="tk-about__legend-row"><span class="tk-about__mark"></span><span class="tk-about__legend-label" data-i18n="map.statLive"><%- t('map.statLive') %></span></div>
+          <div class="tk-about__legend-row"><span class="tk-about__mark tk-about__mark--green"></span><span class="tk-about__legend-label tk-about__legend-label--muted" data-i18n="map.statVerified"><%- t('map.statVerified') %></span></div>
         </div>
       </div>
-      <div data-r="mapBox" class="tk-homemap" id="tkHomeMap" style="height: 560px; margin-top: 40px;"></div>
+      <div class="tk-homemap tk-about__map" id="tkHomeMap"></div>
     </section>
 
-    <section data-r="split" style="border-top: 1px solid rgba(144,113,99,.5); display: grid; grid-template-columns: 1fr 1fr;">
-      <div data-r="splitL" style="padding: 84px 48px 88px 56px; border-right: 1px solid rgba(144,113,99,.5); display: flex; flex-direction: column;">
-        <h2 data-r="h2s" data-i18n="split.left.h2" style="margin: 0; font-size: 48px; line-height: 1.1; letter-spacing: -.01em; font-weight: 900; text-transform: uppercase;"><%- t('split.left.h2') %></h2>
-        <div style="display: flex; flex-direction: column; margin-top: auto; padding-top: 34px;">
-          <div style="display: flex; gap: 18px; padding: 20px 0; border-top: 1px solid rgba(144,113,99,.4);"><span style="font-family: Oswald, sans-serif; font-size: 13px; letter-spacing: .16em; color: #E34234;">01</span><span data-i18n="split.left.item1" style="font-family: Oswald, sans-serif; font-size: 20px; color: #F5F1EA;"><%- t('split.left.item1') %></span></div>
-          <div style="display: flex; gap: 18px; padding: 20px 0; border-top: 1px solid rgba(144,113,99,.4);"><span style="font-family: Oswald, sans-serif; font-size: 13px; letter-spacing: .16em; color: #E34234;">02</span><span data-i18n="split.left.item2" style="font-family: Oswald, sans-serif; font-size: 20px; color: #F5F1EA;"><%- t('split.left.item2') %></span></div>
-          <div style="display: flex; gap: 18px; padding: 20px 0; border-top: 1px solid rgba(144,113,99,.4); border-bottom: 1px solid rgba(144,113,99,.4);"><span style="font-family: Oswald, sans-serif; font-size: 13px; letter-spacing: .16em; color: #E34234;">03</span><span data-i18n="split.left.item3" style="font-family: Oswald, sans-serif; font-size: 20px; color: #F5F1EA;"><%- t('split.left.item3') %></span></div>
+    <section class="tk-about__split">
+      <% [['l', 'left', ''], ['r', 'right', ' tk-about__h2s--accent']].forEach(function (side) { %>
+      <div class="tk-about__split-<%= side[0] %>">
+        <h2 class="tk-about__h2s<%= side[2] %>" data-i18n="split.<%= side[1] %>.h2"><%- t('split.' + side[1] + '.h2') %></h2>
+        <div class="tk-about__list">
+          <% [1, 2, 3].forEach(function (n) { %>
+          <div class="tk-about__item"><span class="tk-about__item-num">0<%= n %></span><span class="tk-about__item-text" data-i18n="split.<%= side[1] %>.item<%= n %>"><%- t('split.' + side[1] + '.item' + n) %></span></div>
+          <% }); %>
         </div>
       </div>
-      <div data-r="splitR" style="padding: 84px 56px 88px 48px; background: #120E0C; display: flex; flex-direction: column;">
-        <h2 data-r="h2s" data-i18n="split.right.h2" style="margin: 0; font-size: 48px; line-height: 1.1; letter-spacing: -.01em; font-weight: 900; text-transform: uppercase; color: #E34234;"><%- t('split.right.h2') %></h2>
-        <div style="display: flex; flex-direction: column; margin-top: auto; padding-top: 34px;">
-          <div style="display: flex; gap: 18px; padding: 20px 0; border-top: 1px solid rgba(144,113,99,.4);"><span style="font-family: Oswald, sans-serif; font-size: 13px; letter-spacing: .16em; color: #679267;">01</span><span data-i18n="split.right.item1" style="font-family: Oswald, sans-serif; font-size: 20px; color: #F5F1EA;"><%- t('split.right.item1') %></span></div>
-          <div style="display: flex; gap: 18px; padding: 20px 0; border-top: 1px solid rgba(144,113,99,.4);"><span style="font-family: Oswald, sans-serif; font-size: 13px; letter-spacing: .16em; color: #679267;">02</span><span data-i18n="split.right.item2" style="font-family: Oswald, sans-serif; font-size: 20px; color: #F5F1EA;"><%- t('split.right.item2') %></span></div>
-          <div style="display: flex; gap: 18px; padding: 20px 0; border-top: 1px solid rgba(144,113,99,.4); border-bottom: 1px solid rgba(144,113,99,.4);"><span style="font-family: Oswald, sans-serif; font-size: 13px; letter-spacing: .16em; color: #679267;">03</span><span data-i18n="split.right.item3" style="font-family: Oswald, sans-serif; font-size: 20px; color: #F5F1EA;"><%- t('split.right.item3') %></span></div>
-        </div>
-      </div>
+      <% }); %>
     </section>
 
-    <section data-bg="paper" data-r="sec pad" style="background: #F5F1EA; color: #0A0A0A; padding: 96px 56px 104px;">
-      <div data-r="secHead" style="display: flex; align-items: flex-end; gap: 32px; border-bottom: 2px solid #0A0A0A; padding-bottom: 22px;">
-        <h2 data-r="h2" data-i18n="steps.h2" style="margin: 0; font-size: 56px; line-height: 1.1; letter-spacing: -.01em; font-weight: 900; text-transform: uppercase;"><%- t('steps.h2') %></h2>
+    <section class="tk-about__sec tk-about__sec--paper" data-bg="paper">
+      <div class="tk-about__head tk-about__head--ink">
+        <h2 class="tk-about__h2" data-i18n="steps.h2"><%- t('steps.h2') %></h2>
       </div>
-      <div data-r="g3" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin-top: 52px;">
-        <div style="display: flex; flex-direction: column; gap: 16px;">
-          <span data-r="num" style="font-size: 132px; font-weight: 900; letter-spacing: -.07em; line-height: .74; color: #E34234;">1</span>
-          <h3 data-i18n="steps.1.title" style="margin: 0; font-size: 28px; font-weight: 900; letter-spacing: -.02em; text-transform: uppercase;"><%- t('steps.1.title') %></h3>
-          <p data-i18n="steps.1.body" style="margin: 0; font-family: Oswald, sans-serif; font-size: 18px; line-height: 1.55; color: #3A3733;"><%- t('steps.1.body') %></p>
+      <div class="tk-about__steps">
+        <% [1, 2, 3].forEach(function (n) { %>
+        <div class="tk-about__step">
+          <span class="tk-about__step-num"><%= n %></span>
+          <h3 class="tk-about__step-title" data-i18n="steps.<%= n %>.title"><%- t('steps.' + n + '.title') %></h3>
+          <p class="tk-about__step-body" data-i18n="steps.<%= n %>.body"><%- t('steps.' + n + '.body') %></p>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 16px;">
-          <span data-r="num" style="font-size: 132px; font-weight: 900; letter-spacing: -.07em; line-height: .74; color: #E34234;">2</span>
-          <h3 data-i18n="steps.2.title" style="margin: 0; font-size: 28px; font-weight: 900; letter-spacing: -.02em; text-transform: uppercase;"><%- t('steps.2.title') %></h3>
-          <p data-i18n="steps.2.body" style="margin: 0; font-family: Oswald, sans-serif; font-size: 18px; line-height: 1.55; color: #3A3733;"><%- t('steps.2.body') %></p>
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 16px;">
-          <span data-r="num" style="font-size: 132px; font-weight: 900; letter-spacing: -.07em; line-height: .74; color: #E34234;">3</span>
-          <h3 data-i18n="steps.3.title" style="margin: 0; font-size: 28px; font-weight: 900; letter-spacing: -.02em; text-transform: uppercase;"><%- t('steps.3.title') %></h3>
-          <p data-i18n="steps.3.body" style="margin: 0; font-family: Oswald, sans-serif; font-size: 18px; line-height: 1.55; color: #3A3733;"><%- t('steps.3.body') %></p>
-        </div>
+        <% }); %>
       </div>
     </section>
 
-    <section data-r="sec pad" style="padding: 96px 56px 104px;">
-      <div data-r="secHead" style="display: flex; align-items: flex-end; gap: 32px; border-bottom: 1px solid rgba(144,113,99,.5); padding-bottom: 22px;">
-        <h2 data-r="h2" data-i18n="comms.h2" style="margin: 0; font-size: 56px; line-height: 1.1; letter-spacing: -.01em; font-weight: 900; text-transform: uppercase;"><%- t('comms.h2') %></h2>
+    <section class="tk-about__sec">
+      <div class="tk-about__head">
+        <h2 class="tk-about__h2" data-i18n="comms.h2"><%- t('comms.h2') %></h2>
       </div>
-      <div data-r="g4c" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-top: 44px;">
-        <div style="border: 1px solid rgba(144,113,99,.5); padding: 30px 26px 34px; display: flex; flex-direction: column; gap: 30px;">
-          <span data-i18n="comms.01.num" style="font-family: Oswald, sans-serif; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--tk-label);"><%- t('comms.01.num') %></span>
+      <div class="tk-about__comms">
+        <div class="tk-about__comm">
+          <span class="tk-about__comm-num" data-i18n="comms.01.num"><%- t('comms.01.num') %></span>
           <svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="#E34234" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M4 6h40v26H16L4 42V6Z"></path><path d="M13 15h22M13 23h14"></path></svg>
-          <span data-i18n="comms.01.title" style="font-size: 26px; font-weight: 900; letter-spacing: -.02em; text-transform: uppercase;"><%- t('comms.01.title') %></span>
+          <span class="tk-about__comm-title" data-i18n="comms.01.title"><%- t('comms.01.title') %></span>
         </div>
-        <div style="border: 1px solid rgba(144,113,99,.5); padding: 30px 26px 34px; display: flex; flex-direction: column; gap: 30px;">
-          <span data-i18n="comms.02.num" style="font-family: Oswald, sans-serif; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--tk-label);"><%- t('comms.02.num') %></span>
+        <div class="tk-about__comm">
+          <span class="tk-about__comm-num" data-i18n="comms.02.num"><%- t('comms.02.num') %></span>
           <svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="#E34234" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M4 12h26v24H4V12Z"></path><path d="M30 21l14-8v22l-14-8"></path><path d="M10 18h6"></path></svg>
-          <span data-i18n="comms.02.title" style="font-size: 26px; font-weight: 900; letter-spacing: -.02em; text-transform: uppercase;"><%- t('comms.02.title') %></span>
+          <span class="tk-about__comm-title" data-i18n="comms.02.title"><%- t('comms.02.title') %></span>
         </div>
-        <div style="border: 1px solid rgba(144,113,99,.5); padding: 30px 26px 34px; display: flex; flex-direction: column; gap: 30px;">
-          <span data-i18n="comms.03.num" style="font-family: Oswald, sans-serif; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--tk-label);"><%- t('comms.03.num') %></span>
+        <div class="tk-about__comm">
+          <span class="tk-about__comm-num" data-i18n="comms.03.num"><%- t('comms.03.num') %></span>
           <svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="#E34234" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M24 5h0a6 6 0 0 1 6 6v11a6 6 0 0 1-12 0V11a6 6 0 0 1 6-6Z"></path><path d="M11 21v2a13 13 0 0 0 26 0v-2"></path><path d="M24 36v7M17 43h14"></path></svg>
-          <span data-i18n="comms.03.title" style="font-size: 26px; font-weight: 900; letter-spacing: -.02em; text-transform: uppercase;"><%- t('comms.03.title') %></span>
+          <span class="tk-about__comm-title" data-i18n="comms.03.title"><%- t('comms.03.title') %></span>
         </div>
-        <div style="border: 1px solid #E34234; background: #E34234; color: #0A0A0A; padding: 30px 26px 34px; display: flex; flex-direction: column; gap: 46px;">
-          <span data-i18n="comms.04.num" style="font-family: Oswald, sans-serif; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: #0A0A0A;"><%- t('comms.04.num') %></span>
-          <span data-i18n="comms.04.title" style="font-size: 26px; font-weight: 900; letter-spacing: -.02em; text-transform: uppercase; line-height: 1.05;"><%- t('comms.04.title') %></span>
-        </div>
-      </div>
-    </section>
-
-    <section data-bg="paper" data-r="sec pad" style="background: #F5F1EA; color: #0A0A0A; padding: 88px 56px 96px;">
-      <div data-r="stats" id="tkStats" style="display: flex; align-items: center; gap: 44px; border-bottom: 2px solid #0A0A0A; padding-bottom: 34px;">
-        <div style="display: flex; align-items: baseline; gap: 16px;">
-          <span data-r="statnum" id="tkStatStreams" style="font-size: 84px; font-weight: 900; letter-spacing: -.05em; line-height: .8;">0+</span>
-          <span data-i18n="stats.streamsLabel" style="font-family: Oswald, sans-serif; font-size: 14px; letter-spacing: .18em; text-transform: uppercase;"><%- t('stats.streamsLabel') %></span>
-        </div>
-        <span data-r="hide-sm" style="width: 1px; height: 72px; background: rgba(10,10,10,.25);"></span>
-        <div style="display: flex; align-items: baseline; gap: 16px;">
-          <span data-r="statnum" id="tkStatVenues" style="font-size: 84px; font-weight: 900; letter-spacing: -.05em; line-height: .8;">0+</span>
-          <span data-i18n="stats.venuesLabel" style="font-family: Oswald, sans-serif; font-size: 14px; letter-spacing: .18em; text-transform: uppercase;"><%- t('stats.venuesLabel') %></span>
-        </div>
-      </div>
-      <div data-r="quotes" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 44px;">
-        <div data-r="quoteL" style="padding-right: 48px; border-right: 1px solid rgba(10,10,10,.2); display: flex; flex-direction: column; gap: 22px;">
-          <p data-r="quote" data-i18n="quote1.text" style="margin: 0; font-size: 30px; line-height: 1.2; font-weight: 700; letter-spacing: -.02em; text-wrap: pretty;"><%- t('quote1.text') %></p>
-          <span data-i18n="quote1.author" style="font-family: Oswald, sans-serif; font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: var(--tk-label);"><%- t('quote1.author') %></span>
-        </div>
-        <div data-r="quoteR" style="padding-left: 48px; display: flex; flex-direction: column; gap: 22px;">
-          <p data-r="quote" data-i18n="quote2.text" style="margin: 0; font-size: 30px; line-height: 1.2; font-weight: 700; letter-spacing: -.02em; text-wrap: pretty;"><%- t('quote2.text') %></p>
-          <span data-i18n="quote2.author" style="font-family: Oswald, sans-serif; font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: var(--tk-label);"><%- t('quote2.author') %></span>
+        <div class="tk-about__comm tk-about__comm--accent">
+          <span class="tk-about__comm-num" data-i18n="comms.04.num"><%- t('comms.04.num') %></span>
+          <span class="tk-about__comm-title" data-i18n="comms.04.title"><%- t('comms.04.title') %></span>
         </div>
       </div>
     </section>
 
-    <section data-r="sec pad cta" data-bleed style="--tk-bleed: #E34234; background: #E34234; color: #0A0A0A; padding: 92px 56px 96px; display: flex; align-items: center; gap: 56px;">
-      <h2 data-r="cta-h" data-i18n="cta.h2" style="margin: 0; font-size: 88px; line-height: 1.1; letter-spacing: -.01em; font-weight: 900; text-transform: uppercase; max-width: 720px; text-wrap: pretty;"><%- t('cta.h2') %></h2>
-      <div style="flex: 1;"></div>
-      <div style="flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 16px;">
-        <a href="<%= currentUser ? '/studio' : '/register' %>" data-r="ctaBtn" class="tk-btn tk-btn--dark" data-i18n="cta.btn"><%- t('cta.btn') %></a>
-        <span data-i18n="cta.note" style="font-family: Oswald, sans-serif; font-size: 15px; color: #0A0A0A;"><%- t('cta.note') %></span>
+    <section class="tk-about__sec tk-about__sec--paper tk-about__sec--stats" data-bg="paper">
+      <div class="tk-about__stats" id="tkStats">
+        <div class="tk-about__stat">
+          <span class="tk-about__stat-num" id="tkStatStreams">0+</span>
+          <span class="tk-about__stat-label" data-i18n="stats.streamsLabel"><%- t('stats.streamsLabel') %></span>
+        </div>
+        <span class="tk-about__stat-rule"></span>
+        <div class="tk-about__stat">
+          <span class="tk-about__stat-num" id="tkStatVenues">0+</span>
+          <span class="tk-about__stat-label" data-i18n="stats.venuesLabel"><%- t('stats.venuesLabel') %></span>
+        </div>
+      </div>
+      <div class="tk-about__quotes">
+        <% [['l', 1], ['r', 2]].forEach(function (q) { %>
+        <div class="tk-about__quote-box tk-about__quote-box--<%= q[0] %>">
+          <p class="tk-about__quote" data-i18n="quote<%= q[1] %>.text"><%- t('quote' + q[1] + '.text') %></p>
+          <span class="tk-about__quote-author" data-i18n="quote<%= q[1] %>.author"><%- t('quote' + q[1] + '.author') %></span>
+        </div>
+        <% }); %>
       </div>
     </section>
 
+    <section class="tk-about__sec tk-about__cta" data-bleed>
+      <h2 class="tk-about__cta-h" data-i18n="cta.h2"><%- t('cta.h2') %></h2>
+      <div class="tk-about__fill"></div>
+      <div class="tk-about__cta-side">
+        <a href="<%= currentUser ? '/studio' : '/register' %>" class="tk-btn tk-btn--dark tk-about__cta-btn" data-i18n="cta.btn"><%- t('cta.btn') %></a>
+        <span class="tk-about__cta-note" data-i18n="cta.note"><%- t('cta.note') %></span>
+      </div>
+    </section>
 
-    </main>
+</main>
 
 <%- include('partials/tkFooter') %>
 </div>
 
-<script defer src="/tk-landing.js"></script>
+<script defer src="<%= asset('/tk-landing.js') %>"></script>
 </body>
 </html>

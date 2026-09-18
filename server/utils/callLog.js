@@ -70,7 +70,7 @@ function ended(io, callId, outcome = 'canceled') {
 }
 
 function missedCount(userId) {
-  return Call.countDocuments({ callee: userId, seen: false, status: { $in: MISSED } });
+  return Call.countDocuments({ callee: userId, seen: false, status: { $in: MISSED }, deletedFor: { $ne: userId } });
 }
 
 // Звонок в том виде, в каком его получает браузер. Кто звонил — по id:
@@ -92,7 +92,7 @@ function view(c) {
 // Вкладка «Звонки»: последние сто в обе стороны, с собеседником. Открыли —
 // пропущенные увидены: счётчик и уведомления о них гаснут.
 async function journal(me) {
-  const calls = await Call.find({ $or: [{ caller: me }, { callee: me }], endedAt: { $ne: null } })
+  const calls = await Call.find({ $or: [{ caller: me }, { callee: me }], endedAt: { $ne: null }, deletedFor: { $ne: me } })
     .sort({ startedAt: -1 })
     .limit(100)
     .populate('caller callee', 'login email avatar')
@@ -113,7 +113,8 @@ async function journal(me) {
 }
 
 // Звонки двоих за отрезок времени — для ленты диалога: from включительно,
-// to — нет; любая граница может отсутствовать.
+// to — нет; любая граница может отсутствовать. a — тот, кто смотрит:
+// убранные им звонки в его ленту не попадают.
 async function between(a, b, { from, to } = {}) {
   const startedAt = {};
   if (from) startedAt.$gte = from;
@@ -121,9 +122,23 @@ async function between(a, b, { from, to } = {}) {
   const calls = await Call.find({
     $or: [{ caller: a, callee: b }, { caller: b, callee: a }],
     endedAt: { $ne: null },
+    deletedFor: { $ne: a },
     ...(from || to ? { startedAt } : {}),
   }).sort({ startedAt: 1 }).lean();
   return calls.map(view);
 }
 
-module.exports = { created, answered, switched, ended, missedCount, journal, between, MISSED };
+// Убрать звонки из своего журнала и ленты. ids — callId, как их видит браузер
+// (view выше). Чужие звонки не трогаются: условие по caller/callee.
+// Убранный пропущенный заодно считается увиденным — иначе он висел бы
+// в счётчике, которого уже ничем не погасить.
+async function remove(me, ids) {
+  const mine = { callId: { $in: ids }, $or: [{ caller: me }, { callee: me }] };
+  const [result] = await Promise.all([
+    Call.updateMany(mine, { $addToSet: { deletedFor: me } }),
+    Call.updateMany({ ...mine, callee: me }, { $set: { seen: true } }),
+  ]);
+  return result.matchedCount;
+}
+
+module.exports = { created, answered, switched, ended, missedCount, journal, between, remove, MISSED };

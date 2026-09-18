@@ -22,6 +22,15 @@
 
       <!-- Шапка профиля -->
       <div class="tk-prof__head">
+        <%# Настройки — иконкой в углу блока, а не кнопкой в общем ряду:
+            на своей странице ряд состоит из неё одной, и она выбивалась
+            из имени с аватаром. %>
+        <% if (isSelf) { %>
+        <a href="/settings" class="tk-prof__gear" aria-label="<%= ta('settings.title') %>" title="<%= ta('settings.title') %>" data-i18n-aria="settings.title" data-i18n-title="settings.title">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg>
+        </a>
+        <% } %>
+
         <div class="tk-prof__ava"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
           <% if (user.avatarStyle.url) { %>
             <img src="<%= user.avatarStyle.url %>" alt="<%= user.displayName %>" data-avatar-url="<%= user.avatarStyle.url %>">
@@ -33,21 +42,45 @@
         <div class="tk-prof__main">
           <h1 class="tk-prof__name"><%= user.displayName %></h1>
 
+          <%# Активность: строка под именем, а не панель в сетке ниже —
+              это две строчки, целого блока им не нужно. Атрибуты присутствия
+              те же: на них висит живое обновление (public/tk-app.js). %>
+          <%# Класс присутствия — на всей строке: по нему CSS прячет ненужную
+              половину. «Онлайн» и «Последний раз в сети: Сейчас» рядом — одно
+              и то же дважды. Тот же класс проставляет живое обновление. %>
+          <p class="tk-prof__meta <%= user.isOnline ? 'presence-online' : 'presence-offline' %>" data-presence-user="<%= user._id %>">
+            <%# Цвет точки задаёт общий класс из app.css. Прежде страница
+                держала свою пару правил с зашитыми цветами. %>
+            <span class="presence-dot <%= user.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
+
+            <span class="tk-prof__meta-live" data-presence-text title="<%= user.lastSeen ? date(user.lastSeen) : '' %>">
+              <% var presenceKey = user.isOnline ? 'common.online' : 'common.offline'; %>
+              <span data-i18n="<%= presenceKey %>"><%- t(presenceKey) %></span>
+            </span>
+
+            <span class="tk-prof__meta-seen">
+              <span data-i18n="user.lastSeen"><%- t('user.lastSeen') %></span>
+              <%# Дата последнего входа — не словарная строка, поэтому ключ только
+                  у «Сейчас»: иначе перевод затирал бы дату. %>
+              <span data-presence-lastseen-user="<%= user._id %>"<% if (user.isOnline) { %> data-i18n="common.now"<% } %>><%= user.isOnline ? ta('common.now') : (user.lastSeen ? date(user.lastSeen) : ta('common.dash')) %></span>
+            </span>
+          </p>
+
+          <%# Оба числа — ссылки на списки (routes/streaming/subscriptions.js).
+              Раньше число подписчиков было просто текстом, а подписки
+              считались, но не показывались. %>
           <div class="tk-prof__stats">
-            <div>
+            <a href="/userPage/<%= user._id %>/followers" class="tk-prof__stat">
               <span class="tk-prof__num"><%= user.followersCount %></span>
               <span class="tk-prof__lbl" data-i18n="user.subscribers"><%- t('user.subscribers') %></span>
-            </div>
-          </div>
-
-          <% if (isSelf) { %>
-          <div class="tk-prof__acts">
-            <a href="/settings" class="tk-btn tk-btn--outline tk-btn--sm">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg>
-              <span data-i18n="settings.title"><%- t('settings.title') %></span>
+            </a>
+            <a href="/userPage/<%= user._id %>/following" class="tk-prof__stat">
+              <span class="tk-prof__num"><%= user.followingCount %></span>
+              <span class="tk-prof__lbl" data-i18n="user.followingLabel"><%- t('user.followingLabel') %></span>
             </a>
           </div>
-          <% } else if (!currentUser) { %>
+
+          <% if (!isSelf && !currentUser) { %>
           <%# Гостю — те же «Написать» и «Подписаться», но через вход: после него
               человек вернётся на эту страницу. Звонки и жалоба — только вошедшим. %>
           <% var loginBack = '/login?next=' + encodeURIComponent(url); %>
@@ -61,7 +94,7 @@
               <span data-i18n="stream.subscribe"><%- t('stream.subscribe') %></span>
             </a>
           </div>
-          <% } else { %>
+          <% } else if (!isSelf) { %>
           <div class="tk-prof__acts">
             <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="message-button" data-user-id="<%= user._id %>">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
@@ -97,57 +130,27 @@
         </div>
       </div>
 
-      <!-- Активность и эфир -->
-      <div class="tk-prof__grid">
-        <section class="tk-panel--prof">
-          <p class="tk-kicker" data-i18n="user.activity"><%- t('user.activity') %></p>
+      <!-- Идёт ли эфир -->
+      <section class="tk-panel--prof">
+        <p class="tk-kicker" data-i18n="user.stream"><%- t('user.stream') %></p>
 
-          <div class="tk-prof__rows">
-            <div class="tk-prof__row" data-presence-user="<%= user._id %>">
-              <span class="tk-prof__key" data-i18n="user.status"><%- t('user.status') %></span>
-              <span class="tk-prof__val">
-                <%# Цвет точки задаёт общий класс из app.css. Прежде страница
-                    держала свою пару правил с зашитыми цветами. %>
-                <span class="presence-dot <%= user.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
-                <span data-presence-text title="<%= user.lastSeen ? date(user.lastSeen) : '' %>">
-                  <% var presenceKey = user.isOnline ? 'common.online' : 'common.offline'; %>
-                  <span data-i18n="<%= presenceKey %>"><%- t(presenceKey) %></span>
-                </span>
-              </span>
-            </div>
-
-            <div class="tk-prof__row">
-              <span class="tk-prof__key" data-i18n="user.lastSeen"><%- t('user.lastSeen') %></span>
-              <span class="tk-prof__val" data-presence-lastseen-user="<%= user._id %>">
-                <%# Дата последнего входа — не словарная строка, поэтому ключ только
-                    у «Сейчас»: иначе перевод затирал бы дату. %>
-                <span<% if (user.isOnline) { %> data-i18n="common.now"<% } %>><%= user.isOnline ? ta('common.now') : (user.lastSeen ? date(user.lastSeen) : ta('common.dash')) %></span>
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <section class="tk-panel--prof">
-          <p class="tk-kicker" data-i18n="user.stream"><%- t('user.stream') %></p>
-
-          <% if (user.isStreaming && user.activeStreamId) { %>
-          <div class="tk-prof__live">
-            <span class="tk-prof__live-mark" data-i18n="user.live"><%- t('user.live') %></span>
-            <a href="/stream/<%= user.activeStreamId %>" data-i18n="stream.goto"><%- t('stream.goto') %></a>
-          </div>
-          <% } else { %>
-          <div class="tk-prof__none">
-            <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg>
-            <p data-i18n="user.notLive"><%- t('user.notLive') %></p>
-          </div>
-          <% } %>
-        </section>
-      </div>
+        <% if (user.isStreaming && user.activeStreamId) { %>
+        <div class="tk-prof__live">
+          <span class="tk-prof__live-mark" data-i18n="user.live"><%- t('user.live') %></span>
+          <a href="/stream/<%= user.activeStreamId %>" data-i18n="stream.goto"><%- t('stream.goto') %></a>
+        </div>
+        <% } else { %>
+        <div class="tk-prof__none">
+          <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg>
+          <p data-i18n="user.notLive"><%- t('user.notLive') %></p>
+        </div>
+        <% } %>
+      </section>
 
       <!-- Записи эфиров: автор видит и те, что ещё сохраняются -->
       <section class="tk-prof__gal" id="recordings">
         <div class="tk-prof__gal-head">
-          <p class="tk-kicker" style="margin: 0; flex: 1;" data-i18n="rec.title"><%- t('rec.title') %></p>
+          <p class="tk-kicker tk-prof__gal-title" data-i18n="rec.title"><%- t('rec.title') %></p>
           <span class="tk-note"><%= recordings.length %></span>
         </div>
 
@@ -175,24 +178,38 @@
         <% } %>
       </section>
 
-      <!-- Галерея -->
-      <section class="tk-prof__gal">
+      <!-- Галерея. Своей управляет владелец прямо здесь: раньше загрузка
+           и удаление жили в настройках, а на странице было видно только
+           результат. Поведение — public/profile.js. -->
+      <section class="tk-prof__gal" id="gallery"<% if (isSelf) { %> data-own<% } %>>
         <div class="tk-prof__gal-head">
-          <p class="tk-kicker" style="margin: 0; flex: 1;" data-i18n="user.gallery"><%- t('user.gallery') %></p>
-          <span class="tk-note"><%= (user.gallery || []).length %> <span data-i18n="user.photos"><%- t('user.photos') %></span></span>
+          <p class="tk-kicker tk-prof__gal-title" data-i18n="user.gallery"><%- t('user.gallery') %></p>
+          <span class="tk-note"><span id="galleryCount"><%= (user.gallery || []).length %></span> <span data-i18n="user.photos"><%- t('user.photos') %></span></span>
+          <% if (isSelf) { %>
+          <input id="galleryInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+          <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" id="galleryAdd" data-i18n="user.galleryAdd"><%- t('user.galleryAdd') %></button>
+          <% } %>
         </div>
 
-        <% if (user.gallery && user.gallery.length) { %>
-        <div class="tk-shots">
-          <% user.gallery.forEach(function (url, idx) { %>
-          <button type="button" class="tk-shot" aria-label="<%= ta('user.photoN', { n: idx + 1 }) %>" data-i18n-aria="user.photoN" data-i18n-vars='{"n": <%= idx + 1 %>}'>
-            <img src="<%= url %>" alt="" loading="lazy" data-photo-url="<%= url %>">
-          </button>
+        <% if (isSelf) { %>
+        <p class="tk-note tk-prof__gal-hint" id="galleryHint" data-i18n="user.galleryLimit"><%- t('user.galleryLimit') %></p>
+        <% } %>
+
+        <div class="tk-shots" id="galleryShots">
+          <% (user.gallery || []).forEach(function (url, idx) { %>
+          <div class="tk-shots__item">
+            <button type="button" class="tk-shot" aria-label="<%= ta('user.photoN', { n: idx + 1 }) %>" data-i18n-aria="user.photoN" data-i18n-vars='{"n": <%= idx + 1 %>}'>
+              <img src="<%= url %>" alt="" loading="lazy" decoding="async" data-photo-url="<%= url %>">
+            </button>
+            <% if (isSelf) { %>
+            <button type="button" class="tk-thumb__del" data-name="<%= url.split('/').pop() %>" aria-label="<%= ta('common.delete') %>" data-i18n-aria="common.delete">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+            </button>
+            <% } %>
+          </div>
           <% }); %>
         </div>
-        <% } else { %>
-        <p class="tk-note tk-note--center" data-i18n="user.galleryEmpty"><%- t('user.galleryEmpty') %></p>
-        <% } %>
+        <p class="tk-note tk-note--center" id="galleryEmpty" data-i18n="user.galleryEmpty"<% if ((user.gallery || []).length) { %> hidden<% } %>><%- t('user.galleryEmpty') %></p>
       </section>
 
     </div>
@@ -224,6 +241,6 @@
     avatarUrl: <%- JSON.stringify(user.avatarStyle.url || '') %>
   };
 </script>
-<script src="/profile.js"></script>
+<script defer src="<%= asset('/profile.js') %>"></script>
 </body>
 </html>

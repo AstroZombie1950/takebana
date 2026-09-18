@@ -98,7 +98,9 @@
       when += ' <svg class="tk-msg__tick ' + s.cls + '" viewBox="0 0 22 24" width="17" height="16" fill="none" stroke="currentColor" stroke-width="2" role="img" aria-label="' +
         escapeHtml(t(s.key)) + '"><title>' + escapeHtml(t(s.key)) + '</title>' + s.icon + '</svg>';
     }
-    return '<div class="tk-msg ' + (out ? 'tk-msg--out' : 'tk-msg--in') + '" data-mid="' + escapeHtml(m._id) + '">' +
+    var key = 'm:' + m._id;
+    return '<div class="tk-msg ' + (out ? 'tk-msg--out' : 'tk-msg--in') + (isPicked(key) ? ' is-picked' : '') +
+      '" data-mid="' + escapeHtml(m._id) + '" data-key="' + escapeHtml(key) + '">' +
       (out ? bubble : '<div class="tk-msg__row">' + avatar('tk-msg__ava', peer, ' data-peer') + bubble + '</div>') +
       '<p class="tk-msg__when">' + when + '</p></div>';
   }
@@ -126,9 +128,13 @@
     return { out: out, missed: missed, text: parts.join(' · ') };
   }
 
+  // Строка звонка выделяется и удаляется так же, как сообщение: у неё тот же
+  // data-key и та же доступность с клавиатуры.
   function callNoteHtml(c) {
     var info = callInfo(c);
-    return '<div class="tk-callnote' + (info.missed ? ' is-missed' : '') + '">' +
+    var key = 'c:' + c.id;
+    return '<div class="tk-callnote' + (info.missed ? ' is-missed' : '') + (isPicked(key) ? ' is-picked' : '') +
+      '" data-key="' + escapeHtml(key) + '" tabindex="0" role="button" aria-haspopup="menu" aria-label="' + escapeHtml(t('chats.callActions')) + '">' +
       '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true">' +
       (c.type === 'video' ? CAMERA : PHONE) + '</svg>' +
       '<span>' + escapeHtml(info.text) + '</span>' +
@@ -263,6 +269,8 @@
 
   // ── Выбор диалога ─────────────────────────────────────────────────────
   function select(el) {
+    stopPicking();
+    closeMenu();
     peer = peerOf(el);
     messages = [];
     calls = [];
@@ -299,6 +307,8 @@
   }
 
   function closeDialog() {
+    stopPicking();
+    closeMenu();
     peer = null;
     messages = [];
     calls = [];
@@ -383,17 +393,14 @@
   });
 
   document.addEventListener('tk:message:deleted', function (e) {
-    var ids = e.detail.ids || [];
-    var before = messages.length;
-    messages = messages.filter(function (m) { return ids.indexOf(m._id) === -1; });
-    if (messages.length === before) return;
-    var top = feed.scrollTop;
-    render();
-    feed.scrollTop = top;
-    var last = messages[messages.length - 1];
-    var el = peer && dialogEl(peer.id);
-    if (el && last) el.querySelector('.tk-dialog__last').innerHTML =
-      (last.sender === ME ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : '') + escapeHtml(last.content);
+    dropMessages(e.detail.ids || []);
+    if (picking) updatePickBar();
+  });
+
+  // Звонки, убранные в другой вкладке этого же человека.
+  document.addEventListener('tk:call:deleted', function (e) {
+    dropCalls(e.detail.ids || []);
+    if (picking) updatePickBar();
   });
 
   document.addEventListener('tk:conversation:deleted', function (e) {
@@ -498,6 +505,8 @@
           '</span>' +
         '</button>' +
         button('audio', PHONE, 'calls.audio') + button('video', CAMERA, 'calls.video') +
+        '<button type="button" class="tk-callrow__btn tk-callrow__del" data-del="' + i + '" aria-label="' + escapeHtml(t('calls.delete')) + '" title="' + escapeHtml(t('calls.delete')) + '">' +
+          '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>' +
       '</div>';
     }).join('');
   }
@@ -505,7 +514,14 @@
   callsList.addEventListener('click', function (e) {
     var call = e.target.closest('[data-call]');
     var open = e.target.closest('[data-open]');
-    if (call && window.showOutgoingCall) {
+    var del = e.target.closest('[data-del]');
+    if (del) {
+      var gone = journal[Number(del.getAttribute('data-del'))];
+      confirmDialog(t('calls.deleteQ'), { okText: t('chats.delete') }).then(function (yes) {
+        if (!yes) return;
+        return post('/api/calls/delete', { ids: [gone.id] }).then(afterCallsDeleted.bind(null, [gone.id]));
+      }).catch(function (err) { toast(t('calls.deleteFailed') + ': ' + err.message, 'error'); });
+    } else if (call && window.showOutgoingCall) {
       var c = journal[Number(call.getAttribute('data-row'))];
       var type = call.getAttribute('data-call');
       window.showOutgoingCall({
@@ -532,77 +548,301 @@
       .catch(function () { location.href = '/userPage/' + encodeURIComponent(p.id); });
   }
 
-  // ── Действия с сообщением ─────────────────────────────────────────────
+  // ── Действия с сообщением и звонком ───────────────────────────────────
+  // Меню — правым кликом, на телефоне — удержанием, с клавиатуры — Enter.
+  // Обычный клик по сообщению меню не открывает: им выделяют текст мышью.
+  // Раньше меню было на левом клике, а удержание на телефоне не ловилось
+  // вовсе — удалить сообщение с телефона было нельзя.
+  //
+  // «Выделить» в меню включает режим выбора: клик отмечает или снимает
+  // отметку, Shift+клик — всё подряд от предыдущей отметки. Вместо шапки
+  // диалога — полоса «Выбрано: N» с теми же действиями на всю пачку.
   var menu = $('msgMenu');
-  var menuFor = null;
+  var menuKey = null;       // над чем открыто меню
+  var picked = {};          // 'm:<id>' — сообщение, 'c:<id>' — звонок
+  var picking = false;
+  var anchor = null;        // от какой отметки считать Shift+клик
+  var pressTimer = null;
+  // Сработало удержание: клик и contextmenu, которыми кончается этот же жест,
+  // не должны ничего делать. Сбрасывается следующим касанием — не по времени:
+  // иначе быстрое касание сразу после удержания терялось бы.
+  var longPressed = false;
 
-  function openMenu(bubble) {
-    var row = bubble.closest('.tk-msg');
-    menuFor = messages.find(function (m) { return m._id === row.getAttribute('data-mid'); });
-    if (!menuFor) return;
+  function isPicked(key) { return !!picked[key]; }
+  function pickedKeys() { return Object.keys(picked); }
+
+  function itemEl(key) { return feed.querySelector('[data-key="' + CSS.escape(key) + '"]'); }
+  function itemOf(el) { return el && el.closest('[data-key]'); }
+
+  // Что стоит за ключом — сообщение или звонок из загруженной ленты.
+  function resolve(key) {
+    var id = key.slice(2);
+    return key[0] === 'm'
+      ? { kind: 'message', m: messages.find(function (x) { return x._id === id; }) }
+      : { kind: 'call', c: calls.find(function (x) { return x.id === id; }) };
+  }
+
+  function mark(key, on) {
+    if (on) picked[key] = true; else delete picked[key];
+    var el = itemEl(key);
+    if (el) el.classList.toggle('is-picked', !!on);
+  }
+
+  function openMenu(el) {
+    var key = el.getAttribute('data-key');
+    var what = resolve(key);
+    if (!what.m && !what.c) return;
+    closeMenu();
+    menuKey = key;
+    el.classList.add('is-picked');   // правый клик выделяет то, над чем меню
+    menu.querySelectorAll('[data-for="message"]').forEach(function (b) { b.hidden = what.kind !== 'message'; });
     menu.hidden = false;
-    var r = bubble.getBoundingClientRect();
+    var target = el.querySelector('.tk-msg__bubble') || el;
+    var r = target.getBoundingClientRect();
     var w = menu.offsetWidth;
     var h = menu.offsetHeight;
-    var left = row.classList.contains('tk-msg--out') ? r.right - w : r.left;
+    var left = el.classList.contains('tk-msg--out') ? r.right - w : el.classList.contains('tk-callnote') ? r.left + (r.width - w) / 2 : r.left;
     var top = r.bottom + 6 + h > innerHeight ? r.top - h - 6 : r.bottom + 6;
     menu.style.left = Math.max(8, Math.min(left, innerWidth - w - 8)) + 'px';
     menu.style.top = Math.max(8, top) + 'px';
-    menu.querySelector('button').focus();
+    menu.querySelector('button:not([hidden])').focus();
   }
 
   function closeMenu() {
+    if (menu.hidden) return;
     menu.hidden = true;
+    // Подсветка, поставленная меню, уходит вместе с ним — если это не отметка.
+    if (menuKey && !picked[menuKey]) { var el = itemEl(menuKey); if (el) el.classList.remove('is-picked'); }
+    menuKey = null;
   }
 
+  // ── Режим выбора ──
+  function startPicking(key) {
+    picking = true;
+    // В режиме выбора клик — это отметка, не выделение текста: старое
+    // выделение снимаем, чтобы оно не путалось с отметками.
+    window.getSelection().removeAllRanges();
+    $('chat').classList.add('is-picking');
+    $('pickBar').hidden = false;
+    document.querySelector('.tk-chat__head').hidden = true;
+    mark(key, true);
+    anchor = key;
+    updatePickBar();
+  }
+
+  function stopPicking() {
+    if (!picking) return;
+    picking = false;
+    pickedKeys().forEach(function (k) { mark(k, false); });
+    anchor = null;
+    $('chat').classList.remove('is-picking');
+    $('pickBar').hidden = true;
+    document.querySelector('.tk-chat__head').hidden = false;
+  }
+
+  // Копировать и переслать можно только сообщения: у звонка нет текста.
+  function updatePickBar() {
+    var keys = pickedKeys();
+    if (!keys.length) return stopPicking();
+    $('pickCount').textContent = t('chats.picked', { n: keys.length });
+    var hasText = keys.some(function (k) { return k[0] === 'm'; });
+    document.querySelectorAll('#pickBar [data-pick="forward"], #pickBar [data-pick="copy"]').forEach(function (b) { b.disabled = !hasText; });
+  }
+
+  function toggle(key, range) {
+    if (range && anchor && itemEl(anchor)) {
+      // Всё между предыдущей отметкой и этой — в порядке ленты.
+      var all = Array.prototype.map.call(feed.querySelectorAll('[data-key]'), function (el) { return el.getAttribute('data-key'); });
+      var a = all.indexOf(anchor), b = all.indexOf(key);
+      all.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(function (k) { mark(k, true); });
+    } else {
+      mark(key, !picked[key]);
+    }
+    anchor = key;
+    updatePickBar();
+  }
+
+  $('pickCancel').addEventListener('click', stopPicking);
+  $('pickBar').addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-pick]');
+    if (!btn || btn.disabled) return;
+    var keys = pickedKeys();
+    var act = btn.getAttribute('data-pick');
+    if (act === 'copy') copy(keys);
+    else if (act === 'forward') openForward(keys);
+    else if (act === 'delete') removeItems(keys);
+  });
+
+  // ── Мышь, палец, клавиатура ──
+  feed.addEventListener('contextmenu', function (e) {
+    var el = itemOf(e.target);
+    if (!el) return;
+    e.preventDefault();
+    // Android после удержания шлёт ещё и contextmenu — меню уже открыто им.
+    if (longPressed) return;
+    if (picking) toggle(el.getAttribute('data-key'), e.shiftKey);
+    else openMenu(el);
+  });
+
   feed.addEventListener('click', function (e) {
-    if (e.target.closest('[data-peer]')) return goToPeer();
-    var bubble = e.target.closest('.tk-msg__bubble');
-    // Выделяли текст мышью — это не нажатие.
-    if (!bubble || !window.getSelection().isCollapsed) return;
-    e.stopPropagation();
-    openMenu(bubble);
+    if (e.target.closest('[data-peer]') && !picking) return goToPeer();
+    var el = itemOf(e.target);
+    if (!el || !picking) return;
+    if (longPressed) return;   // клик, которым кончилось удержание
+    e.preventDefault();
+    toggle(el.getAttribute('data-key'), e.shiftKey);
+  });
+
+  // Shift+клик браузер понимает ещё и как «растянуть выделение текста».
+  // В режиме выбора текст не выделяем вовсе: иначе следующий клик попадал
+  // внутрь выделенного, браузер его не сбрасывал, и отметка не снималась.
+  feed.addEventListener('mousedown', function (e) {
+    if (picking && itemOf(e.target)) e.preventDefault();
+  });
+
+  // Новое касание где угодно — новый жест: флаг удержания снимаем. Не только
+  // в ленте — иначе касание шапки, чтобы закрыть меню, его бы не закрыло.
+  document.addEventListener('touchstart', function () { longPressed = false; }, { capture: true, passive: true });
+
+  // Удержание пальцем: iOS не шлёт contextmenu, поэтому считаем время сами.
+  // Сдвинул палец — это прокрутка, не удержание.
+  var pressFrom = null;
+  feed.addEventListener('touchstart', function (e) {
+    var el = itemOf(e.target);
+    if (!el || e.touches.length > 1) return;
+    pressFrom = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(function () {
+      longPressed = true;
+      if (navigator.vibrate) navigator.vibrate(12);
+      if (picking) toggle(el.getAttribute('data-key'), false);
+      else openMenu(el);
+    }, 450);
+  }, { passive: true });
+  feed.addEventListener('touchmove', function (e) {
+    if (!pressFrom) return;
+    var dx = e.touches[0].clientX - pressFrom.x, dy = e.touches[0].clientY - pressFrom.y;
+    if (dx * dx + dy * dy > 100) { clearTimeout(pressTimer); pressFrom = null; }
+  }, { passive: true });
+  ['touchend', 'touchcancel'].forEach(function (name) {
+    feed.addEventListener(name, function () { clearTimeout(pressTimer); pressFrom = null; });
   });
 
   feed.addEventListener('keydown', function (e) {
-    var bubble = e.target.closest('.tk-msg__bubble');
-    if (bubble && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openMenu(bubble); }
+    var el = itemOf(e.target);
+    if (!el || e.target !== (el.querySelector('.tk-msg__bubble') || el)) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (picking) toggle(el.getAttribute('data-key'), e.shiftKey);
+      else openMenu(el);
+    }
   });
 
   document.addEventListener('click', function (e) {
+    // Клик, которым кончилось удержание (так делают некоторые Android),
+    // не «мимо меню»: оно только что открылось этим же жестом.
+    if (longPressed) return;
     if (!menu.hidden && !menu.contains(e.target)) closeMenu();
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !menu.hidden) closeMenu();
+    if (e.key !== 'Escape') return;
+    if (!menu.hidden) closeMenu();
+    else if (picking && fwd.classList.contains('hidden')) stopPicking();
   });
   feed.addEventListener('scroll', closeMenu);
 
   menu.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-act]');
-    if (!btn || !menuFor) return;
-    var m = menuFor;
-    closeMenu();
+    if (!btn || !menuKey) return;
+    var key = menuKey;
     var act = btn.getAttribute('data-act');
-    if (act === 'copy') copy(m);
-    else if (act === 'delete') removeMessage(m);
-    else if (act === 'forward') openForward(m);
+    closeMenu();
+    if (act === 'select') startPicking(key);
+    else if (act === 'copy') copy([key]);
+    else if (act === 'forward') openForward([key]);
+    else if (act === 'delete') removeItems([key]);
   });
 
-  function copy(m) {
-    navigator.clipboard.writeText(m.content)
-      .then(function () { toast(t('chats.copied'), 'ok'); })
+  // Сообщения выбранного — в порядке ленты, без звонков.
+  function pickedMessages(keys) {
+    return keys.filter(function (k) { return k[0] === 'm'; })
+      .map(function (k) { return resolve(k).m; })
+      .filter(Boolean)
+      .sort(function (a, b) { return new Date(a.sentAt) - new Date(b.sentAt); });
+  }
+
+  function copy(keys) {
+    var text = pickedMessages(keys).map(function (m) { return m.content; }).join('\n\n');
+    if (!text) return;
+    navigator.clipboard.writeText(text)
+      .then(function () { toast(t('chats.copied'), 'ok'); stopPicking(); })
       .catch(function () {});
   }
 
-  function removeMessage(m) {
-    var mine = m.sender === ME;
+  // Удаление выбранного одним окном. Своё сообщение можно убрать у всех,
+  // чужое и звонок — только у себя (сервер следит за этим сам). Если в
+  // выбранном есть и то и другое, в вопросе сказано, что уйдёт только у вас.
+  function removeItems(keys) {
+    var msgs = pickedMessages(keys);
+    var callIds = keys.filter(function (k) { return k[0] === 'c'; }).map(function (k) { return k.slice(2); });
+    var mine = msgs.filter(function (m) { return m.sender === ME; }).length;
+    var n = msgs.length + callIds.length;
+    if (!n) return;
+
+    var q = n > 1 ? t('chats.deleteManyQ', { n: n }) : msgs.length ? t('chats.deleteMsgQ') : t('chats.deleteCallQ');
+    if (mine && mine < n) q += ' ' + t('chats.deleteMixedNote');
     var choices = mine
       ? [{ value: 'me', text: t('chats.deleteForMe'), danger: false }, { value: 'all', text: t('chats.deleteForAll') }]
       : [{ value: 'me', text: t('chats.delete') }];
-    chooseDialog(t('chats.deleteMsgQ'), choices).then(function (v) {
+
+    chooseDialog(q, choices).then(function (v) {
       if (!v) return;
-      return post('/messages/delete', { ids: [m._id], forAll: v === 'all' });
+      var jobs = [];
+      if (msgs.length) jobs.push(post('/messages/delete', { ids: msgs.map(function (m) { return m._id; }), forAll: v === 'all' }));
+      if (callIds.length) jobs.push(post('/api/calls/delete', { ids: callIds }).then(afterCallsDeleted.bind(null, callIds)));
+      return Promise.all(jobs).then(function () {
+        // Сокет пришлёт то же самое, но лента не должна ждать его.
+        dropMessages(msgs.map(function (m) { return m._id; }));
+        stopPicking();
+      });
     }).catch(function (e) { toast(t('chats.deleteFailed') + ': ' + e.message, 'error'); });
+  }
+
+  function dropMessages(ids) {
+    if (!ids.length) return;
+    var before = messages.length;
+    messages = messages.filter(function (m) { return ids.indexOf(m._id) === -1; });
+    ids.forEach(function (id) { delete picked['m:' + id]; });
+    if (messages.length === before) return;
+    var top = feed.scrollTop;
+    render();
+    feed.scrollTop = top;
+    var last = messages[messages.length - 1];
+    var el = peer && dialogEl(peer.id);
+    if (el && last) el.querySelector('.tk-dialog__last').innerHTML =
+      (last.sender === ME ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : '') + escapeHtml(last.content);
+  }
+
+  // Звонки ушли — из ленты открытого диалога и из вкладки «Звонки».
+  // Ответ сервера несёт, сколько пропущенных осталось, — это счётчик у иконки.
+  function dropCalls(ids) {
+    var feedBefore = calls.length;
+    calls = calls.filter(function (c) { return ids.indexOf(c.id) === -1; });
+    ids.forEach(function (id) { delete picked['c:' + id]; });
+    if (calls.length !== feedBefore) { var top = feed.scrollTop; render(); feed.scrollTop = top; }
+    if (journal) {
+      var jBefore = journal.length;
+      journal = journal.filter(function (c) { return ids.indexOf(c.id) === -1; });
+      if (journal.length !== jBefore) renderJournal();
+    }
+  }
+
+  function afterCallsDeleted(ids, r) {
+    dropCalls(ids);
+    document.querySelectorAll('[data-missed-calls]').forEach(function (b) {
+      b.textContent = String(r.missed || 0);
+      b.classList.toggle('hidden', !r.missed);
+    });
   }
 
   $('deleteChat').addEventListener('click', function () {
@@ -622,7 +862,8 @@
   var fwdList = $('forwardList');
   var fwdSearch = $('forwardSearch');
   var fwdSend = $('forwardSend');
-  var fwdMessage = null;
+  var fwdMessages = [];     // что пересылаем, в порядке ленты
+  var fwdComment = $('forwardComment');
   var fwdPicked = {};      // id → true
   var fwdTimer = null;
 
@@ -650,11 +891,16 @@
     $('forwardCount').textContent = n ? '\u00a0(' + n + ')' : '';
   }
 
-  function openForward(m) {
-    fwdMessage = m;
+  function openForward(keys) {
+    fwdMessages = pickedMessages(keys);
+    if (!fwdMessages.length) return;
     fwdPicked = {};
     fwdSearch.value = '';
-    $('forwardQuote').textContent = m.content;
+    fwdComment.value = '';
+    // Одно — его текст; несколько — сколько и начало первого.
+    $('forwardQuote').textContent = fwdMessages.length === 1
+      ? fwdMessages[0].content
+      : t('chats.forwardMany', { n: fwdMessages.length }) + ' · ' + fwdMessages[0].content;
     fwdRender(known());
     fwdCount();
     fwd.classList.remove('hidden');
@@ -663,7 +909,7 @@
 
   function closeForward() {
     fwd.classList.add('hidden');
-    fwdMessage = null;
+    fwdMessages = [];
   }
 
   $('forwardClose').addEventListener('click', closeForward);
@@ -702,12 +948,17 @@
   });
 
   fwdSend.addEventListener('click', function () {
-    if (!fwdMessage) return;
+    if (!fwdMessages.length) return;
     fwdSend.disabled = true;
-    post('/messages/forward', { messageId: fwdMessage._id, recipientIds: Object.keys(fwdPicked) })
+    post('/messages/forward', {
+      messageIds: fwdMessages.map(function (m) { return m._id; }),
+      recipientIds: Object.keys(fwdPicked),
+      comment: fwdComment.value.trim()
+    })
       .then(function () {
         toast(t('chats.forwardDone'), 'ok');
         closeForward();
+        stopPicking();
       })
       .catch(function (e) {
         toast(t('chats.forwardFailed') + ': ' + e.message, 'error');

@@ -76,4 +76,19 @@ router.get('/api/calls', requireAuthApi, async (req, res) => {
   res.json({ calls, unread });
 });
 
+// Убрать звонки у себя: крестик в журнале, выделение в ленте переписки.
+// У собеседника они остаются — запись общая (models/Call.js). Остальным
+// вкладкам этого же человека — call:deleted, чтобы строки пропали и там.
+// В ответе — сколько пропущенных осталось: счётчик на иконке сообщений.
+router.post('/api/calls/delete', requireAuthApi, validate({
+  ids: { type: 'array', required: true, max: 100, of: { type: 'string', max: 64, pattern: /^[\w-]+$/ }, label: 'Звонки' },
+}), async (req, res) => {
+  const me = String(req.session.userId);
+  const { ids } = req.body;
+  const deleted = await callLog.remove(me, ids);
+  const io = req.app.get('io');
+  if (io) io.to(`user:${me}`).emit('call:deleted', { ids });
+  res.json({ success: true, deleted, missed: await callLog.missedCount(me) });
+});
+
 module.exports = router;

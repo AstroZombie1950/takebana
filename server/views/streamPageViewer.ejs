@@ -73,8 +73,8 @@
 </div>
 
 <%# socket.io грузит шапка. Плеер HLS — только идущему эфиру. %>
-<% if (playable) { %><script src="/tk-hls.js"></script><% } %>
-<script src="/tk-stream.js"></script>
-<script src="/tk-viewer.js"></script>
+<% if (playable) { %><script defer src="<%= asset('/tk-hls.js') %>"></script><% } %>
+<script defer src="<%= asset('/tk-stream.js') %>"></script>
+<script defer src="<%= asset('/tk-viewer.js') %>"></script>
 </body>
 </html>

@@ -21,25 +21,24 @@ const path = require('path');
 // процесса: папка оказывалась вне public (то есть не раздавалась статикой
 // напрямую), не попадала в .gitignore и уезжала, если сервер запускали не из
 // server/. В базе не было ни одного заведения с фото, переносить нечего.
-const fs = require('fs');
-
 const ESTABLISHMENT_UPLOAD_DIR = path.join(__dirname, '..', 'public', 'uploads', 'establishments');
 
-const storage = multer.diskStorage({
-  destination: function(req, file, cb) {
-    try {
-      if (!fs.existsSync(ESTABLISHMENT_UPLOAD_DIR)) {
-        fs.mkdirSync(ESTABLISHMENT_UPLOAD_DIR, { recursive: true });
-      }
-      cb(null, ESTABLISHMENT_UPLOAD_DIR);
-    } catch (e) {
-      cb(e);
-    }
+// Фотографии заведения идут тем же путём, что аватары и галерея: в память,
+// потом через sharp на диск (utils/image.js). Прежде здесь стоял diskStorage
+// вообще без проверки типа и без ограничения размера — на публично раздаваемую
+// папку можно было положить файл любого вида и любого веса.
+const { saveImages, BadImageError } = require('../utils/image');
+
+const ALLOWED_PHOTO = /^image\/(jpeg|png|webp)$/;
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter(req, file, cb) {
+    if (ALLOWED_PHOTO.test(file.mimetype)) return cb(null, true);
+    cb(Object.assign(new Error('Только изображения JPEG, PNG или WebP.'), { status: 400, expose: true }));
   },
-  filename: function(req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname)) // сохраняем оригинальное расширение файла
-  }
-})
+});
 
 const { requireAuth, requireOwner, wrap } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
@@ -58,7 +57,6 @@ const errorLog = require('../utils/errorLog');
 // и владелец — только самому владельцу, в /user-establishments.
 const PUBLIC_FIELDS = 'name type city country address weekdayHours weekendHours location photos online';
 
-const upload = multer({ storage: storage });
 
 
 // Заявка на заведение — страница /company-register (public/tk-company.js).
@@ -214,6 +212,14 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
         return res.status(400).json({ message: 'Пожалуйста, укажите хотя бы одно поле для обновления' });
     }
 
+    let newPhotoNames;
+    try {
+        newPhotoNames = await saveImages(req.files, 'establishment', ESTABLISHMENT_UPLOAD_DIR);
+    } catch (e) {
+        if (!(e instanceof BadImageError)) throw e;
+        return res.status(400).json({ message: e.message });
+    }
+
     const establishment = {
         name,
         type,
@@ -229,7 +235,7 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
         // Абсолютный URL от корня сайта. file.path раньше давал относительный
         // 'uploads/имя.jpg', и на вложенных страницах вида /userPage/:id браузер
         // искал его по /userPage/uploads/... — картинка не находилась.
-        photos: uploadedPhotos.concat(req.files.map(file => `/uploads/establishments/${file.filename}`)).slice(0, 6)
+        photos: uploadedPhotos.concat(newPhotoNames.map(name => `/uploads/establishments/${name}`)).slice(0, 6)
     };
 
     const updatedEstablishment = await Establishments.findByIdAndUpdate(req.params.id, establishment, { new: true });

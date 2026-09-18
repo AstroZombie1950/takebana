@@ -230,16 +230,10 @@
         </label>
       </div>
 
-      <div class="tk-venues__pair">
-        <label class="tk-form__row">
-          <span class="tk-form__label" data-i18n="venues.country"><%- t('venues.country') %></span>
-          <input class="tk-field" type="text" name="country" maxlength="100">
-        </label>
-        <label class="tk-form__row">
-          <span class="tk-form__label" data-i18n="venues.address"><%- t('venues.address') %></span>
-          <input class="tk-field" type="text" name="address" maxlength="300">
-        </label>
-      </div>
+      <label class="tk-form__row">
+        <span class="tk-form__label" data-i18n="venues.country"><%- t('venues.country') %></span>
+        <input class="tk-field" type="text" name="country" maxlength="100">
+      </label>
 
       <%- include('partials/venuePoint') %>
 
@@ -279,9 +273,9 @@
     чтобы выбор точки открывался на нужном городе (public/tk-point.js). %>
 <script>window.TKVenueDict = <%- JSON.stringify({ types: catalog.VENUE_TYPE_NAME, cities: catalog.CITY_NAME }) %>;
 window.TKCityCenter = <%- JSON.stringify(catalog.CITY_CENTER) %>;</script>
-<script src="/vendor/pmtiles-4.5.0.js"></script>
-<script src="/tk-map.js"></script>
-<script src="/tk-point.js"></script>
-<script src="/tk-venues.js"></script>
+<script defer src="<%= asset('/vendor/pmtiles-4.5.0.js') %>"></script>
+<script defer src="<%= asset('/tk-map.js') %>"></script>
+<script defer src="<%= asset('/tk-point.js') %>"></script>
+<script defer src="<%= asset('/tk-venues.js') %>"></script>
 </body>
 </html>

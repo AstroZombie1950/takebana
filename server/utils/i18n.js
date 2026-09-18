@@ -61,7 +61,10 @@ const EN = {
     'Файл не передан': 'No file received',
     'Лимит 100 фото уже достигнут': 'The 100 photo limit has been reached',
     'Некорректное имя файла': 'Invalid file name',
-    'Только изображения форматов JPEG, JPG, PNG разрешены.': 'Only JPEG, JPG and PNG images are allowed.',
+    'Только изображения JPEG, PNG или WebP.': 'Only JPEG, PNG or WebP images.',
+    'Файл слишком большой': 'The file is too large',
+    'Ошибка загрузки файла': 'File upload failed',
+    'Не удалось обработать изображение': 'Could not process the image',
     'Ошибка сервера при поиске пользователей': 'Server error while searching for users',
 
     // Подписки, уведомления, переписка

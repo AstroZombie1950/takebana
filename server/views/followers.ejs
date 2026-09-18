@@ -1,0 +1,78 @@
+<%#
+  Подписчики и подписки человека: /userPage/:id/followers и /following.
+  Маршрут — routes/streaming/subscriptions.js. Вёрстка — та же, что у поиска
+  и авторов (css/search.css): вкладки, сетка карточек, пустое состояние.
+%>
+<%
+  var base = '/userPage/' + owner._id;
+  var tabs = [
+    { key: 'followers', n: followersCount, i18n: 'user.subscribersTab' },
+    { key: 'following', n: followingCount, i18n: 'user.followingTab' }
+  ];
+  var pageHref = function (p) { return base + '/' + list + (p > 1 ? '?page=' + p : ''); };
+  var titleKey = list === 'followers' ? 'page.followers.title' : 'page.following.title';
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { titleKey: titleKey, titleVars: { name: owner.displayName } }) %>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/search.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-search">
+
+      <a href="<%= base %>" class="tk-page__back">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        <span data-i18n="user.backToProfile"><%- t('user.backToProfile') %></span>
+      </a>
+
+      <%# Имя — отдельным узлом с экранированием, не подстановкой в строку
+          словаря: словарь вставляется как разметка (public/tk-i18n.js). %>
+      <h1 class="tk-search__h1"><%= owner.displayName %></h1>
+
+      <nav class="tk-tabs" aria-label="<%= ta('user.listsAria') %>" data-i18n-aria="user.listsAria">
+        <% tabs.forEach(function (tab) { var on = tab.key === list; %>
+        <a href="<%= base + '/' + tab.key %>" class="tk-tabs__item<%= on ? ' tk-tabs__item--on' : '' %>"<%- on ? ' aria-current="page"' : '' %>>
+          <span data-i18n="<%= tab.i18n %>"><%- t(tab.i18n) %></span>
+          <span class="tk-tabs__num"><%= tab.n %></span>
+        </a>
+        <% }); %>
+      </nav>
+
+      <% if (!people.length) { %>
+      <div class="tk-empty">
+        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
+        <% var emptyKey = list === 'followers' ? 'user.followersEmpty' : 'user.followingEmpty'; %>
+        <p class="tk-empty__h" data-i18n="<%= emptyKey %>"><%- t(emptyKey) %></p>
+      </div>
+      <% } else { %>
+      <section class="tk-search__sec">
+        <div class="tk-people">
+          <% people.forEach(function (person) { %>
+          <%- include('partials/personCard', { person: person }) %>
+          <% }); %>
+        </div>
+      </section>
+
+      <% if (page > 1 || more) { %>
+      <nav class="tk-search__pager">
+        <% if (page > 1) { %><a href="<%= pageHref(page - 1) %>" class="tk-btn tk-btn--outline tk-btn--sm" rel="prev" data-i18n="user.listPrev"><%- t('user.listPrev') %></a><% } %>
+        <% if (more) { %><a href="<%= pageHref(page + 1) %>" class="tk-btn tk-btn--outline tk-btn--sm" rel="next" data-i18n="user.listNext"><%- t('user.listNext') %></a><% } %>
+      </nav>
+      <% } %>
+      <% } %>
+
+    </div>
+  </main>
+</div>
+</body>
+</html>

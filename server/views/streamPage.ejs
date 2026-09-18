@@ -154,7 +154,7 @@
       </form>
     </div>
 
-    <script src="/tk-studio.js"></script>
+    <script defer src="<%= asset('/tk-studio.js') %>"></script>
 
   <% } else { %>
     <div class="tk-live">
@@ -219,9 +219,9 @@
     </div>
 
     <%# socket.io и tk-daily.js грузит шапка. Плеер HLS нужен только предпросмотру OBS. %>
-    <% if (source === 'obs') { %><script src="/tk-hls.js"></script><% } %>
-    <script src="/tk-stream.js"></script>
-    <script src="/tk-console.js"></script>
+    <% if (source === 'obs') { %><script defer src="<%= asset('/tk-hls.js') %>"></script><% } %>
+    <script defer src="<%= asset('/tk-stream.js') %>"></script>
+    <script defer src="<%= asset('/tk-console.js') %>"></script>
   <% } %>
   </main>
 </div>

@@ -232,25 +232,29 @@ router.post('/sendMessage', requireAuthApi, requireNotBanned, validate({
 });
 
 
-// Пересылка одного сообщения одному или нескольким собеседникам. Подпись
-// «переслано от» — изначальный автор, даже если пересылают пересланное.
+// Пересылка сообщений — одного или выделенных пачкой — одному или нескольким
+// собеседникам. Подпись «переслано от» — изначальный автор, даже если
+// пересылают пересланное. comment — своё сообщение к пересылке: уходит
+// первым, над пересланными, как подпись к ним.
 router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
-  messageId: { type: 'objectId', required: true, label: 'Сообщение' },
+  messageIds: { type: 'array', required: true, max: 50, of: { type: 'objectId' }, label: 'Сообщения' },
   recipientIds: { type: 'array', required: true, max: 20, of: { type: 'objectId' }, label: 'Кому' },
+  comment: { type: 'string', max: 5000, default: '', label: 'Комментарий' },
 }), async (req, res) => {
   const me = String(req.session.userId);
-  const { messageId } = req.body;
+  const { comment } = req.body;
   const recipientIds = [...new Set(req.body.recipientIds)].filter((id) => id !== me);
   if (!recipientIds.length) {
     return res.status(400).json({ message: 'Выберите, кому переслать' });
   }
 
-  const original = await Message.findOne({
-    _id: messageId,
+  // Порядок — как в переписке, по времени, а не как их выделяли.
+  const originals = await Message.find({
+    _id: { $in: [...new Set(req.body.messageIds)] },
     $or: [{ sender: me }, { recipient: me }],
     deletedFor: { $ne: me },
-  }).lean();
-  if (!original) {
+  }).sort({ sentAt: 1 }).lean();
+  if (!originals.length) {
     return res.status(404).json({ message: 'Сообщение не найдено' });
   }
 
@@ -259,21 +263,26 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
     User.find({ _id: { $in: recipientIds } }).select('login email avatar').lean(),
   ]);
 
-  let forwardedFrom = original.forwardedFrom && original.forwardedFrom.name ? original.forwardedFrom : null;
-  if (!forwardedFrom) {
-    const author = String(original.sender) === me
-      ? sender
-      : await User.findById(original.sender).select('login email').lean();
-    forwardedFrom = author
+  // Автор каждого — один раз на всю пачку: в выделении обычно два человека.
+  const authors = new Map([[me, sender]]);
+  const origin = async (m) => {
+    if (m.forwardedFrom && m.forwardedFrom.name) return m.forwardedFrom;
+    const id = String(m.sender);
+    if (!authors.has(id)) authors.set(id, await User.findById(id).select('login email').lean());
+    const author = authors.get(id);
+    return author
       ? { user: author._id, name: userView.displayName(author) }
-      : { user: original.sender, name: '#' + String(original.sender).slice(-6) };
-  }
+      : { user: m.sender, name: '#' + id.slice(-6) };
+  };
+  const batch = [];
+  for (const m of originals) batch.push({ content: m.content, forwardedFrom: await origin(m) });
 
   const sent = [];
   for (const recipient of recipients) {
     let conversation = await findConversation(me, recipient._id);
     if (!conversation) conversation = await Conversation.create({ userOne: me, userTwo: recipient._id });
-    sent.push(await deliver(req, { conversation, sender, recipient, content: original.content, forwardedFrom }));
+    if (comment) sent.push(await deliver(req, { conversation, sender, recipient, content: comment }));
+    for (const item of batch) sent.push(await deliver(req, { conversation, sender, recipient, ...item }));
   }
 
   res.json({ success: true, messages: sent });

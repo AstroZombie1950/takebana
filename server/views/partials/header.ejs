@@ -10,8 +10,13 @@
    // На самих страницах входа и регистрации те же кнопки в шапке ни к чему:
    // форма прямо под ней.
    var onAuthPage = /^\/(login|register)\b/.test(path); %>
-<script src="/escape-html.js"></script>
-<script src="/toast.js"></script>
+<%# Все внешние скрипты сайта идут с defer: разбор разметки на них не встаёт,
+    а порядок выполнения остаётся порядком в документе. Запускаются они до
+    DOMContentLoaded, так что обработчики этого события в наших файлах
+    срабатывают как прежде. Без defer эта пара блокировала отрисовку
+    в самом начале страницы — PageSpeed оценивал её в 430 мс. %>
+<script defer src="<%= asset('/escape-html.js') %>"></script>
+<script defer src="<%= asset('/toast.js') %>"></script>
 
 <% if (!guest) { %><%- include('appModals') %><% } %>
 
@@ -42,10 +47,16 @@
   </form>
   <% } %>
 
-  <%# Заметный вход в «что это за сервис»: не мелкая ссылка в подвале. %>
-  <a href="/about" class="tk-btn tk-btn--outline tk-btn--sm tk-ahead__about"<%- path === '/about' ? ' aria-current="page"' : '' %> data-i18n="nav.whatIs"><%- t('nav.whatIs') %></a>
-
   <div class="tk-ahead__right">
+    <%# Заметный вход в «что это за сервис»: не мелкая ссылка в подвале.
+        В правой группе, а не за поиском: поиска нет на входе и регистрации,
+        и кнопка уезжала к логотипу. Здесь она всегда у правого края —
+        слева от языка у гостя и левее колокольчика у вошедшего.
+        На самой «О нас» её нет: она вела бы на эту же страницу. %>
+    <% if (path !== '/about') { %>
+    <a href="/about" class="tk-btn tk-btn--outline tk-btn--sm tk-ahead__about" data-i18n="nav.whatIs"><%- t('nav.whatIs') %></a>
+    <% } %>
+
     <% if (guest) { %>
     <div class="tk-lang tk-ahead__lang">
       <button type="button" class="tk-lang__btn<%= lang === 'ru' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'ru' %>" data-lang="ru">RU</button>
@@ -88,13 +99,19 @@
 <%# Единственное, что скрипту нужно от сервера. %>
 <script>
   window.TK = {
-    userId: <%- JSON.stringify(guest ? '' : String(currentUser._id)) %>
+    userId: <%- JSON.stringify(guest ? '' : String(currentUser._id)) %>,
+    // Словари обоих языков: второй tk-i18n.js догружает при переключении.
+    dicts: <%- JSON.stringify({ ru: asset('/tk-i18n-ru.js'), en: asset('/tk-i18n-en.js') }) %>
   };
 </script>
 <%# Словарь языка страницы и переключатель — одни на весь сайт
     (public/tk-i18n.js). Второй язык подгружается при переключении. %>
-<script src="/tk-i18n-<%= lang %>.js"></script>
-<script src="/tk-i18n.js"></script>
-<% if (!guest || typeof socket !== 'undefined') { %><script src="/socket.io/socket.io.js"></script><% } %>
-<% if (!guest) { %><script src="/tk-daily.js"></script><script src="/tk-peer.js"></script><% } %>
-<script src="/tk-app.js"></script>
+<script defer src="<%= asset('/tk-i18n-' + lang + '.js') %>"></script>
+<script defer src="<%= asset('/tk-i18n.js') %>"></script>
+<%# Свой раскрывающийся список у всех <select class="tk-select">: системный
+    рисуется мимо дизайна. До скриптов страниц — те заполняют списки уже
+    поверх него, и он это видит. %>
+<script defer src="<%= asset('/tk-listbox.js') %>"></script>
+<% if (!guest || typeof socket !== 'undefined') { %><script defer src="/socket.io/socket.io.js"></script><% } %>
+<% if (!guest) { %><script defer src="<%= asset('/tk-daily.js') %>"></script><script defer src="<%= asset('/tk-peer.js') %>"></script><% } %>
+<script defer src="<%= asset('/tk-app.js') %>"></script>

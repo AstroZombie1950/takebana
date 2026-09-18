@@ -64,7 +64,11 @@
     if (TK[l]) return Promise.resolve();
     return loading[l] || (loading[l] = new Promise(function (resolve, reject) {
       var script = document.createElement('script');
-      script.src = '/tk-i18n-' + l + '.js';
+      // Адрес — от сервера (window.TK.dicts, partials/header.ejs): сжатая копия
+      // с хешем в имени. Собранный здесь «/tk-i18n-en.js» был бы без версии,
+      // и после правки словаря браузер держал бы старый.
+      var dicts = (window.TK && window.TK.dicts) || {};
+      script.src = dicts[l] || '/tk-i18n-' + l + '.js';
       script.onload = resolve;
       script.onerror = function () { delete loading[l]; reject(new Error('словарь ' + l + ' не загрузился')); };
       document.head.appendChild(script);

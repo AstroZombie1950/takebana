@@ -70,7 +70,46 @@ router.delete('/unsubscribe', validate({
   res.status(200).json({ message: 'Отписка успешно выполнена' });
 });
 
+// Списки человека: кто на него подписан (/followers) и на кого подписан он
+// (/following). Открыты гостю, как и сама страница человека. Новые подписки
+// сверху, по LIST_PAGE на страницу. Карточки — те же, что в поиске
+// (utils/search.js, partials/personCard.ejs).
+const { commonDataMiddleware } = require('./shared');
+const { peopleCards } = require('../../utils/search');
+const LIST_PAGE = 48;
 
-// Маршрут для страницы профиля пользователя /userPage/:id
+router.get(['/userPage/:id/followers', '/userPage/:id/following'], commonDataMiddleware, async (req, res) => {
+  const { id } = req.params;
+  if (!/^[a-f\d]{24}$/i.test(id)) return res.status(404).send('Пользователь не найден');
+  const owner = await User.findById(id).select('login email avatar').lean();
+  if (!owner) return res.status(404).send('Пользователь не найден');
+
+  const list = req.path.endsWith('/following') ? 'following' : 'followers';
+  // В одной коллекции обе стороны: подписчики — те, кто подписан на него,
+  // подписки — те, на кого подписан он.
+  const [mine, other] = list === 'followers' ? ['subscribedToId', 'subscriberId'] : ['subscriberId', 'subscribedToId'];
+  const page = Math.max(1, Math.min(1000, parseInt(req.query.page, 10) || 1));
+
+  const [links, followersCount, followingCount] = await Promise.all([
+    Subscription.find({ [mine]: id }).sort({ createdAt: -1, _id: -1 })
+      .skip((page - 1) * LIST_PAGE).limit(LIST_PAGE + 1).select(other).lean(),
+    Subscription.countDocuments({ subscribedToId: id }),
+    Subscription.countDocuments({ subscriberId: id }),
+  ]);
+  const more = links.length > LIST_PAGE;
+  const ids = links.slice(0, LIST_PAGE).map((l) => l[other]);
+
+  // Порядок подписок сохраняем: find по $in отдаёт в своём порядке.
+  // Удалённых аккаунтов в списке нет — их карточке некуда вести.
+  const users = await User.find({ _id: { $in: ids } }).select('login email avatar isOnline').lean();
+  const byId = new Map(users.map((u) => [String(u._id), u]));
+  const people = await peopleCards(ids.map((i) => byId.get(String(i))).filter(Boolean));
+
+  const displayName = userView.displayName(owner);
+  res.render('followers', {
+    owner: { _id: owner._id, displayName, avatarStyle: userView.avatarStyle(owner, displayName) },
+    list, people, page, more, followersCount, followingCount,
+  });
+});
 
 module.exports = router;

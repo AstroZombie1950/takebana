@@ -50,18 +50,23 @@
 }
 .tb-backdrop.tb-in { opacity: 1; }
 .tb-dialog {
-  width: min(440px, 100%); background: #0A0A0A;
+  width: min(460px, 100%); background: #0A0A0A;
   border: 1px solid rgba(144, 113, 99, .5);
-  padding: 22px; box-shadow: 0 20px 60px rgba(0, 0, 0, .6);
+  padding: 24px 22px 22px; box-shadow: 0 20px 60px rgba(0, 0, 0, .6);
   font: 14px/1.5 'Golos Text', Helvetica, sans-serif;
   color: #F5F1EA;
 }
-.tb-dialog p { margin: 0 0 20px; font-size: 16px; font-weight: 700; }
-.tb-dialog-buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+/* Вопрос — заголовком окна: сверху и по центру. */
+.tb-dialog p { margin: 0 0 22px; font-size: 16px; font-weight: 700; text-align: center; }
+/* Действия слева направо, отмена — последней: «у меня · у всех · отмена».
+ * Раньше отмена стояла первой и с выравниванием вправо оказывалась
+ * посередине между двумя удалениями. */
+.tb-dialog-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
 .tb-dialog button {
+  flex: 1 1 auto;
   font: 700 12px/1 'Golos Text', Helvetica, sans-serif;
   letter-spacing: .1em; text-transform: uppercase;
-  padding: 12px 16px; cursor: pointer; border: 1px solid transparent;
+  padding: 12px 12px; cursor: pointer; border: 1px solid transparent;
   transition: background-color .18s ease, border-color .18s ease, color .18s ease;
 }
 .tb-dialog .tb-cancel { background: transparent; color: #C9C2B7; border-color: rgba(144, 113, 99, .7); }
@@ -71,7 +76,7 @@
 .tb-dialog button:focus-visible { outline: 2px solid #E34234; outline-offset: 3px; }
 
 @media (max-width: 480px) {
-  .tb-dialog-buttons { flex-direction: column-reverse; }
+  .tb-dialog-buttons { flex-direction: column; }
   .tb-dialog button { width: 100%; }
 }
 
@@ -162,14 +167,16 @@
         return b;
       });
 
-      buttons.append(cancel, ...actions);
+      buttons.append(...actions, cancel);
       dialog.append(text, buttons);
       backdrop.appendChild(dialog);
       document.body.appendChild(backdrop);
       requestAnimationFrame(() => backdrop.classList.add('tb-in'));
-      actions[actions.length - 1].focus();
+      // Фокус на отмене: действие деструктивное, по умолчанию «нет».
+      cancel.focus();
 
-      const all = [cancel, ...actions];
+      // Порядок обхода по Tab — тот же, что на глаз.
+      const all = [...actions, cancel];
       function close(result) {
         document.removeEventListener('keydown', onKey, true);
         backdrop.classList.remove('tb-in');

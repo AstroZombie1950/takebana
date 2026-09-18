@@ -11,7 +11,20 @@
 <div class="tk-pick" data-point>
   <div class="tk-pick__head">
     <span class="tk-form__label" data-i18n="venue.point.label"><%- t('venue.point.label') %></span>
-    <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-point-find data-i18n="venue.point.find"><%- t('venue.point.find') %></button>
+  </div>
+
+  <%# Поле адреса — здесь, а не в панели выше. Кнопка «Найти» ищет по тому,
+      что в нём написано, но пока поле стояло в другом блоке, связи между ними
+      не было видно: человек ставил метку, получал подставленный адрес и не
+      догадывался, что адрес можно вписать руками и подвинуть метку. %>
+  <div class="tk-pick__addr">
+    <label class="tk-form__label" for="venueAddress" data-i18n="venues.address"><%- t('venues.address') %></label>
+    <div class="tk-pick__addr-line">
+      <input id="venueAddress" class="tk-field" type="text" name="address" maxlength="300"
+             placeholder="<%= ta('company.ph.address') %>" data-i18n-placeholder="company.ph.address"
+             autocomplete="street-address"<% if (typeof addressRequired !== 'undefined' && addressRequired) { %> required<% } %>>
+      <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" data-point-find data-i18n="venue.point.find"><%- t('venue.point.find') %></button>
+    </div>
   </div>
 
   <div class="tk-pick__map" data-point-map></div>

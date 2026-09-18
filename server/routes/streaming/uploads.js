@@ -1,91 +1,46 @@
 // Приём файлов: обложки эфиров, аватары, галерея профиля.
 //
-// Три разных хранилища с общим фильтром типов. Папка — от расположения
-// файла, а не от рабочего каталога: маршруты, которые удаляют файлы, считают
-// путь так же (UPLOADS), и раньше они промахивались мимо папки — удалённое
-// из галереи оставалось на диске.
+// Файл приходит в память и уходит на диск уже обработанным — сжатым,
+// подогнанным по размеру и без EXIF (utils/image.js). Прежде здесь стояли
+// три multer.diskStorage, и присланное ложилось на диск байт в байт.
+//
+// Память, а не диск, по двум причинам: обрабатывать всё равно нужно из буфера,
+// а файл, не прошедший обработку, не остаётся на диске мусором. Размеры тут
+// небольшие — лимиты ниже, и до памяти доходит только то, что их прошло.
+//
+// Папка — от расположения файла, а не от рабочего каталога: маршруты, которые
+// удаляют файлы, считают путь так же (UPLOADS), и раньше они промахивались
+// мимо папки — удалённое из галереи оставалось на диске.
 
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 
 const UPLOADS = path.join(__dirname, '..', '..', 'public', 'uploads');
 
-// Настройка хранилища для Multer
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(UPLOADS, 'thumbnails')); // Папка для хранения заглавных картинок
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname)); // Уникальное имя файла
-  }
-});
+// webp принимаем наравне с jpeg и png: его отдаёт «Поделиться» на телефонах
+// и большинство редакторов, а раньше такая загрузка просто отваливалась.
+// heic (снимок с айфона) пока нет: в готовых сборках sharp его поддержки нет,
+// нужна отдельная libheif — см. temp/backlog-2026-09-17.md.
+const ALLOWED = /^image\/(jpeg|png|webp)$/;
 
+// status и expose — для middleware/errors.js: не тот формат файла это 400
+// с внятным текстом, а не безымянная пятисотка в журнале ошибок.
+const badType = () => Object.assign(new Error('Только изображения JPEG, PNG или WebP.'), { status: 400, expose: true });
 
-// Фильтр для проверки типа файла
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
-  
-  if (mimetype && extname) {
-    return cb(null, true);
-  } else {
-    cb(new Error('Только изображения форматов JPEG, JPG, PNG разрешены.'));
-  }
+  if (ALLOWED.test(file.mimetype)) return cb(null, true);
+  cb(badType());
 };
 
-// Инициализация Multer
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // Ограничение размера файла: 5MB
-  fileFilter: fileFilter
+// Лимит — на присланное, не на сохранённое: после обработки файл в разы легче.
+const inMemory = (mb) => multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: mb * 1024 * 1024 },
+  fileFilter,
 });
 
-// Хранилище для аватаров пользователей
-const avatarStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    try {
-      const dest = path.join(UPLOADS, 'avatars');
-      if (!fs.existsSync(dest)) {
-        fs.mkdirSync(dest, { recursive: true });
-      }
-      cb(null, dest);
-    } catch (e) {
-      cb(e);
-    }
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-const uploadAvatar = multer({
-  storage: avatarStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: fileFilter
-});
-
-// Хранилище для галереи пользователей
-const galleryStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    try {
-      if (!req.session || !req.session.userId) return cb(new Error('Необходима авторизация'));
-      const dest = path.join(UPLOADS, 'gallery', String(req.session.userId));
-      if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
-      cb(null, dest);
-    } catch (e) { cb(e); }
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-const uploadGallery = multer({
-  storage: galleryStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB на фото
-  fileFilter: fileFilter
-});
+const upload = inMemory(5);         // обложки эфиров
+const uploadAvatar = inMemory(5);
+const uploadGallery = inMemory(10); // фото галереи бывают крупнее
 
 module.exports = { UPLOADS, upload, uploadAvatar, uploadGallery };

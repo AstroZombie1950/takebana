@@ -57,6 +57,13 @@ async function findPeople(query, limit) {
     .select('login email avatar isOnline')
     .limit(limit)
     .lean();
+  return peopleCards(users);
+}
+
+// Карточки людей (partials/personCard.ejs): имя, аватар, подписчики, в сети ли.
+// Общие для поиска и списков подписчиков. users — с полями login, email,
+// avatar, isOnline; порядок сохраняется.
+async function peopleCards(users) {
   if (!users.length) return [];
 
   // Подписчики — одним запросом на всех найденных, а не по запросу на каждого.
@@ -168,4 +175,4 @@ async function counts(rawQuery) {
   return { people, streams, recordings, venues, total: people + streams + recordings + venues };
 }
 
-module.exports = { search, counts, normalize, TYPES, MIN_QUERY };
+module.exports = { search, counts, normalize, peopleCards, TYPES, MIN_QUERY };

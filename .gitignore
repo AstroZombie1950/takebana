@@ -23,6 +23,8 @@ certs/
 
 # Пользовательский контент (переезжает в объектное хранилище)
 server/public/uploads/
+# Сжатые копии стилей и скриптов — собирает server/utils/assets.js при старте
+server/public/min/
 # прежний путь загрузок заведений: до 4 сентября multer писал сюда, мимо public
 server/uploads/
 

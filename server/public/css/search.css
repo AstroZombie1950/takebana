@@ -267,3 +267,11 @@
   .tk-search__sec { margin-top: 32px; }
   .tk-places { grid-template-columns: 1fr; }
 }
+
+/* Листалка списков подписчиков (followers.ejs): назад и дальше под сеткой. */
+.tk-search__pager {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 32px;
+}

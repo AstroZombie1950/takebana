@@ -10,6 +10,35 @@
 
 .tk-company__submit { align-self: flex-start; }
 
+/* На широком экране заявка шла в одну колонку шириной 760 px и занимала
+ * едва половину места справа от панели. Теперь данные и часы слева, карта
+ * справа во всю высоту, заявка — по центру своей полосы. */
+@media (min-width: 1100px) {
+  .tk-page.tk-company { max-width: 1180px; }
+
+  .tk-company__form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 16px 20px;
+  }
+
+  .tk-company__data  { grid-column: 1; grid-row: 1; }
+  .tk-company__when  { grid-column: 1; grid-row: 2; }
+  /* Карта тянется на обе строки левой колонки: иначе под ней зияла бы дыра. */
+  /* align-self — против общего align-items: start, иначе растяжки на две
+     строки не будет и под картой останется дыра. */
+  .tk-company__place { grid-column: 2; grid-row: 1 / span 2; align-self: stretch; display: flex; }
+
+  .tk-company__form > .tk-form__note,
+  .tk-company__submit { grid-column: 1 / -1; justify-self: center; }
+
+  .tk-company__form > .tk-form__note { text-align: center; }
+  /* .tk-pick — колонка флексом, поэтому карта тянется flex, а не height. */
+  .tk-company__place .tk-pick { flex: 1; }
+  .tk-company__place .tk-pick__map { flex: 1; min-height: 340px; }
+}
+
 .tk-company__pair {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -106,13 +106,20 @@ body.tk-app {
 .tk-ahead__field:focus { border-color: var(--tk-accent); }
 
 /* Лупа — кнопка отправки формы: с ней поиск работает и без скрипта. */
+/* Значок 16×16, а область нажатия — 26×26: меньше 24 браузер и проверки
+ * доступности считают непопадаемой целью на телефоне. Смещение слева
+ * подобрано так, чтобы сам значок остался там же, где был. */
 .tk-ahead__loupe {
   position: absolute;
-  left: 13px;
+  left: 8px;
   top: 50%;
   transform: translateY(-50%);
   z-index: 1;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
   padding: 0;
   background: none;
   border: 0;
@@ -195,10 +202,9 @@ body.tk-app {
   margin-left: auto;
 }
 
-/* «Что такое Takebana?» — сразу за поиском, заметной кнопкой. На телефоне
+/* «Что такое Takebana?» — первой в правой группе, заметной кнопкой. На телефоне
  * места нет: там тот же пункт в левой панели и плашка над витриной. */
 .tk-ahead__about { flex: none; white-space: nowrap; }
-.tk-ahead__about[aria-current="page"] { border-color: var(--tk-accent); color: var(--tk-paper); }
 
 /* Гостю: язык, вход и регистрация. У .tk-lang отступ под шапку лендинга. */
 .tk-ahead__lang { margin-left: 0; }
@@ -999,12 +1005,14 @@ body.tk-app {
 }
 
 .tk-thumb:hover .tk-thumb__del,
+.tk-shots__item:hover .tk-thumb__del,
 .tk-thumb__del:focus-visible { opacity: 1; }
 .tk-thumb__del:hover { background: var(--tk-accent); }
 
-/* На тач-устройстве наведения нет — кнопку видно всегда. */
+/* На тач-устройстве наведения нет — кнопку видно всегда, и она крупнее:
+ * 22 px пальцем не попасть, меньше 24 проверки доступности не пропускают. */
 @media (hover: none) {
-  .tk-thumb__del { opacity: 1; }
+  .tk-thumb__del { opacity: 1; width: 28px; height: 28px; }
 }
 
 /* ── Уведомления ── */

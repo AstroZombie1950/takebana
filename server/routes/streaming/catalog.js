@@ -20,6 +20,7 @@ const PAGES = {
   popular:       { i18n: 'cat.popularTitle' },
   business:      { i18n: 'cat.businessTitle' },
   entertainment: { i18n: 'cat.entertainmentTitle' },
+  fashion:       { i18n: 'cat.fashionTitle' },
 };
 
 // Прежде роут отдавал не больше четырёх эфиров — с фильтрами это значило бы

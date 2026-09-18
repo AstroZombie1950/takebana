@@ -3,7 +3,9 @@
   // Категории, подкатегории и города — config/catalog.js.
   var groupIcons = {
     entertainment: '<path d="M9 5.2l1.1 3.7L13.8 10l-3.7 1.1L9 14.8l-1.1-3.7L4.2 10l3.7-1.1L9 5.2Z"></path><path d="M17.5 13.5l.6 2 2 .6-2 .6-.6 2-.6-2-2-.6 2-.6.6-2Z"></path>',
-    business: '<rect x="3" y="7" width="18" height="13"></rect><path d="M9 7V5h6v2"></path><path d="M3 13h18"></path>'
+    business: '<rect x="3" y="7" width="18" height="13"></rect><path d="M9 7V5h6v2"></path><path d="M3 13h18"></path>',
+    // Вешалка — тот же знак, что у раздела в левой панели.
+    fashion: '<path d="M12 3a2 2 0 0 0-1 3.8v1.9"></path><path d="M11 8.7 3.6 14.6a1.2 1.2 0 0 0 .8 2.2h15.2a1.2 1.2 0 0 0 .8-2.2L13 8.7Z"></path>'
   };
   var groups = category === 'popular' ? Object.keys(catalog.CATEGORIES) : [category];
 %>
@@ -200,6 +202,6 @@
   </main>
 </div>
 
-<script src="/catalog.js"></script>
+<script defer src="<%= asset('/catalog.js') %>"></script>
 </body>
 </html>

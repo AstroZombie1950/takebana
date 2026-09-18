@@ -26,7 +26,11 @@ const callSchema = new Schema({
   // (utils/turn.js): сразу, если кто-то из двоих уже на нём, или переходом
   // посреди звонка. fallback — почему перешли, со слов браузера.
   path: { type: String, enum: ['daily', 'own'], default: 'daily' },
-  fallback: { type: String, default: null }
+  fallback: { type: String, default: null },
+  // Кто убрал звонок из своего журнала и ленты переписки. Только «у себя»:
+  // запись общая на двоих, и по ней же панель считает разговоры и расходы
+  // на Daily — поэтому сам документ не стирается никогда.
+  deletedFor: [{ type: Schema.Types.ObjectId, ref: 'User' }]
 });
 
 callSchema.index({ caller: 1, startedAt: -1 });

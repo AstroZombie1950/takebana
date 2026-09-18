@@ -14,6 +14,7 @@ const { validate } = require('../../middleware/validate');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
 const { CATEGORIES, SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
 const { UPLOADS, upload } = require('./uploads');
+const { saveImage, BadImageError } = require('../../utils/image');
 const daily = require('../../utils/daily');
 const webLive = require('../../utils/webLive');
 const hls = require('../../utils/hls');
@@ -277,8 +278,18 @@ router.post('/upload-thumbnail', requireAuth, upload.single('thumbnail'), valida
           });
       }
 
+      // Обложка ложится на диск уже подогнанной под 16:9 и сжатой
+      // (utils/image.js): до этого на диск шёл присланный файл как есть.
+      let name;
+      try {
+          name = await saveImage(req.file.buffer, 'thumbnail', thumbsDir);
+      } catch (e) {
+          if (!(e instanceof BadImageError)) throw e;
+          return res.status(400).json({ message: e.message });
+      }
+
       // Обновляем поле thumbnail в документе Stream
-      stream.thumbnail = `/uploads/thumbnails/${req.file.filename}`;
+      stream.thumbnail = `/uploads/thumbnails/${name}`;
       await stream.save();
 
       audit(req, 'stream.thumbnail', { targetType: 'stream', target: stream });

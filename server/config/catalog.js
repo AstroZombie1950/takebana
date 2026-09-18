@@ -36,6 +36,18 @@ const CATEGORIES = {
       { code: 'presentation', name: 'Презентация', i18n: 'sub.presentation' },
     ],
   },
+  fashion: {
+    name: 'Мода', i18n: 'cat.fashion',
+    note: 'Дизайн, стиль, красота', noteI18n: 'cat.fashionNote',
+    subs: [
+      { code: 'designers', name: 'Дизайнеры', i18n: 'sub.designers' },
+      { code: 'style', name: 'Стиль и образы', i18n: 'sub.style' },
+      { code: 'beauty', name: 'Красота', i18n: 'sub.beauty' },
+      { code: 'handmade', name: 'Украшения и хендмейд', i18n: 'sub.handmade' },
+      { code: 'shows', name: 'Показы', i18n: 'sub.shows' },
+      { code: 'vintage', name: 'Винтаж и ресейл', i18n: 'sub.vintage' },
+    ],
+  },
 };
 
 // Закрытый список, а не свободный ввод: «Белград», «Beograd» и «белград »

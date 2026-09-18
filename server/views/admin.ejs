@@ -8,8 +8,8 @@
 <%# escapeHtml обязателен: таблицы собираются строками и уходят в innerHTML,
     а значения полей вводят посетители — от названия заведения до текста
     жалобы и сообщения об ошибке в чужом браузере. %>
-<script src="/escape-html.js"></script>
-<script src="/toast.js"></script>
+<script defer src="<%= asset('/escape-html.js') %>"></script>
+<script defer src="<%= asset('/toast.js') %>"></script>
 </head>
 <body class="tk-panel">
 
@@ -52,6 +52,6 @@ window.TKPanel = <%- JSON.stringify({
   actions: actions
 }) %>;
 </script>
-<script src="/panel.js"></script>
+<script defer src="<%= asset('/panel.js') %>"></script>
 </body>
 </html>

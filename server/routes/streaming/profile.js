@@ -12,6 +12,7 @@ const Subscription = require('../../models/Subscription');
 const { requireAuth } = require('../../middleware/auth');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
 const { UPLOADS, uploadAvatar, uploadGallery } = require('./uploads');
+const { saveImage, saveImages, BadImageError } = require('../../utils/image');
 const { commonDataMiddleware } = require('./shared');
 const bcrypt = require('bcrypt');
 const { PASSWORD_PROVIDER, PASSWORD_MAX } = require('../../utils/password');
@@ -56,13 +57,19 @@ router.post('/profile/avatar', requireAuth, uploadAvatar.single('avatar'), async
     return res.status(400).json({ success: false, message: 'Файл не передан' });
   }
   const user = await User.findById(req.session.userId);
-  if (!user) {
-    fs.unlink(req.file.path, () => {});
-    return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+  // Удалять нечего: файл ещё в памяти, на диск он ложится строкой ниже.
+  if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+
+  let name;
+  try {
+    name = await saveImage(req.file.buffer, 'avatar', path.join(UPLOADS, 'avatars'));
+  } catch (e) {
+    if (!(e instanceof BadImageError)) throw e;
+    return res.status(400).json({ success: false, message: e.message });
   }
 
   const old = user.avatar;
-  user.avatar = `/uploads/avatars/${req.file.filename}`;
+  user.avatar = `/uploads/avatars/${name}`;
   await user.save();
   removeAvatarFile(old);
 
@@ -101,8 +108,16 @@ router.post('/profile/gallery', requireAuth, uploadGallery.array('photos', 100),
     req.files = req.files.slice(0, 100 - existing);
   }
 
+  let names;
+  try {
+    names = await saveImages(req.files || [], 'gallery', path.join(UPLOADS, 'gallery', String(req.session.userId)));
+  } catch (e) {
+    if (!(e instanceof BadImageError)) throw e;
+    return res.status(400).json({ success: false, message: e.message });
+  }
+
   const basePath = `/uploads/gallery/${req.session.userId}/`;
-  const urls = (req.files || []).map(f => basePath + f.filename);
+  const urls = names.map(n => basePath + n);
   user.gallery = [...(user.gallery || []), ...urls];
   await user.save();
 

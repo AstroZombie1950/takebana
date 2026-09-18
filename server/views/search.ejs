@@ -90,22 +90,7 @@
         <% if (group.key === 'people') { %>
         <div class="tk-people">
           <% group.items.forEach(function (person) { %>
-          <a href="/userPage/<%= person._id %>" class="tk-person" data-presence-user="<%= person._id %>">
-            <span class="tk-person__ava"<% if (!person.avatarStyle.url) { %> data-bg="<%= person.avatarStyle.gradient %>"<% } %>>
-              <% if (person.avatarStyle.url) { %><img src="<%= person.avatarStyle.url %>" alt="" loading="lazy"><% } else { %><%= person.avatarStyle.initial %><% } %>
-              <span class="presence-dot <%= person.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
-            </span>
-            <span class="tk-person__body">
-              <span class="tk-person__name"><%= person.displayName %></span>
-              <span class="tk-person__meta">
-                <span data-i18n="authors.followers"><%- t('authors.followers') %></span>: <%= person.followersCount %>
-              </span>
-              <span class="tk-person__meta" data-presence-text>
-                <% var pk = person.isOnline ? 'common.online' : 'common.offline'; %>
-                <span data-i18n="<%= pk %>"><%- t(pk) %></span>
-              </span>
-            </span>
-          </a>
+          <%- include('partials/personCard', { person: person }) %>
           <% }); %>
         </div>
 

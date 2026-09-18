@@ -8,12 +8,13 @@
  */
 
 .tk-prof {
-  max-width: 980px;
+  max-width: 1440px;
   padding: 40px;
 }
 
 /* ── Шапка профиля ────────────────────────────────────────────────────── */
 .tk-prof__head {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 28px;
@@ -57,12 +58,72 @@
   overflow-wrap: anywhere;
 }
 
+/* Настройки — иконкой в правом верхнем углу блока имени. Кнопкой в общем
+ * ряду она стояла одна и выбивалась из имени с аватаром. */
+.tk-prof__gear {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  color: var(--tk-muted);
+  border: 1px solid var(--tk-rule);
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.tk-prof__gear:hover { color: var(--tk-paper); border-color: var(--tk-beige); }
+
+/* Присутствие: одна строка под именем. Раньше это была отдельная панель
+ * с двумя строками «ключ — значение» в сетке ниже. */
+.tk-prof__meta {
+  margin: 12px 0 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+}
+
+.tk-prof__meta-live,
+.tk-prof__meta-seen {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tk-prof__meta-live { color: var(--tk-paper); }
+
+/* Половина строки лишняя: у того, кто на связи, «Последний раз в сети»
+ * повторяет «онлайн», а у ушедшего «не в сети» повторяет дату. */
+.tk-prof__meta.presence-online .tk-prof__meta-seen,
+.tk-prof__meta.presence-offline .tk-prof__meta-live { display: none; }
+
+/* Точка присутствия в строке: обычный кружок, не значок на аватаре. */
+.tk-prof__meta .presence-dot {
+  position: static;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border: none;
+  border-radius: 50%;
+}
+
 /* Подписчики: число крупно, подпись мелко под ним. */
 .tk-prof__stats {
   margin-top: 18px;
   display: flex;
   gap: 32px;
 }
+
+/* Число и подпись — ссылка на список: на наведении подпись светлеет. */
+.tk-prof__stat { display: block; color: inherit; }
+.tk-prof__stat:hover .tk-prof__lbl,
+.tk-prof__stat:focus-visible .tk-prof__lbl { color: var(--tk-paper); }
 
 .tk-prof__num {
   display: block;
@@ -93,55 +154,10 @@
 .tk-prof__acts svg { flex: none; }
 
 /* ── Секции ───────────────────────────────────────────────────────────── */
-.tk-prof__grid {
-  margin-top: 32px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-}
-
 .tk-panel--prof {
+  margin-top: 32px;
   padding: 20px 22px;
   border: 1px solid var(--tk-rule);
-}
-
-.tk-prof__rows { display: flex; flex-direction: column; }
-
-.tk-prof__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 11px 0;
-  border-bottom: 1px solid rgba(144, 113, 99, .25);
-}
-
-.tk-prof__row:last-child { border-bottom: none; }
-
-.tk-prof__key {
-  font-family: Oswald, sans-serif;
-  font-size: 13px;
-  color: var(--tk-muted);
-}
-
-.tk-prof__val {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--tk-paper);
-  text-align: right;
-}
-
-/* Точка присутствия в строке: обычный кружок, не значок на аватаре. */
-.tk-prof__val .presence-dot {
-  position: static;
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border: none;
-  border-radius: 50%;
 }
 
 /* ── Активный эфир ── */
@@ -221,6 +237,21 @@
   margin-bottom: 16px;
 }
 
+/* Рубрика секции тянется, число и кнопка — справа. Было инлайном в разметке. */
+.tk-prof__gal-title { margin: 0; flex: 1; }
+
+/* Кнопка «Добавить фото» — по центру строки, а не по базовой линии текста. */
+.tk-prof__gal-head .tk-btn { align-self: center; }
+
+.tk-prof__gal-hint { margin: -8px 0 16px; }
+
+/* Перетащили файлы на галерею — подсветка, как у зоны загрузки. */
+.tk-prof__gal.is-over { border-color: var(--tk-accent); background: rgba(227, 66, 52, .06); }
+
+/* Ячейка: снимок и крестик владельца поверх (.tk-thumb__del — app.css). */
+.tk-shots__item { position: relative; }
+.tk-shots__item.is-busy { opacity: .45; pointer-events: none; }
+
 .tk-shots {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -229,6 +260,7 @@
 
 .tk-shot {
   display: block;
+  width: 100%;
   padding: 0;
   background: none;
   border: none;
@@ -391,7 +423,8 @@
   .tk-prof__stats { justify-content: center; }
   .tk-prof__acts { justify-content: center; }
   .tk-prof__acts .tk-btn { flex: 1 1 140px; }
-  .tk-prof__grid { grid-template-columns: 1fr; margin-top: 26px; }
+  .tk-panel--prof { margin-top: 26px; }
+  .tk-prof__meta { justify-content: center; }
   .tk-shots { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
   .tk-shot img { height: 110px; }
   .tk-lightbox__btn { width: 38px; height: 38px; }

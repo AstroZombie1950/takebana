@@ -190,7 +190,19 @@ app.use('/fonts', express.static(path.join(__dirname, 'public', 'fonts'), {
     immutable: true,
 }));
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+    // Сжатые копии в /min/ несут хеш в имени, исходники — в ?v=
+    // (utils/assets.js): при правке файла меняется сам адрес, поэтому
+    // кэшировать можно навсегда. Без версии — ETag и перепроверка. На проде
+    // то же делает nginx (ops/nginx/takebana.conf), здесь — для локального
+    // запуска и чтобы правило жило рядом с раздачей.
+    setHeaders(res) {
+        const req = res.req;
+        if (req && (req.path.startsWith('/min/') || req.query.v)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+    },
+}));
 // /uploads/... раздаётся строкой выше из public/uploads. Отдельный монтаж
 // express.static('uploads') убран: путь считался от рабочего каталога процесса,
 // а не от папки проекта, и такой папки в проекте нет — фото заведений теперь

@@ -99,6 +99,18 @@
           </button>
         </div>
 
+        <%# Режим выбора: вместо шапки диалога — сколько выбрано и что с этим
+            сделать. Включается пунктом «Выделить» в меню сообщения (chats.js). %>
+        <div class="tk-chat__pickbar" id="pickBar" hidden>
+          <button type="button" class="tk-chat__tool" id="pickCancel" aria-label="<%= ta('chats.pickCancel') %>" data-i18n-aria="chats.pickCancel" title="<%= ta('chats.pickCancel') %>" data-i18n-title="chats.pickCancel">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+          </button>
+          <span class="tk-chat__pickcount" id="pickCount" aria-live="polite"></span>
+          <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" data-pick="forward" data-i18n="chats.forward"><%- t('chats.forward') %></button>
+          <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" data-pick="copy" data-i18n="chats.copy"><%- t('chats.copy') %></button>
+          <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" data-pick="delete" data-i18n="chats.delete"><%- t('chats.delete') %></button>
+        </div>
+
         <div class="tk-chat__feed" id="feed"></div>
 
         <div class="tk-chat__compose">
@@ -115,10 +127,13 @@
   </main>
 </div>
 
-<%# Действия с сообщением: открываются нажатием на сообщение. %>
+<%# Действия с сообщением или звонком в ленте: правый клик, на телефоне —
+    удержание, с клавиатуры — Enter. У звонка — только «Выделить» и «Удалить»:
+    data-for="message" chats.js прячет. %>
 <div class="tk-msgmenu" id="msgMenu" role="menu" hidden>
-  <button type="button" role="menuitem" data-act="forward" data-i18n="chats.forward"><%- t('chats.forward') %></button>
-  <button type="button" role="menuitem" data-act="copy" data-i18n="chats.copy"><%- t('chats.copy') %></button>
+  <button type="button" role="menuitem" data-act="forward" data-for="message" data-i18n="chats.forward"><%- t('chats.forward') %></button>
+  <button type="button" role="menuitem" data-act="copy" data-for="message" data-i18n="chats.copy"><%- t('chats.copy') %></button>
+  <button type="button" role="menuitem" data-act="select" data-i18n="chats.select"><%- t('chats.select') %></button>
   <button type="button" role="menuitem" data-act="delete" class="tk-msgmenu__danger" data-i18n="chats.delete"><%- t('chats.delete') %></button>
 </div>
 
@@ -133,6 +148,8 @@
     </div>
     <div class="tk-modal__body">
       <p class="tk-fwd__quote" id="forwardQuote"></p>
+      <%# Своё к пересылаемому: уходит первым, над пересланным. %>
+      <textarea class="tk-field tk-fwd__comment" id="forwardComment" rows="2" maxlength="5000" placeholder="<%= ta('chats.forwardComment') %>" data-i18n-placeholder="chats.forwardComment"></textarea>
       <input type="text" class="tk-field" id="forwardSearch" placeholder="<%= ta('chats.forwardSearch') %>" data-i18n-placeholder="chats.forwardSearch" autocomplete="off">
       <div class="tk-fwd__list" id="forwardList"></div>
     </div>
@@ -144,6 +161,6 @@
   </div>
 </div>
 
-<script src="/chats.js"></script>
+<script defer src="<%= asset('/chats.js') %>"></script>
 </body>
 </html>

@@ -33,7 +33,7 @@
       <p class="tk-company__done" id="tkCompanyDone" hidden data-i18n="company.finish"><%- t('company.finish') %></p>
 
       <form class="tk-company__form" id="tkCompanyForm" novalidate>
-        <section class="tk-panel">
+        <section class="tk-panel tk-company__data">
           <p class="tk-panel__title" data-i18n="company.kicker"><%- t('company.kicker') %></p>
 
           <input class="tk-field" type="text" name="name" placeholder="<%= ta('company.ph.name') %>" data-i18n-placeholder="company.ph.name" required>
@@ -55,19 +55,17 @@
             </select>
           </div>
 
-          <input class="tk-field" type="text" name="address" placeholder="<%= ta('company.ph.address') %>" data-i18n-placeholder="company.ph.address" autocomplete="street-address" required>
-
           <div class="tk-company__pair">
             <input class="tk-field" type="email" name="email" placeholder="<%= ta('company.ph.email') %>" data-i18n-placeholder="company.ph.email" value="<%= currentUser.email %>" autocomplete="email" required>
             <input class="tk-field" type="tel" name="phone" placeholder="<%= ta('company.ph.phone') %>" data-i18n-placeholder="company.ph.phone" autocomplete="tel" required>
           </div>
         </section>
 
-        <section class="tk-panel">
-          <%- include('partials/venuePoint') %>
+        <section class="tk-panel tk-company__place">
+          <%- include('partials/venuePoint', { addressRequired: true }) %>
         </section>
 
-        <section class="tk-panel">
+        <section class="tk-panel tk-company__when">
           <div class="tk-company__hours">
             <span class="tk-company__label" data-i18n="company.weekdays"><%- t('company.weekdays') %></span>
             <label class="tk-company__time">
@@ -103,9 +101,9 @@
 <%# Центры городов — с них открывается выбор точки (public/tk-point.js).
     Сама карта (MapLibre, ~290 КБ) грузится, когда до блока доскроллили. %>
 <script>window.TKCityCenter = <%- JSON.stringify(catalog.CITY_CENTER) %>;</script>
-<script src="/vendor/pmtiles-4.5.0.js"></script>
-<script src="/tk-map.js"></script>
-<script src="/tk-point.js"></script>
-<script src="/tk-company.js"></script>
+<script defer src="<%= asset('/vendor/pmtiles-4.5.0.js') %>"></script>
+<script defer src="<%= asset('/tk-map.js') %>"></script>
+<script defer src="<%= asset('/tk-point.js') %>"></script>
+<script defer src="<%= asset('/tk-company.js') %>"></script>
 </body>
 </html>
