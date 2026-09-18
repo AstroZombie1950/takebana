@@ -169,7 +169,10 @@
               <% if (r.isAdult) { %><span class="tk-recard__adult">18+</span><% } %>
             </span>
             <span class="tk-recard__title"><%= r.title %></span>
-            <time class="tk-recard__date"><%= date(r.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></time>
+            <span class="tk-recard__date">
+              <% if (r.status === 'ready') { var rv = plural(r.views || 0, 'rec.views'); %><span data-i18n="<%= rv.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(r.views) }) %>'><%= rv.text %></span> · <% } %>
+              <time><%= date(r.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></time>
+            </span>
           </a>
           <% }); %>
         </div>

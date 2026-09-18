@@ -14,13 +14,19 @@ const NotificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    // message — новое сообщение, call — пропущенный звонок
-    enum: ['message', 'call'],
+    // message — новое сообщение, call — пропущенный звонок,
+    // comment — комментарий к записи эфира
+    enum: ['message', 'call', 'comment'],
     required: true
   },
   content: {
     type: String, // Можно хранить текст последнего сообщения
     required: false
+  },
+  // Куда ведёт строка уведомления, если не в переписку: комментарий — к записи.
+  link: {
+    type: String,
+    default: ''
   },
   isRead: {
     type: Boolean,

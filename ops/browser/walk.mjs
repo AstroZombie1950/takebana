@@ -33,7 +33,7 @@ const PUBLIC = [
   ['вход', '/login'],
   ['регистрация', '/register'],
   ['о проекте', '/about'],
-  ['условия', '/terms_of_service'],
+  ['условия', '/terms'],
 ];
 const PRIVATE = [
   ['витрина вошедшему', '/'],

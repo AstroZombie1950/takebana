@@ -41,6 +41,8 @@
   //                   без конца. ffmpeg пишет index.m3u8 только после первых
   //                   сегментов — через несколько секунд после начала эфира.
   //   opts.onGiveUp — плейлист так и не появился.
+  //   opts.onHls    — получает созданный hls.js: плеер (tk-player.js) берёт
+  //                   у него качества и живой край. Своему плееру Safari не зовётся.
   // Поток пропал посреди просмотра (эфир прервался, OBS переподключился) —
   // плеер пересоздаётся и снова ждёт плейлист.
   function play(video, url, opts) {
@@ -89,6 +91,7 @@
       });
       hls.loadSource(url);
       hls.attachMedia(video);
+      if (opts.onHls) opts.onHls(hls);
     }
 
     function wait(left) {
@@ -133,5 +136,5 @@
     };
   }
 
-  window.TKHls = { play: play };
+  window.TKHls = { play: play, load: load };
 })();

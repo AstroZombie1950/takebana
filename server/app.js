@@ -212,6 +212,8 @@ app.use(express.static(path.join(__dirname, 'public'), {
 require('./jobs/streamCleanup').startStreamCleanup();
 // Записи, чью склейку оборвал перезапуск процесса, — в «не сохранилась».
 require('./utils/recording').sweep();
+// Готовые записи без нескольких качеств — в очередь пережатия (utils/recordingHls.js).
+require('./utils/recordingHls').resume();
 // Отрезки эфиров, оставшиеся открытыми от прошлого процесса, — закрыть,
 // иначе они навсегда останутся «в эфире» и испортят сумму часов.
 require('./utils/streamLog').sweep();

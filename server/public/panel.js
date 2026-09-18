@@ -593,7 +593,7 @@ const REASONS = {
   spam: 'спам', abuse: 'оскорбления', adult: 'контент 18+',
   violence: 'насилие', copyright: 'права на контент', other: 'другое',
 };
-const TARGETS = { stream: 'эфир', user: 'пользователь', message: 'сообщение чата' };
+const TARGETS = { stream: 'эфир', user: 'пользователь', message: 'сообщение чата', recording: 'запись эфира', comment: 'комментарий к записи' };
 
 VIEWS.reports = {
   title: 'Жалобы',
@@ -631,6 +631,14 @@ VIEWS.reports = {
 
       let acts = '';
       if (open) {
+        if (r.targetType === 'recording' && t) {
+          acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/recording/' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
+                  '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="recording-delete" data-id="' + esc(r.targetId) + '">Удалить запись</button>';
+        }
+        if (r.targetType === 'comment' && t) {
+          acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/recording/' + esc(t.recordingId) + '#c-' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
+                  '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="comment-delete" data-id="' + esc(r.targetId) + '" data-recording="' + esc(t.recordingId) + '">Удалить комментарий</button>';
+        }
         if (r.targetType === 'stream' && t && t.isActive) {
           acts += '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="stop-stream" data-id="' + esc(r.targetId) + '">Остановить эфир</button>';
         }
@@ -1182,6 +1190,13 @@ view.addEventListener('click', async (e) => {
       if (!await confirmDialog('Удалить запись? Файл уйдёт из хранилища навсегда.', { okText: 'Удалить' })) return;
       await send('DELETE', '/recording/' + id);
       toast('Запись удалена', 'ok');
+      return show();
+    }
+
+    if (act === 'comment-delete') {
+      if (!await confirmDialog('Удалить комментарий?', { okText: 'Удалить' })) return;
+      await send('DELETE', '/recording/' + el.dataset.recording + '/comments/' + id);
+      toast('Комментарий удалён', 'ok');
       return show();
     }
 

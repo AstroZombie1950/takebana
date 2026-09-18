@@ -25,12 +25,27 @@ const recordingSchema = new Schema({
   duration: { type: Number, default: 0 },   // секунды
   size: { type: Number, default: 0 },       // байты
   video: { type: fileSchema, default: () => ({}) },
+  // Несколько качеств (utils/recordingHls.js): главный плейлист и все файлы
+  // в хранилище. Появляется через несколько минут после готовности;
+  // тогда MP4 из video удаляется.
+  hls: {
+    url: { type: String, default: '' },
+    files: { type: [String], default: undefined },
+  },
   thumb: { type: fileSchema, default: () => ({}) },
   recordedAt: { type: Date, default: null }, // первый выход в эфир
+  // Счётчики для страницы и карточек; источники — RecordingView,
+  // RecordingReaction, RecordingComment. Дизлайки видит только автор.
+  views: { type: Number, default: 0 },
+  likes: { type: Number, default: 0 },
+  dislikes: { type: Number, default: 0 },
+  comments: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
 });
 
 // Записи на странице пользователя — новые сверху.
 recordingSchema.index({ userId: 1, createdAt: -1 });
+// Рекомендации: готовые записи раздела, популярные сверху.
+recordingSchema.index({ status: 1, category: 1, views: -1 });
 
 module.exports = mongoose.model('Recording', recordingSchema);

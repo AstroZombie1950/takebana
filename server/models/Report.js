@@ -1,6 +1,6 @@
 // models/Report.js
 //
-// Жалоба на эфир, пользователя или сообщение чата. Отдельная коллекция, а не
+// Жалоба на эфир, пользователя, сообщение чата, запись эфира или комментарий к ней. Отдельная коллекция, а не
 // поле у объекта жалобы: на один эфир их приходит много, а разбирает их панель
 // списком — по статусу и по свежести.
 const mongoose = require('mongoose');
@@ -13,7 +13,8 @@ const ReportSchema = new mongoose.Schema({
   },
   targetType: {
     type: String,
-    enum: ['stream', 'user', 'message'],
+    // recording — запись эфира, comment — комментарий к записи
+    enum: ['stream', 'user', 'message', 'recording', 'comment'],
     required: true
   },
   // Ссылка без ref: цель живёт в разных коллекциях, и populate тут всё равно

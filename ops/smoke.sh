@@ -83,6 +83,19 @@ expect() {
   fi
 }
 
+# moved "описание" СТАРЫЙ_ПУТЬ НОВЫЙ_ПУТЬ — постоянный редирект (301) именно туда.
+# Одного кода мало: 301 на главную вместо документа тоже 301.
+moved() {
+  local title="$1" from="$2" to="$3"
+  local got; got=$("${CURL[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' "${BASE}${from}" 2>/dev/null || echo "000")
+  local code="${got%% *}" target="${got#* }"
+  if [[ "$code" == "301" && "$target" == *"$to" ]]; then
+    pass "$title ${c_dim}→ 301 $to${c_off}"
+  else
+    fail "$title" "ждали 301 на $to, получили $got  (GET $from)"
+  fi
+}
+
 # ═════════════════════════════════════════════════════════════════════════════
 step "Доступность"
 
@@ -99,7 +112,14 @@ else
 fi
 
 expect "страница входа"          "200"     GET /login
-expect "условия использования"   "200"     GET /terms_of_service
+# Документы с 17 сентября — /terms, /privacy, /cookies; прежние адреса
+# ведут на них постоянным редиректом, чтобы не терять старые ссылки.
+expect "условия использования"   "200"     GET /terms
+expect "конфиденциальность"      "200"     GET /privacy
+expect "файлы cookie"            "200"     GET /cookies
+moved  "старый адрес условий"               /terms_of_service /terms
+moved  "старый адрес соглашения"            /user_agreement /terms
+moved  "старый адрес персональных данных"   /personal_data_processing /privacy
 expect "о нас"                    "200"     GET /about
 expect "раздел каталога"         "200"     GET /streaming/business   # гость смотрит без входа
 expect "старый адрес популярного" "302"    GET /streaming           # ведёт на главную

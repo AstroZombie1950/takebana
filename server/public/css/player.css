@@ -1,0 +1,417 @@
+/* Плеер Takebana: эфир, запись эфира, загрузки видео.
+ * Разметка — views/partials/player.ejs, поведение — /tk-player.js.
+ *
+ * Плеер заполняет свой контейнер целиком (у эфира и записи это
+ * .tk-live__player с соотношением 16:9). Кнопки — полосой снизу поверх
+ * картинки, на затемнении; пока смотрят и мышь стоит — прячутся (is-idle).
+ */
+
+.tk-player {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+  color: var(--tk-paper);
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tk-player [hidden] { display: none !important; }
+
+.tk-player__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: pointer;
+}
+
+.tk-player.is-idle,
+.tk-player.is-idle .tk-player__video { cursor: none; }
+
+/* ── Большая кнопка до первого запуска и на паузе ── */
+.tk-player__big {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0 0 4px;
+  transform: translate(-50%, -50%);
+  background: rgba(10, 10, 10, .72);
+  border: 1px solid var(--tk-rule);
+  border-radius: 50%;
+  color: var(--tk-paper);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+
+.tk-player__big:hover { background: var(--tk-accent); border-color: var(--tk-accent); }
+.tk-player:not(.is-paused) .tk-player__big,
+.tk-player.is-error .tk-player__big { display: none; }
+/* Эфир на паузе: большую кнопку не показываем — полоса снизу есть всегда. */
+.tk-player[data-mode="live"].is-started .tk-player__big { display: none; }
+
+/* ── Ожидание и ошибка ── */
+.tk-player__spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border: 3px solid rgba(245, 241, 234, .2);
+  border-top-color: var(--tk-accent);
+  border-radius: 50%;
+  animation: tk-player-spin .8s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes tk-player-spin { to { transform: rotate(360deg); } }
+
+.tk-player__error {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--tk-beige);
+}
+
+/* ── «Включить звук» после автозапуска без звука ── */
+.tk-player__unmute {
+  position: absolute;
+  left: 12px;
+  bottom: 64px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 8px 10px;
+  background: var(--tk-paper);
+  border: 0;
+  color: var(--tk-ink);
+  font: 500 13px/1 Oswald, sans-serif;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.tk-player__unmute svg { width: 18px; height: 18px; }
+.tk-player__unmute:hover { background: var(--tk-accent); color: var(--tk-paper); }
+
+/* ── ±10 секунд двойным касанием ── */
+.tk-player__flash {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  padding: 10px 14px;
+  transform: translateY(-50%);
+  background: rgba(10, 10, 10, .6);
+  border-radius: 999px;
+  font: 500 15px/1 Oswald, sans-serif;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tk-player__flash--back { left: 12%; }
+.tk-player__flash--fwd { right: 12%; }
+.tk-player__flash.is-on { animation: tk-player-flash .6s ease-out; }
+
+@keyframes tk-player-flash {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ── Полоса снизу ── */
+.tk-player__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  padding: 28px 10px 4px;
+  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, .78));
+  transition: opacity .2s ease;
+}
+
+.tk-player.is-idle .tk-player__bar,
+.tk-player.is-idle .tk-player__unmute { opacity: 0; pointer-events: none; }
+/* Прячем вместе с полосой и метки эфира, и кнопку чата. */
+.tk-live__player:has(.tk-player.is-idle) .tk-live__badges,
+.tk-live__player:has(.tk-player.is-idle) .tk-live__chatbtn { opacity: 0; transition: opacity .2s ease; }
+
+.tk-player__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tk-player__spacer { flex: 1; }
+
+.tk-player__btn {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--tk-paper);
+  cursor: pointer;
+  opacity: .9;
+}
+
+.tk-player__btn:hover { opacity: 1; color: var(--tk-accent); }
+.tk-player__btn:focus-visible,
+.tk-player__big:focus-visible,
+.tk-player__live:focus-visible,
+.tk-player__item:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: -2px; }
+
+/* Иконки по состоянию. */
+.tk-player__i-pause { display: none; }
+.tk-player:not(.is-paused) .tk-player__i-play { display: none; }
+.tk-player:not(.is-paused) .tk-player__i-pause { display: block; }
+.tk-player__i-muted,
+.tk-player.is-muted .tk-player__i-vol { display: none; }
+.tk-player.is-muted .tk-player__i-muted { display: block; }
+.tk-player__i-fsx,
+.tk-player__fs[aria-pressed="true"] .tk-player__i-fs { display: none; }
+.tk-player__fs[aria-pressed="true"] .tk-player__i-fsx { display: block; }
+.tk-player__theater[aria-pressed="true"] rect { fill: currentColor; fill-opacity: .35; }
+
+/* ── Громкость: ползунок выезжает при наведении ── */
+.tk-player__vol {
+  display: flex;
+  align-items: center;
+}
+
+.tk-player__volume {
+  --fill: 100%;
+  width: 0;
+  height: 4px;
+  margin: 0;
+  opacity: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, var(--tk-paper) var(--fill), rgba(245, 241, 234, .3) var(--fill));
+  cursor: pointer;
+  transition: width .18s ease, opacity .18s ease, margin .18s ease;
+}
+
+.tk-player__vol:hover .tk-player__volume,
+.tk-player__volume:focus-visible {
+  width: 72px;
+  margin: 0 10px 0 2px;
+  opacity: 1;
+}
+
+.tk-player__volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--tk-paper);
+}
+
+.tk-player__volume::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--tk-paper);
+}
+
+/* На сенсорных экранах громкость — кнопками телефона; iOS её и не даёт менять. */
+@media (pointer: coarse) {
+  .tk-player__volume { display: none; }
+}
+
+/* ── Время ── */
+.tk-player__time {
+  padding: 0 8px;
+  font: 400 13px/1 Oswald, sans-serif;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--tk-beige);
+}
+
+.tk-player__cur { color: var(--tk-paper); }
+
+/* ── «В эфире»: к живому краю ── */
+.tk-player__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 10px;
+  background: none;
+  border: 0;
+  font: 500 12px/1 Oswald, sans-serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+  cursor: default;
+}
+
+.tk-player__live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tk-accent);
+}
+
+.tk-player__live.is-behind { color: var(--tk-beige); cursor: pointer; }
+.tk-player__live.is-behind .tk-player__live-dot { background: var(--tk-muted); }
+.tk-player__live.is-behind:hover { color: var(--tk-paper); }
+
+/* ── Полоса перемотки ── */
+.tk-player__progress {
+  position: relative;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  margin: 0 6px;
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+
+.tk-player__rail {
+  position: relative;
+  flex: 1;
+  height: 3px;
+  background: rgba(245, 241, 234, .25);
+  transition: height .12s ease;
+}
+
+.tk-player__progress:hover .tk-player__rail,
+.tk-player__progress:focus-visible .tk-player__rail,
+.tk-player.is-seeking .tk-player__rail { height: 5px; }
+.tk-player__progress:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
+
+.tk-player__buffered,
+.tk-player__played {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 0;
+}
+
+.tk-player__buffered { background: rgba(245, 241, 234, .4); }
+.tk-player__played { background: var(--tk-accent); }
+
+.tk-player__knob {
+  position: absolute;
+  top: 50%;
+  right: -7px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--tk-accent);
+  transform: translateY(-50%) scale(0);
+  transition: transform .12s ease;
+}
+
+.tk-player__progress:hover .tk-player__knob,
+.tk-player.is-seeking .tk-player__knob { transform: translateY(-50%) scale(1); }
+
+@media (pointer: coarse) {
+  .tk-player__rail { height: 4px; }
+  .tk-player__knob { transform: translateY(-50%) scale(1); width: 12px; height: 12px; right: -6px; }
+}
+
+.tk-player__tip {
+  position: absolute;
+  bottom: 22px;
+  padding: 4px 7px;
+  transform: translateX(-50%);
+  background: rgba(10, 10, 10, .88);
+  font: 400 12px/1 Oswald, sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ── Меню настроек ── */
+.tk-player__settings { position: relative; }
+
+.tk-player__menu {
+  position: absolute;
+  right: -40px;
+  bottom: 46px;
+  z-index: 7;
+  min-width: 220px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 6px 0;
+  background: rgba(10, 10, 10, .94);
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-player__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 10px 16px;
+  background: none;
+  border: 0;
+  font: 400 14px/1.2 'Golos Text', sans-serif;
+  text-align: left;
+  color: var(--tk-paper);
+  cursor: pointer;
+}
+
+.tk-player__item:hover { background: rgba(245, 241, 234, .08); }
+.tk-player__item-val { color: var(--tk-beige); font-size: 13px; }
+.tk-player__item[role="menuitemradio"] { padding-left: 38px; position: relative; }
+.tk-player__item[aria-checked="true"]::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  width: 10px;
+  height: 5px;
+  margin-top: -4px;
+  border-left: 2px solid var(--tk-accent);
+  border-bottom: 2px solid var(--tk-accent);
+  transform: rotate(-45deg);
+}
+
+/* ── Полный экран самого плеера (запись) ── */
+.tk-player.is-fullscreen .tk-player__bar { padding: 40px 18px 10px; }
+
+/* ── Узкий экран: только нужное ── */
+@media (max-width: 560px) {
+  .tk-player__bar { padding: 22px 4px 2px; }
+  .tk-player__btn { width: 36px; height: 36px; }
+  .tk-player__time { padding: 0 4px; font-size: 12px; }
+  .tk-player__theater { display: none; }
+  .tk-player__unmute { bottom: 54px; left: 8px; }
+  .tk-player__big { width: 60px; height: 60px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-player__spinner { animation-duration: 2s; }
+  .tk-player__flash.is-on { animation: none; }
+}

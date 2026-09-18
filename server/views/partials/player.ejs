@@ -1,0 +1,105 @@
+<%#
+  Плеер Takebana — один на эфир, запись и будущие загрузки видео. Поведение —
+  /tk-player.js, вёрстка — css/player.css. Кладётся внутрь контейнера
+  с размерами (.tk-live__player) и заполняет его целиком.
+
+    mode     'live' — эфир: без перемотки и скорости, кнопка «В эфире»,
+                      весь экран — вся сцена с чатом (data-fullscreen,
+                      обрабатывает tk-stream.js);
+             'vod'  — запись: перемотка, скорость, качество, широкий режим.
+    src      адрес MP4 или плейлиста .m3u8 (у эфира источник ставит tk-viewer.js).
+    poster   обложка, необязательно.
+    theater  показывать кнопку широкого режима (страница записи).
+
+  Родных кнопок браузера нет — с ними уходит и «Скачать».
+%>
+<%
+  var pMode = typeof mode !== 'undefined' ? mode : 'vod';
+  var pLive = pMode === 'live';
+  var pSrc = typeof src !== 'undefined' ? src : '';
+  var pPoster = typeof poster !== 'undefined' ? poster : '';
+  var pTheater = typeof theater !== 'undefined' && theater;
+  var ico = 'viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"';
+%>
+<div class="tk-player" data-mode="<%= pMode %>"<% if (pSrc) { %> data-src="<%= pSrc %>"<% } %> tabindex="-1">
+  <video class="tk-player__video" id="video" playsinline preload="metadata"<% if (pPoster) { %> poster="<%= pPoster %>"<% } %>
+         controlslist="nodownload noremoteplayback noplaybackrate" disableremoteplayback></video>
+
+  <div class="tk-player__spinner" hidden></div>
+  <p class="tk-player__error" hidden data-i18n="player.error"><%- t('player.error') %></p>
+
+  <button type="button" class="tk-player__big" data-act="play" aria-label="<%= ta('player.play') %>" data-i18n-aria="player.play">
+    <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+  </button>
+
+  <%# Автозапуск возможен только без звука: зритель включает его одной кнопкой. %>
+  <button type="button" class="tk-player__unmute" data-act="unmute" hidden>
+    <svg <%- ico %> fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" stroke="none"/><path d="M16 9l5 6M21 9l-5 6"/></svg>
+    <span data-i18n="player.unmute"><%- t('player.unmute') %></span>
+  </button>
+
+  <% if (!pLive) { %>
+  <div class="tk-player__flash tk-player__flash--back" aria-hidden="true">−10</div>
+  <div class="tk-player__flash tk-player__flash--fwd" aria-hidden="true">+10</div>
+  <% } %>
+
+  <div class="tk-player__bar">
+    <% if (!pLive) { %>
+    <div class="tk-player__progress" role="slider" tabindex="0" aria-label="<%= ta('player.seek') %>" data-i18n-aria="player.seek" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+      <div class="tk-player__rail">
+        <div class="tk-player__buffered"></div>
+        <div class="tk-player__played"><span class="tk-player__knob"></span></div>
+      </div>
+      <span class="tk-player__tip" hidden></span>
+    </div>
+    <% } %>
+
+    <div class="tk-player__row">
+      <button type="button" class="tk-player__btn" data-act="play" aria-label="<%= ta('player.play') %>" data-i18n-aria="player.play" title="<%= ta('player.play') %> (k)">
+        <svg class="tk-player__i-play" <%- ico %>><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+        <svg class="tk-player__i-pause" <%- ico %>><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+      </button>
+
+      <div class="tk-player__vol">
+        <button type="button" class="tk-player__btn" data-act="mute" aria-label="<%= ta('player.mute') %>" data-i18n-aria="player.mute" title="<%= ta('player.mute') %> (m)">
+          <svg class="tk-player__i-vol" <%- ico %> fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" stroke="none"/><path d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/></svg>
+          <svg class="tk-player__i-muted" <%- ico %> fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" stroke="none"/><path d="M16 9l5 6M21 9l-5 6"/></svg>
+        </button>
+        <input type="range" class="tk-player__volume" min="0" max="1" step="0.05" value="1" aria-label="<%= ta('player.volume') %>" data-i18n-aria="player.volume">
+      </div>
+
+      <% if (pLive) { %>
+      <button type="button" class="tk-player__live" data-act="live" title="<%= ta('player.toLive') %>" data-i18n-title="player.toLive">
+        <span class="tk-player__live-dot"></span><span data-i18n="player.live"><%- t('player.live') %></span>
+      </button>
+      <% } else { %>
+      <span class="tk-player__time"><span class="tk-player__cur">0:00</span> / <span class="tk-player__dur">0:00</span></span>
+      <% } %>
+
+      <span class="tk-player__spacer"></span>
+
+      <div class="tk-player__settings">
+        <button type="button" class="tk-player__btn" data-act="settings" aria-haspopup="true" aria-expanded="false" aria-label="<%= ta('player.settings') %>" data-i18n-aria="player.settings" title="<%= ta('player.settings') %>" data-i18n-title="player.settings">
+          <svg <%- ico %> fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+        </button>
+        <%# Меню собирает tk-player.js: пункты зависят от того, что умеет источник. %>
+        <div class="tk-player__menu" role="menu" hidden></div>
+      </div>
+
+      <button type="button" class="tk-player__btn" data-act="pip" hidden aria-label="<%= ta('player.pip') %>" data-i18n-aria="player.pip" title="<%= ta('player.pip') %>" data-i18n-title="player.pip">
+        <svg <%- ico %> fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14"/><rect x="12" y="12" width="7" height="5" fill="currentColor" stroke="none"/></svg>
+      </button>
+
+      <% if (pTheater) { %>
+      <button type="button" class="tk-player__btn tk-player__theater" data-act="theater" aria-pressed="false" aria-label="<%= ta('player.theater') %>" data-i18n-aria="player.theater" title="<%= ta('player.theater') %> (t)">
+        <svg <%- ico %> fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="6.5" width="19" height="11"/></svg>
+      </button>
+      <% } %>
+
+      <button type="button" class="tk-player__btn tk-player__fs"<% if (pLive) { %> data-fullscreen<% } else { %> data-act="fullscreen"<% } %> aria-pressed="false" aria-label="<%= ta('stream.fullscreen') %>" data-i18n-aria="stream.fullscreen" title="<%= ta('stream.fullscreen') %> (f)">
+        <svg class="tk-player__i-fs" <%- ico %> fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M4.5 15v4.5H9M15 19.5h4.5V15"/></svg>
+        <svg class="tk-player__i-fsx" <%- ico %> fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M9 4.5V9H4.5M19.5 9H15V4.5M9 19.5V15H4.5M15 19.5V15h4.5"/></svg>
+      </button>
+    </div>
+  </div>
+</div>

@@ -183,8 +183,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const sender = n.sender || {};
             const name = sender.name || t('modal.notifications.unknown');
             const isCall = n.type === 'call';
-            const href = isCall ? '/chatsPage?tab=calls' : '/chatsPage?peer=' + encodeURIComponent(sender._id || '');
-            const title = isCall ? t('modal.notifications.missedCall', { name }) : t('modal.notifications.from') + ' ' + name;
+            const isComment = n.type === 'comment';
+            const href = isCall ? '/chatsPage?tab=calls'
+              : isComment ? (n.link || '/')
+              : '/chatsPage?peer=' + encodeURIComponent(sender._id || '');
+            const title = isCall ? t('modal.notifications.missedCall', { name })
+              : isComment ? t('modal.notifications.comment', { name })
+              : t('modal.notifications.from') + ' ' + name;
             const text = isCall ? '' : (n.content || t('modal.notifications.fallback'));
             return `
             <a class="tk-notice${n.isRead ? '' : ' tk-notice--new'}" href="${escapeHtml(href)}">

@@ -19,6 +19,11 @@ const streamLog = require('./streamLog');
 const { audit } = require('./audit');
 const errorLog = require('./errorLog');
 const Recording = require('../models/Recording');
+const RecordingReaction = require('../models/RecordingReaction');
+const RecordingComment = require('../models/RecordingComment');
+const RecordingView = require('../models/RecordingView');
+const Report = require('../models/Report');
+const recordingHls = require('./recordingHls');
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 // ffprobe лежит рядом с ffmpeg: в apt они приходят одним пакетом.
@@ -115,6 +120,8 @@ async function finalize(rec, dir) {
     // сходиться с эфиром, который их породил.
     audit(null, 'recording.ready', { actor: rec.userId, targetType: 'recording', target: rec, meta: { duration, size } });
     streamLog.recordingSize(rec._id, size);
+    // Несколько качеств — в фоне; пока их нет, запись играет из MP4.
+    if (saved) recordingHls.enqueue(rec._id);
   } catch (e) {
     errorLog.media(e, 'recording.finalize', { recording: String(rec._id) });
     audit(null, 'recording.fail', { actor: rec.userId, result: 'fail', targetType: 'recording', target: rec, meta: { error: e.message } });
@@ -154,9 +161,43 @@ async function save(stream) {
 }
 
 // Запись после склейки — удалить из хранилища и базы.
+// Вместе с файлами уходят оценки, комментарии, отметки просмотров и жалобы
+// на запись и её комментарии: у них больше нет предмета.
 async function remove(rec) {
-  await Promise.all([storage.remove(rec.video && rec.video.key), storage.remove(rec.thumb && rec.thumb.key)]);
-  await Recording.deleteOne({ _id: rec._id });
+  const keys = [rec.video && rec.video.key, rec.thumb && rec.thumb.key, ...((rec.hls && rec.hls.files) || [])];
+  await Promise.all(keys.filter(Boolean).map((k) => storage.remove(k)));
+  const commentIds = await RecordingComment.distinct('_id', { recordingId: rec._id });
+  await Promise.all([
+    Recording.deleteOne({ _id: rec._id }),
+    RecordingReaction.deleteMany({ recordingId: rec._id }),
+    RecordingComment.deleteMany({ recordingId: rec._id }),
+    RecordingView.deleteMany({ recordingId: rec._id }),
+    Report.deleteMany({ $or: [
+      { targetType: 'recording', targetId: rec._id },
+      { targetType: 'comment', targetId: { $in: commentIds } },
+    ] }),
+  ]);
+}
+
+// Удаление аккаунта: его оценки и комментарии под чужими записями уходят,
+// а счётчики тех записей уменьшаются на столько же.
+async function forgetUser(userId) {
+  const [reactions, comments] = await Promise.all([
+    RecordingReaction.find({ userId }).select('recordingId value').lean(),
+    RecordingComment.aggregate([{ $match: { userId } }, { $group: { _id: '$recordingId', n: { $sum: 1 } } }]),
+  ]);
+  const ops = reactions.map((r) => ({
+    updateOne: { filter: { _id: r.recordingId }, update: { $inc: r.value === 1 ? { likes: -1 } : { dislikes: -1 } } },
+  })).concat(comments.map((c) => ({
+    updateOne: { filter: { _id: c._id }, update: { $inc: { comments: -c.n } } },
+  })));
+  const commentIds = await RecordingComment.distinct('_id', { userId });
+  await Promise.all([
+    ops.length ? Recording.bulkWrite(ops, { ordered: false }) : null,
+    RecordingReaction.deleteMany({ userId }),
+    RecordingComment.deleteMany({ userId }),
+    Report.deleteMany({ targetType: 'comment', targetId: { $in: commentIds } }),
+  ]);
 }
 
 // Каталоги, оставшиеся от падения процесса посреди склейки: их никто уже
@@ -180,4 +221,4 @@ function clock(seconds) {
   return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
 }
 
-module.exports = { enabled: storage.enabled, newPart, discard, save, remove, sweep, clock };
+module.exports = { enabled: storage.enabled, newPart, discard, save, remove, forgetUser, sweep, clock };

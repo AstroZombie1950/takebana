@@ -1,4 +1,4 @@
-/* Страница зрителя: плеер HLS, подписка на ведущего, перезагрузка на смене
+/* Страница зрителя: плеер эфира, подписка на ведущего, перезагрузка на смене
  * состояния эфира. Чат, метки и полный экран — /tk-stream.js.
  * Разметка — views/streamPageViewer.ejs.
  */
@@ -45,8 +45,8 @@
     });
   });
 
-  var video = document.getElementById('video');
-  if (!video) {
+  var playerRoot = document.querySelector('.tk-player');
+  if (!playerRoot) {
     // Старт эфира пришлёт stream:update, и страница перезагрузится. Событие
     // могло проскочить между отрисовкой страницы и входом в комнату сокета —
     // одна сверка вдогонку.
@@ -64,9 +64,12 @@
   // HLS — тот же плеер, что у предпросмотра ведущего. Зритель берёт поток
   // с CDN, если он задан (HLS_BASE_URL); ведущий — всегда со своего домена.
   // У веб-эфира плейлист появляется не сразу: Daily сначала поднимает RTMP-выход.
+  // Кнопки и меню — плеер Takebana (/tk-player.js), поток ему подаёт TKHls.
+  var player = TKPlayer.mount(playerRoot);
   var hlsUrl = data.hlsBase + '/live/' + data.streamKey + '/index.m3u8';
-  TKHls.play(video, hlsUrl, {
+  TKHls.play(player.video, hlsUrl, {
     attempts: 30,
+    onHls: player.attachHls,
     onGiveUp: function () { console.error('[hls] плейлист не появился за минуту:', hlsUrl); },
   });
 })();

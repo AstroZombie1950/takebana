@@ -41,9 +41,9 @@ const PUBLIC = [
   ['вход', '/login'],
   ['регистрация', '/register'],
   ['о проекте', '/about'],
-  ['условия', '/terms_of_service'],
-  ['соглашение', '/user_agreement'],
-  ['персональные данные', '/personal_data_processing'],
+  ['условия', '/terms'],
+  ['конфиденциальность', '/privacy'],
+  ['cookie', '/cookies'],
 ];
 const PRIVATE = [
   ['витрина вошедшему', '/'],

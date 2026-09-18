@@ -15,11 +15,13 @@ const Report = require('../../models/Report');
 const User = require('../../models/User');
 const Stream = require('../../models/Stream');
 const ChatMessage = require('../../models/ChatMessage');
+const Recording = require('../../models/Recording');
+const RecordingComment = require('../../models/RecordingComment');
 const { requireModerator, paging, list, period, namesFor, csvRoute, nameOf } = require('./shared');
 
 const STATUSES = ['new', 'resolved', 'rejected'];
 const REASONS = ['spam', 'abuse', 'adult', 'violence', 'copyright', 'other'];
-const TARGETS = ['stream', 'user', 'message'];
+const TARGETS = ['stream', 'user', 'message', 'recording', 'comment'];
 
 async function loadReports(req) {
   const p = paging(req);
@@ -36,13 +38,15 @@ async function loadReports(req) {
     Report.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
   ]);
 
-  const ids = { user: [], stream: [], message: [] };
+  const ids = { user: [], stream: [], message: [], recording: [], comment: [] };
   for (const r of reports) ids[r.targetType].push(r.targetId);
 
-  const [users, streams, messages, names, sameTarget] = await Promise.all([
+  const [users, streams, messages, recordings, comments, names, sameTarget] = await Promise.all([
     ids.user.length ? User.find({ _id: { $in: ids.user } }).select('login email banned role').lean() : [],
     ids.stream.length ? Stream.find({ _id: { $in: ids.stream } }).select('title isActive userId stoppedByModeration isAdult').lean() : [],
     ids.message.length ? ChatMessage.find({ _id: { $in: ids.message } }).select('message userId streamId').lean() : [],
+    ids.recording.length ? Recording.find({ _id: { $in: ids.recording } }).select('title userId').lean() : [],
+    ids.comment.length ? RecordingComment.find({ _id: { $in: ids.comment } }).select('text userId recordingId').lean() : [],
     namesFor([...reports.map((r) => r.reporter), ...reports.map((r) => r.resolvedBy)]),
     // Сколько всего жалоб на те же объекты: одна жалоба и двадцатая на один
     // эфир разбираются по-разному.
@@ -56,6 +60,8 @@ async function loadReports(req) {
   for (const u of users) target.set(String(u._id), { kind: 'user', title: u.login || u.email || '', banned: !!u.banned, role: u.role, ownerId: String(u._id) });
   for (const s of streams) target.set(String(s._id), { kind: 'stream', title: s.title, isActive: !!s.isActive, stopped: !!s.stoppedByModeration, isAdult: !!s.isAdult, ownerId: String(s.userId) });
   for (const m of messages) target.set(String(m._id), { kind: 'message', title: m.message, ownerId: String(m.userId), streamId: m.streamId ? String(m.streamId) : null });
+  for (const r of recordings) target.set(String(r._id), { kind: 'recording', title: r.title, ownerId: String(r.userId) });
+  for (const c of comments) target.set(String(c._id), { kind: 'comment', title: c.text, ownerId: String(c.userId), recordingId: String(c.recordingId) });
 
   const total4 = new Map(sameTarget.map((t) => [String(t._id), t.n]));
 

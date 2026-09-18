@@ -53,6 +53,9 @@ const ACTIONS = {
   'recording.ready': 'Запись готова',
   'recording.fail': 'Запись не сохранилась',
   'recording.delete': 'Удаление записи',
+  'recording.edit': 'Правка записи',
+  'recording.comment': 'Комментарий к записи',
+  'recording.uncomment': 'Удаление комментария',
 
   'venue.apply': 'Заявка на заведение',
   'venue.update': 'Правка заведения',

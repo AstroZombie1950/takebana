@@ -91,6 +91,12 @@ const EN = {
     'Подкатегория не относится к выбранной категории': 'The subcategory does not belong to the selected category',
     'У вас уже есть эфир: завершите его, чтобы начать новый': 'You already have a stream: end it to start a new one',
     'Эфир завершён, запись сохраняется': 'The stream has ended, the recording is being saved',
+    'Слишком много комментариев. Подождите минуту.': 'Too many comments. Wait a minute.',
+    'Комментарий не найден': 'Comment not found',
+    'Нет прав на этот комментарий': 'You have no rights to this comment',
+    'Некорректная дата': 'Invalid date',
+    'Запись для 18+: подтвердите возраст': 'This recording is 18+: confirm your age',
+    'Оценка': 'Rating',
     'Запись ещё сохраняется, удалить можно после': 'The recording is still being saved, you can delete it afterwards',
     'Источник': 'Source',
     'Сохранить запись': 'Save recording',
@@ -263,6 +269,15 @@ function pageLocals(req, res, next) {
     res.locals.lang = lang;
     res.locals.t = t;
     res.locals.ta = (key, arg) => t(key, arg).replace(/<[^>]*>/g, '');
+    // Число с разрядами по языку: 12 345 / 12,345.
+    res.locals.num = (n) => Number(n || 0).toLocaleString(LOCALE[lang]);
+    // Форма слова по числу: plural(5, 'rec.views') → ключ rec.viewsMany.
+    // По-английски «few» и «many» совпадают — правила годятся обоим языкам.
+    res.locals.plural = (n, base, vars) => {
+        const d10 = n % 10, d100 = n % 100;
+        const form = d10 === 1 && d100 !== 11 ? 'One' : d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14) ? 'Few' : 'Many';
+        return { key: base + form, text: t(base + form, { n: n.toLocaleString(LOCALE[lang]), ...vars }) };
+    };
     res.locals.date = (value, opts) =>
         new Date(value).toLocaleString(LOCALE[lang], { ...opts, timeZone: timeZoneOf(req) });
     // Одна и та же ссылка отдаёт разные страницы: кэш между сервером

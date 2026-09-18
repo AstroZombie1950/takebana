@@ -176,8 +176,9 @@ async function loadRecordings(req) {
       createdAt: r.createdAt,
       recordedAt: r.recordedAt || null,
       // Ключ в хранилище нужен, когда файл ищут руками в Bunny.
-      key: (r.video && r.video.key) || '',
-      url: (r.video && r.video.url) || '',
+      // После пережатия в HLS MP4 нет: ключ — папка качеств, адрес — плейлист.
+      key: (r.hls && r.hls.url) ? `recordings/${r.userId}/${r._id}/hls/` : (r.video && r.video.key) || '',
+      url: (r.hls && r.hls.url) || (r.video && r.video.url) || '',
       owner: names.get(String(r.userId)) || null,
     })), total, p),
     totals: { bytes: sum.bytes || 0, seconds: sum.seconds || 0 },

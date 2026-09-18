@@ -178,7 +178,7 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
   const isSelf = String(userId) === String(currentUserId);
   const recordings = await Recording.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
     .sort({ createdAt: -1 })
-    .select('title status duration thumb isAdult createdAt')
+    .select('title status duration thumb isAdult createdAt views')
     .lean();
 
   // Передача данных в шаблон

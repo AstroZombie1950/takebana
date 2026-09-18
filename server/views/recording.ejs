@@ -1,14 +1,28 @@
 <%#
-  Запись эфира (/recording/:id). Смотрят все вошедшие, метка 18+ — через
-  гейт (routes/recordings.js). Автор видит и незаконченную запись, и кнопку
-  удаления. Вёрстка — раздел «Запись эфира» в css/stream.css.
+  Запись эфира (/recording/:id). Смотрят все, метка 18+ — через гейт
+  (routes/recordings.js). Раскладка как у видеохостинга: плеер, под ним
+  название, автор, оценки и описание, ниже комментарии; справа «Смотрите
+  также». Широкий режим плеера растягивает его над обеими колонками.
+
+  Автор видит и незаконченную запись, правит название и описание, удаляет
+  запись и любые комментарии под ней; дизлайки считаются для всех, а число
+  видно только ему. Вёрстка — css/watch.css и css/player.css, поведение —
+  /tk-recording.js и /tk-player.js.
+%>
+<%
+  var ready = rec.status === 'ready';
+  var views = plural(rec.views || 0, 'rec.views');
+  var commentsN = plural(rec.comments || 0, 'rec.comments');
+  var nextUrl = encodeURIComponent('/recording/' + rec._id);
 %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { title: rec.title + ' — Takebana' }) %>
+<%- include('partials/tkHead', { title: rec.title + ' — Takebana', description: (rec.description || '').slice(0, 160) }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/player.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/watch.css') %>">
 </head>
 <body class="tk-app">
 
@@ -18,69 +32,155 @@
   <%- include('partials/leftBar') %>
 
   <main class="tk-app-main">
-    <div class="tk-rec">
-      <div class="tk-rec__col">
-        <div class="tk-live__player">
-          <% if (rec.status === 'ready') { %>
-            <%# Обычный MP4 с индексом в начале: перемотка и iPhone — без плеера HLS. %>
-            <video src="<%= rec.video.url %>"<% if (rec.thumb.url) { %> poster="<%= rec.thumb.url %>"<% } %> class="video-fit-contain" controls playsinline preload="metadata"></video>
+    <div class="tk-watch" id="watch"
+         data-id="<%= rec._id %>"
+         data-owner="<%= isOwner ? '1' : '' %>"
+         data-user="<%= currentUser ? currentUser._id : '' %>"
+         data-back="/userPage/<%= author._id %>">
+
+      <div class="tk-watch__stage">
+        <div class="tk-live__player tk-watch__player">
+          <% if (ready) { %>
+            <%- include('partials/player', { mode: 'vod', src: (rec.hls && rec.hls.url) || rec.video.url, poster: rec.thumb.url, theater: true }) %>
           <% } else { %>
             <% var stateKey = rec.status === 'failed' ? 'rec.failedNote' : 'rec.processingNote'; %>
             <p class="tk-rec__state" data-i18n="<%= stateKey %>"><%- t(stateKey) %></p>
           <% } %>
         </div>
+      </div>
 
-        <div class="tk-live__info">
-          <h1 class="tk-live__title"><%= rec.title %></h1>
-          <p class="tk-rec__meta">
-            <% if (rec.isAdult) { %><span>18+</span> · <% } %>
-            <span><%= date(rec.recordedAt || rec.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %></span>
-            <% if (rec.duration) { %> · <span><%= clock(rec.duration) %></span><% } %>
-          </p>
+      <div class="tk-watch__main">
+        <h1 class="tk-watch__title" id="recTitle"><%= rec.title %></h1>
 
-          <div class="tk-rec__body">
-            <div class="tk-live__author">
-              <a href="/userPage/<%= author._id %>" class="tk-live__avatar"<% if (!author.avatarStyle.url) { %> data-bg="<%= author.avatarStyle.gradient %>"<% } %>>
-                <% if (author.avatarStyle.url) { %><img src="<%= author.avatarStyle.url %>" alt=""><% } else { %><%= author.avatarStyle.initial %><% } %>
-              </a>
-              <div class="tk-live__author-body">
-                <a href="/userPage/<%= author._id %>" class="tk-live__author-name"><%= author.displayName %></a>
-              </div>
+        <div class="tk-watch__bar">
+          <div class="tk-live__author tk-watch__author">
+            <a href="/userPage/<%= author._id %>" class="tk-live__avatar"<% if (!author.avatarStyle.url) { %> data-bg="<%= author.avatarStyle.gradient %>"<% } %>>
+              <% if (author.avatarStyle.url) { %><img src="<%= author.avatarStyle.url %>" alt=""><% } else { %><%= author.avatarStyle.initial %><% } %>
+            </a>
+            <div class="tk-live__author-body">
+              <a href="/userPage/<%= author._id %>" class="tk-live__author-name"><%= author.displayName %></a>
             </div>
-            <% if (rec.description) { %><p class="tk-live__desc"><%= rec.description %></p><% } %>
           </div>
 
-          <% if (isOwner && rec.status !== 'processing') { %>
-          <div class="tk-rec__acts">
-            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="deleteRecording" data-id="<%= rec._id %>" data-back="/userPage/<%= author._id %>" data-i18n="rec.delete"><%- t('rec.delete') %></button>
+          <% if (ready) { %>
+          <div class="tk-watch__acts">
+            <div class="tk-watch__rate" role="group">
+              <%# Гостю вместо кнопок — ссылки на вход с возвратом сюда. %>
+              <% [
+                { v: 1, key: 'rec.like', count: rec.likes, id: 'likes', d: 'M7 10v11H3V10zM7 10l4-8a3 3 0 013 3v4h5.5a2 2 0 012 2.3l-1.4 8A2 2 0 0118.1 21H7' },
+                { v: -1, key: isOwner ? 'rec.dislikesMine' : 'rec.dislike', count: isOwner ? rec.dislikes : null, id: 'dislikes', d: 'M17 14V3h4v11zM17 14l-4 8a3 3 0 01-3-3v-4H4.5a2 2 0 01-2-2.3l1.4-8A2 2 0 015.9 3H17' }
+              ].forEach(function (b) { var k = currentUser ? b.key : 'rec.loginToRate'; %>
+              <<%- currentUser ? 'button type="button"' : 'a' %> class="tk-watch__pill"<% if (currentUser) { %> data-rate="<%= b.v %>" aria-pressed="<%= myReaction === b.v %>"<% } else { %> href="/login?next=<%= nextUrl %>"<% } %> aria-label="<%= ta(k) %>" data-i18n-aria="<%= k %>" title="<%= ta(k) %>" data-i18n-title="<%= k %>">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="<%= b.d %>"/></svg>
+                <% if (b.count !== null) { %><span class="tk-watch__count" id="<%= b.id %>"><%= num(b.count) %></span><% } %>
+              </<%- currentUser ? 'button' : 'a' %>>
+              <% }); %>
+            </div>
+
+            <button type="button" class="tk-watch__pill" id="shareRecording">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 4l7 7-7 7M21 11H9a6 6 0 00-6 6v3"/></svg>
+              <span data-i18n="rec.share"><%- t('rec.share') %></span>
+            </button>
+
+            <% if (currentUser && !isOwner) { %>
+            <button type="button" class="tk-watch__pill" data-report="recording" data-report-id="<%= rec._id %>" data-report-name="<%= rec.title %>">
+              <span data-i18n="common.report"><%- t('common.report') %></span>
+            </button>
+            <% } %>
           </div>
           <% } %>
         </div>
+
+        <div class="tk-watch__about" id="about">
+          <p class="tk-watch__meta">
+            <% if (ready) { %><span id="viewsLine" data-i18n="<%= views.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(rec.views) }) %>'><%= views.text %></span> · <% } %>
+            <span><%= date(rec.recordedAt || rec.createdAt, { day: 'numeric', month: 'long', year: 'numeric' }) %></span>
+            <% if (rec.isAdult) { %> · <span class="tk-watch__adult">18+</span><% } %>
+          </p>
+          <% if (rec.description) { %>
+          <p class="tk-watch__desc" id="recDesc"><%= rec.description %></p>
+          <button type="button" class="tk-watch__more" id="descMore" hidden data-i18n="rec.more"><%- t('rec.more') %></button>
+          <% } else if (isOwner) { %>
+          <p class="tk-watch__desc tk-watch__desc--empty" id="recDesc" data-i18n="rec.noDesc"><%- t('rec.noDesc') %></p>
+          <% } %>
+
+          <% if (isOwner && rec.status !== 'processing') { %>
+          <div class="tk-watch__owner">
+            <% if (ready) { %>
+            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="editRecording" data-i18n="rec.edit"><%- t('rec.edit') %></button>
+            <% } %>
+            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="deleteRecording" data-i18n="rec.delete"><%- t('rec.delete') %></button>
+          </div>
+
+          <form class="tk-watch__edit" id="editForm" hidden>
+            <label class="tk-form__label" for="editTitle" data-i18n="rec.fieldTitle"><%- t('rec.fieldTitle') %></label>
+            <input type="text" id="editTitle" class="tk-field" maxlength="<%= limits.title %>" required value="<%= rec.title %>">
+            <label class="tk-form__label" for="editDesc" data-i18n="rec.fieldDesc"><%- t('rec.fieldDesc') %></label>
+            <textarea id="editDesc" class="tk-field" rows="6" maxlength="<%= limits.description %>"><%= rec.description %></textarea>
+            <div class="tk-watch__edit-acts">
+              <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="editCancel" data-i18n="common.cancel"><%- t('common.cancel') %></button>
+            </div>
+          </form>
+          <% } %>
+        </div>
+
+        <% if (ready) { %>
+        <section class="tk-watch__comments" id="comments" aria-labelledby="commentsTitle">
+          <h2 class="tk-watch__h2" id="commentsTitle" data-count="<%= rec.comments || 0 %>" data-i18n="<%= commentsN.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(rec.comments) }) %>'><%= commentsN.text %></h2>
+
+          <% if (currentUser) { %>
+          <form class="tk-watch__form" id="commentForm">
+            <textarea id="commentText" class="tk-field" rows="1" maxlength="<%= limits.comment %>" placeholder="<%= ta('rec.commentPh') %>" data-i18n-placeholder="rec.commentPh" aria-label="<%= ta('rec.commentPh') %>" data-i18n-aria="rec.commentPh"></textarea>
+            <div class="tk-watch__form-acts" hidden>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="commentCancel" data-i18n="common.cancel"><%- t('common.cancel') %></button>
+              <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="rec.commentSend"><%- t('rec.commentSend') %></button>
+            </div>
+          </form>
+          <% } else { %>
+          <a class="tk-btn tk-btn--outline tk-btn--sm tk-watch__login" href="/login?next=<%= nextUrl %>" data-i18n="rec.commentLogin"><%- t('rec.commentLogin') %></a>
+          <% } %>
+
+          <p class="tk-note" id="commentsEmpty"<% if (comments.length) { %> hidden<% } %> data-i18n="rec.commentsEmpty"><%- t('rec.commentsEmpty') %></p>
+          <ol class="tk-watch__list" id="commentList"></ol>
+          <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-watch__load" id="commentsMore"<% if (!moreComments) { %> hidden<% } %> data-i18n="rec.commentsMore"><%- t('rec.commentsMore') %></button>
+          <%# Первая порция — данными: ленту рисует один шаблон в tk-recording.js. %>
+          <script type="application/json" id="commentsData"><%- JSON.stringify(comments).replace(/</g, '\\u003c') %></script>
+        </section>
+        <% } %>
       </div>
+
+      <% if (related.length) { %>
+      <aside class="tk-watch__side" aria-labelledby="relatedTitle">
+        <p class="tk-kicker tk-watch__side-title" id="relatedTitle" data-i18n="rec.related"><%- t('rec.related') %></p>
+        <ul class="tk-watch__related">
+          <% related.forEach(function (r) { var rv = plural(r.views || 0, 'rec.views'); %>
+          <li>
+            <a class="tk-watch__card" href="/recording/<%= r._id %>">
+              <span class="tk-watch__thumb">
+                <% if (r.thumb && r.thumb.url) { %><img src="<%= r.thumb.url %>" alt="" loading="lazy"><% } %>
+                <span class="tk-watch__len"><%= clock(r.duration) %></span>
+                <% if (r.isAdult) { %><span class="tk-watch__card-adult">18+</span><% } %>
+              </span>
+              <span class="tk-watch__card-body">
+                <span class="tk-watch__card-title"><%= r.title %></span>
+                <span class="tk-watch__card-meta"><%= r.authorName %></span>
+                <span class="tk-watch__card-meta"><span data-i18n="<%= rv.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(r.views) }) %>'><%= rv.text %></span> · <%= date(r.recordedAt || r.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></span>
+              </span>
+            </a>
+          </li>
+          <% }); %>
+        </ul>
+      </aside>
+      <% } %>
     </div>
   </main>
 </div>
 
-<% if (isOwner && rec.status !== 'processing') { %>
-<script>
-  // Удаление записи автором: подтверждение, запрос, назад на свою страницу.
-  document.getElementById('deleteRecording').addEventListener('click', function () {
-    var btn = this;
-    confirmDialog(t('rec.deleteQ'), { okText: t('rec.delete') }).then(function (ok) {
-      if (!ok) return;
-      btn.disabled = true;
-      return fetch('/recording/' + btn.dataset.id, { method: 'DELETE' }).then(function (r) {
-        return r.json().catch(function () { return {}; }).then(function (b) {
-          if (!r.ok) throw new Error(b.message || 'HTTP ' + r.status);
-          location.href = btn.dataset.back + '#recordings';
-        });
-      });
-    }).catch(function (e) {
-      btn.disabled = false;
-      toast(t('app.deleteError', { message: e.message }), 'error');
-    });
-  });
-</script>
+<% if (ready) { %>
+<script defer src="<%= asset('/tk-hls.js') %>"></script>
+<script defer src="<%= asset('/tk-player.js') %>"></script>
 <% } %>
+<script defer src="<%= asset('/tk-recording.js') %>"></script>
 </body>
 </html>

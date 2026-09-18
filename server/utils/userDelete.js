@@ -92,6 +92,8 @@ async function removeUser(user, io) {
   for (const r of recordings) {
     await recording.remove(r).catch((err) => errorLog.external(err, 'recording.remove', { recording: String(r._id) }));
   }
+  // Оценки и комментарии под чужими записями — со счётчиками тех записей.
+  await recording.forgetUser(user._id);
 
   // Жалобы на сам аккаунт, на его эфиры и сообщения чата — у них больше
   // нет предмета.

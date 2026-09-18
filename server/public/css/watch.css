@@ -1,0 +1,400 @@
+/* Страница записи эфира (/recording/:id): плеер, описание, комментарии,
+ * «Смотрите также». Разметка — views/recording.ejs, поведение —
+ * /tk-recording.js; плеер — css/player.css.
+ *
+ * Широкий экран: плеер и под ним всё про запись слева, подборка справа
+ * во всю высоту. Широкий режим (is-theater) — плеер над обеими колонками,
+ * по высоте окна. Телефон и планшет (до 1023px) — одна колонка, плеер
+ * от края до края.
+ */
+
+.tk-watch [hidden] { display: none !important; }
+
+.tk-watch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "stage side"
+    "main  side";
+  gap: 20px 24px;
+  max-width: 1760px;
+  padding: 20px 24px 48px;
+  align-items: start;
+}
+
+.tk-watch__stage { grid-area: stage; min-width: 0; }
+.tk-watch__main { grid-area: main; min-width: 0; }
+.tk-watch__side { grid-area: side; min-width: 0; }
+
+.tk-watch__player { border: 1px solid var(--tk-rule); }
+
+/* ── Широкий режим ── */
+.tk-watch.is-theater {
+  grid-template-areas:
+    "stage stage"
+    "main  side";
+}
+
+.tk-watch.is-theater .tk-watch__player {
+  width: 100%;
+  max-height: calc(100vh - 120px);
+  max-height: calc(100dvh - 120px);
+}
+
+/* ── Название, автор, кнопки ── */
+.tk-watch__title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -.02em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+  overflow-wrap: anywhere;
+}
+
+.tk-watch__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin-top: 14px;
+}
+
+.tk-watch__author { flex: 1 1 200px; min-width: 0; }
+
+.tk-watch__acts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tk-watch__rate { display: flex; }
+.tk-watch__rate .tk-watch__pill + .tk-watch__pill { border-left: 0; }
+
+.tk-watch__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+  background: none;
+  border: 1px solid var(--tk-rule);
+  font: 500 13px/1 Oswald, sans-serif;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+
+.tk-watch__pill:hover { color: var(--tk-paper); border-color: var(--tk-beige); }
+.tk-watch__pill:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
+.tk-watch__pill[aria-pressed="true"] { color: var(--tk-paper); background: rgba(227, 66, 52, .16); border-color: var(--tk-accent); }
+.tk-watch__pill[aria-pressed="true"] svg { fill: currentColor; fill-opacity: .35; }
+.tk-watch__pill:disabled { opacity: .6; cursor: default; }
+
+.tk-watch__count {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+}
+
+/* ── Описание ── */
+.tk-watch__about {
+  margin-top: 16px;
+  padding: 14px 16px 16px;
+  background: rgba(144, 113, 99, .1);
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-watch__meta {
+  margin: 0;
+  font: 500 13px/1.4 Oswald, sans-serif;
+  letter-spacing: .02em;
+  color: var(--tk-paper);
+}
+
+.tk-watch__adult { color: var(--tk-accent); }
+
+.tk-watch__desc {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--tk-beige);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* Длинное описание свёрнуто до пяти строк, «Ещё» раскрывает. */
+.tk-watch__desc.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tk-watch__desc--empty { color: var(--tk-muted); font-style: italic; }
+
+.tk-watch__more {
+  margin-top: 6px;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: 500 13px/1.4 Oswald, sans-serif;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+  cursor: pointer;
+}
+
+.tk-watch__more:hover { color: var(--tk-accent); }
+
+.tk-watch__owner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.tk-watch__edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.tk-watch__edit textarea { resize: vertical; min-height: 120px; }
+
+.tk-watch__edit-acts {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* ── Комментарии ── */
+.tk-watch__comments { margin-top: 28px; }
+
+.tk-watch__h2 {
+  margin: 0 0 16px;
+  font: 500 18px/1.2 Oswald, sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+.tk-watch__form { margin-bottom: 20px; }
+
+.tk-watch__form .tk-field[rows] {
+  width: 100%;
+  min-height: 44px;
+  max-height: 240px;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+
+.tk-watch__form-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tk-watch__login { margin-bottom: 20px; }
+
+.tk-watch__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.tk-watch__c {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 0 12px;
+  align-items: start;
+  scroll-margin-top: 90px;
+}
+
+.tk-watch__c:target .tk-watch__c-text { background: rgba(227, 66, 52, .12); }
+
+.tk-watch__c-ava {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .35);
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-watch__c-ava img { width: 100%; height: 100%; object-fit: cover; }
+
+.tk-watch__c-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.tk-watch__c-name {
+  font: 500 14px/1.3 Oswald, sans-serif;
+  color: var(--tk-paper);
+}
+
+.tk-watch__c-name:hover { color: var(--tk-accent); }
+
+.tk-watch__c-when {
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+.tk-watch__c-text {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--tk-beige);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tk-watch__c-acts { display: flex; gap: 2px; }
+
+.tk-watch__c-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--tk-muted);
+  cursor: pointer;
+}
+
+.tk-watch__c-btn:hover { color: var(--tk-accent); }
+.tk-watch__c-btn:focus-visible { outline: 2px solid var(--tk-accent); }
+
+.tk-watch__load { margin-top: 20px; }
+
+/* ── Смотрите также ── */
+.tk-watch__side-title { margin: 0 0 12px; }
+
+.tk-watch__related {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tk-watch__card {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.tk-watch__thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .2);
+  border: 1px solid var(--tk-rule);
+  transition: border-color .18s ease;
+}
+
+.tk-watch__card:hover .tk-watch__thumb,
+.tk-watch__card:focus-visible .tk-watch__thumb { border-color: var(--tk-accent); }
+.tk-watch__card:focus-visible { outline: none; }
+
+.tk-watch__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-watch__len,
+.tk-watch__card-adult {
+  position: absolute;
+  padding: 2px 6px;
+  background: rgba(10, 10, 10, .78);
+  font: 400 11px/1.4 Oswald, sans-serif;
+  letter-spacing: .04em;
+  color: var(--tk-paper);
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-watch__len { right: 6px; bottom: 6px; }
+.tk-watch__card-adult { left: 6px; top: 6px; color: var(--tk-accent); }
+
+.tk-watch__card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tk-watch__card-title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--tk-paper);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.tk-watch__card:hover .tk-watch__card-title { color: var(--tk-accent); }
+
+.tk-watch__card-meta {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--tk-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Средний экран: подборка уже ── */
+@media (max-width: 1279px) {
+  .tk-watch { grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; }
+  .tk-watch__card { grid-template-columns: 140px minmax(0, 1fr); }
+}
+
+/* ── Телефон и планшет: одна колонка ── */
+@media (max-width: 1023px) {
+  .tk-watch,
+  .tk-watch.is-theater {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: "stage" "main" "side";
+    gap: 0;
+    padding: 0 0 40px;
+  }
+
+  .tk-watch__player,
+  .tk-watch.is-theater .tk-watch__player { border: 0; max-height: none; }
+  .tk-watch__main { padding: 14px 16px 0; }
+  .tk-watch__side { padding: 28px 16px 0; }
+  .tk-watch__title { font-size: 18px; }
+  .tk-watch__card { grid-template-columns: 160px minmax(0, 1fr); }
+}
+
+@media (max-width: 560px) {
+  .tk-watch__bar { align-items: stretch; }
+  .tk-watch__acts { width: 100%; }
+  .tk-watch__pill { padding: 0 12px; }
+  .tk-watch__card { grid-template-columns: 136px minmax(0, 1fr); }
+}
