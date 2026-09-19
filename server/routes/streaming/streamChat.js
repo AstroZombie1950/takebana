@@ -19,7 +19,7 @@ router.post('/chat/message', requireAuth, requireNotBanned, validate({
 
   // Автор берётся из сессии, а не из тела запроса: раньше userId и username
   // приходили от клиента, и любой вошедший писал в чат эфира от чужого имени.
-  const author = await User.findById(req.session.userId).select('login email');
+  const author = await User.findById(req.session.userId).select('nickname login email');
   if (!author) {
       return res.status(401).json({ message: 'Необходима авторизация' });
   }

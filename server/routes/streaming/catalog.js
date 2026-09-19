@@ -7,6 +7,7 @@ const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const User = require('../../models/User');
 const Recording = require('../../models/Recording');
+const GalleryVideo = require('../../models/GalleryVideo');
 const Stream = require('../../models/Stream');
 const Subscription = require('../../models/Subscription');
 const { SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
@@ -56,7 +57,7 @@ async function findStreams(category, filters) {
   const streams = await Stream.find(where)
     .sort(filters.sort === 'new' ? { startedAt: -1 } : { viewers: -1, startedAt: -1 })
     .limit(PAGE_SIZE)
-    .populate('userId', 'login email avatar')
+    .populate('userId', 'nickname login email avatar')
     .select('title category city viewers thumbnail userId isActive')
     .lean();
 
@@ -180,10 +181,16 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
     .sort({ createdAt: -1 })
     .select('title status duration thumb isAdult createdAt views')
     .lean();
+  // Видео галереи: чужому — готовые, владельцу — и те, что пережимаются.
+  const videos = await GalleryVideo.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
+    .sort({ createdAt: -1 })
+    .select('status error duration video thumb')
+    .lean();
 
   // Передача данных в шаблон
   res.render('userPage', {
     recordings,
+    videos,
     user: {
       displayName,
       avatarStyle,

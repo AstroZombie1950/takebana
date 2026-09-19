@@ -9,8 +9,10 @@
  * TKHls.load), свой HLS браузера — только где нет MediaSource. Качество
  * выбирается, когда источник отдаёт несколько и играет hls.js.
  *
- * TKPlayer.mount(root) → { video, attachHls(hls) }. Эфир подключает свой
- * hls.js сам (tk-viewer.js) и передаёт его сюда — ради качества и живого края.
+ * TKPlayer.mount(root) → { video, attachHls(hls), load(src, poster), stop() }.
+ * Эфир подключает свой hls.js сам (tk-viewer.js) и передаёт его сюда — ради
+ * качества и живого края. load — сменить ролик в том же плеере (окно видео
+ * галереи профиля), stop — остановить и отпустить источник при закрытии.
  */
 (function () {
   var t = function (key, arg) { return window.t ? window.t(key, arg) : key; };
@@ -353,6 +355,7 @@
         if (b) b.click();
         return;
       }
+      if (pseudo) { setPseudo(false); return; }
       if (fsElement()) {
         (document.exitFullscreen || document.webkitExitFullscreen).call(document);
         return;
@@ -361,15 +364,27 @@
       if (req) {
         var p = req.call(root);
         if (p && p.catch) p.catch(function () {});
-      } else if (video.webkitEnterFullscreen) {
-        // iPhone отдаёт весь экран только самому <video>, со своими кнопками.
-        video.webkitEnterFullscreen();
+      } else {
+        // iPhone отдаёт весь экран только самому <video> — родным плеером iOS,
+        // где из наших кнопок нет ни одной (и широкого режима тоже). Вместо
+        // него — плеер поверх страницы на весь экран, со своими кнопками.
+        setPseudo(true);
       }
     }
 
+    var pseudo = false;
+    function setPseudo(on) {
+      pseudo = on;
+      root.classList.toggle('is-pseudo-fs', on);
+      document.documentElement.classList.toggle('tk-player-fs', on);
+      syncFullscreen();
+    }
+
+    function isFullscreen() { return pseudo || fsElement() === root; }
+
     function syncFullscreen() {
       if (live) return;
-      var on = fsElement() === root;
+      var on = isFullscreen();
       root.classList.toggle('is-fullscreen', on);
       var b = q('.tk-player__fs');
       var key = on ? 'stream.exitFullscreen' : 'stream.fullscreen';
@@ -404,6 +419,14 @@
     }
     if (theaterBtn && load('theater', false)) setTheater(true);
 
+    // Широкий режим из полного экрана: выйти из него сразу в широкий, а не
+    // включать широкий невидимо под полным экраном.
+    function toggleTheater() {
+      var on = theaterBtn.getAttribute('aria-pressed') !== 'true';
+      if (isFullscreen()) { toggleFullscreen(); on = true; }
+      setTheater(on);
+    }
+
     // ── Кнопки ──
     root.addEventListener('click', function (e) {
       var b = e.target.closest('[data-act]');
@@ -416,7 +439,7 @@
       else if (act === 'settings') { e.stopPropagation(); menu.hidden ? openMenu('main') : closeMenu(); }
       else if (act === 'fullscreen') toggleFullscreen();
       else if (act === 'pip') togglePip();
-      else if (act === 'theater') setTheater(theaterBtn.getAttribute('aria-pressed') !== 'true');
+      else if (act === 'theater') toggleTheater();
     });
 
     if (volume) volume.addEventListener('input', function () { setVolume(Number(volume.value)); });
@@ -469,19 +492,22 @@
     // ── Клавиши: страница с одним плеером, поэтому слушаем документ ──
     document.addEventListener('keydown', function (e) {
       if (e.ctrlKey || e.metaKey || e.altKey || typing(e.target)) return;
+      // Плеер в закрытом окне (видео галереи профиля) клавиш не слушает.
+      if (!root.getClientRects().length) return;
       if (e.target.closest && e.target.closest('button, a, [role="slider"]') && (e.key === ' ' || e.key === 'Enter')) return;
       var k = e.key.toLowerCase();
       var handled = true;
       if (k === ' ' || k === 'k') playPause();
       else if (k === 'm') setMuted(!(video.muted || video.volume === 0));
       else if (k === 'f') toggleFullscreen();
-      else if (k === 't' && theaterBtn) setTheater(theaterBtn.getAttribute('aria-pressed') !== 'true');
+      else if (k === 't' && theaterBtn) toggleTheater();
       else if (k === 'arrowup') setVolume(video.volume + 0.05);
       else if (k === 'arrowdown') setVolume(video.volume - 0.05);
       else if (!live && (k === 'arrowleft' || k === 'j')) seekBy(k === 'j' ? -SEEK_STEP : -5);
       else if (!live && (k === 'arrowright' || k === 'l')) seekBy(k === 'l' ? SEEK_STEP : 5);
       else if (!live && /^[0-9]$/.test(k)) seekTo(duration() * Number(k) / 10);
       else if (k === 'escape' && !menu.hidden) closeMenu();
+      else if (k === 'escape' && pseudo) setPseudo(false);
       else handled = false;
       if (handled) { e.preventDefault(); wake(); }
     });
@@ -510,16 +536,34 @@
     syncPlay();
     syncVolume();
     syncFullscreen();
-    if (root.dataset.src) {
-      useSource(root.dataset.src, function () {
-        var p = video.play();
-        if (p && p.catch) p.catch(function () {
-          video.muted = true;
-          var p2 = video.play();
-          if (p2 && p2.then) p2.then(function () { unmuteBtn.hidden = false; }, function () { video.muted = load('muted', false); });
-        });
+    // Запуск: со звуком, а если браузер не дал — без звука и с кнопкой.
+    function start() {
+      var p = video.play();
+      if (p && p.catch) p.catch(function () {
+        video.muted = true;
+        var p2 = video.play();
+        if (p2 && p2.then) p2.then(function () { unmuteBtn.hidden = false; }, function () { video.muted = load('muted', false); });
       });
     }
+
+    function stop() {
+      if (pseudo) setPseudo(false);
+      video.pause();
+      if (hls) { try { hls.destroy(); } catch (_) {} hls = null; }
+      video.removeAttribute('src');
+      video.load();
+      errorBox.hidden = true;
+      root.classList.remove('is-error', 'is-started');
+      syncPlay();
+    }
+
+    function loadSource(src, poster) {
+      stop();
+      if (poster) video.poster = poster; else video.removeAttribute('poster');
+      useSource(src, start);
+    }
+
+    if (root.dataset.src) useSource(root.dataset.src, start);
     if (live) {
       video.addEventListener('playing', function once() {
         video.removeEventListener('playing', once);
@@ -535,7 +579,7 @@
       });
     }
 
-    return { video: video, attachHls: attachHls };
+    return { video: video, attachHls: attachHls, load: loadSource, stop: stop };
   }
 
   window.TKPlayer = { mount: mount };

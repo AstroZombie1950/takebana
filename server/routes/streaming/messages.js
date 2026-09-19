@@ -39,6 +39,27 @@ function findConversation(a, b) {
   });
 }
 
+// Сколько у человека непрочитанных после удаления — всего и в диалогах
+// с peers. Уходит в событие: удалили непрочитанное — счётчики в шапке
+// и в списке диалогов падают сразу, а не после перезагрузки.
+async function unreadAfter(userId, peers) {
+  // В aggregate mongoose типы не приводит — id сразу ObjectId.
+  const oid = (id) => new mongoose.Types.ObjectId(String(id));
+  const mine = { recipient: oid(userId), readAt: null, deletedFor: { $ne: oid(userId) } };
+  const [unreadMessages, rows] = await Promise.all([
+    Message.countDocuments(mine),
+    peers.length
+      ? Message.aggregate([
+          { $match: { ...mine, sender: { $in: peers.map(oid) } } },
+          { $group: { _id: '$sender', n: { $sum: 1 } } },
+        ])
+      : [],
+  ]);
+  const dialogs = Object.fromEntries(peers.map((p) => [String(p), 0]));
+  rows.forEach((r) => { dialogs[String(r._id)] = r.n; });
+  return { unreadMessages, dialogs };
+}
+
 // Сообщение в том виде, в каком его получает браузер.
 function view(m) {
   return {
@@ -49,7 +70,9 @@ function view(m) {
     sentAt: m.sentAt,
     deliveredAt: m.deliveredAt || null,
     readAt: m.readAt || null,
-    forwardedFrom: m.forwardedFrom && m.forwardedFrom.name ? { name: m.forwardedFrom.name } : null,
+    forwardedFrom: m.forwardedFrom && m.forwardedFrom.name
+      ? { name: m.forwardedFrom.name, sentAt: m.forwardedFrom.sentAt || null, batch: m.forwardedFrom.batch || null }
+      : null,
   };
 }
 
@@ -84,18 +107,13 @@ async function deliver(req, { conversation, sender, recipient, content, forwarde
   conversation.hiddenFor = []; // удалённая переписка возвращается с новым сообщением
   await conversation.save();
 
-  // Одно непрочитанное уведомление на отправителя: новое сообщение освежает его.
-  await Notification.findOneAndUpdate(
-    { recipient: recipient._id, sender: sender._id, type: 'message', isRead: false },
-    { $set: { content, createdAt: now } },
-    { upsert: true }
-  );
+  // В колокольчик сообщение не пишется (18.09.2026): о нём говорит счётчик
+  // у иконки переписки в шапке, его ведёт tk-app.js по message:new.
 
   const out = view(message);
   const socket = io(req);
   if (socket) {
     socket.to(`user:${recipient._id}`).emit('message:new', { message: out, peer: person(sender) });
-    socket.to(`user:${recipient._id}`).emit('notification:new');
     socket.to(`user:${sender._id}`).emit('message:new', { message: out, peer: person(recipient) });
   }
   return out;
@@ -107,7 +125,7 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
     $or: [{ userOne: me }, { userTwo: me }],
     hiddenFor: { $ne: me },
   })
-    .populate('userOne userTwo', 'login email avatar isOnline lastSeen')
+    .populate('userOne userTwo', 'nickname login email avatar isOnline lastSeen')
     .lean();
 
   const ids = conversations.map((c) => c._id);
@@ -221,8 +239,8 @@ router.post('/sendMessage', requireAuthApi, requireNotBanned, validate({
 
   const [conversation, sender, recipient] = await Promise.all([
     findConversation(me, recipientId),
-    User.findById(me).select('login email avatar').lean(),
-    User.findById(recipientId).select('login email avatar').lean(),
+    User.findById(me).select('nickname login email avatar').lean(),
+    User.findById(recipientId).select('nickname login email avatar').lean(),
   ]);
   if (!conversation || !sender || !recipient) {
     return res.status(404).json({ message: 'Диалог не найден' });
@@ -259,20 +277,24 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
   }
 
   const [sender, recipients] = await Promise.all([
-    User.findById(me).select('login email avatar').lean(),
-    User.find({ _id: { $in: recipientIds } }).select('login email avatar').lean(),
+    User.findById(me).select('nickname login email avatar').lean(),
+    User.find({ _id: { $in: recipientIds } }).select('nickname login email avatar').lean(),
   ]);
 
   // Автор каждого — один раз на всю пачку: в выделении обычно два человека.
   const authors = new Map([[me, sender]]);
+  // Пересланное дальше — с исходным автором и временем, но в новой пачке.
+  const batchId = new ObjectId().toString();
   const origin = async (m) => {
-    if (m.forwardedFrom && m.forwardedFrom.name) return m.forwardedFrom;
+    if (m.forwardedFrom && m.forwardedFrom.name) {
+      return { user: m.forwardedFrom.user, name: m.forwardedFrom.name, sentAt: m.forwardedFrom.sentAt || m.sentAt, batch: batchId };
+    }
     const id = String(m.sender);
-    if (!authors.has(id)) authors.set(id, await User.findById(id).select('login email').lean());
+    if (!authors.has(id)) authors.set(id, await User.findById(id).select('nickname login email').lean());
     const author = authors.get(id);
     return author
-      ? { user: author._id, name: userView.displayName(author) }
-      : { user: m.sender, name: '#' + id.slice(-6) };
+      ? { user: author._id, name: userView.displayName(author), sentAt: m.sentAt, batch: batchId }
+      : { user: m.sender, name: '#' + id.slice(-6), sentAt: m.sentAt, batch: batchId };
   };
   const batch = [];
   for (const m of originals) batch.push({ content: m.content, forwardedFrom: await origin(m) });
@@ -311,8 +333,11 @@ router.post('/messages/read', requireAuthApi, validate({
     await Notification.deleteMany({ recipient: me, sender: peerId, type: 'message' });
   }
 
-  const unread = await Notification.countDocuments({ recipient: me, isRead: false });
-  res.json({ success: true, unread });
+  const [unread, unreadMessages] = await Promise.all([
+    Notification.countDocuments({ recipient: me, isRead: false, type: { $ne: 'message' } }),
+    Message.countDocuments({ recipient: me, readAt: null, deletedFor: { $ne: me } }),
+  ]);
+  res.json({ success: true, unread, unreadMessages });
 });
 
 
@@ -337,9 +362,12 @@ router.post('/messages/delete', requireAuthApi, validate({
     await Message.deleteMany({ _id: { $in: [...mineIds] } });
     const peers = new Set(mine.map((m) => String(m.recipient)));
     if (io(req)) {
-      let room = io(req).to(`user:${me}`);
-      peers.forEach((p) => { room = room.to(`user:${p}`); });
-      room.emit('message:deleted', { ids: [...mineIds] });
+      const ids = [...mineIds];
+      io(req).to(`user:${me}`).emit('message:deleted', { ids });
+      // У собеседника могли пропасть его непрочитанные.
+      for (const p of peers) {
+        io(req).to(`user:${p}`).emit('message:deleted', { ids, ...(await unreadAfter(p, [me])) });
+      }
     }
   }
 
@@ -347,7 +375,10 @@ router.post('/messages/delete', requireAuthApi, validate({
     const restIds = rest.map((m) => m._id);
     await Message.updateMany({ _id: { $in: restIds } }, { $addToSet: { deletedFor: me } });
     await Message.deleteMany({ _id: { $in: restIds }, 'deletedFor.1': { $exists: true } });
-    if (io(req)) io(req).to(`user:${me}`).emit('message:deleted', { ids: restIds.map(String) });
+    if (io(req)) {
+      const senders = [...new Set(rest.filter((m) => String(m.recipient) === me).map((m) => String(m.sender)))];
+      io(req).to(`user:${me}`).emit('message:deleted', { ids: restIds.map(String), ...(await unreadAfter(me, senders)) });
+    }
   }
 
   res.json({ success: true, deleted: messages.length });
@@ -375,8 +406,8 @@ router.post('/conversations/delete', requireAuthApi, validate({
     ]);
     await conversation.deleteOne();
     if (io(req)) {
-      io(req).to(`user:${me}`).emit('conversation:deleted', { peerId });
-      io(req).to(`user:${peerId}`).emit('conversation:deleted', { peerId: me });
+      io(req).to(`user:${me}`).emit('conversation:deleted', { peerId, ...(await unreadAfter(me, [])) });
+      io(req).to(`user:${peerId}`).emit('conversation:deleted', { peerId: me, ...(await unreadAfter(peerId, [])) });
     }
   } else {
     await Message.updateMany({ conversationId: conversation._id }, { $addToSet: { deletedFor: me } });
@@ -384,7 +415,7 @@ router.post('/conversations/delete', requireAuthApi, validate({
     conversation.hiddenFor.addToSet(me);
     await conversation.save();
     await Notification.deleteMany({ recipient: me, sender: peerId, type: 'message' });
-    if (io(req)) io(req).to(`user:${me}`).emit('conversation:deleted', { peerId });
+    if (io(req)) io(req).to(`user:${me}`).emit('conversation:deleted', { peerId, ...(await unreadAfter(me, [])) });
   }
 
   res.json({ success: true });

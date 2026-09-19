@@ -32,10 +32,14 @@ const ACTIONS = {
   'auth.ratelimit': 'Сработал лимит попыток',
 
   'profile.update': 'Правка профиля',
+  'profile.email.request': 'Запрос смены почты',
+  'profile.email.change': 'Почта сменена по ссылке',
   'profile.avatar': 'Смена фото',
   'profile.avatar.delete': 'Удаление фото',
   'profile.gallery.add': 'Фото в галерею',
   'profile.gallery.delete': 'Удаление из галереи',
+  'profile.gallery.video': 'Видео в галерею',
+  'profile.gallery.video.delete': 'Удаление видео из галереи',
   'profile.delete': 'Удаление своего аккаунта',
   'age.confirm': 'Подтверждение 18+',
 
@@ -95,9 +99,9 @@ async function actorInfo(userId, sessionLogin) {
 
   let info = { login: sessionLogin || '', role: '', at: Date.now() };
   try {
-    const user = await User.findById(userId).select('login email role').lean();
+    const user = await User.findById(userId).select('nickname login email role').lean();
     if (user) {
-      info = { login: user.login || user.email || '', role: user.role || 'user', at: Date.now() };
+      info = { login: user.nickname || user.login || user.email || '', role: user.role || 'user', at: Date.now() };
     }
   } catch (_) {
     // Не достали — пишем то, что знает сессия. Журнал важнее точности подписи.
@@ -137,7 +141,7 @@ function clientIp(req) {
 
 function label(target) {
   if (!target) return '';
-  return String(target.title || target.name || target.login || target.email || '').slice(0, 200);
+  return String(target.title || target.name || target.nickname || target.login || target.email || '').slice(0, 200);
 }
 
 // Основная функция. req может быть null — тогда действие записывается как

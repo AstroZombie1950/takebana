@@ -11,8 +11,12 @@ const User = require('../../models/User');
 const Subscription = require('../../models/Subscription');
 const { requireAuth } = require('../../middleware/auth');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
-const { UPLOADS, uploadAvatar, uploadGallery } = require('./uploads');
-const { saveImage, saveImages, BadImageError } = require('../../utils/image');
+const { UPLOADS, uploadAvatar, uploadGallery, uploadVideo } = require('./uploads');
+const GalleryVideo = require('../../models/GalleryVideo');
+const galleryVideo = require('../../utils/galleryVideo');
+const { saveImage, BadImageError } = require('../../utils/image');
+const galleryPhotos = require('../../utils/galleryPhotos');
+const errorLog = require('../../utils/errorLog');
 const { commonDataMiddleware } = require('./shared');
 const bcrypt = require('bcrypt');
 const { PASSWORD_PROVIDER, PASSWORD_MAX } = require('../../utils/password');
@@ -21,17 +25,32 @@ const { validate } = require('../../middleware/validate');
 const { removeUser } = require('../../utils/userDelete');
 const userView = require('../../utils/userView');
 const { audit } = require('../../utils/audit');
+const nickname = require('../../utils/nickname');
+const { mailConfigured } = require('../../utils/mail');
 
-// Страница настроек: имя, фото, язык, галерея, пароль. Раньше — окно поверх
+// Страница настроек: имя и ник, фото, пароль, почта, язык, удаление. Раньше — окно поверх
 // любой страницы кабинета, и его разметка со скриптом ехали с каждой из них.
 router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
   // Роль — ради блока удаления аккаунта: у администратора его нет. Общий
   // commonDataMiddleware роль не тянет, и ради одной страницы добавлять её
   // в выборку каждой страницы кабинета незачем.
-  const user = await User.findById(req.session.userId).select('provider role').lean();
+  const user = await User.findById(req.session.userId)
+    .select('provider role login nickname nicknameChangedAt email emailChange emailVerifiedAt').lean();
+  if (!user) return res.redirect('/login');
+  const pending = user.emailChange && user.emailChange.expiresAt > new Date() ? user.emailChange.email : '';
   res.render('settings', {
-    hasPassword: !!user && (user.provider || '') === PASSWORD_PROVIDER,
-    canDelete: !!user && user.role !== 'admin',
+    hasPassword: (user.provider || '') === PASSWORD_PROVIDER,
+    canDelete: user.role !== 'admin',
+    mailOn: mailConfigured,
+    profile: {
+      login: user.login || '',
+      nickname: user.nickname || '',
+      nickNext: nickname.nextChangeAt(user),
+      email: user.email || '',
+      pendingEmail: pending,
+      // У входа через Google почту подтвердил Google.
+      emailVerified: !!user.emailVerifiedAt || (user.provider || '') !== PASSWORD_PROVIDER,
+    },
   });
 });
 
@@ -108,16 +127,15 @@ router.post('/profile/gallery', requireAuth, uploadGallery.array('photos', 100),
     req.files = req.files.slice(0, 100 - existing);
   }
 
-  let names;
+  // Сжатие и выгрузка в Bunny — utils/galleryPhotos.js.
+  let urls;
   try {
-    names = await saveImages(req.files || [], 'gallery', path.join(UPLOADS, 'gallery', String(req.session.userId)));
+    urls = await galleryPhotos.save(req.session.userId, req.files || []);
   } catch (e) {
     if (!(e instanceof BadImageError)) throw e;
     return res.status(400).json({ success: false, message: e.message });
   }
 
-  const basePath = `/uploads/gallery/${req.session.userId}/`;
-  const urls = names.map(n => basePath + n);
   user.gallery = [...(user.gallery || []), ...urls];
   await user.save();
 
@@ -142,22 +160,73 @@ router.delete('/profile/gallery/:name', requireAuth, async (req, res) => {
     return res.status(400).json({ success: false, message: 'Некорректное имя файла' });
   }
 
-  const urlPrefix = `/uploads/gallery/${req.session.userId}/`;
-  const fullUrl = urlPrefix + fileName;
+  // Только своё фото: адрес ищется в галерее этого человека — на CDN
+  // или, у загруженных до переезда в Bunny, на сервере.
+  const fullUrl = galleryPhotos.find(req.session.userId, user.gallery, fileName);
+  if (!fullUrl) return res.status(404).json({ success: false, message: 'Фото не найдено' });
 
-  // Удаляем из массива
-  user.gallery = (user.gallery || []).filter(u => u !== fullUrl);
+  user.gallery = user.gallery.filter(u => u !== fullUrl);
   await user.save();
-
-  // Удаляем из файловой системы — строго из папки галереи этого пользователя
-  const galleryDir = path.join(UPLOADS, 'gallery', String(req.session.userId));
-  const filePath = resolveWithin(galleryDir, fileName);
-  if (filePath && fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-  }
+  await galleryPhotos.remove(req.session.userId, fullUrl)
+    .catch((e) => errorLog.external(e, 'gallery.photo.remove', { url: fullUrl }));
 
   audit(req, 'profile.gallery.delete', { targetType: 'user', target: user, meta: { file: fileName } });
   return res.json({ success: true });
+});
+
+// ── Видео в галерее ──────────────────────────────────────────────────────
+// Принимается файл до 300 МБ и 10 минут, дальше — пережатие со знаком
+// в фоне (utils/galleryVideo.js). Страница спрашивает состояние, пока
+// ролик не готов. Без хранилища (на бою без Bunny) видео не принимаем.
+const OBJECT_ID = /^[a-f\d]{24}$/i;
+
+function videoView(v) {
+  return {
+    id: String(v._id),
+    status: v.status,
+    error: v.error || '',
+    duration: v.duration || 0,
+    url: (v.video && v.video.url) || '',
+    thumb: (v.thumb && v.thumb.url) || '',
+  };
+}
+
+// Лимит — до приёма файла: иначе 300 МБ успевали бы лечь на диск.
+async function videoQuota(req, res, next) {
+  if (!galleryVideo.enabled) return res.status(503).json({ success: false, message: 'Видео сейчас не принимаются' });
+  const n = await GalleryVideo.countDocuments({ userId: req.session.userId, status: { $ne: 'failed' } });
+  if (n >= galleryVideo.MAX_PER_USER) {
+    return res.status(400).json({ success: false, message: 'В галерее уже 30 видео — удалите что-нибудь' });
+  }
+  next();
+}
+
+router.post('/profile/gallery/video', requireAuth, videoQuota, uploadVideo.single('video'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, message: 'Файл не передан' });
+  const doc = await GalleryVideo.create({ userId: req.session.userId });
+  galleryVideo.enqueue(doc, req.file.path);
+  audit(req, 'profile.gallery.video', { targetType: 'user', targetId: req.session.userId, meta: { video: String(doc._id), size: req.file.size } });
+  res.json({ success: true, video: videoView(doc) });
+});
+
+router.get('/profile/gallery/video/:id', requireAuth, async (req, res) => {
+  const v = OBJECT_ID.test(req.params.id)
+    ? await GalleryVideo.findOne({ _id: req.params.id, userId: req.session.userId }).lean()
+    : null;
+  if (!v) return res.status(404).json({ success: false, message: 'Видео не найдено' });
+  res.json({ success: true, video: videoView(v) });
+});
+
+// Удаляет владелец. Пока ролик пережимается, удаление тоже можно: обработка
+// увидит, что записи нет, и уберёт выгруженное за собой.
+router.delete('/profile/gallery/video/:id', requireAuth, async (req, res) => {
+  const v = OBJECT_ID.test(req.params.id)
+    ? await GalleryVideo.findOne({ _id: req.params.id, userId: req.session.userId }).lean()
+    : null;
+  if (!v) return res.status(404).json({ success: false, message: 'Видео не найдено' });
+  await galleryVideo.remove(v);
+  audit(req, 'profile.gallery.video.delete', { targetType: 'user', targetId: req.session.userId, meta: { video: String(v._id) } });
+  res.json({ success: true });
 });
 
 // Удаление своего аккаунта. Право на удаление данных человек применяет сам,

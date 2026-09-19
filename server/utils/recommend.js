@@ -22,7 +22,7 @@ async function forRecording(rec, { adultOk }) {
   const take = async (filter, sort, limit) => {
     if (limit <= 0) return;
     const rows = await Recording.find({ ...base, ...filter, _id: { $nin: seen } })
-      .sort(sort).limit(limit).select(FIELDS).populate('userId', 'login email').lean();
+      .sort(sort).limit(limit).select(FIELDS).populate('userId', 'nickname login email').lean();
     for (const r of rows) { seen.push(r._id); out.push(r); }
   };
 

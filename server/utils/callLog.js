@@ -95,7 +95,7 @@ async function journal(me) {
   const calls = await Call.find({ $or: [{ caller: me }, { callee: me }], endedAt: { $ne: null }, deletedFor: { $ne: me } })
     .sort({ startedAt: -1 })
     .limit(100)
-    .populate('caller callee', 'login email avatar')
+    .populate('caller callee', 'nickname login email avatar')
     .lean();
 
   await Promise.all([

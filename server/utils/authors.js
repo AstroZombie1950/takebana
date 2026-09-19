@@ -37,7 +37,7 @@ function view(user, extra = {}) {
 async function liveStreams() {
   const streams = await Stream.find({ isActive: true })
     .sort({ viewers: -1, startedAt: -1 })
-    .populate('userId', 'login email avatar isOnline banned')
+    .populate('userId', 'nickname login email avatar isOnline banned')
     .select('title viewers userId')
     .lean();
   return streams.filter((s) => s.userId && !s.userId.banned);
@@ -91,7 +91,7 @@ async function groups({ limit = GROUP_SIZE } = {}) {
   if (!rest.length) return { live, popular: [], fresh: [], recorded: [] };
 
   const [users, followers, recent] = await Promise.all([
-    User.find({ _id: { $in: rest } }).select('login email avatar isOnline').lean(),
+    User.find({ _id: { $in: rest } }).select('nickname login email avatar isOnline').lean(),
     followersOf(rest),
     // Последняя запись каждого — по ней сортируется группа «С записями».
     Recording.aggregate([

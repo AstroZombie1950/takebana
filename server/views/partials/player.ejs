@@ -29,7 +29,7 @@
   <p class="tk-player__error" hidden data-i18n="player.error"><%- t('player.error') %></p>
 
   <button type="button" class="tk-player__big" data-act="play" aria-label="<%= ta('player.play') %>" data-i18n-aria="player.play">
-    <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+    <svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true"><path d="M8 5.5v13L20 12z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
   </button>
 
   <%# Автозапуск возможен только без звука: зритель включает его одной кнопкой. %>
@@ -56,7 +56,7 @@
 
     <div class="tk-player__row">
       <button type="button" class="tk-player__btn" data-act="play" aria-label="<%= ta('player.play') %>" data-i18n-aria="player.play" title="<%= ta('player.play') %> (k)">
-        <svg class="tk-player__i-play" <%- ico %>><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+        <svg class="tk-player__i-play" <%- ico %>><path d="M8 5.5v13L20 12z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
         <svg class="tk-player__i-pause" <%- ico %>><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
       </button>
 

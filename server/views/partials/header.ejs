@@ -74,10 +74,12 @@
       <span class="tk-ahead__dot<%= notifications && notifications.hasUnread ? '' : ' hidden' %>" id="notificationDot"></span>
     </button>
 
-    <%# Счётчик — пропущенные звонки: звонки — вкладка переписки. %>
+    <%# Счётчик — непрочитанные сообщения и пропущенные звонки вместе: и то
+        и другое живёт в переписке. Ведёт его tk-app.js (window.tkChatBadge). %>
+    <% var chatCount = (unreadMessages || 0) + (missedCalls || 0); %>
     <a href="/chatsPage" class="tk-ahead__icon" aria-label="<%= ta('app.chats') %>" data-i18n-aria="app.chats">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M21 11a8 8 0 01-11.5 7.2L4 20l1.8-5.5A8 8 0 1121 11Z"></path></svg>
-      <span class="tk-ahead__count<%= missedCalls ? '' : ' hidden' %>" data-missed-calls><%= missedCalls %></span>
+      <span class="tk-ahead__count<%= chatCount ? '' : ' hidden' %>" data-chat-badge data-messages="<%= unreadMessages || 0 %>" data-calls="<%= missedCalls || 0 %>"><%= chatCount > 99 ? '99+' : chatCount %></span>
     </a>
 
     <a href="/studio" class="tk-btn tk-btn--primary tk-btn--sm" id="startStreamButtonHeader">
@@ -113,5 +115,5 @@
     поверх него, и он это видит. %>
 <script defer src="<%= asset('/tk-listbox.js') %>"></script>
 <% if (!guest || typeof socket !== 'undefined') { %><script defer src="/socket.io/socket.io.js"></script><% } %>
-<% if (!guest) { %><script defer src="<%= asset('/tk-daily.js') %>"></script><script defer src="<%= asset('/tk-peer.js') %>"></script><% } %>
+<% if (!guest) { %><script defer src="<%= asset('/tk-daily.js') %>"></script><script defer src="<%= asset('/tk-peer.js') %>"></script><script defer src="<%= asset('/tk-notify.js') %>"></script><% } %>
 <script defer src="<%= asset('/tk-app.js') %>"></script>

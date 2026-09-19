@@ -5,7 +5,12 @@ const mongoose = require('mongoose');
 const { randomUUID: uuidv4 } = require('crypto'); // Генератор уникальных ключей
 
 const UserSchema = new mongoose.Schema({
+  // Имя — свободная строка на любом языке; пока нигде не показывается.
   login: String,
+  // Никнейм — под ним человека видят везде (utils/userView.js). Уникальный,
+  // в нижнем регистре; правила и выдача — utils/nickname.js.
+  nickname: String,
+  nicknameChangedAt: { type: Date, default: null },
   email: String,
   password: String,
   provider: String,
@@ -83,6 +88,34 @@ const UserSchema = new mongoose.Schema({
     tokenHash: String,
     expiresAt: Date,
     requestedAt: Date
+  },
+  // Смена почты (routes/emailChange.js): новый адрес ждёт подтверждения по
+  // ссылке из письма на него же. В базе — хеш токена, как у пароля.
+  emailChange: {
+    email: String,
+    tokenHash: String,
+    expiresAt: Date,
+    requestedAt: Date
+  },
+  // Почта подтверждена ссылкой из письма (routes/emailChange.js): после
+  // регистрации или смены почты. Ничего не запирает — только статус
+  // в настройках. У входа через Google почту подтвердил Google.
+  emailVerifiedAt: {
+    type: Date,
+    default: null
+  },
+  emailVerify: {
+    tokenHash: String,
+    expiresAt: Date,
+    requestedAt: Date
+  }
+});
+
+// Новому аккаунту — ник сразу, каким бы путём он ни появился: регистрация,
+// Google, сиды, панель. Потом его можно сменить в настройках.
+UserSchema.pre('save', async function () {
+  if (this.isNew && !this.nickname) {
+    this.nickname = await require('../utils/nickname').free(this.constructor, this.login || this.email || 'user');
   }
 });
 
@@ -99,5 +132,11 @@ UserSchema.index({ banned: 1 }, { partialFilterExpression: { banned: true } });
 // Переход по ссылке из письма ищет по хешу токена. Частичный: ссылка открыта
 // у единиц, остальным строкам место в индексе не нужно.
 UserSchema.index({ 'passwordReset.tokenHash': 1 }, { partialFilterExpression: { 'passwordReset.tokenHash': { $exists: true } } });
+UserSchema.index({ 'emailChange.tokenHash': 1 }, { partialFilterExpression: { 'emailChange.tokenHash': { $exists: true } } });
+UserSchema.index({ 'emailVerify.tokenHash': 1 }, { partialFilterExpression: { 'emailVerify.tokenHash': { $exists: true } } });
+
+// Ник уникален. Частичный индекс, а не sparse: пустая строка тоже «нет ника»,
+// и таких до выдачи при запуске может быть несколько.
+UserSchema.index({ nickname: 1 }, { unique: true, partialFilterExpression: { nickname: { $type: 'string', $gt: '' } } });
 
 module.exports = mongoose.model('User', UserSchema);

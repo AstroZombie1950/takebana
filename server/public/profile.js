@@ -61,6 +61,9 @@ document.addEventListener('DOMContentLoaded', function () {
             else window.tkSubscriptions.add(body.user);
           }
           subscribeButton.classList.toggle('unsubscribe', !off);
+          // Число подписчиков — сразу, без перезагрузки: сервер вернул свежее.
+          var followers = document.getElementById('followersCount');
+          if (followers && typeof body.followers === 'number') followers.textContent = body.followers;
           // Ключ словаря меняем вместе с текстом: иначе следующее
           // переключение языка вернёт прежнюю подпись.
           window.tkText(label, off ? 'stream.subscribe' : 'stream.unsubscribe');
@@ -121,10 +124,11 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     };
 
+    // Счётчик — то, что можно смотреть: без роликов, которые ещё грузятся,
+    // пережимаются или не вышли.
     var recount = function () {
-      var n = shots.children.length;
-      countEl.textContent = String(n);
-      empty.hidden = n > 0;
+      countEl.textContent = String(shots.querySelectorAll('.tk-shots__item:not(.is-uploading):not(.is-processing):not(.is-failed)').length);
+      empty.hidden = shots.children.length > 0;
     };
 
     var say = function (key, vars) { if (hint) window.tkText(hint, key, vars); };
@@ -136,11 +140,98 @@ document.addEventListener('DOMContentLoaded', function () {
         '<button type="button" class="tk-thumb__del" data-name="' + escapeHtml(name) + '" aria-label="' + escapeHtml(pt('common.delete')) + '" data-i18n-aria="common.delete">' + CROSS + '</button></div>';
     };
 
+    // ── Видео: загрузка с процентами, потом ожидание пережатия ──
+    var VIDEO_MAX = 300 * 1024 * 1024;
+    var PLAY = '<span class="tk-shot__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5.5v13L20 12z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>';
+    var clock = function (s) { s = Math.round(s || 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+
+    var videoInner = function (v) {
+      if (v.status === 'ready') {
+        return '<button type="button" class="tk-shot tk-shot--video" data-video-url="' + escapeHtml(v.url) + '" data-video-poster="' + escapeHtml(v.thumb) + '" aria-label="' + escapeHtml(pt('user.videoPlay')) + '">' +
+          (v.thumb ? '<img src="' + escapeHtml(v.thumb) + '" alt="" loading="lazy" decoding="async">' : '') + PLAY +
+          '<span class="tk-shot__len">' + clock(v.duration) + '</span></button>';
+      }
+      var key = v.status === 'failed' ? (v.error === 'long' ? 'user.videoLong' : 'user.videoFailed') : 'user.videoProcessing';
+      return '<div class="tk-shot tk-shot--state"><span data-i18n="' + key + '">' + escapeHtml(pt(key)) + '</span></div>';
+    };
+
+    var videoTile = function (v) {
+      var el = document.createElement('div');
+      el.className = 'tk-shots__item' + (v.status !== 'ready' ? ' is-' + v.status : '');
+      if (v.id) el.setAttribute('data-video-id', v.id);
+      el.innerHTML = videoInner(v) +
+        '<button type="button" class="tk-thumb__del" data-video-del aria-label="' + escapeHtml(pt('common.delete')) + '" data-i18n-aria="common.delete">' + CROSS + '</button>';
+      return el;
+    };
+
+    var paintVideo = function (el, v) {
+      el.className = 'tk-shots__item' + (v.status !== 'ready' ? ' is-' + v.status : '');
+      el.firstElementChild.outerHTML = videoInner(v);
+      recount();
+    };
+
+    // Пока ролик пережимается — спрашиваем раз в 4 секунды.
+    var watch = function (el, id) {
+      setTimeout(function () {
+        if (!el.isConnected) return;
+        json('/profile/gallery/video/' + encodeURIComponent(id), { method: 'GET' })
+          .then(function (d) {
+            if (d.video.status === 'processing') return watch(el, id);
+            paintVideo(el, d.video);
+          })
+          .catch(function () { watch(el, id); });
+      }, 4000);
+    };
+    shots.querySelectorAll('.tk-shots__item.is-processing[data-video-id]').forEach(function (el) {
+      watch(el, el.getAttribute('data-video-id'));
+    });
+
+    // XHR, а не fetch: у fetch нет прогресса отправки, а ролик на сотни
+    // мегабайт без процентов выглядит зависшим.
+    var uploadVideo = function (file) {
+      var el = videoTile({ status: 'uploading' });
+      el.firstElementChild.innerHTML = '<span></span>';
+      var label = el.firstElementChild.firstChild;
+      window.tkText(label, 'user.videoUploading', { p: 0 });
+      shots.insertBefore(el, shots.firstChild);
+      recount();
+      var form = new FormData();
+      form.append('video', file);
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/profile/gallery/video');
+      xhr.setRequestHeader('Accept', 'application/json');
+      xhr.upload.onprogress = function (e) {
+        if (e.lengthComputable) window.tkText(label, 'user.videoUploading', { p: Math.floor(e.loaded / e.total * 100) });
+      };
+      xhr.onload = function () {
+        var d = {};
+        try { d = JSON.parse(xhr.responseText); } catch (_) {}
+        if (xhr.status !== 200 || !d.video) {
+          el.remove();
+          recount();
+          return toast(window.t('app.errorShort', { message: d.message || 'HTTP ' + xhr.status }), 'error');
+        }
+        el.setAttribute('data-video-id', d.video.id);
+        paintVideo(el, d.video);
+        watch(el, d.video.id);
+      };
+      xhr.onerror = function () {
+        el.remove();
+        recount();
+        toast(window.t('common.noNetwork'), 'error');
+      };
+      xhr.send(form);
+    };
+
     var upload = function (list) {
-      var files = Array.prototype.filter.call(list || [], function (f) {
+      var all = Array.prototype.slice.call(list || []);
+      var videos = all.filter(function (f) { return /^video\//.test(f.type) && f.size <= VIDEO_MAX; });
+      var files = all.filter(function (f) {
         return /^image\/(png|jpeg|webp)$/.test(f.type) && f.size <= 10 * 1024 * 1024;
       });
-      if (!files.length) return say('user.galleryBadFiles');
+      if (!files.length && !videos.length) return say('user.galleryBadFiles');
+      videos.forEach(uploadVideo);
+      if (!files.length) return;
       var form = new FormData();
       files.forEach(function (f) { form.append('photos', f); });
       say('app.uploading');
@@ -166,6 +257,23 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     shots.addEventListener('click', function (e) {
+      var vdel = e.target.closest('[data-video-del]');
+      if (vdel) {
+        var tile = vdel.closest('.tk-shots__item');
+        var vid = tile.getAttribute('data-video-id');
+        if (!vid) return; // ещё грузится — удалить нечего
+        confirmDialog(pt('user.videoDeleteQ'), { okText: pt('common.delete') }).then(function (yes) {
+          if (!yes) return;
+          tile.classList.add('is-busy');
+          return json('/profile/gallery/video/' + encodeURIComponent(vid), { method: 'DELETE' })
+            .then(function () { tile.remove(); recount(); })
+            .catch(function (err) {
+              tile.classList.remove('is-busy');
+              toast(window.t('app.deleteError', { message: err.message }), 'error');
+            });
+        });
+        return;
+      }
       var del = e.target.closest('[data-name]');
       if (!del) return;
       var item = del.closest('.tk-shots__item');
@@ -180,6 +288,29 @@ document.addEventListener('DOMContentLoaded', function () {
           });
       });
     });
+  }
+
+  // ── Просмотр видео: плеер Takebana в окне ──────────────────────────────
+  // Плеер один на все ролики: при открытии — новый источник, при закрытии —
+  // остановка и отпущенный файл, чтобы звук не играл за закрытым окном.
+  var videoBox = document.getElementById('videoBox');
+  if (videoBox && window.TKPlayer) {
+    var vplayer = null;
+    var closeVideo = function () {
+      if (videoBox.classList.contains('hidden')) return;
+      videoBox.classList.add('hidden');
+      if (vplayer) vplayer.stop();
+    };
+    document.addEventListener('click', function (e) {
+      var v = e.target.closest('[data-video-url]');
+      if (!v) return;
+      if (!vplayer) vplayer = TKPlayer.mount(videoBox.querySelector('.tk-player'));
+      videoBox.classList.remove('hidden');
+      vplayer.load(v.getAttribute('data-video-url'), v.getAttribute('data-video-poster'));
+    });
+    document.getElementById('videoBoxClose').addEventListener('click', closeVideo);
+    videoBox.addEventListener('click', function (e) { if (e.target === videoBox) closeVideo(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeVideo(); });
   }
 
   // ── Просмотр фотографии ─────────────────────────────────────────────────

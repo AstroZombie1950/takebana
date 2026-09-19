@@ -23,7 +23,7 @@ const OBJECT_ID = /^[a-f\d]{24}$/i;
 // Эфир и его автор для шапки эфира. null — эфира нет или нет автора.
 async function loadStream(streamId) {
   if (!OBJECT_ID.test(streamId)) return null;
-  const stream = await Stream.findById(streamId).populate('userId', 'login email avatar').lean();
+  const stream = await Stream.findById(streamId).populate('userId', 'nickname login email avatar').lean();
   if (!stream || !stream.userId) return null;
 
   const author = stream.userId;

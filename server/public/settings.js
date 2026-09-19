@@ -1,4 +1,5 @@
-/* Настройки профиля: имя, фото, пароль, удаление аккаунта. Язык переключает общий
+/* Настройки профиля: имя и никнейм, фото, пароль, почта, уведомления,
+ * камера и микрофон, удаление аккаунта. Язык переключает общий
  * tk-i18n.js по кнопкам с data-lang — здесь для него ничего не нужно.
  *
  * Раньше жило в tk-app.js и грузилось с каждой страницей кабинета вместе
@@ -28,17 +29,99 @@
     return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
   }
 
-  // ── Имя ───────────────────────────────────────────────────────────────
-  // После сохранения — перезагрузка: имя и буква аватара стоят по всей
-  // странице, от шапки панели до подписей.
+  // ── Имя и никнейм ─────────────────────────────────────────────────────
+  // Ник проверяется на ходу: формат — здесь же, занятость — запросом
+  // (routes/userRoutes.js), с паузой на набор. Правила — utils/nickname.js.
+  var nick = $('profileNick');
+  var nickStatus = $('nickStatus');
+  var NICK_RULE = /^[a-z][a-z0-9_]{2,19}$/;
+  var nickTimer = null, nickSeq = 0;
+
+  function nickSay(key, vars, state) {
+    nickStatus.className = 'tk-set__status' + (state ? ' is-' + state : '');
+    if (!key) { nickStatus.textContent = ''; nickStatus.removeAttribute('data-i18n'); return; }
+    tkText(nickStatus, key, vars);
+  }
+
+  function untilVars(iso) {
+    return { date: tkDate(iso, { day: 'numeric', month: 'long', year: 'numeric' }) };
+  }
+
+  function nickReason(reason, until) {
+    if (reason === 'wait') return nickSay('settings.nick.wait', untilVars(until), 'bad');
+    nickSay('settings.nick.' + (reason || 'format'), null, 'bad');
+  }
+
+  function checkNick() {
+    var v = nick.value.trim().toLowerCase();
+    if (nick.value !== v) nick.value = v;
+    clearTimeout(nickTimer);
+    if (v === nick.dataset.current) return nickSay(nick.dataset.next ? 'settings.nick.wait' : null, nick.dataset.next ? untilVars(nick.dataset.next) : null, '');
+    if (!NICK_RULE.test(v)) return nickReason('format');
+    nickSay('settings.nick.checking', null, '');
+    var seq = ++nickSeq;
+    nickTimer = setTimeout(function () {
+      fetch('/api/nickname/check?n=' + encodeURIComponent(v))
+        .then(function (r) { return r.json(); })
+        .then(function (r) {
+          if (seq !== nickSeq) return; // уже печатают дальше
+          if (r.ok) nickSay('settings.nick.free', null, 'ok');
+          else nickReason(r.reason, r.until);
+        })
+        .catch(function () { if (seq === nickSeq) nickSay(null); });
+    }, 350);
+  }
+
+  nick.addEventListener('input', checkNick);
+  checkNick();
+
   $('nameForm').addEventListener('submit', function (e) {
     e.preventDefault();
-    var login = $('profileNameInput').value.trim();
-    if (!login) return toast(t('app.nameEmpty'), 'error');
-    send('/update-profile', json({ login: login }))
-      .then(function () { location.reload(); })
-      .catch(function (err) { toast(t('app.errorPrefix', { message: err.message }), 'error'); });
+    var v = nick.value.trim().toLowerCase();
+    if (!NICK_RULE.test(v)) { nickReason('format'); return nick.focus(); }
+    var btn = e.target.querySelector('[type="submit"]');
+    btn.disabled = true;
+    fetch('/update-profile', json({ login: $('profileName').value.trim(), nickname: v }))
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+      .then(function (x) {
+        if (!x.ok) {
+          if (x.b.reason) nickReason(x.b.reason, x.b.until);
+          return toast(t('app.errorPrefix', { message: x.b.message || '' }), 'error');
+        }
+        // Ник стоит по всей странице — в шапке панели, подписях: проще
+        // перезагрузить, чем искать каждое место.
+        if (x.b.nickname !== nick.dataset.current) return location.reload();
+        toast(t('settings.saved'), 'ok');
+      })
+      .catch(function () { toast(t('common.noNetwork'), 'error'); })
+      .finally(function () { btn.disabled = false; });
   });
+
+  // ── Почта ─────────────────────────────────────────────────────────────
+  // Новый адрес вступает в силу по ссылке из письма на него
+  // (routes/emailChange.js); до тех пор — «ждёт подтверждения».
+  var emailForm = $('emailForm');
+  if (emailForm) {
+    emailForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var email = $('newEmail').value.trim();
+      var pass = $('emailPassword');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast(t('settings.emailBad'), 'error');
+      if (!pass.value) return toast(t('settings.delete.needPassword'), 'error');
+      var btn = emailForm.querySelector('[type="submit"]');
+      btn.disabled = true;
+      send('/settings/email', json({ email: email, password: pass.value }))
+        .then(function () {
+          $('emailPendingAddr').textContent = email;
+          $('emailPending').hidden = false;
+          $('newEmail').value = '';
+          pass.value = '';
+          toast(t('settings.emailSent'), 'ok');
+        })
+        .catch(function (err) { toast(t('app.errorPrefix', { message: err.message }), 'error'); })
+        .finally(function () { btn.disabled = false; });
+    });
+  }
 
   // ── Фото профиля ──────────────────────────────────────────────────────
   var avatarInput = $('avatarInput');
@@ -135,5 +218,133 @@
         })
         .catch(function (err) { toast(t('app.errorPrefix', { message: err.message }), 'error'); });
     });
+  }
+
+  // ── Подтверждение почты: письмо ещё раз ──
+  var verifyBtn = $('verifyBtn');
+  if (verifyBtn) verifyBtn.addEventListener('click', function () {
+    verifyBtn.disabled = true;
+    send('/settings/email/verify', { method: 'POST' })
+      .then(function (data) { toast(data.message, 'ok'); })
+      .catch(function (err) { toast(t('app.errorPrefix', { message: err.message }), 'error'); })
+      .then(function () { setTimeout(function () { verifyBtn.disabled = false; }, 60000); });
+  });
+
+  // ── Уведомления: тумблеры пишут в браузер (tk-notify.js) ──
+  // Разрешение на системные уведомления просим только по нажатию на тумблер:
+  // без жеста браузер запрос блокирует. Отказ с сайта не отменить —
+  // подсказываем, где это в настройках браузера.
+  var notifyState = $('notifyState');
+  if (notifyState && window.TKNotify) {
+    var N = window.TKNotify;
+    var sysBlocked = function () {
+      var key = !N.supported() ? 'settings.notifyNone'
+        : Notification.permission === 'denied' ? 'settings.notifyDenied' : '';
+      notifyState.hidden = !key;
+      if (key) tkText(notifyState, key);
+      return !!key;
+    };
+    var saved = N.prefs();
+    document.querySelectorAll('[data-notify]').forEach(function (box) {
+      var name = box.getAttribute('data-notify');
+      box.checked = name === 'sys'
+        ? !!saved.sys && N.supported() && Notification.permission === 'granted'
+        : !!saved[name];
+      box.addEventListener('change', function () {
+        if (name !== 'sys') {
+          N.setPref(name, box.checked);
+          if (box.checked) N.preview(name); // сразу слышно, что включили
+          return;
+        }
+        if (!box.checked) return N.setPref('sys', false);
+        if (sysBlocked()) { box.checked = false; return; }
+        Promise.resolve(Notification.permission === 'granted' ? 'granted' : Notification.requestPermission())
+          .then(function (res) {
+            box.checked = res === 'granted';
+            N.setPref('sys', box.checked);
+            sysBlocked();
+          });
+      });
+    });
+    sysBlocked();
+  }
+
+  // ── Камера и микрофон: что разрешил браузер, и проверка ──
+  // Сайт не выдаёт себе доступ сам — его даёт браузер по жесту и запоминает
+  // ответ. «Проверить» и есть такой жест: разрешили один раз — звонки
+  // и эфиры дальше идут без вопроса.
+  var devBtn = $('devBtn');
+  if (devBtn) {
+    var PERM = { granted: ['settings.permGranted', 'is-ok'], prompt: ['settings.permPrompt', ''], denied: ['settings.permDenied', 'is-bad'] };
+    var devState = $('devState');
+    var showPerm = function (el, state) {
+      var p = PERM[state] || ['settings.permUnknown', ''];
+      tkText(el, p[0]);
+      el.className = p[1];
+    };
+    // Permissions API знает не каждый браузер (Firefox — не про камеру):
+    // тогда «не известно», и ответ покажет проверка.
+    var readPerms = function () {
+      [['camera', $('permCamera')], ['microphone', $('permMic')]].forEach(function (x) {
+        if (!navigator.permissions) return showPerm(x[1], '');
+        navigator.permissions.query({ name: x[0] }).then(function (st) {
+          showPerm(x[1], st.state);
+          st.onchange = function () { showPerm(x[1], st.state); };
+        }, function () { showPerm(x[1], ''); });
+      });
+    };
+    readPerms();
+
+    var devStream = null, devCtx = null, devRaf = 0;
+    var stopCheck = function () {
+      cancelAnimationFrame(devRaf);
+      if (devStream) devStream.getTracks().forEach(function (tr) { tr.stop(); });
+      if (devCtx) devCtx.close().catch(function () {});
+      devStream = devCtx = null;
+      $('devVideo').srcObject = null;
+      $('devCheck').hidden = true;
+      tkText(devBtn, 'settings.devicesCheck');
+    };
+    // Уровень микрофона — громкость по временной форме сигнала.
+    var meter = function (stream) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC || !stream.getAudioTracks().length) return;
+      devCtx = new AC();
+      var an = devCtx.createAnalyser();
+      an.fftSize = 512;
+      devCtx.createMediaStreamSource(stream).connect(an);
+      var buf = new Uint8Array(an.fftSize);
+      var bar = $('devLevel');
+      (function tick() {
+        an.getByteTimeDomainData(buf);
+        var sum = 0;
+        for (var i = 0; i < buf.length; i++) { var v = (buf[i] - 128) / 128; sum += v * v; }
+        bar.style.width = Math.min(100, Math.round(Math.sqrt(sum / buf.length) * 400)) + '%';
+        devRaf = requestAnimationFrame(tick);
+      })();
+    };
+    devBtn.addEventListener('click', function () {
+      if (devStream) return stopCheck();
+      devState.hidden = true;
+      devBtn.disabled = true;
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(function (stream) {
+          devStream = stream;
+          $('devVideo').srcObject = stream;
+          $('devCheck').hidden = false;
+          meter(stream);
+          tkText(devBtn, 'settings.devicesStop');
+        })
+        .catch(function (e) {
+          devState.hidden = false;
+          if (e && e.name === 'NotAllowedError') tkText(devState, 'settings.devicesDenied');
+          else devState.textContent = t('settings.devicesFail', { message: (e && (e.message || e.name)) || '' });
+        })
+        .then(function () {
+          devBtn.disabled = false;
+          readPerms(); // Safari не шлёт onchange — перечитываем
+        });
+    });
+    window.addEventListener('pagehide', stopCheck);
   }
 })();

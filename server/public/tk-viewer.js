@@ -9,7 +9,9 @@
   // Старт, пауза, конец эфира и смена его типа меняют сам плеер — на месте
   // он не перестраивается, страница перезагружается. Эфира больше нет —
   // перезагрузка покажет «эфир завершён».
+  var awayBox = document.getElementById('hostAway');
   TKStream.onUpdate(function (u) {
+    if (awayBox && typeof u.away === 'boolean') awayBox.hidden = !u.away;
     if (u.ended || (u.streamType && u.streamType !== data.streamType) ||
         (typeof u.isActive === 'boolean' && u.isActive !== active)) {
       location.reload();

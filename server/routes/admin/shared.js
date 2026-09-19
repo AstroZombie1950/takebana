@@ -61,6 +61,7 @@ function personBrief(user) {
     id: String(user._id),
     displayName,
     login: user.login || '',
+    nickname: user.nickname || '',
     role: user.role || 'user',
     banned: !!user.banned,
     isOnline: !!user.isOnline,
@@ -80,7 +81,7 @@ async function namesFor(ids) {
   if (!unique.length) return new Map();
 
   const users = await User.find({ _id: { $in: unique } })
-    .select('login email avatar role banned')
+    .select('nickname login email avatar role banned')
     .lean();
 
   return new Map(users.map((u) => [String(u._id), personBrief(u)]));

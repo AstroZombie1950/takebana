@@ -56,9 +56,11 @@
   // Фото — картинкой, без фото — градиент с буквой. Раньше фото узнавали по
   // началу адреса «http», а загруженные аватары лежат по /uploads/… — и вместо
   // фото рисовался фон с адресом внутри.
-  function avatar(cls, p, attrs) {
-    if (p.url) return '<span class="' + cls + '"' + (attrs || '') + '><img src="' + escapeHtml(p.url) + '" alt=""></span>';
-    return '<span class="' + cls + '"' + (attrs || '') + ' style="background: ' + escapeHtml(p.bg || '') + '">' + escapeHtml(p.initial || '?') + '</span>';
+  // tag — 'a' для аватара-ссылки (шапка диалога ведёт в профиль), по умолчанию span.
+  function avatar(cls, p, attrs, tag) {
+    tag = tag || 'span';
+    if (p.url) return '<' + tag + ' class="' + cls + '"' + (attrs || '') + '><img src="' + escapeHtml(p.url) + '" alt=""></' + tag + '>';
+    return '<' + tag + ' class="' + cls + '"' + (attrs || '') + ' style="background: ' + escapeHtml(p.bg || '') + '">' + escapeHtml(p.initial || '?') + '</' + tag + '>';
   }
 
   function peerOf(el) {
@@ -85,13 +87,27 @@
     return { key: 'chats.status.sent', cls: '', icon: TICK };
   }
 
-  function messageHtml(m) {
+  // Пересланное. Сообщения одной пачки (forwardedFrom.batch), идущие подряд,
+  // лента собирает в общую рамку: заголовок «Переслано» над первым, имя
+  // автора — там, где он сменился, как в исходной переписке; время и галочки —
+  // под последним. g — место в пачке: { first, last, name } (name — автор
+  // предыдущего в пачке).
+  var FWD_TIME = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
+
+  function messageHtml(m, g) {
     var out = m.sender === ME;
-    var fwd = m.forwardedFrom
-      ? '<span class="tk-msg__fwd">' + escapeHtml(t('chats.forwardedFrom', { name: m.forwardedFrom.name })) + '</span>'
-      : '';
+    var f = m.forwardedFrom;
+    g = g || { first: true, last: true, name: null };
+    var head = '';
+    if (f) {
+      if (g.first) head += '<span class="tk-msg__fwd-head">' + escapeHtml(t('chats.forwarded')) + '</span>';
+      if (g.first || g.name !== f.name) {
+        head += '<span class="tk-msg__fwd-name">' + escapeHtml(f.name) +
+          (f.sentAt ? ' <time>' + escapeHtml(tkDate(f.sentAt, FWD_TIME)) + '</time>' : '') + '</span>';
+      }
+    }
     var bubble = '<div class="tk-msg__bubble" tabindex="0" role="button" aria-haspopup="menu" aria-label="' + escapeHtml(t('chats.actions')) + '">' +
-      fwd + '<p class="tk-msg__text">' + escapeHtml(m.content) + '</p></div>';
+      head + '<p class="tk-msg__text">' + escapeHtml(m.content) + '</p></div>';
     var when = '<time>' + escapeHtml(tkDate(m.sentAt)) + '</time>';
     if (out) {
       var s = status(m);
@@ -99,10 +115,28 @@
         escapeHtml(t(s.key)) + '"><title>' + escapeHtml(t(s.key)) + '</title>' + s.icon + '</svg>';
     }
     var key = 'm:' + m._id;
-    return '<div class="tk-msg ' + (out ? 'tk-msg--out' : 'tk-msg--in') + (isPicked(key) ? ' is-picked' : '') +
-      '" data-mid="' + escapeHtml(m._id) + '" data-key="' + escapeHtml(key) + '">' +
-      (out ? bubble : '<div class="tk-msg__row">' + avatar('tk-msg__ava', peer, ' data-peer') + bubble + '</div>') +
-      '<p class="tk-msg__when">' + when + '</p></div>';
+    var cls = 'tk-msg ' + (out ? 'tk-msg--out' : 'tk-msg--in') + (isPicked(key) ? ' is-picked' : '') +
+      (f ? ' tk-msg--fwd' + (g.first ? ' is-first' : '') + (g.last ? ' is-last' : '') : '');
+    // Аватар собеседника — у первого в пачке; у остальных место под него
+    // остаётся, чтобы рамка пачки шла ровным столбцом.
+    var ava = avatar('tk-msg__ava' + (g.first ? '' : ' is-blank'), peer, g.first ? ' data-peer' : ' aria-hidden="true"');
+    return '<div class="' + cls + '" data-mid="' + escapeHtml(m._id) + '" data-key="' + escapeHtml(key) + '">' +
+      (out ? bubble : '<div class="tk-msg__row">' + ava + bubble + '</div>') +
+      (g.last ? '<p class="tk-msg__when">' + when + '</p>' : '') + '</div>';
+  }
+
+  // Место каждого сообщения в пачке пересланного: соседи в ленте с той же
+  // пачкой и тем же отправителем. Звонок посередине пачку разрывает.
+  function groups(items) {
+    items.forEach(function (x, i) {
+      if (!x.m) return;
+      var batch = x.m.forwardedFrom && x.m.forwardedFrom.batch;
+      var same = function (y) {
+        return y && y.m && batch && y.m.sender === x.m.sender && y.m.forwardedFrom && y.m.forwardedFrom.batch === batch;
+      };
+      var prev = items[i - 1], next = items[i + 1];
+      x.g = { first: !same(prev), last: !same(next), name: same(prev) ? prev.m.forwardedFrom.name : null };
+    });
   }
 
   // ── Звонки ────────────────────────────────────────────────────────────
@@ -146,10 +180,11 @@
       feed.innerHTML = '<p class="tk-note tk-note--center">' + escapeHtml(t('chats.dialogEmpty')) + '</p>';
       return;
     }
-    var items = messages.map(function (m) { return { at: m.sentAt, html: messageHtml(m) }; })
-      .concat(calls.map(function (c) { return { at: c.startedAt, html: callNoteHtml(c) }; }));
+    var items = messages.map(function (m) { return { at: m.sentAt, m: m }; })
+      .concat(calls.map(function (c) { return { at: c.startedAt, c: c }; }));
     items.sort(function (a, b) { return new Date(a.at) - new Date(b.at); });
-    feed.innerHTML = items.map(function (x) { return x.html; }).join('');
+    groups(items);
+    feed.innerHTML = items.map(function (x) { return x.m ? messageHtml(x.m, x.g) : callNoteHtml(x.c); }).join('');
   }
 
   function atBottom() {
@@ -223,7 +258,10 @@
     messages.forEach(function (m) { if (m.sender === peer.id && !m.readAt) m.readAt = now; });
     if (badge) { badge.textContent = '0'; badge.classList.add('hidden'); }
     post('/messages/read', { peerId: peer.id })
-      .then(function (r) { if (window.setNotificationDot) window.setNotificationDot(r.unread > 0); })
+      .then(function (r) {
+        if (window.setNotificationDot) window.setNotificationDot(r.unread > 0);
+        if (window.tkChatBadge) window.tkChatBadge({ messages: r.unreadMessages });
+      })
       .catch(function (e) { console.error('read:', e); });
   }
 
@@ -283,7 +321,9 @@
     });
 
     $('peerName').textContent = peer.name;
-    $('chatAvatar').outerHTML = avatar('tk-chat__ava-big', peer, ' id="chatAvatar"');
+    // Аватар ведёт в профиль, как и имя рядом.
+    $('chatAvatar').outerHTML = avatar('tk-chat__ava-big', peer,
+      ' id="chatAvatar" href="/userPage/' + encodeURIComponent(peer.id) + '" aria-label="' + escapeHtml(peer.name) + '"', 'a');
 
     var presence = $('chatHeaderPresence');
     presence.setAttribute('data-presence-user', peer.id);
@@ -394,6 +434,14 @@
 
   document.addEventListener('tk:message:deleted', function (e) {
     dropMessages(e.detail.ids || []);
+    // Непрочитанные в диалогах — точным числом с сервера.
+    var dialogs = e.detail.dialogs || {};
+    Object.keys(dialogs).forEach(function (id) {
+      var badge = dialogEl(id) && dialogEl(id).querySelector('.tk-dialog__unread');
+      if (!badge) return;
+      badge.textContent = String(dialogs[id]);
+      badge.classList.toggle('hidden', !dialogs[id]);
+    });
     if (picking) updatePickBar();
   });
 
@@ -471,6 +519,7 @@
           b.textContent = '0';
           b.classList.add('hidden');
         });
+        if (window.tkChatBadge) window.tkChatBadge({ calls: 0 });
         if (window.setNotificationDot) window.setNotificationDot(data.unread > 0);
       })
       .catch(function (e) { journalStale = true; console.error('calls:', e); });
@@ -843,6 +892,7 @@
       b.textContent = String(r.missed || 0);
       b.classList.toggle('hidden', !r.missed);
     });
+    if (window.tkChatBadge) window.tkChatBadge({ calls: r.missed || 0 });
   }
 
   $('deleteChat').addEventListener('click', function () {

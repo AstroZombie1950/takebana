@@ -37,7 +37,7 @@ const OBJECT_ID = /^[a-f\d]{24}$/i;
 const SORTS = {
   new: { _id: -1 },
   old: { _id: 1 },
-  name: { login: 1, _id: -1 },
+  name: { nickname: 1, _id: -1 },
   seen: { lastSeen: -1, _id: -1 },
   banned: { banned: -1, _id: -1 },
 };
@@ -47,7 +47,7 @@ async function loadUsers(req) {
   const filter = {};
 
   const q = needle(req.query.q);
-  if (q) filter.$or = [{ login: q }, { email: q }];
+  if (q) filter.$or = [{ nickname: q }, { login: q }, { email: q }];
 
   if (['user', 'moderator', 'admin'].includes(req.query.role)) filter.role = req.query.role;
   if (req.query.status === 'banned') filter.banned = true;
@@ -61,7 +61,7 @@ async function loadUsers(req) {
   const sort = SORTS[req.query.sort] || SORTS.new;
 
   const [users, total] = await Promise.all([
-    User.find(filter).select('login email role banned isOnline lastSeen avatar provider adultConfirmedAt').sort(sort).skip(p.skip).limit(p.perPage).lean(),
+    User.find(filter).select('nickname login email role banned isOnline lastSeen avatar provider adultConfirmedAt').sort(sort).skip(p.skip).limit(p.perPage).lean(),
     User.countDocuments(filter),
   ]);
 
@@ -78,8 +78,8 @@ async function loadUsers(req) {
 router.get('/users', requireModerator, async (req, res) => res.json(await loadUsers(req)));
 csvRoute(router, '/users', requireModerator, 'people', loadUsers, (req) => [
   ['Идентификатор', (u) => u.id],
-  ['Имя', (u) => u.displayName],
-  ['Логин', (u) => u.login],
+  ['Никнейм', (u) => u.nickname],
+  ['Имя', (u) => u.login],
   ...(req.userRole === 'admin' ? [['Почта', (u) => u.email]] : []),
   ['Роль', (u) => ({ admin: 'администратор', moderator: 'модератор' }[u.role] || 'пользователь')],
   ['Вход', (u) => u.provider],
@@ -171,7 +171,7 @@ router.get('/users/:id', requireModerator, async (req, res) => {
   const r = one(recordings);
   const c = one(calls);
 
-  audit(req, 'admin.view', { targetType: 'user', target: user, targetLabel: user.login || user.email || '' });
+  audit(req, 'admin.view', { targetType: 'user', target: user, targetLabel: user.nickname || user.login || user.email || '' });
 
   res.json({
     person: personBrief(user),
@@ -237,7 +237,7 @@ router.get('/users/:id', requireModerator, async (req, res) => {
 router.post('/users/:id/sessions/kill', requireAdmin, async (req, res) => {
   if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Пользователь не найден' });
 
-  const user = await User.findById(req.params.id).select('login email').lean();
+  const user = await User.findById(req.params.id).select('nickname login email').lean();
   if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
 
   const { deletedCount } = await mongoose.connection.collection('mySessions')
@@ -245,7 +245,7 @@ router.post('/users/:id/sessions/kill', requireAdmin, async (req, res) => {
 
   audit(req, 'admin.session.kill', {
     targetType: 'user', target: user,
-    targetLabel: user.login || user.email || '',
+    targetLabel: user.nickname || user.login || user.email || '',
     meta: { sessions: deletedCount },
   });
 
@@ -265,7 +265,7 @@ router.post('/users/:id/password', requireAdmin, validate({
 }), async (req, res) => {
   if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Пользователь не найден' });
 
-  const user = await User.findById(req.params.id).select('login email role provider');
+  const user = await User.findById(req.params.id).select('nickname login email role provider');
   if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
   if (user.provider !== PASSWORD_PROVIDER) return res.status(400).json({ message: 'Аккаунт входит через Google, пароля у него нет' });
   const self = req.params.id === String(req.session.userId);
@@ -281,7 +281,7 @@ router.post('/users/:id/password', requireAdmin, validate({
 
   audit(req, 'admin.password.set', {
     targetType: 'user', target: user,
-    targetLabel: user.login || user.email || '',
+    targetLabel: user.nickname || user.login || user.email || '',
     meta: { sessions: deletedCount },
   });
   res.json({ ok: true, sessions: deletedCount });
@@ -297,7 +297,7 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
   if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Пользователь не найден' });
   if (req.params.id === String(req.session.userId)) return res.status(400).json({ message: 'Себя удалить нельзя' });
 
-  const user = await User.findById(req.params.id).select('login email role avatar').lean();
+  const user = await User.findById(req.params.id).select('nickname login email role avatar').lean();
   if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
   if (user.role === 'admin') return res.status(403).json({ message: 'Администратора удалить нельзя — сначала смените роль' });
 
@@ -305,7 +305,7 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
 
   audit(req, 'admin.user.delete', {
     targetType: 'user', target: user,
-    targetLabel: user.login || user.email || '',
+    targetLabel: user.nickname || user.login || user.email || '',
     meta: removed,
   });
   res.json({ ok: true, removed });

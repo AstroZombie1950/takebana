@@ -38,7 +38,11 @@ const messageSchema = new Schema({
   // чтобы подпись не зависела от того, что автор потом сменил логин.
   forwardedFrom: {
     user: { type: Schema.Types.ObjectId, ref: 'User' },
-    name: String
+    name: String,
+    // Когда было написано исходное и одна ли это пересылка: сообщения одной
+    // пачки лента собирает в общую рамку «Переслано» (public/chats.js).
+    sentAt: Date,
+    batch: String
   }
 }, {
   timestamps: true // Автоматически добавляет поля createdAt и updatedAt

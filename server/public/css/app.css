@@ -648,9 +648,18 @@ body.tk-app {
   background: var(--tk-ink);
   border: 1px solid var(--tk-rule);
   /* Появление держит CSS: анимация стартует сама, когда блок получает
-   * display. Прежде это делал setTimeout в скрипте. */
-  animation: tk-modal-in .18s ease-out both;
+   * display. Прежде это делал setTimeout в скрипте.
+   *
+   * Без fill-mode both: с ним последний кадр (transform: none) оставался
+   * на карточке навсегда, а любой transform делает её точкой отсчёта для
+   * position: fixed. Свой выпадающий список (tk-listbox.js) считает
+   * координаты от экрана — и в окне жалобы открывался в правом нижнем
+   * углу (18.09.2026). */
+  animation: tk-modal-in .18s ease-out;
 }
+
+/* Поле комментария к жалобе и так высокое — растягивать нечего. */
+#reportComment { resize: none; }
 
 .tk-modal__card--wide { max-width: 620px; }
 
@@ -1423,3 +1432,34 @@ body.tk-app {
 @media (max-width: 1024px) {
   .tk-ahead__burger { width: 40px; height: 40px; }
 }
+
+/* ── Пусто: каталог, поиск, авторы, подписчики ──
+ * Здесь, а не в catalog.css: страница подписчиков его не подключает,
+ * и пустое состояние там было без отступов (18.09.2026). */
+.tk-empty {
+  padding: 64px 24px;
+  text-align: center;
+  border: 1px dashed var(--tk-rule);
+}
+
+.tk-empty svg { color: rgba(144, 113, 99, .5); }
+
+.tk-empty__h {
+  margin: 18px 0 8px;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+.tk-empty__p {
+  margin: 0 auto 22px;
+  max-width: 420px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--tk-beige);
+}
+
+.tk-empty > :first-child { margin-top: 0; }
+.tk-empty > :last-child { margin-bottom: 0; }

@@ -482,32 +482,6 @@
   color: var(--tk-label);
 }
 
-/* ── Пусто ── */
-.tk-empty {
-  padding: 64px 24px;
-  text-align: center;
-  border: 1px dashed var(--tk-rule);
-}
-
-.tk-empty svg { color: rgba(144, 113, 99, .5); }
-
-.tk-empty__h {
-  margin: 18px 0 8px;
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: -.01em;
-  text-transform: uppercase;
-  color: var(--tk-paper);
-}
-
-.tk-empty__p {
-  margin: 0 auto 22px;
-  max-width: 420px;
-  font-size: 15px;
-  line-height: 1.55;
-  color: var(--tk-beige);
-}
-
 /* ── Узкие экраны ─────────────────────────────────────────────────────── */
 @media (max-width: 1279px) {
   .tk-cat__hero {

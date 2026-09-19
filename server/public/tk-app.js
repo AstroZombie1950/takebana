@@ -70,6 +70,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Точка непрочитанного на колокольчике. Зажигает её сокет (notification:new),
 // гасит открытие списка уведомлений.
+// Счётчик у иконки переписки в шапке: непрочитанные сообщения + пропущенные
+// звонки. part — точные числа { messages, calls } или приращения
+// { addMessages, addCalls }; обе части хранятся в data-атрибутах значка.
+window.tkChatBadge = function (part) {
+  const badge = document.querySelector('[data-chat-badge]');
+  if (!badge) return;
+  const d = badge.dataset;
+  let m = Number(d.messages) || 0;
+  let c = Number(d.calls) || 0;
+  if (typeof part.messages === 'number') m = part.messages;
+  if (typeof part.calls === 'number') c = part.calls;
+  m = Math.max(0, m + (part.addMessages || 0));
+  c = Math.max(0, c + (part.addCalls || 0));
+  d.messages = m;
+  d.calls = c;
+  badge.textContent = m + c > 99 ? '99+' : String(m + c);
+  badge.classList.toggle('hidden', !(m + c));
+};
+
 window.setNotificationDot = function (on) {
   const dot = document.getElementById('notificationDot');
   if (dot) dot.classList.toggle('hidden', !on);
@@ -364,9 +383,21 @@ document.addEventListener('DOMContentLoaded', function () {
       socket.on(name, (detail) => document.dispatchEvent(new CustomEvent('tk:' + name, { detail })));
     });
     socket.on('notification:new', () => window.setNotificationDot(true));
-    // Пропущенный звонок — счётчик у иконки сообщений в шапке и у вкладки
+    // Удалили непрочитанное — сервер присылает точное число (messages.js, unreadAfter).
+    ['message:deleted', 'conversation:deleted'].forEach((name) => {
+      socket.on(name, (d) => { if (d && typeof d.unreadMessages === 'number') window.tkChatBadge({ messages: d.unreadMessages }); });
+    });
+    // Входящее сообщение — +1 у иконки переписки. Открытый диалог тут же
+    // его читает, и chats.js ставит точное число из ответа сервера.
+    socket.on('message:new', (d) => {
+      if (d && d.message && d.peer && d.message.sender === d.peer.id) window.tkChatBadge({ addMessages: 1 });
+      // Звук и системное уведомление — если включены в настройках (tk-notify.js).
+      if (window.TKNotify) window.TKNotify.message(d);
+    });
+    // Пропущенный звонок — счётчик у иконки переписки в шапке и у вкладки
     // «Звонки». Открытая вкладка гасит его сама (chats.js).
     socket.on('call:missed', () => {
+      window.tkChatBadge({ addCalls: 1 });
       document.querySelectorAll('[data-missed-calls]').forEach((badge) => {
         badge.textContent = String((parseInt(badge.textContent, 10) || 0) + 1);
         badge.classList.remove('hidden');
@@ -484,6 +515,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // Уже разговариваем: второй звонок получает «отклонено», а не окно
       // поверх идущего разговора.
       if (window.currentCallId) { socket.emit('call:decline', { callId }); return; }
+      if (window.TKNotify) window.TKNotify.ring({ callId, name: from.displayName, video: type !== 'audio' });
       window.showIncomingCall && window.showIncomingCall({
         userId: from.userId,
         displayName: from.displayName,
@@ -879,6 +911,7 @@ document.addEventListener('DOMContentLoaded', function(){
   window.hideOutgoingCall = function(){ outgoing.classList.add('hidden'); };
 
   function hideIncoming(){
+    if (window.TKNotify) window.TKNotify.stopRing();
     incoming.classList.add('hidden');
     inAccept.onclick = null; inDecline.onclick = null; inClose.onclick = null;
   }
@@ -905,6 +938,7 @@ document.addEventListener('DOMContentLoaded', function(){
     inClose.classList.remove('hidden');
     incoming.classList.remove('hidden');
     inAccept.onclick = function(){
+      if (window.TKNotify) window.TKNotify.stopRing();
       tkText(IN.status, 'call.connectingShort');
       inAccept.disabled = true; inDecline.disabled = true; inClose.disabled = true;
       onAccept && onAccept();

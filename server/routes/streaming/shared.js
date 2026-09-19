@@ -9,6 +9,7 @@ const User = require('../../models/User');
 const Subscription = require('../../models/Subscription');
 const Stream = require('../../models/Stream');
 const Notification = require('../../models/Notification');
+const Message = require('../../models/Message');
 const userView = require('../../utils/userView');
 const callLog = require('../../utils/callLog');
 const errorLog = require('../../utils/errorLog');
@@ -25,7 +26,7 @@ const commonDataMiddleware = async (req, res, next) => {
       // Получение данных текущего пользователя
       // (lean/select) чтобы уменьшить нагрузку при каждом F5
       const currentUser = await User.findById(currentUserId)
-        .select('login email avatar gallery streamKey isStreaming banned banReason adultConfirmedAt')
+        .select('nickname login email avatar gallery streamKey isStreaming banned banReason adultConfirmedAt')
         .lean();
       // Пользователя уже нет: он удалил себя сам или его удалил администратор,
       // а вкладка осталась открытой. Это не ошибка сервера — гасим сеанс
@@ -42,20 +43,23 @@ const commonDataMiddleware = async (req, res, next) => {
       const currentUserAvatarStyle = userView.avatarStyle(currentUser, currentUserDisplayName);
 
       // Получение подписок текущего пользователя (ограничиваем 4) + непрочитанные уведомления (параллельно)
-      const [userSubscriptions, unreadNotificationsCount, missedCalls] = await Promise.all([
+      const [userSubscriptions, unreadNotificationsCount, missedCalls, unreadMessages] = await Promise.all([
         Subscription.find({ subscriberId: new mongoose.Types.ObjectId(currentUserId) })
           .select('subscribedToId')
           .limit(4)
           .lean(),
-        Notification.countDocuments({ recipient: currentUserId, isRead: false }),
-        callLog.missedCount(currentUserId)
+        // Сообщения в колокольчик не пишутся — их счётчик у иконки переписки.
+        // Старые уведомления о сообщениях (до 18.09.2026) не считаем.
+        Notification.countDocuments({ recipient: currentUserId, isRead: false, type: { $ne: 'message' } }),
+        callLog.missedCount(currentUserId),
+        Message.countDocuments({ recipient: currentUserId, readAt: null, deletedFor: { $ne: currentUserId } })
       ]);
 
       // Получение данных о подписанных пользователях
       const subscribedUserIds = (userSubscriptions || []).map(sub => sub.subscribedToId);
       const subscribedUsers = subscribedUserIds.length
         ? await User.find({ _id: { $in: subscribedUserIds } })
-            .select('login email avatar isStreaming')
+            .select('nickname login email avatar isStreaming')
             .lean()
         : [];
 
@@ -98,6 +102,7 @@ const commonDataMiddleware = async (req, res, next) => {
 
       // Левой панели: сколько пропущенных звонков.
       res.locals.missedCalls = missedCalls;
+      res.locals.unreadMessages = unreadMessages;
 
       next(); // Передаем управление следующему middleware или маршруту
   } catch (error) {

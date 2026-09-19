@@ -274,4 +274,5 @@ function isRunning(streamKey) {
     return jobs.has(streamKey);
 }
 
-module.exports = { start, stop, stopped, isRunning, HLS_ROOT, hlsBase };
+// Знак и отступ — ещё и видео галереи (utils/galleryVideo.js): один знак на всё видео сайта.
+module.exports = { start, stop, stopped, isRunning, HLS_ROOT, hlsBase, WATERMARK, WATERMARK_MARGIN };

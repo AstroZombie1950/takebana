@@ -50,7 +50,6 @@
 
       <% if (!people.length) { %>
       <div class="tk-empty">
-        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
         <% var emptyKey = list === 'followers' ? 'user.followersEmpty' : 'user.followingEmpty'; %>
         <p class="tk-empty__h" data-i18n="<%= emptyKey %>"><%- t(emptyKey) %></p>
       </div>

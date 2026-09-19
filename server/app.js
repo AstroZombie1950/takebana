@@ -133,7 +133,7 @@ app.locals.asset = require('./utils/assets').asset;
 // Гость по умолчанию. Шапка и левая панель (header.ejs, leftBar.ejs) есть и на
 // страницах без commonDataMiddleware — вход, документы; вошедшему эти поля
 // перекрывает он же (routes/streaming/shared.js).
-Object.assign(app.locals, { currentUser: null, subscriptions: [], notifications: null, missedCalls: 0 });
+Object.assign(app.locals, { currentUser: null, subscriptions: [], notifications: null, missedCalls: 0, unreadMessages: 0 });
 // Страницы и сообщения в JSON-ответах — на языке интерфейса (cookie `lang`,
 // utils/i18n.js). До маршрутов: переводить нужно всё, что они ответят.
 const { localizeMessages, pageLocals } = require('./utils/i18n');
@@ -152,6 +152,7 @@ require('./db');
 app.use(express.json());
 app.use(require('./routes/userRoutes'));
 app.use(require('./routes/passwordReset'));
+app.use(require('./routes/emailChange'));
 app.use(require('./routes/establishmentsRouter'));
 app.use(require('./routes/admin'));
 app.use(require('./routes/streaming'));
@@ -212,8 +213,12 @@ app.use(express.static(path.join(__dirname, 'public'), {
 require('./jobs/streamCleanup').startStreamCleanup();
 // Записи, чью склейку оборвал перезапуск процесса, — в «не сохранилась».
 require('./utils/recording').sweep();
+// Видео галереи, чьё пережатие оборвал перезапуск, — в «не вышло».
+require('./utils/galleryVideo').sweep();
 // Готовые записи без нескольких качеств — в очередь пережатия (utils/recordingHls.js).
 require('./utils/recordingHls').resume();
+// Аккаунтам, заведённым до ников (18.09.2026), — ник из имени или почты.
+require('./utils/nickname').ensureAll(require('./models/User')).catch((e) => require('./utils/errorLog').server(e, 'nickname.ensureAll'));
 // Отрезки эфиров, оставшиеся открытыми от прошлого процесса, — закрыть,
 // иначе они навсегда останутся «в эфире» и испортят сумму часов.
 require('./utils/streamLog').sweep();

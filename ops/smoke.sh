@@ -171,6 +171,14 @@ if grep -qi '^x-powered-by:' <<<"$HEADERS"; then
 else
   pass "X-Powered-By скрыт"
 fi
+# Модуль карты: с типом application/octet-stream браузер его не исполняет,
+# и карта падает «Failed to fetch dynamically imported module» (18.09.2026).
+MJS_TYPE=$("${CURL[@]}" -sI "${BASE}/vendor/maplibre-gl-6.9.0/maplibre-gl.mjs" 2>/dev/null | grep -i '^content-type:' || echo "")
+if grep -qi 'javascript' <<<"$MJS_TYPE"; then
+  pass "модуль карты отдаётся как JavaScript"
+else
+  fail "модуль карты: ${MJS_TYPE:-нет ответа}" "в location /vendor/ у nginx нет types для mjs (ops/nginx/takebana.conf)"
+fi
 if [[ "$SCHEME" == "https" ]]; then
   grep -qi '^strict-transport-security:' <<<"$HEADERS" \
     && pass "HSTS" || fail "нет HSTS" "helmet ставит его только когда видит HTTPS — снова X-Forwarded-Proto"

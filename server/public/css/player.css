@@ -43,7 +43,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 0 0 4px;
+  padding: 0;
   transform: translate(-50%, -50%);
   background: rgba(10, 10, 10, .72);
   border: 1px solid var(--tk-rule);
@@ -246,8 +246,10 @@
 /* ── Время ── */
 .tk-player__time {
   padding: 0 8px;
-  font: 400 13px/1 Oswald, sans-serif;
-  letter-spacing: .02em;
+  /* Как метки эфира над картинкой (stream.css, .tk-live__badge): плеер
+   * и сцена читаются одним набором. */
+  font: 500 13px/1 Oswald, sans-serif;
+  letter-spacing: .08em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--tk-beige);
@@ -400,15 +402,38 @@
 
 /* ── Полный экран самого плеера (запись) ── */
 .tk-player.is-fullscreen .tk-player__bar { padding: 40px 18px 10px; }
+/* Полоса во весь экран выше — «Включить звук» над ней, а не на перемотке. */
+.tk-player.is-fullscreen .tk-player__unmute { bottom: calc(88px + env(safe-area-inset-bottom)); left: 18px; }
+
+/* iPhone: весь экран — плеер поверх страницы (tk-player.js, setPseudo).
+ * Поверх окон и шапки; вырез и полоса «домой» — отступами полосы кнопок. */
+.tk-player.is-pseudo-fs {
+  position: fixed;
+  z-index: 120;
+}
+
+.tk-player.is-pseudo-fs .tk-player__bar {
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  padding-left: calc(18px + env(safe-area-inset-left));
+  padding-right: calc(18px + env(safe-area-inset-right));
+}
+
+html.tk-player-fs { overflow: hidden; }
+
+/* Широкий режим на телефоне и планшете ничего не меняет: страница записи
+ * там и так в одну колонку во всю ширину (watch.css). */
+@media (max-width: 1023px) {
+  .tk-player__theater { display: none; }
+}
 
 /* ── Узкий экран: только нужное ── */
 @media (max-width: 560px) {
   .tk-player__bar { padding: 22px 4px 2px; }
   .tk-player__btn { width: 36px; height: 36px; }
   .tk-player__time { padding: 0 4px; font-size: 12px; }
-  .tk-player__theater { display: none; }
   .tk-player__unmute { bottom: 54px; left: 8px; }
   .tk-player__big { width: 60px; height: 60px; }
+  .tk-player__big svg { width: 34px; height: 34px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

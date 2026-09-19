@@ -279,6 +279,65 @@
 .tk-shot:hover img,
 .tk-shot:focus-visible img { border-color: var(--tk-accent); }
 
+/* ── Видео в галерее: обложка, «play», длительность ── */
+.tk-shot--video {
+  position: relative;
+  height: 140px;
+  background: #000;
+  cursor: pointer;
+}
+
+.tk-shot--video img { height: 100%; }
+
+.tk-shot__play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  background: var(--tk-accent);
+  color: var(--tk-paper);
+  pointer-events: none;
+}
+
+.tk-shot__len {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
+  background: rgba(10, 10, 10, .78);
+  font: 400 11px/1.4 Oswald, sans-serif;
+  color: var(--tk-paper);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Грузится, пережимается или не вышло — плитка с подписью, видит владелец. */
+.tk-shot--state {
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border: 1px dashed var(--tk-rule);
+  font: 400 13px/1.3 Oswald, sans-serif;
+  text-align: center;
+  color: var(--tk-beige);
+  cursor: default;
+}
+
+.tk-shots__item.is-failed .tk-shot--state { color: var(--tk-accent); border-color: rgba(227, 66, 52, .45); }
+
+/* Окно просмотра видео: плеер 16:9 по ширине окна. */
+.tk-videobox__stage {
+  position: relative;
+  width: min(92vw, calc(86vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+}
+
 /* ── Записи эфиров ── */
 .tk-recs {
   display: grid;
@@ -426,7 +485,9 @@
   .tk-panel--prof { margin-top: 26px; }
   .tk-prof__meta { justify-content: center; }
   .tk-shots { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
-  .tk-shot img { height: 110px; }
+  .tk-shot img,
+  .tk-shot--video,
+  .tk-shot--state { height: 110px; }
   .tk-lightbox__btn { width: 38px; height: 38px; }
   .tk-lightbox__close { top: 12px; right: 12px; }
   .tk-lightbox__prev { left: 8px; }

@@ -1,11 +1,17 @@
 <%#
-  Настройки профиля (/settings): имя, фото, язык, пароль, выход, удаление.
-  Галерея 18 сентября переехала на страницу профиля: там её и видно.
-  Открываются кнопкой на своей странице. Маршрут — routes/streaming/profile.js,
-  поведение — public/settings.js, вёрстка — public/css/settings.css.
-
-  Раньше это было окно в шапке кабинета: разметка и скрипт ехали с каждой
-  страницей, хотя нужны только здесь.
+  Настройки профиля (/settings). Восемь блоков, четыре ряда по два, в ряду —
+  одной высоты (решение 18.09.2026):
+    имя и никнейм  | фото профиля
+    ── Безопасность ──
+    пароль         | почта
+    ── Это устройство ──
+    уведомления    | камера и микрофон
+    язык           | удаление аккаунта
+  Уведомления и доступ к камере — свойство браузера, не аккаунта: настройки
+  хранятся в нём (tk-notify.js), разрешения выдаёт он сам.
+  На телефоне — одной колонкой в том же порядке. Галерея живёт на странице
+  профиля. Маршрут — routes/streaming/profile.js, поведение — public/settings.js,
+  вёрстка — public/css/settings.css.
 %>
 <% var ava = currentUser.avatarStyle; %>
 <!DOCTYPE html>
@@ -30,93 +36,155 @@
       </a>
       <h1 class="tk-page__h1" data-i18n="settings.title"><%- t('settings.title') %></h1>
 
-      <%# Две колонки вместо одного столбца шириной 760 px: страница занимала
-          едва половину места справа от панели. Слева — как тебя видят
-          (имя, фото), справа — язык и вход. Удаление — внизу во всю ширину. %>
-      <div class="tk-set__cols">
-        <div class="tk-set__col">
+      <div class="tk-set__grid">
 
-          <!-- Имя -->
-          <section class="tk-panel">
-            <label class="tk-panel__title" for="profileNameInput" data-i18n="settings.yourName"><%- t('settings.yourName') %></label>
-            <form class="tk-set__line" id="nameForm">
-              <input id="profileNameInput" class="tk-field" type="text" maxlength="64" placeholder="<%= ta('settings.namePh') %>" value="<%= currentUser.displayName %>" data-i18n-placeholder="settings.namePh">
-              <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="settings.saveName"><%- t('settings.saveName') %></button>
-            </form>
-          </section>
+        <!-- Имя и никнейм -->
+        <section class="tk-panel">
+          <p class="tk-panel__title" data-i18n="settings.who"><%- t('settings.who') %></p>
+          <form class="tk-form tk-set__form" id="nameForm" novalidate>
+            <label class="tk-form__label" for="profileName" data-i18n="settings.name"><%- t('settings.name') %></label>
+            <input id="profileName" class="tk-field" type="text" maxlength="64" value="<%= profile.login %>" placeholder="<%= ta('settings.namePh') %>" data-i18n-placeholder="settings.namePh" aria-describedby="nameHint">
+            <p class="tk-note" id="nameHint" data-i18n="settings.nameHint"><%- t('settings.nameHint') %></p>
 
-          <!-- Фото профиля: файл уходит на сервер сразу после выбора -->
-          <section class="tk-panel">
-            <p class="tk-panel__title" data-i18n="settings.photo"><%- t('settings.photo') %></p>
-            <div class="tk-set__photo">
-              <div class="tk-set__ava" id="avatarBox"<% if (!ava.url) { %> data-bg="<%= ava.gradient %>"<% } %>>
-                <% if (ava.url) { %><img src="<%= ava.url %>" alt=""><% } else { %><%= ava.initial %><% } %>
-              </div>
-              <div class="tk-set__side">
-                <input id="avatarInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
-                <div class="tk-panel__actions">
-                  <button id="chooseAvatarBtn" type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="<%= ava.url ? 'settings.photoReplace' : 'settings.photoUpload' %>"><%- t(ava.url ? 'settings.photoReplace' : 'settings.photoUpload') %></button>
-                  <button id="deleteAvatarBtn" type="button" class="tk-btn tk-btn--ghost tk-btn--xs tk-set__danger"<% if (!ava.url) { %> hidden<% } %> data-i18n="settings.photoDelete"><%- t('settings.photoDelete') %></button>
-                </div>
-                <p class="tk-note" id="avatarHint" data-i18n="settings.photoLimit"><%- t('settings.photoLimit') %></p>
-              </div>
+
+            <label class="tk-form__label" for="profileNick" data-i18n="settings.nickname"><%- t('settings.nickname') %></label>
+            <div class="tk-set__nick">
+              <span class="tk-set__at" aria-hidden="true">@</span>
+              <input id="profileNick" class="tk-field" type="text" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false"
+                     value="<%= profile.nickname %>" data-current="<%= profile.nickname %>"
+                     data-next="<%= profile.nickNext ? profile.nickNext.toISOString() : '' %>" aria-describedby="nickStatus nickHint">
             </div>
-          </section>
+            <p class="tk-set__status" id="nickStatus" aria-live="polite"></p>
+            <p class="tk-note" id="nickHint" data-i18n="settings.nickHint"><%- t('settings.nickHint') %></p>
 
-        </div>
+            <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>
+          </form>
+        </section>
 
-        <div class="tk-set__col">
-
-          <!-- Язык: общий переключатель public/tk-i18n.js, без перезагрузки -->
-          <section class="tk-panel">
-            <p class="tk-panel__title" data-i18n="settings.lang"><%- t('settings.lang') %></p>
-            <div class="tk-lang tk-set__lang">
-              <button type="button" class="tk-lang__btn<%= lang === 'ru' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'ru' %>" data-lang="ru">RU</button>
-              <button type="button" class="tk-lang__btn<%= lang === 'en' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'en' %>" data-lang="en">EN</button>
+        <!-- Фото профиля: файл уходит на сервер сразу после выбора -->
+        <section class="tk-panel">
+          <p class="tk-panel__title" data-i18n="settings.photo"><%- t('settings.photo') %></p>
+          <div class="tk-set__photo">
+            <div class="tk-set__ava" id="avatarBox"<% if (!ava.url) { %> data-bg="<%= ava.gradient %>"<% } %>>
+              <% if (ava.url) { %><img src="<%= ava.url %>" alt=""><% } else { %><%= ava.initial %><% } %>
             </div>
-          </section>
+            <div class="tk-set__side">
+              <input id="avatarInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+              <div class="tk-panel__actions">
+                <button id="chooseAvatarBtn" type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="<%= ava.url ? 'settings.photoReplace' : 'settings.photoUpload' %>"><%- t(ava.url ? 'settings.photoReplace' : 'settings.photoUpload') %></button>
+                <button id="deleteAvatarBtn" type="button" class="tk-btn tk-btn--ghost tk-btn--xs tk-set__danger"<% if (!ava.url) { %> hidden<% } %> data-i18n="settings.photoDelete"><%- t('settings.photoDelete') %></button>
+              </div>
+              <p class="tk-note" id="avatarHint" data-i18n="settings.photoLimit"><%- t('settings.photoLimit') %></p>
+            </div>
+          </div>
+        </section>
 
-          <%# Смена пароля — только у входа по паролю: у входа через Google его нет. %>
+        <p class="tk-kicker tk-set__row-title" data-i18n="settings.security"><%- t('settings.security') %></p>
+
+        <!-- Пароль: только у входа по паролю, у Google его нет -->
+        <section class="tk-panel">
+          <p class="tk-panel__title" data-i18n="settings.password"><%- t('settings.password') %></p>
           <% if (hasPassword) { %>
-          <section class="tk-panel">
-            <p class="tk-panel__title" data-i18n="settings.security"><%- t('settings.security') %></p>
-            <form class="tk-form tk-set__pass" id="passwordForm">
-              <%# Для менеджера паролей: к какой учётке относится новый пароль. %>
-              <input type="email" value="<%= currentUser.email %>" autocomplete="username" hidden>
-              <input class="tk-field" type="password" placeholder="<%= ta('settings.oldPassword') %>" id="oldPassword" data-i18n-placeholder="settings.oldPassword" autocomplete="current-password">
-              <input class="tk-field" type="password" placeholder="<%= ta('settings.newPassword') %>" id="newPassword" data-i18n-placeholder="settings.newPassword" autocomplete="new-password">
-              <input class="tk-field" type="password" placeholder="<%= ta('settings.confirmPassword') %>" id="confirmPassword" data-i18n-placeholder="settings.confirmPassword" autocomplete="new-password">
-              <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="settings.savePassword"><%- t('settings.savePassword') %></button>
-            </form>
-          </section>
+          <form class="tk-form tk-set__form" id="passwordForm">
+            <%# Для менеджера паролей: к какой учётке относится новый пароль. %>
+            <input type="email" value="<%= profile.email %>" autocomplete="username" hidden>
+            <input class="tk-field" type="password" placeholder="<%= ta('settings.oldPassword') %>" id="oldPassword" data-i18n-placeholder="settings.oldPassword" autocomplete="current-password">
+            <input class="tk-field" type="password" placeholder="<%= ta('settings.newPassword') %>" id="newPassword" data-i18n-placeholder="settings.newPassword" autocomplete="new-password">
+            <input class="tk-field" type="password" placeholder="<%= ta('settings.confirmPassword') %>" id="confirmPassword" data-i18n-placeholder="settings.confirmPassword" autocomplete="new-password">
+            <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="settings.savePassword"><%- t('settings.savePassword') %></button>
+          </form>
+          <% } else { %>
+          <p class="tk-note" data-i18n="settings.passwordGoogle"><%- t('settings.passwordGoogle') %></p>
           <% } %>
+        </section>
 
-        </div>
+        <!-- Почта: меняется по ссылке из письма на новый адрес -->
+        <section class="tk-panel">
+          <p class="tk-panel__title" data-i18n="settings.email"><%- t('settings.email') %></p>
+          <p class="tk-set__email"><%= profile.email %></p>
+          <% if (profile.emailVerified) { %>
+          <p class="tk-set__verified is-ok" data-i18n="settings.emailVerified"><%- t('settings.emailVerified') %></p>
+          <% } else { %>
+          <p class="tk-set__verified is-bad"><span data-i18n="settings.emailUnverified"><%- t('settings.emailUnverified') %></span>
+            <% if (mailOn) { %><button type="button" class="tk-set__link" id="verifyBtn" data-i18n="settings.emailVerifySend"><%- t('settings.emailVerifySend') %></button><% } %>
+          </p>
+          <% } %>
+          <% if (hasPassword && mailOn) { %>
+          <p class="tk-note tk-set__pending" id="emailPending"<% if (!profile.pendingEmail) { %> hidden<% } %>>
+            <span data-i18n="settings.emailPending"><%- t('settings.emailPending') %></span> <b id="emailPendingAddr"><%= profile.pendingEmail %></b>
+          </p>
+          <form class="tk-form tk-set__form" id="emailForm" novalidate>
+            <input class="tk-field" type="email" id="newEmail" autocomplete="email" placeholder="<%= ta('settings.emailNew') %>" data-i18n-placeholder="settings.emailNew">
+            <input class="tk-field" type="password" id="emailPassword" autocomplete="current-password" placeholder="<%= ta('settings.emailPassword') %>" data-i18n-placeholder="settings.emailPassword">
+            <p class="tk-note" data-i18n="settings.emailHint"><%- t('settings.emailHint') %></p>
+            <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="settings.emailSend"><%- t('settings.emailSend') %></button>
+          </form>
+          <% } else if (!hasPassword) { %>
+          <p class="tk-note" data-i18n="settings.emailGoogle"><%- t('settings.emailGoogle') %></p>
+          <% } %>
+        </section>
+
+        <p class="tk-kicker tk-set__row-title" data-i18n="settings.device"><%- t('settings.device') %></p>
+
+        <!-- Уведомления: звук сообщения, звук звонка, системные (tk-notify.js) -->
+        <section class="tk-panel" id="notifyPanel">
+          <p class="tk-panel__title" data-i18n="settings.notify"><%- t('settings.notify') %></p>
+          <div class="tk-set__form">
+            <label class="tk-form__toggle"><input type="checkbox" data-notify="sndMsg"><span data-i18n="settings.notifyMsg"><%- t('settings.notifyMsg') %></span></label>
+            <label class="tk-form__toggle"><input type="checkbox" data-notify="sndCall"><span data-i18n="settings.notifyCall"><%- t('settings.notifyCall') %></span></label>
+            <label class="tk-form__toggle"><input type="checkbox" data-notify="sys"><span data-i18n="settings.notifySys"><%- t('settings.notifySys') %></span></label>
+            <p class="tk-note tk-set__warn" id="notifyState" hidden></p>
+            <p class="tk-note" data-i18n="settings.notifyHint"><%- t('settings.notifyHint') %></p>
+          </div>
+        </section>
+
+        <!-- Камера и микрофон: что разрешил браузер, и проверка -->
+        <section class="tk-panel" id="devicesPanel">
+          <p class="tk-panel__title" data-i18n="settings.devices"><%- t('settings.devices') %></p>
+          <div class="tk-set__form">
+            <dl class="tk-set__perms">
+              <dt data-i18n="settings.camera"><%- t('settings.camera') %></dt><dd id="permCamera">—</dd>
+              <dt data-i18n="settings.mic"><%- t('settings.mic') %></dt><dd id="permMic">—</dd>
+            </dl>
+            <div class="tk-set__check" id="devCheck" hidden>
+              <video id="devVideo" autoplay muted playsinline></video>
+              <div class="tk-set__meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-label="<%= ta('settings.micLevel') %>" data-i18n-aria="settings.micLevel"><i id="devLevel"></i></div>
+            </div>
+            <p class="tk-note tk-set__warn" id="devState" hidden></p>
+            <p class="tk-note" data-i18n="settings.devicesHint"><%- t('settings.devicesHint') %></p>
+            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="devBtn" data-i18n="settings.devicesCheck"><%- t('settings.devicesCheck') %></button>
+          </div>
+        </section>
+
+        <!-- Язык: общий переключатель public/tk-i18n.js, без перезагрузки -->
+        <section class="tk-panel">
+          <p class="tk-panel__title" data-i18n="settings.lang"><%- t('settings.lang') %></p>
+          <div class="tk-lang tk-set__lang">
+            <button type="button" class="tk-lang__btn<%= lang === 'ru' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'ru' %>" data-lang="ru">RU</button>
+            <button type="button" class="tk-lang__btn<%= lang === 'en' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'en' %>" data-lang="en">EN</button>
+          </div>
+        </section>
+
+        <%# Удаление аккаунта. У администратора его нет: панель осталась бы
+            без владельца, маршрут такую попытку тоже отклоняет. Но и пустого
+            места нет — иначе похоже, что удаления в системе не сделали. %>
+        <section class="tk-panel tk-set__zone">
+          <p class="tk-panel__title" data-i18n="settings.delete.title"><%- t('settings.delete.title') %></p>
+          <% if (canDelete) { %>
+          <p class="tk-note" data-i18n="settings.delete.what"><%- t('settings.delete.what') %></p>
+          <form class="tk-form tk-set__form" id="deleteForm">
+            <% if (hasPassword) { %>
+            <input class="tk-field" type="password" placeholder="<%= ta('settings.delete.password') %>" id="deletePassword" data-i18n-placeholder="settings.delete.password" autocomplete="current-password">
+            <% } %>
+            <button type="submit" class="tk-btn tk-btn--danger tk-btn--sm" data-i18n="settings.delete.btn"><%- t('settings.delete.btn') %></button>
+          </form>
+          <% } else { %>
+          <p class="tk-note" data-i18n="settings.delete.admin"><%- t('settings.delete.admin') %></p>
+          <% } %>
+        </section>
       </div>
 
       <a href="/logout" class="tk-set__exit" data-i18n="settings.logout"><%- t('settings.logout') %></a>
-
-      <%# Удаление аккаунта. У администратора его нет: панель осталась бы
-          без владельца, маршрут такую попытку тоже отклоняет. %>
-      <% if (canDelete) { %>
-      <section class="tk-panel tk-set__zone">
-        <p class="tk-panel__title" data-i18n="settings.delete.title"><%- t('settings.delete.title') %></p>
-        <p class="tk-note" data-i18n="settings.delete.what"><%- t('settings.delete.what') %></p>
-        <form class="tk-form tk-set__pass" id="deleteForm">
-          <% if (hasPassword) { %>
-          <input class="tk-field" type="password" placeholder="<%= ta('settings.delete.password') %>" id="deletePassword" data-i18n-placeholder="settings.delete.password" autocomplete="current-password">
-          <% } %>
-          <button type="submit" class="tk-btn tk-btn--danger tk-btn--sm" data-i18n="settings.delete.btn"><%- t('settings.delete.btn') %></button>
-        </form>
-      </section>
-      <% } else { %>
-      <%# Администратору кнопки нет — но и пустого места быть не должно:
-          иначе выглядит так, будто удаления в системе вообще не сделали. %>
-      <section class="tk-panel tk-set__zone">
-        <p class="tk-panel__title" data-i18n="settings.delete.title"><%- t('settings.delete.title') %></p>
-        <p class="tk-note" data-i18n="settings.delete.admin"><%- t('settings.delete.admin') %></p>
-      </section>
-      <% } %>
     </div>
   </main>
 </div>

@@ -1,17 +1,74 @@
 /* Настройки профиля — /settings.
  *
- * Каркас страницы (.tk-page), панели, подписи, миниатюры и зона загрузки —
- * общие, лежат в app.css. Здесь только своё.
+ * Каркас страницы (.tk-page), панели, подписи и поля — общие, лежат
+ * в app.css. Здесь только своё.
+ *
+ * Восемь блоков сеткой два на четыре (решение 18.09.2026): колонки одной
+ * ширины, блоки в ряду — одной высоты (stretch), кнопки прижаты к низу
+ * блока — у соседей они стоят на одной линии.
  */
 
-/* Поле и кнопка в одну строку; на телефоне кнопка уходит под поле. */
-.tk-set__line {
+.tk-page.tk-set { max-width: 1180px; }
+
+.tk-set__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.tk-set__grid > .tk-panel {
   display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+/* Подпись ряда «Безопасность» — во всю ширину сетки. */
+.tk-set__row-title {
+  grid-column: 1 / -1;
+  margin: 12px 0 -4px;
+}
+
+/* Форма занимает остаток блока, кнопка — внизу. */
+.tk-set__form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
-.tk-set__line .tk-field { flex: 1; min-width: 0; padding: 12px 16px; }
-.tk-set__line .tk-btn { flex: none; }
+.tk-set__form .tk-field { padding: 12px 16px; }
+.tk-set__form .tk-btn { align-self: flex-start; margin-top: auto; }
+.tk-set__form .tk-note { margin: -4px 0 0; }
+.tk-set__form .tk-form__label { margin-top: 4px; }
+.tk-set__form .tk-form__label:first-child { margin-top: 0; }
+
+/* ── Никнейм: «@» перед полем, строка состояния под ним ── */
+.tk-set__nick { position: relative; }
+
+.tk-set__at {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: Oswald, sans-serif;
+  font-size: 16px;
+  color: var(--tk-muted);
+  pointer-events: none;
+}
+
+.tk-set__nick .tk-field { width: 100%; padding-left: 34px; }
+
+.tk-set__status {
+  min-height: 1.4em;
+  margin: -4px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--tk-muted);
+}
+
+.tk-set__status.is-ok { color: var(--tk-green-live); }
+.tk-set__status.is-bad { color: var(--tk-accent); }
 
 /* ── Фото ── */
 .tk-set__photo {
@@ -45,27 +102,105 @@
 }
 
 /* display у кнопок сильнее браузерного [hidden]. */
-.tk-set .tk-btn[hidden] { display: none; }
+.tk-set .tk-btn[hidden],
+.tk-set [hidden] { display: none; }
 
 .tk-set__danger { border-color: transparent; color: var(--tk-accent); }
 .tk-set__danger:hover,
 .tk-set__danger:focus-visible { background: rgba(227, 66, 52, .12); color: var(--tk-paper); }
 
+/* ── Почта ── */
+.tk-set__email {
+  margin: 0 0 14px;
+  font-family: Oswald, sans-serif;
+  font-size: 16px;
+  color: var(--tk-paper);
+  overflow-wrap: anywhere;
+}
+
+.tk-set__pending { margin: -6px 0 14px; }
+
+/* Подтверждена ли почта; «прислать письмо» — ссылкой в той же строке. */
+.tk-set__verified { margin: -8px 0 14px; font-size: 13px; line-height: 1.5; }
+.tk-set__verified.is-ok { color: var(--tk-green-live); }
+.tk-set__verified.is-bad { color: var(--tk-accent); }
+
+.tk-set__link {
+  padding: 0;
+  margin-left: 6px;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: var(--tk-beige);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.tk-set__link:hover { color: var(--tk-paper); }
+.tk-set__link:disabled { opacity: .5; cursor: default; }
+.tk-set__pending b { color: var(--tk-paper); font-weight: 500; }
+
+/* ── Уведомления, камера и микрофон ── */
+.tk-set__form .tk-form__toggle { font-size: 13px; letter-spacing: .1em; color: var(--tk-beige); }
+.tk-set__warn { color: var(--tk-accent); }
+
+.tk-set__perms {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+}
+
+.tk-set__perms dt { color: var(--tk-label); text-transform: uppercase; letter-spacing: .12em; font-size: 12px; align-self: center; }
+.tk-set__perms dd { margin: 0; color: var(--tk-beige); }
+.tk-set__perms dd.is-ok { color: var(--tk-green-live); }
+.tk-set__perms dd.is-bad { color: var(--tk-accent); }
+
+/* Проверка: своя картинка и уровень микрофона. */
+.tk-set__check { display: flex; flex-direction: column; gap: 8px; }
+
+.tk-set__check video {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: #000;
+  border: 1px solid var(--tk-rule);
+  transform: scaleX(-1);
+}
+
+.tk-set__meter {
+  width: 100%;
+  max-width: 320px;
+  height: 6px;
+  background: rgba(201, 194, 183, .12);
+}
+
+.tk-set__meter i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--tk-green-live);
+  transition: width .08s linear;
+}
+
 /* Тумблер языка — тот же, что в публичной шапке (tk.css). */
 .tk-set__lang { align-self: flex-start; margin-left: 0; }
 .tk-set__lang .tk-lang__btn { padding: 9px 16px; }
 
-.tk-set__pass { max-width: 420px; }
-.tk-set__pass .tk-field { padding: 12px 16px; }
-.tk-set__pass .tk-btn { align-self: flex-start; }
+/* Удаление аккаунта: подписано красным — действие необратимо. */
+.tk-set__zone { border-color: rgba(227, 66, 52, .45); }
+.tk-set__zone .tk-panel__title { color: var(--tk-accent); }
 
-/* Выход — только на узком экране. На десктопе он в сотне пикселей отсюда,
- * в левой панели, и в настройках это лишняя кнопка; на телефоне панель
- * спрятана под бургер, поэтому здесь выход остаётся. */
+/* Выход — только на узком экране. На десктопе он в левой панели; на
+ * телефоне панель спрятана под бургер, поэтому здесь выход остаётся. */
 .tk-set__exit {
   display: none;
   align-self: flex-start;
-  margin-top: 8px;
+  margin-top: 20px;
   font-family: Oswald, sans-serif;
   font-size: 14px;
   color: var(--tk-accent);
@@ -74,32 +209,12 @@
 
 .tk-set__exit:hover { color: var(--tk-paper); }
 
+@media (max-width: 1023px) {
+  .tk-set__grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 767px) {
   .tk-set__exit { display: inline-block; }
-  .tk-set__line { flex-direction: column; }
-  .tk-set__line .tk-btn { align-self: flex-start; }
   .tk-set__photo { align-items: flex-start; }
   .tk-set__ava { width: 72px; height: 72px; font-size: 26px; }
-}
-
-/* Удаление аккаунта: отделено от остальных настроек и подписано красным —
-   действие необратимо, и его не должно быть видно «заодно». */
-.tk-set__zone { border-color: rgba(227, 66, 52, .45); }
-.tk-set__zone .tk-panel__title { color: var(--tk-accent); }
-
-/* Две колонки на широком экране. Каждая колонка — свой столбец панелей,
- * высоты не выравниваются: в соседних колонках панели разной высоты. */
-.tk-page.tk-set { max-width: 1180px; }
-
-.tk-set__cols {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  align-items: start;
-}
-
-.tk-set__col { display: flex; flex-direction: column; gap: 16px; }
-
-@media (max-width: 1023px) {
-  .tk-set__cols { grid-template-columns: 1fr; }
 }

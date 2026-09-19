@@ -26,7 +26,7 @@ router.post('/subscribe', validate({
     return res.status(400).json({ message: 'Вы уже подписаны на этого пользователя' });
   }
 
-  const target = await User.findById(userId).select('login email avatar isStreaming').lean();
+  const target = await User.findById(userId).select('nickname login email avatar isStreaming').lean();
   if (!target) {
     return res.status(404).json({ message: 'Пользователь не найден' });
   }
@@ -39,6 +39,8 @@ router.post('/subscribe', validate({
   const displayName = userView.displayName(target);
   res.status(200).json({
     message: 'Подписка успешно оформлена',
+    // Свежее число подписчиков — страница профиля ставит его сразу.
+    followers: await Subscription.countDocuments({ subscribedToId: userId }),
     user: {
       id: String(target._id),
       displayName,
@@ -67,7 +69,10 @@ router.delete('/unsubscribe', validate({
     return res.status(400).json({ message: 'Вы не подписаны на этого пользователя' });
   }
 
-  res.status(200).json({ message: 'Отписка успешно выполнена' });
+  res.status(200).json({
+    message: 'Отписка успешно выполнена',
+    followers: await Subscription.countDocuments({ subscribedToId: userId }),
+  });
 });
 
 // Списки человека: кто на него подписан (/followers) и на кого подписан он
@@ -81,7 +86,7 @@ const LIST_PAGE = 48;
 router.get(['/userPage/:id/followers', '/userPage/:id/following'], commonDataMiddleware, async (req, res) => {
   const { id } = req.params;
   if (!/^[a-f\d]{24}$/i.test(id)) return res.status(404).send('Пользователь не найден');
-  const owner = await User.findById(id).select('login email avatar').lean();
+  const owner = await User.findById(id).select('nickname login email avatar').lean();
   if (!owner) return res.status(404).send('Пользователь не найден');
 
   const list = req.path.endsWith('/following') ? 'following' : 'followers';
@@ -101,7 +106,7 @@ router.get(['/userPage/:id/followers', '/userPage/:id/following'], commonDataMid
 
   // Порядок подписок сохраняем: find по $in отдаёт в своём порядке.
   // Удалённых аккаунтов в списке нет — их карточке некуда вести.
-  const users = await User.find({ _id: { $in: ids } }).select('login email avatar isOnline').lean();
+  const users = await User.find({ _id: { $in: ids } }).select('nickname login email avatar isOnline').lean();
   const byId = new Map(users.map((u) => [String(u._id), u]));
   const people = await peopleCards(ids.map((i) => byId.get(String(i))).filter(Boolean));
 

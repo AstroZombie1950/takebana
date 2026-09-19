@@ -27,12 +27,13 @@ function normalize(raw) {
   return q.length >= MIN_QUERY ? q : '';
 }
 
-// Люди ищутся по видимому имени (utils/userView.js): логин, а у кого логина
-// нет — начало почты до «@». По всей почте не ищем: запрос «gmail» выдавал бы
-// список людей, а по выдаче проверялся бы чужой адрес.
+// Люди ищутся по нику (его видно везде, utils/userView.js) и по имени,
+// а у кого нет ни того ни другого — по началу почты до «@». По всей почте
+// не ищем: запрос «gmail» выдавал бы список людей, а по выдаче проверялся
+// бы чужой адрес.
 function peopleWhere(query) {
   const rx = new RegExp(escapeRegex(query), 'i');
-  const where = [{ login: rx }];
+  const where = [{ nickname: rx }, { login: rx }];
   if (!query.includes('@')) {
     where.push({ login: { $in: ['', null] }, email: new RegExp('^[^@]*' + escapeRegex(query), 'i') });
   }
@@ -54,7 +55,7 @@ function authorOf(doc) {
 
 async function findPeople(query, limit) {
   const users = await User.find(peopleWhere(query))
-    .select('login email avatar isOnline')
+    .select('nickname login email avatar isOnline')
     .limit(limit)
     .lean();
   return peopleCards(users);
@@ -89,7 +90,7 @@ async function findStreams(rx, limit) {
   const streams = await Stream.find(streamsWhere(rx))
     .sort({ viewers: -1, startedAt: -1 })
     .limit(limit)
-    .populate('userId', 'login email avatar')
+    .populate('userId', 'nickname login email avatar')
     .select('title category city viewers thumbnail isAdult userId')
     .lean();
   return streams.filter((s) => s.userId).map((s) => ({
@@ -108,7 +109,7 @@ async function findRecordings(rx, limit) {
   const recordings = await Recording.find(recordingsWhere(rx))
     .sort({ createdAt: -1 })
     .limit(limit)
-    .populate('userId', 'login email avatar')
+    .populate('userId', 'nickname login email avatar')
     .select('title duration thumb isAdult createdAt recordedAt userId')
     .lean();
   return recordings.filter((r) => r.userId).map((r) => ({

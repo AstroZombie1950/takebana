@@ -62,6 +62,7 @@
   //                ошибка с err.final прекращает попытки
   //   send       — отправлять свои звук и видео (зритель — нет)
   //   video      — включить камеру сразу (дальше — setVideo)
+  //   videoSource — id камеры, с которой входить; без него — камера по умолчанию
   //   onTrack(track, participant, on)  — дорожка появилась или ушла
   //   onState(state) — 'connecting' | 'live' | 'reconnecting' | 'ended'
   //   onNetwork(state) — 'good' | 'low' | 'bad', оценка самого Daily
@@ -233,14 +234,16 @@
         if (closed) return;
         var Daily = r[0];
         var access = r[1];
-        var c = Daily.createCallObject({
+        var props = {
           // Речь, а не музыка: браузерные эхоподавление, шумоподавление
           // и автоусиление остаются включены.
           dailyConfig: { micAudioMode: 'speech' },
           subscribeToTracksAutomatically: !manual,
           startVideoOff: !(opts.send && opts.video && !voiceOnly),
           startAudioOff: !opts.send
-        });
+        };
+        if (opts.videoSource) props.videoSource = opts.videoSource;
+        var c = Daily.createCallObject(props);
         call = c;
         // События мёртвого объекта сюда не доходят: c !== call.
         function mine(fn) { return function (e) { if (c === call) fn(e); }; }

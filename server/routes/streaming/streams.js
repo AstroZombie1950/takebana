@@ -46,6 +46,22 @@ router.post('/stream/active/:streamId', requireAuth, requireOwner(Stream, { para
   res.sendStatus(200); // Возвращаем успех
 });
 
+// Ведущий ушёл в другое приложение (?on=1) или вернулся (?on=0). Уход
+// пульт шлёт sendBeacon — страницу в фоне телефон вот-вот заморозит, и
+// обычный запрос или сокет могут не успеть. Только у идущего эфира.
+router.post('/stream/away/:streamId', requireAuth, requireOwner(Stream, { param: 'streamId', field: 'userId' }), async (req, res) => {
+  const away = req.query.on === '1';
+  const stream = await Stream.findOneAndUpdate(
+    { _id: req.params.streamId, isActive: true, hostAway: { $ne: away } },
+    { hostAway: away, updatedAt: Date.now() },
+    { new: true }
+  );
+  if (stream) {
+    const io = req.app.get('io');
+    if (io) io.to(`stream:${stream.streamKey}`).emit('stream:update', { streamKey: stream.streamKey, away });
+  }
+  res.sendStatus(204);
+});
 
 // Источник эфира: что пульт делает дальше. Веб — ведущий выходит в эфир
 // кнопкой, картинка идёт через Daily; OBS — эфир начинается, когда программа
@@ -151,7 +167,7 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
   const now = new Date();
   const stream = await Stream.findOneAndUpdate(
     { streamKey, userId: req.session.userId },
-    [{ $set: { isActive: true, startedAt: now, updatedAt: now, firstLiveAt: { $ifNull: ['$firstLiveAt', now] } } }],
+    [{ $set: { isActive: true, hostAway: false, startedAt: now, updatedAt: now, firstLiveAt: { $ifNull: ['$firstLiveAt', now] } } }],
     { new: true }
   );
 
@@ -201,6 +217,7 @@ router.post('/set-inactive', requireAuth, validate({
     { streamKey, userId: req.session.userId },
     { 
       isActive: false,
+      hostAway: false,
       startedAt: null // Сбрасываем время начала при деактивации
     },
     { new: true } // Возвращаем обновлённый документ

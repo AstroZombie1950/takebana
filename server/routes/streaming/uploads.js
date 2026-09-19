@@ -13,6 +13,7 @@
 // мимо папки — удалённое из галереи оставалось на диске.
 
 const multer = require('multer');
+const os = require('os');
 const path = require('path');
 
 const UPLOADS = path.join(__dirname, '..', '..', 'public', 'uploads');
@@ -43,4 +44,16 @@ const upload = inMemory(5);         // обложки эфиров
 const uploadAvatar = inMemory(5);
 const uploadGallery = inMemory(10); // фото галереи бывают крупнее
 
-module.exports = { UPLOADS, upload, uploadAvatar, uploadGallery };
+// Видео галереи — исключение: оно большое, и в память его не берём. Файл
+// ложится во временную папку и живёт там только до пережатия со знаком
+// (utils/galleryVideo.js), которое его и удаляет.
+const VIDEO = /^video\//;
+const uploadVideo = multer({
+  storage: multer.diskStorage({ destination: os.tmpdir(), filename: (req, file, cb) => cb(null, 'tk-upload-' + Date.now() + '-' + Math.random().toString(36).slice(2)) }),
+  limits: { fileSize: require('../../utils/galleryVideo').MAX_MB * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => (VIDEO.test(file.mimetype)
+    ? cb(null, true)
+    : cb(Object.assign(new Error('Только видео'), { status: 400, expose: true }))),
+});
+
+module.exports = { UPLOADS, upload, uploadAvatar, uploadGallery, uploadVideo };

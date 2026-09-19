@@ -16,6 +16,9 @@ const User = require('../models/User');
 const Stream = require('../models/Stream');
 const StreamSession = require('../models/StreamSession');
 const Recording = require('../models/Recording');
+const GalleryVideo = require('../models/GalleryVideo');
+const galleryVideo = require('./galleryVideo');
+const galleryPhotos = require('./galleryPhotos');
 const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
 const Report = require('../models/Report');
@@ -95,6 +98,12 @@ async function removeUser(user, io) {
   // Оценки и комментарии под чужими записями — со счётчиками тех записей.
   await recording.forgetUser(user._id);
 
+  // Видео галереи — тоже в хранилище, по одному.
+  const videos = await GalleryVideo.find({ userId: id }).lean();
+  for (const v of videos) {
+    await galleryVideo.remove(v).catch((err) => errorLog.external(err, 'gallery.video.remove', { video: String(v._id) }));
+  }
+
   // Жалобы на сам аккаунт, на его эфиры и сообщения чата — у них больше
   // нет предмета.
   const chatIds = await ChatMessage.distinct('_id', { userId: id });
@@ -120,8 +129,8 @@ async function removeUser(user, io) {
   ]);
 
   unlinkUpload(user.avatar, 'avatars');
-  const gallery = resolveWithin(path.join(UPLOADS, 'gallery'), idStr);
-  if (gallery) await fs.promises.rm(gallery, { recursive: true, force: true }).catch(() => {});
+  // Фото галереи — из Bunny и из папки на сервере (загруженные до переезда).
+  await galleryPhotos.removeAll(idStr, user.gallery);
 
   await User.deleteOne({ _id: id });
   forget(idStr);

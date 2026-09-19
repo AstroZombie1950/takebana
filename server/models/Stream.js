@@ -47,6 +47,13 @@ const StreamSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // Ведущий с телефона ушёл в другое приложение: iOS и Android гасят камеру
+  // у страницы в фоне, звук идёт. Зритель видит заставку вместо чёрного кадра.
+  // Ставит и снимает пульт (/stream/away), сбрасывают выход в эфир и пауза.
+  hostAway: {
+    type: Boolean,
+    default: false
+  },
   viewers: {
     type: Number,
     default: 0

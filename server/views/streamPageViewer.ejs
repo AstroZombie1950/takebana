@@ -42,6 +42,11 @@
                 плейлиста и прятал карточку. О старте придёт stream:update. %>
             <% if (playable) { %>
               <%- include('partials/player', { mode: 'live' }) %>
+              <%# Ведущий в другом приложении: картинки нет, звук идёт. Полоса
+                  плеера остаётся поверх — звук включают ею. tk-viewer.js. %>
+              <div class="tk-live__hint tk-live__away" id="hostAway"<% if (!stream.hostAway) { %> hidden<% } %>>
+                <p class="tk-live__hint-title" data-i18n="viewer.awayTitle"><%- t('viewer.awayTitle') %></p>
+              </div>
             <% } else { %>
               <div class="tk-live__hint tk-live__hint--paused" id="viewerIdle">
                 <% if (stream.thumbnail) { %>

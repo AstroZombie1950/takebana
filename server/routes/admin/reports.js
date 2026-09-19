@@ -42,7 +42,7 @@ async function loadReports(req) {
   for (const r of reports) ids[r.targetType].push(r.targetId);
 
   const [users, streams, messages, recordings, comments, names, sameTarget] = await Promise.all([
-    ids.user.length ? User.find({ _id: { $in: ids.user } }).select('login email banned role').lean() : [],
+    ids.user.length ? User.find({ _id: { $in: ids.user } }).select('nickname login email banned role').lean() : [],
     ids.stream.length ? Stream.find({ _id: { $in: ids.stream } }).select('title isActive userId stoppedByModeration isAdult').lean() : [],
     ids.message.length ? ChatMessage.find({ _id: { $in: ids.message } }).select('message userId streamId').lean() : [],
     ids.recording.length ? Recording.find({ _id: { $in: ids.recording } }).select('title userId').lean() : [],
@@ -57,7 +57,7 @@ async function loadReports(req) {
   ]);
 
   const target = new Map();
-  for (const u of users) target.set(String(u._id), { kind: 'user', title: u.login || u.email || '', banned: !!u.banned, role: u.role, ownerId: String(u._id) });
+  for (const u of users) target.set(String(u._id), { kind: 'user', title: u.nickname || u.login || u.email || '', banned: !!u.banned, role: u.role, ownerId: String(u._id) });
   for (const s of streams) target.set(String(s._id), { kind: 'stream', title: s.title, isActive: !!s.isActive, stopped: !!s.stoppedByModeration, isAdult: !!s.isAdult, ownerId: String(s.userId) });
   for (const m of messages) target.set(String(m._id), { kind: 'message', title: m.message, ownerId: String(m.userId), streamId: m.streamId ? String(m.streamId) : null });
   for (const r of recordings) target.set(String(r._id), { kind: 'recording', title: r.title, ownerId: String(r.userId) });

@@ -89,7 +89,7 @@ function commentsPage(recordingId, before) {
   return RecordingComment.find(filter)
     .sort({ createdAt: -1 })
     .limit(COMMENTS_PAGE + 1)
-    .populate('userId', 'login email avatar')
+    .populate('userId', 'nickname login email avatar')
     .lean();
 }
 
@@ -97,7 +97,7 @@ function commentsPage(recordingId, before) {
 // что у эфира: подтверждение возраста хранится в аккаунте, гостя гейт зовёт войти.
 router.get('/recording/:id', commonDataMiddleware, async (req, res) => {
   const rec = OBJECT_ID.test(req.params.id)
-    ? await Recording.findById(req.params.id).populate('userId', 'login email avatar').lean()
+    ? await Recording.findById(req.params.id).populate('userId', 'nickname login email avatar').lean()
     : null;
   const me = req.session.userId;
   const isOwner = !!rec && !!rec.userId && String(rec.userId._id) === String(me);
@@ -231,7 +231,7 @@ router.post('/recording/:id/comments', requireAuthApi, requireNotBanned, checkId
   }
   audit(req, 'recording.comment', { targetType: 'recording', target: rec, meta: { comment: String(c._id) } });
 
-  const full = await RecordingComment.findById(c._id).populate('userId', 'login email avatar').lean();
+  const full = await RecordingComment.findById(c._id).populate('userId', 'nickname login email avatar').lean();
   res.status(201).json(commentView(full, me, rec.userId, false));
 });
 

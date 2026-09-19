@@ -187,8 +187,18 @@
     }
     navigator.wakeLock.request('screen').then(function (l) { wakeLock = l; }).catch(function () {});
   }
+  // Ушёл в другое приложение — камеру телефон гасит, звук идёт: зрителям
+  // вместо чёрного кадра заставка (tk-viewer.js). Уход — маяком: обычный
+  // запрос страница в фоне может не успеть отправить.
+  var awayUrl = '/stream/away/' + streamId + '?on=';
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && streamer && streamer.connected) holdScreen(true);
+    if (!streamer || !streamer.connected) return;
+    if (document.visibilityState === 'visible') {
+      holdScreen(true);
+      fetch(awayUrl + '0', { method: 'POST' }).catch(function () {});
+    } else {
+      navigator.sendBeacon(awayUrl + '1');
+    }
   });
 
   function Streamer() {
@@ -205,13 +215,31 @@
     tkText(startBtn, 'studio.connecting');
     showHint('studio.connecting');
     var first = null;
-    return TKDaily.requestAccess('/api/create-room', { streamId: streamId })
+    // Камера из студии. Её id есть среди камер — Daily сразу входит с ней;
+    // иначе (известна только сторона или камеры уже нет) — переключаем
+    // после входа, как раньше.
+    // Своя картинка — только когда камера уже выбранная: раньше первую
+    // секунду в предпросмотре была фронтальная, даже если выбрана задняя.
+    var saved = '';
+    try { saved = localStorage.getItem('tk_camera') || ''; } catch (e) {}
+    var deviceId = '';
+    var ready = false;
+    var track = null;
+    var known = saved.indexOf('device:') === 0
+      ? navigator.mediaDevices.enumerateDevices().then(function (list) {
+          var id = saved.slice(7);
+          if (list.some(function (d) { return d.kind === 'videoinput' && d.deviceId === id; })) deviceId = id;
+        }).catch(function () {})
+      : Promise.resolve();
+    return known
+      .then(function () { return TKDaily.requestAccess('/api/create-room', { streamId: streamId }); })
       .then(function (access) {
         first = access;
         return new Promise(function (resolve, reject) {
           self.session = TKDaily.connect({
             send: true,
             video: true,
+            videoSource: deviceId || undefined,
             // Повторный вход после обрыва — в ту же комнату со свежим токеном.
             access: function () {
               if (!first) return TKDaily.requestAccess('/api/get-token', { streamId: streamId });
@@ -219,8 +247,10 @@
               first = null;
               return Promise.resolve(a);
             },
-            onTrack: function (track, p, on) {
-              if (p.local && track.kind === 'video') showLocal(on ? track : null);
+            onTrack: function (tr, p, on) {
+              if (!p.local || tr.kind !== 'video') return;
+              track = on ? tr : null;
+              if (ready) showLocal(track);
             },
             onMediaError: function () { toast(t('stream.mediaDeniedObs'), 'error'); },
             onState: function (state) {
@@ -236,9 +266,12 @@
         });
       })
       .then(function () {
-        var saved = '';
-        try { saved = localStorage.getItem('tk_camera') || ''; } catch (e) {}
+        if (deviceId) return;
         return useCamera(self.session.call, saved).catch(function () {});
+      })
+      .then(function () {
+        ready = true;
+        if (track) showLocal(track);
       })
       .then(function () { return post('/set-active', { streamKey: streamKey }); })
       .then(function () {

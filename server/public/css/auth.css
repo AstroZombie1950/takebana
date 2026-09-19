@@ -9,7 +9,9 @@
 /* Поля сверху и снизу — с расчётом, чтобы вход целиком, с футером,
  * помещался в экран 1920×1080 без прокрутки. */
 .tk-auth {
-  padding: 40px 56px 48px;
+  /* Сверху и под «На главную» — по 20: было по 40, и между шапкой, ссылкой
+   * и «Личным кабинетом» висел лишний воздух (18.09.2026). */
+  padding: 20px 56px 48px;
   display: flex;
   justify-content: center;
 }
@@ -47,7 +49,7 @@
 }
 
 .tk-auth__kicker {
-  margin-top: 40px;
+  margin-top: 20px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -189,14 +191,16 @@
 
 @media (max-width: 1023px) {
   .tk-auth {
-    padding: 40px 28px 48px;
+    padding: 20px 28px 48px;
   }
 }
 
 @media (max-width: 767px) {
   .tk-auth {
-    padding: 28px 20px 40px;
+    padding: 14px 20px 40px;
   }
+
+  .tk-auth__kicker { margin-top: 16px; }
 
   .tk-auth__h1 {
     font-size: 34px;

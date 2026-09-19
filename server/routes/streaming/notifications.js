@@ -20,10 +20,10 @@ router.get('/api/notifications', async (req, res) => {
   // Имя — как везде на сайте: логин, иначе часть почты до @ (displayName).
   // Саму почту в браузер не отдаём: раньше она уходила получателю целиком
   // и показывалась, если логина нет.
-  const notifications = await Notification.find({ recipient: userId })
+  const notifications = await Notification.find({ recipient: userId, type: { $ne: 'message' } })
     .sort({ createdAt: -1 })
     .limit(10)
-    .populate('sender', 'login email')
+    .populate('sender', 'nickname login email')
     .lean();
 
   res.json(notifications.map((n) => ({
@@ -38,7 +38,7 @@ router.put('/api/notifications/read', async (req, res) => {
   if (!userId) {
     return res.status(401).json({ message: 'Необходима авторизация' });
   }
-  await Notification.updateMany({ recipient: userId, isRead: false }, { isRead: true });
+  await Notification.updateMany({ recipient: userId, isRead: false, type: { $ne: 'message' } }, { isRead: true });
   res.json({ success: true });
 });
 

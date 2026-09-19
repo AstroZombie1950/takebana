@@ -1,0 +1,39 @@
+<%#
+  Итог перехода по ссылке из письма о смене почты (routes/emailChange.js):
+  ok — почта сменена, verified — почта подтверждена, taken — адрес заняли,
+  пока шло письмо, invalid — ссылка устарела или уже сработала. Раскладка — как у входа (css/auth.css).
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { titleKey: 'page.emailConfirm.title' }) %>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/auth.css') %>">
+</head>
+<body class="tk-app tk-app--wide">
+
+<%- include('partials/header') %>
+<%- include('partials/leftBar') %>
+
+<div class="tk-shell">
+
+<main class="tk-auth">
+  <div class="tk-auth__card">
+    <span class="tk-auth__kicker" data-i18n="auth.kicker"><%- t('auth.kicker') %></span>
+    <% var key = { ok: 'email.confirm.ok', verified: 'email.confirm.verified', taken: 'email.confirm.taken' }[state] || 'email.confirm.invalid'; %>
+    <h1 class="tk-auth__h1" data-i18n="<%= key %>"><%- t(key) %></h1>
+    <% if (state === 'ok' || state === 'verified') { %>
+    <% var now = state === 'ok' ? 'email.confirm.now' : 'email.confirm.verifiedNow'; %>
+    <p class="tk-auth__lede"><span data-i18n="<%= now %>"><%- t(now) %></span> <b><%= email %></b></p>
+    <% } else { %>
+    <p class="tk-auth__lede" data-i18n="email.confirm.again"><%- t('email.confirm.again') %></p>
+    <% } %>
+    <a href="/settings" class="tk-btn tk-btn--primary tk-btn--block" data-i18n="email.confirm.toSettings"><%- t('email.confirm.toSettings') %></a>
+  </div>
+</main>
+
+<%- include('partials/tkFooter') %>
+</div>
+</body>
+</html>

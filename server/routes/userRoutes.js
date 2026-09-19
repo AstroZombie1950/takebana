@@ -11,6 +11,17 @@ const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const { PASSWORD_PROVIDER, PASSWORD_MIN, PASSWORD_MAX, hashPassword } = require('../utils/password');
 const { audit } = require('../utils/audit');
+const nickname = require('../utils/nickname');
+const errorLog = require('../utils/errorLog');
+// Подтверждение почты после регистрации (router.sendVerify есть, когда настроена почта).
+const emailRoutes = require('./emailChange');
+const { requireAuthApi } = require('../middleware/auth');
+
+const NICK_ERRORS = {
+  format: 'Ник: 3–20 знаков — латинские буквы, цифры и «_», первая — буква',
+  reserved: 'Этот ник зарезервирован',
+  taken: 'Этот ник уже занят',
+};
 
 // Маршрут входа
 router.post('/login', authLimiter, validate({
@@ -69,35 +80,78 @@ router.post('/register', registerLimiter, validate({
 
   // Туда, откуда пришёл на вход (?next= страницы входа), иначе на витрину.
   const redirectUrl = safeNext(req.body.next) || '/';
+  // Письмо для подтверждения почты. Не ждём и не держим регистрацию:
+  // не дошло — человек повторит из настроек.
+  if (emailRoutes.sendVerify) {
+    emailRoutes.sendVerify(req, user).catch((e) => errorLog.external(e, 'mail.verify.register'));
+  }
+
   audit(req, 'auth.register', { actor: user });
   res.status(200).json({ message: 'Регистрация прошла успешно', redirectUrl });
 });
 
 
 
+// Имя и никнейм из настроек. Имя — свободная строка, пустое можно. Ник —
+// по правилам utils/nickname.js, уникальный, не чаще раза в 30 дней.
 router.post('/update-profile', validate({
-  login: { type: 'string', required: true, min: 1, max: 64, label: 'Логин' },
+  login: { type: 'string', max: 64, allowEmpty: true, default: '', label: 'Имя' },
+  nickname: { type: 'string', required: true, max: 40, label: 'Никнейм' },
 }), async (req, res) => {
-  const { login } = req.body;
   const userId = req.session.userId;
   if (!userId) {
     return res.status(401).json({ message: 'Пользователь не авторизован' });
   }
-  // Найти пользователя по ID
   const user = await User.findById(userId);
   if (!user) {
     return res.status(400).json({ message: 'Пользователь не найден' });
   }
-  // Обновить логин пользователя
-  const was = user.login;
-  user.login = login;
-  // Сохранить обновленного пользователя
-  await user.save();
 
-  audit(req, 'profile.update', { targetType: 'user', target: user, meta: { login: { was, now: login } } });
-  res.status(200).json({ message: 'Профиль успешно обновлен' });
+  const login = req.body.login || '';
+  const nick = nickname.normalize(req.body.nickname);
+  const changed = nick !== user.nickname;
+  if (changed) {
+    const bad = nickname.problem(nick);
+    if (bad) return res.status(400).json({ message: NICK_ERRORS[bad], reason: bad });
+    const wait = nickname.nextChangeAt(user);
+    if (wait) {
+      return res.status(400).json({ message: 'Ник можно менять раз в 30 дней', reason: 'wait', until: wait });
+    }
+    if (await User.exists({ nickname: nick, _id: { $ne: user._id } })) {
+      return res.status(400).json({ message: NICK_ERRORS.taken, reason: 'taken' });
+    }
+  }
+
+  const was = { login: user.login, nickname: user.nickname };
+  user.login = login;
+  if (changed) {
+    user.nickname = nick;
+    user.nicknameChangedAt = new Date();
+  }
+  try {
+    await user.save();
+  } catch (e) {
+    // Ник заняли между проверкой и сохранением.
+    if (e && e.code === 11000) return res.status(400).json({ message: NICK_ERRORS.taken, reason: 'taken' });
+    throw e;
+  }
+
+  audit(req, 'profile.update', { targetType: 'user', target: user, meta: { was, now: { login, nickname: user.nickname } } });
+  res.status(200).json({ message: 'Профиль успешно обновлен', nickname: user.nickname, login });
 });
 
+// Свободен ли ник — поле в настройках спрашивает на ходу, пока человек печатает.
+router.get('/api/nickname/check', requireAuthApi, async (req, res) => {
+  const nick = nickname.normalize(req.query.n);
+  const me = await User.findById(req.session.userId).select('nickname nicknameChangedAt').lean();
+  if (!me) return res.status(401).json({ message: 'Необходима авторизация' });
+  if (nick === me.nickname) return res.json({ ok: true, same: true });
+  const bad = nickname.problem(nick);
+  if (bad) return res.json({ ok: false, reason: bad });
+  if (await User.exists({ nickname: nick })) return res.json({ ok: false, reason: 'taken' });
+  const wait = nickname.nextChangeAt(me);
+  res.json({ ok: !wait, reason: wait ? 'wait' : null, until: wait });
+});
 
 // Минимум тот же, что в регистрации: иначе через смену пароля он обходится.
 router.post('/update-password', authLimiter, validate({

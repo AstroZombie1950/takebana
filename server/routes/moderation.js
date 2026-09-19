@@ -136,7 +136,7 @@ router.post('/api/moderation/users/:id/ban', requireModerator, validate({
 }), wrap(async (req, res) => {
     // Модератора и администратора банить нельзя: это единственный способ
     // не дать разобрать панель изнутри одним неверным нажатием.
-    const target = await User.findById(req.params.id).select('role banned');
+    const target = await User.findById(req.params.id).select('role banned nickname login email');
     if (!target) return res.status(404).json({ message: 'Пользователь не найден' });
     if (canModerate(target)) {
         return res.status(403).json({ message: 'Нельзя ограничить модератора' });
@@ -186,7 +186,7 @@ router.post('/api/moderation/users/:id/ban', requireModerator, validate({
     audit(req, 'mod.ban', {
         targetType: 'user',
         target,
-        targetLabel: target.login || target.email || '',
+        targetLabel: target.nickname || target.login || target.email || '',
         meta: { reason: req.body.reason, streamsStopped: live.length, venuesStopped: venues.length },
     });
     return res.json({ ok: true, streamsStopped: live.length, venuesStopped: venues.length });
