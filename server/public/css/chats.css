@@ -472,6 +472,501 @@
 
 .tk-chat__send { flex: none; }
 
+/* Скрепка и микрофон по краям поля. */
+.tk-chat__compose .tk-chat__tool { align-self: center; }
+.is-recording .tk-chat__mic { color: var(--tk-accent); border-color: var(--tk-accent); }
+
+/* Идёт запись голосового: вместо поля и скрепки — полоса записи. */
+.is-recording #messageInput,
+.is-recording .tk-chat__clip { display: none; }
+
+.tk-rec:not([hidden]) {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px 0 16px;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-rec__dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--tk-accent);
+  animation: tk-rec 1.2s ease-in-out infinite;
+}
+
+@keyframes tk-rec { 50% { opacity: .25; } }
+
+.tk-rec__time {
+  flex: 1;
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  letter-spacing: .06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--tk-paper);
+}
+
+/* Перетаскивание файла в диалог: рамка поверх ленты. */
+.tk-chat__area { position: relative; }
+
+.tk-chat__drop:not([hidden]) {
+  position: absolute;
+  inset: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--tk-accent);
+  background: rgba(10, 10, 10, .82);
+  font-family: Oswald, sans-serif;
+  font-size: 18px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+  pointer-events: none;
+}
+
+/* ── Вложения в ленте ── */
+.tk-msg__bubble.has-att { display: flex; flex-direction: column; gap: 8px; }
+.tk-msg__bubble.is-bare { padding: 0; background: none; border: 0; }
+
+.tk-att { display: block; font: inherit; color: inherit; }
+
+/* Вложению — явная ширина: пузырь подстраивается под содержимое,
+ * и ширина в процентах от него не определена (волна схлопывалась в ноль,
+ * превью 720 px распирало пузырь). */
+
+/* Картинка и кадр видео: вписаны в 320×360 в своих пропорциях — ширину
+ * и aspect-ratio ставит chats.js, здесь запас на случай без размеров. */
+.tk-att--media {
+  position: relative;
+  width: 320px;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .2);
+  border: 1px solid var(--tk-rule);
+  cursor: zoom-in;
+}
+
+.tk-att--media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tk-att--media[data-video] { cursor: pointer; }
+
+.tk-att__play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 10, .72);
+  color: var(--tk-paper);
+  transition: background .18s ease;
+}
+
+.tk-att--media:hover .tk-att__play { background: var(--tk-accent); }
+
+.tk-att__len {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 7px;
+  background: rgba(10, 10, 10, .78);
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--tk-paper);
+}
+
+/* Звук: кнопка, волна или полоса, время. Ход — --p от 0 до 1 (chats.js). */
+.tk-audio {
+  --p: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 280px;
+  max-width: 100%;
+}
+
+.tk-audio__btn {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  cursor: pointer;
+}
+
+.tk-msg--out .tk-audio__btn { background: var(--tk-ink); color: var(--tk-accent); }
+
+.tk-audio__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.tk-audio__name {
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-audio__track { display: block; height: 26px; cursor: pointer; }
+
+.tk-audio__wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  /* Сыгранная часть — насыщенная, остальное — бледное. */
+  -webkit-mask: linear-gradient(90deg, #000 calc(var(--p) * 100%), rgba(0, 0, 0, .38) 0);
+  mask: linear-gradient(90deg, #000 calc(var(--p) * 100%), rgba(0, 0, 0, .38) 0);
+}
+
+.tk-audio__wave i { flex: 1; min-height: 2px; background: currentColor; }
+
+.tk-audio__line {
+  display: block;
+  position: relative;
+  top: 11px;
+  height: 4px;
+  background: linear-gradient(90deg, currentColor calc(var(--p) * 100%), rgba(144, 113, 99, .45) 0);
+}
+
+.tk-audio__time {
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .04em;
+  font-variant-numeric: tabular-nums;
+  opacity: .8;
+}
+
+/* Документ: расширение, имя, размер, стрелка «скачать». */
+.tk-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 280px;
+  max-width: 100%;
+  text-decoration: none;
+}
+
+.tk-file__ext {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid currentColor;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .04em;
+}
+
+.tk-file__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.tk-file__name {
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-file__size { font-size: 12px; opacity: .8; }
+.tk-file__dl { flex: none; }
+.tk-file:hover .tk-file__name { text-decoration: underline; }
+
+/* Загрузка: заглушка своего сообщения с полосой. */
+.tk-upload {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+  width: 260px;
+  max-width: 100%;
+}
+
+.tk-upload__name {
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-upload__bar {
+  grid-column: 1;
+  height: 4px;
+  background: rgba(10, 10, 10, .25);
+  overflow: hidden;
+}
+
+.tk-upload__bar i { display: block; height: 100%; background: var(--tk-ink); transition: width .2s linear; }
+.tk-upload__bar.is-busy i { animation: tk-rec 1.2s ease-in-out infinite; }
+.tk-upload__state { grid-column: 1; font-size: 12px; }
+
+.tk-upload__x {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  align-self: center;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid currentColor;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tk-msg--pending .tk-msg__bubble { opacity: .85; }
+.tk-msg--pending.is-failed .tk-msg__bubble { background: none; border: 1px solid var(--tk-accent); color: var(--tk-paper); }
+.tk-msg--pending.is-failed .tk-upload__state { color: var(--tk-accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-rec__dot,
+  .tk-upload__bar.is-busy i { animation: none; }
+}
+
+/* ── Кружки ── */
+.tk-round {
+  --p: 0;
+  position: relative;
+  width: 240px;
+  height: 240px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .25);
+  cursor: pointer;
+}
+
+.tk-round img,
+.tk-round__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Ход — кольцом по краю. */
+.tk-round__ring,
+.tk-roundrec__ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.tk-round__ring circle,
+.tk-roundrec__ring circle {
+  fill: none;
+  stroke: var(--tk-accent);
+  stroke-width: 3;
+  stroke-dasharray: 100;
+  stroke-dashoffset: calc(100 - var(--p) * 100);
+}
+
+.tk-round .tk-att__len { left: 50%; right: auto; bottom: 12px; transform: translateX(-50%); }
+
+/* Запись кружка: круг с камерой, кольцо — сколько из минуты. */
+.tk-roundrec {
+  --p: 0;
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: rgba(10, 10, 10, .92);
+}
+
+.tk-roundrec:not(.hidden) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.tk-roundrec__stage {
+  position: relative;
+  width: min(320px, 78vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #000;
+}
+
+/* Своя камера — зеркалом, как в зеркале; в файл кадр уходит как есть. */
+.tk-roundrec__stage video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
+
+.tk-roundrec__time {
+  font-family: Oswald, sans-serif;
+  font-size: 18px;
+  letter-spacing: .08em;
+  font-variant-numeric: tabular-nums;
+  color: var(--tk-paper);
+}
+
+.tk-roundrec__acts { display: flex; gap: 12px; }
+
+/* ── Исчезающие ── */
+.tk-chat__limit { position: relative; }
+.tk-chat__limit.is-on { color: var(--tk-accent); border-color: var(--tk-accent); }
+
+.tk-chat__limit-badge {
+  position: absolute;
+  right: -6px;
+  top: -6px;
+  padding: 1px 4px;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font: 700 10px/1.3 Oswald, sans-serif;
+  white-space: nowrap;
+}
+
+.tk-chat__limit-badge[hidden] { display: none; }
+
+.tk-limitmenu { width: 270px; }
+.tk-limitmenu__title {
+  margin: 0;
+  padding: 10px 14px 6px;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-limitmenu [aria-checked="true"] { color: var(--tk-paper); }
+.tk-limitmenu [aria-checked="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  vertical-align: 1px;
+  background: var(--tk-accent);
+}
+
+.tk-limitmenu__hint {
+  margin: 0;
+  padding: 8px 14px 12px;
+  border-top: 1px solid var(--tk-rule);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--tk-muted);
+}
+
+/* Карточка исчезающего: огонёк, что это, условия, что сделать. */
+.tk-sealed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 260px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+button.tk-sealed { cursor: pointer; }
+
+.tk-sealed__icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed currentColor;
+  border-radius: 50%;
+}
+
+button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
+
+.tk-sealed__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tk-sealed__kind { font-size: 14px; font-weight: 700; }
+.tk-sealed__policy { font-size: 12px; font-variant-numeric: tabular-nums; }
+.tk-sealed__hint { font-size: 12px; opacity: .75; }
+
+.tk-sealed.is-gone { opacity: .7; }
+.tk-sealed.is-gone .tk-sealed__kind { font-weight: 500; font-style: italic; }
+
+/* Раскрытое исчезающее: под содержимым — условия и «Скрыть». */
+.tk-sealed__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  opacity: .85;
+}
+
+.tk-sealed__bar .tk-sealed__policy { flex: 1; }
+
+.tk-sealed__hide {
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Осталось у исчезающего в окне просмотра — поверх окна. */
+.tk-oncetimer {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  z-index: 96;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font: 700 14px/1.4 Oswald, sans-serif;
+  letter-spacing: .08em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-oncetimer[hidden] { display: none; }
+
+.tk-chat__send-ico { display: none; }
+
+@media (max-width: 640px) {
+  .tk-round { width: 200px; height: 200px; }
+
+  /* Поле ввода и четыре кнопки в одну строку: «Отправить» — стрелкой,
+   * кнопки уже, поле забирает остальное. */
+  .tk-chat__compose form { gap: 4px; }
+  .tk-chat__compose .tk-chat__tool { width: 32px; }
+  .tk-chat__compose .tk-field { min-width: 0; padding: 12px; }
+  .tk-chat__send { width: 44px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  .tk-chat__send span { display: none; }
+  .tk-chat__send-ico { display: block; }
+}
+
 /* ── Журнал звонков ── */
 /* Строка: аватар, имя, итог и время — одна кнопка (открыть переписку),
  * справа — перезвонить голосом или с видео. */

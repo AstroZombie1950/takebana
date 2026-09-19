@@ -19,13 +19,13 @@ const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
 const galleryVideo = require('./galleryVideo');
 const galleryPhotos = require('./galleryPhotos');
+const attachments = require('./attachments');
 const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
 const Report = require('../models/Report');
 const Subscription = require('../models/Subscription');
 const Notification = require('../models/Notification');
 const Conversation = require('../models/Conversation');
-const Message = require('../models/Message');
 const ChatMessage = require('../models/ChatMessage');
 const Call = require('../models/Call');
 
@@ -116,7 +116,8 @@ async function removeUser(user, io) {
       { targetType: 'stream', targetId: { $in: streams.map((s) => s._id) } },
       { targetType: 'message', targetId: { $in: chatIds } },
     ] }),
-    Message.deleteMany({ $or: [{ sender: id }, { recipient: id }, { conversationId: { $in: conversations.map((c) => c._id) } }] }),
+    // Вложения переписки уходят из хранилища вместе с сообщениями.
+    attachments.deleteMessages({ $or: [{ sender: id }, { recipient: id }, { conversationId: { $in: conversations.map((c) => c._id) } }] }),
     ChatMessage.deleteMany({ userId: id }),
     Subscription.deleteMany({ $or: [{ subscriberId: id }, { subscribedToId: id }] }),
     Call.deleteMany({ $or: [{ caller: id }, { callee: id }] }),

@@ -11,6 +11,7 @@
 // sharp метаданные не переносит, если явно не попросить — это то, что нужно.
 
 const sharp = require('sharp');
+const { stamp } = require('./watermark');
 const fsp = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
@@ -23,7 +24,8 @@ const crypto = require('crypto');
 // экран: и аватар, и фото галереи открываются в лайтбоксе.
 const PRESETS = {
   avatar:        { width: 512,  height: 512,  fit: 'cover',  quality: 82 },
-  gallery:       { width: 1600, height: 1600, fit: 'inside', quality: 80 },
+  // Галерея — контент человека: со знаком (решение заказчика 18.09.2026).
+  gallery:       { width: 1600, height: 1600, fit: 'inside', quality: 80, watermark: true },
   thumbnail:     { width: 1280, height: 720,  fit: 'cover',  quality: 80 },
   establishment: { width: 1600, height: 1200, fit: 'inside', quality: 80 },
 };
@@ -48,7 +50,8 @@ async function saveImage(buffer, preset, dir) {
 
   let data;
   try {
-    data = await sharp(buffer)
+    if (p.watermark) data = (await stamp(buffer, p, p.quality)).data;
+    else data = await sharp(buffer)
       // По EXIF: снимок с телефона иначе ложится набок. Только до resize —
       // после поворота размеры меняются местами.
       .rotate()

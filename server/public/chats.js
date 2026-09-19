@@ -1,6 +1,6 @@
 /* Переписка: вкладки «Сообщения» и «Звонки», лента со звонками между
- * сообщениями, отправка, пересылка, удаление, статусы «доставлено»
- * и «прочитано».
+ * сообщениями, отправка, вложения и голосовые, пересылка, удаление,
+ * статусы «доставлено» и «прочитано».
  *
  * Новое приходит сокетом: tk-app.js пересылает события сервера в document
  * как tk:message:new, tk:message:read и т. д. Раньше открытый диалог
@@ -94,6 +94,146 @@
   // предыдущего в пачке).
   var FWD_TIME = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
 
+  // ── Вложения ──────────────────────────────────────────────────────────
+  // Одно на сообщение (routes/streaming/messages.js, /messages/attach).
+  // Картинка и видео открываются окном во весь экран, звук играет прямо
+  // в ленте, документ — ссылкой на файл.
+  var PLAY = '<path d="M8 5.5v13L20 12z" fill="currentColor"></path>';
+  var PAUSE = '<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"></path>';
+
+  function clock(sec) {
+    sec = Math.max(0, Math.round(sec || 0));
+    return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  }
+
+  function fileSize(bytes) {
+    var units = uiLang() === 'ru' ? ['Б', 'КБ', 'МБ'] : ['B', 'KB', 'MB'];
+    var i = bytes >= 1048576 ? 2 : bytes >= 1024 ? 1 : 0;
+    var n = bytes / Math.pow(1024, i);
+    return (i && n < 10 ? n.toFixed(1) : Math.round(n)) + '\u00a0' + units[i];
+  }
+
+  // Картинка и кадр видео — в рамке своих пропорций, вписанной в 320×360,
+  // чтобы лента не прыгала, пока они грузятся, а вертикальное не обрезалось.
+  function frame(a) {
+    if (!a.width || !a.height) return '';
+    var w = Math.round(Math.min(320, a.width, 360 * a.width / a.height));
+    return ' style="width: ' + w + 'px; aspect-ratio: ' + a.width + ' / ' + a.height + '"';
+  }
+
+  function attachmentHtml(a) {
+    if (a.kind === 'image') {
+      return '<button type="button" class="tk-att tk-att--media" data-img="' + escapeHtml(a.url) + '" aria-label="' + escapeHtml(t('chats.openImage')) + '"' + frame(a) + '>' +
+        '<img src="' + escapeHtml(a.preview || a.url) + '" alt="" loading="lazy" decoding="async"></button>';
+    }
+    if (a.kind === 'video') {
+      return '<button type="button" class="tk-att tk-att--media" data-video="' + escapeHtml(a.url) + '" data-poster="' + escapeHtml(a.preview || '') + '" aria-label="' + escapeHtml(t('chats.openVideo')) + '"' + frame(a) + '>' +
+        (a.preview ? '<img src="' + escapeHtml(a.preview) + '" alt="" loading="lazy" decoding="async">' : '') +
+        '<span class="tk-att__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28">' + PLAY + '</svg></span>' +
+        (a.duration ? '<span class="tk-att__len">' + clock(a.duration) + '</span>' : '') + '</button>';
+    }
+    if (a.kind === 'round') {
+      // Кружок: кадр-обложка в круге; видео одно на страницу и вставляется
+      // сюда при воспроизведении (roundPlay). Ход — кольцом по --p.
+      return '<button type="button" class="tk-att tk-round" data-round="' + escapeHtml(a.url) + '" data-duration="' + (a.duration || 0) + '" aria-label="' + escapeHtml(t('chats.play')) + '">' +
+        (a.preview ? '<img src="' + escapeHtml(a.preview) + '" alt="" loading="lazy" decoding="async">' : '') +
+        '<svg class="tk-round__ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48.5" pathLength="100"></circle></svg>' +
+        '<span class="tk-att__len">' + clock(a.duration) + '</span></button>';
+    }
+    if (a.kind === 'audio' || a.kind === 'voice') {
+      // Голосовое — волной, файл звука — именем над полосой.
+      var track = a.wave && a.wave.length
+        ? '<span class="tk-audio__wave">' + a.wave.map(function (v) { return '<i style="height:' + (12 + v * 88 / 31).toFixed(0) + '%"></i>'; }).join('') + '</span>'
+        : '<span class="tk-audio__line"></span>';
+      return '<div class="tk-att tk-audio" data-audio="' + escapeHtml(a.url) + '" data-duration="' + (a.duration || 0) + '">' +
+        '<button type="button" class="tk-audio__btn" data-play aria-label="' + escapeHtml(t('chats.play')) + '">' +
+          '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">' + PLAY + '</svg></button>' +
+        '<span class="tk-audio__body">' +
+          (a.kind === 'audio' ? '<span class="tk-audio__name">' + escapeHtml(a.name) + '</span>' : '') +
+          '<span class="tk-audio__track" data-seek>' + track + '</span>' +
+          '<span class="tk-audio__time">' + clock(a.duration) + '</span>' +
+        '</span></div>';
+    }
+    var ext = (/\.([a-z0-9]{1,5})$/i.exec(a.name || '') || [])[1] || '';
+    return '<a class="tk-att tk-file" href="' + escapeHtml(a.url) + '" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(t('chats.download')) + '">' +
+      '<span class="tk-file__ext">' + escapeHtml(ext.toUpperCase() || '?') + '</span>' +
+      '<span class="tk-file__body"><span class="tk-file__name">' + escapeHtml(a.name) + '</span>' +
+      '<span class="tk-file__size">' + escapeHtml(fileSize(a.size || 0)) + '</span></span>' +
+      '<svg class="tk-file__dl" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg></a>';
+  }
+
+  // Подпись сообщения в списке диалогов и в окне пересылки: текст, а у файла —
+  // «Фото», «Голосовое» и т. п. перед подписью. Уже экранировано.
+  function summaryHtml(m) {
+    if (m.expired || m.limit) {
+      var k = m.expired ? 'chats.gone' : 'chats.sealed.' + ((m.attachments[0] || {}).kind || 'text');
+      return '<span data-i18n="' + k + '">' + escapeHtml(t(k)) + '</span>';
+    }
+    var a = m.attachments && m.attachments[0];
+    var label = a ? '<span data-i18n="chats.att.' + a.kind + '">' + escapeHtml(t('chats.att.' + a.kind)) + '</span>' : '';
+    return label + (label && m.content ? ' · ' : '') + escapeHtml(m.content || '');
+  }
+
+  function summaryText(m) {
+    if (m.expired) return t('chats.gone');
+    if (m.limit) return t('chats.sealed.' + ((m.attachments[0] || {}).kind || 'text'));
+    var a = m.attachments && m.attachments[0];
+    return (a ? t('chats.att.' + a.kind) + (m.content ? ' · ' : '') : '') + (m.content || '');
+  }
+
+  // ── Исчезающие ──────────────────────────────────────────────────────
+  // Сообщение с ограничением (utils/messageLimit.js): в ленте — карточка
+  // с условиями, содержимое сервер выдаёт только получателю по «Открыть».
+  // Текст, звук и кружок раскрываются прямо в ленте (revealed), фото
+  // и видео — окном просмотра (viewing). Исчерпано — заглушка «исчезло».
+  var FLAME = '<path d="M12 3c1 4 5 5.5 5 10a5 5 0 01-10 0c0-2.5 1.5-3.5 2-5 1 1.5 1.5 2.5 3 3 .5-3-1-5.5 0-8z"></path>';
+  var revealed = {};        // id → { content, att, until }
+  var viewing = null;       // id исчезающего, открытого окном просмотра
+
+  function span(sec) {
+    sec = Math.max(0, Math.ceil(sec));
+    if (sec >= 3600) return t('chats.unit.h', { n: Math.round(sec / 3600) });
+    if (sec >= 60) return t('chats.unit.m', { n: Math.round(sec / 60) });
+    return t('chats.unit.s', { n: sec });
+  }
+
+  function policy(l) {
+    if (l.mode === 'timer') {
+      return l.until ? t('chats.policy.running', { t: span((new Date(l.until) - Date.now()) / 1000) }) : t('chats.policy.timer', { t: span(l.seconds) });
+    }
+    var left = Math.max(0, l.n - l.used);
+    if (l.mode === 'downloads') return t('chats.policy.downloads', { left: left, n: l.n });
+    return l.n === 1 ? t('chats.policy.once') : t('chats.policy.views', { left: left, n: l.n });
+  }
+
+  function sealedHtml(m) {
+    var kind = (m.attachments[0] || {}).kind || 'text';
+    var l = m.limit;
+    var mine = m.sender === ME;
+    var hint = mine ? t(l.opened ? 'chats.sealed.opened' : 'chats.sealed.notOpened')
+      : t(kind === 'file' ? 'chats.sealed.tapDownload' : 'chats.sealed.tapOpen');
+    var inner = '<span class="tk-sealed__icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true">' + FLAME + '</svg></span>' +
+      '<span class="tk-sealed__body"><span class="tk-sealed__kind">' + escapeHtml(t('chats.sealed.' + kind)) + '</span>' +
+      '<span class="tk-sealed__policy"' + (l.until ? ' data-until="' + escapeHtml(l.until) + '"' : '') + '>' + escapeHtml(policy(l)) + '</span>' +
+      '<span class="tk-sealed__hint">' + escapeHtml(hint) + '</span></span>';
+    return mine ? '<div class="tk-sealed">' + inner + '</div>'
+      : '<button type="button" class="tk-sealed" data-open-sealed="' + escapeHtml(m._id) + '">' + inner + '</button>';
+  }
+
+  // Раскрытое в ленте: текст или звук и полоса с условиями; у просмотров —
+  // «Скрыть» (закрыть и стереть), у таймера — сколько осталось.
+  function revealedHtml(m, r) {
+    var bar = '<span class="tk-sealed__bar"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">' + FLAME + '</svg>' +
+      '<span class="tk-sealed__policy"' + (r.until && m.limit.mode === 'timer' ? ' data-until="' + escapeHtml(r.until) + '"' : '') + '>' + escapeHtml(policy(m.limit)) + '</span>' +
+      (m.limit.mode === 'timer' ? '' : '<button type="button" class="tk-sealed__hide" data-hide-sealed="' + escapeHtml(m._id) + '">' + escapeHtml(t('chats.sealed.hide')) + '</button>') + '</span>';
+    return (r.att ? attachmentHtml(r.att) : '') + (r.content ? '<p class="tk-msg__text">' + escapeHtml(r.content) + '</p>' : '') + bar;
+  }
+
+  function goneHtml() {
+    return '<div class="tk-sealed is-gone"><span class="tk-sealed__icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M6 18L18 6"></path></svg></span>' +
+      '<span class="tk-sealed__kind">' + escapeHtml(t('chats.gone')) + '</span></div>';
+  }
+
   function messageHtml(m, g) {
     var out = m.sender === ME;
     var f = m.forwardedFrom;
@@ -106,8 +246,20 @@
           (f.sentAt ? ' <time>' + escapeHtml(tkDate(f.sentAt, FWD_TIME)) + '</time>' : '') + '</span>';
       }
     }
-    var bubble = '<div class="tk-msg__bubble" tabindex="0" role="button" aria-haspopup="menu" aria-label="' + escapeHtml(t('chats.actions')) + '">' +
-      head + '<p class="tk-msg__text">' + escapeHtml(m.content) + '</p></div>';
+    var body;
+    var bare = false;
+    if (m.expired) body = goneHtml();
+    else if (m.limit && revealed[m._id]) body = revealedHtml(m, revealed[m._id]);
+    else if (m.limit) body = sealedHtml(m);
+    else {
+      var att = (m.attachments || []).map(attachmentHtml).join('');
+      // Картинка, видео или кружок без подписи — пузырь без полей.
+      bare = att && !m.content && !head && /^(image|video|round)$/.test(m.attachments[0].kind);
+      body = att + (m.content ? '<p class="tk-msg__text">' + escapeHtml(m.content) + '</p>' : '');
+    }
+    var special = m.expired || m.limit || (m.attachments && m.attachments.length);
+    var bubble = '<div class="tk-msg__bubble' + (special ? ' has-att' : '') + (bare ? ' is-bare' : '') + (m.limit || m.expired ? ' is-sealed' : '') + '" tabindex="0" role="button" aria-haspopup="menu" aria-label="' + escapeHtml(t('chats.actions')) + '">' +
+      head + body + '</div>';
     var when = '<time>' + escapeHtml(tkDate(m.sentAt)) + '</time>';
     if (out) {
       var s = status(m);
@@ -176,15 +328,18 @@
   }
 
   function render() {
+    var waiting = uploads.filter(function (u) { return peer && u.peerId === peer.id; }).map(uploadHtml).join('');
     if (!messages.length && !calls.length) {
-      feed.innerHTML = '<p class="tk-note tk-note--center">' + escapeHtml(t('chats.dialogEmpty')) + '</p>';
+      feed.innerHTML = waiting || '<p class="tk-note tk-note--center">' + escapeHtml(t('chats.dialogEmpty')) + '</p>';
       return;
     }
     var items = messages.map(function (m) { return { at: m.sentAt, m: m }; })
       .concat(calls.map(function (c) { return { at: c.startedAt, c: c }; }));
     items.sort(function (a, b) { return new Date(a.at) - new Date(b.at); });
     groups(items);
-    feed.innerHTML = items.map(function (x) { return x.m ? messageHtml(x.m, x.g) : callNoteHtml(x.c); }).join('');
+    feed.innerHTML = items.map(function (x) { return x.m ? messageHtml(x.m, x.g) : callNoteHtml(x.c); }).join('') + waiting;
+    if (sound.el) relinkSound();
+    if (roundPlayer.url) relinkRound();
   }
 
   function atBottom() {
@@ -270,7 +425,7 @@
   // ── Список диалогов ───────────────────────────────────────────────────
   function setLast(el, m) {
     var last = el.querySelector('.tk-dialog__last');
-    last.innerHTML = (m.sender === ME ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : '') + escapeHtml(m.content);
+    last.innerHTML = (m.sender === ME ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : '') + summaryHtml(m);
     var when = el.querySelector('.tk-dialog__when');
     when.setAttribute('data-time', m.sentAt);
     when.textContent = timeAgo(m.sentAt);
@@ -307,6 +462,8 @@
 
   // ── Выбор диалога ─────────────────────────────────────────────────────
   function select(el) {
+    closeAllSealed();
+    stopVoice(false);
     stopPicking();
     closeMenu();
     peer = peerOf(el);
@@ -347,6 +504,8 @@
   }
 
   function closeDialog() {
+    closeAllSealed();
+    stopVoice(false);
     stopPicking();
     closeMenu();
     peer = null;
@@ -372,10 +531,13 @@
   // ── Отправка ──────────────────────────────────────────────────────────
   $('composeForm').addEventListener('submit', function (e) {
     e.preventDefault();
+    if (rec) return stopVoice(true);
     var content = input.value.trim();
     if (!peer || !content) return;
     input.value = '';
-    post('/sendMessage', { recipientId: peer.id, content: content })
+    var limit = limitOpt;
+    setLimit('');
+    post('/sendMessage', { recipientId: peer.id, content: content, limit: limit })
       .then(function (m) {
         merge([m]);
         render();
@@ -385,10 +547,695 @@
       })
       .catch(function (err) {
         console.error('sendMessage:', err);
-        if (!input.value) input.value = content; // текст не теряем
+        if (!input.value) { input.value = content; setLimit(limit); } // текст не теряем
         toast(t('chats.sendFailed'), 'error');
       });
   });
+
+  // ── Отправка файлов ───────────────────────────────────────────────────
+  // Файлы уходят по одному, в порядке выбора; пока идут, в конце ленты
+  // стоит заглушка с полосой загрузки. Текст из поля — подпись к первому.
+  // Видео сервер пережимает со знаком: ответ 202 приходит сразу, а готовое
+  // сообщение — сокетом, с тем же ref (tk:message:new или tk:message:failed).
+  var uploads = [];         // { ref, peerId, name, kind, pct, state, xhr, error }
+  var sending = false;
+
+  function uploadHtml(u) {
+    var state = u.state === 'failed' ? escapeHtml(u.error || t('chats.uploadFailed'))
+      : u.state === 'processing' ? escapeHtml(t('chats.processing'))
+      : escapeHtml(t('chats.uploading')) + ' ' + u.pct + '%';
+    return '<div class="tk-msg tk-msg--out tk-msg--pending' + (u.state === 'failed' ? ' is-failed' : '') + '" data-ref="' + escapeHtml(u.ref) + '">' +
+      '<div class="tk-msg__bubble has-att"><div class="tk-upload">' +
+        '<span class="tk-upload__name">' + escapeHtml(u.name) + '</span>' +
+        '<span class="tk-upload__bar' + (u.state === 'processing' ? ' is-busy' : '') + '"><i style="width:' + (u.state === 'uploading' ? u.pct : 100) + '%"></i></span>' +
+        '<span class="tk-upload__state">' + state + '</span>' +
+        (u.state === 'processing' ? '' : '<button type="button" class="tk-upload__x" data-drop-upload="' + escapeHtml(u.ref) + '" aria-label="' + escapeHtml(t('chats.uploadCancel')) + '">' +
+          '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>') +
+      '</div></div></div>';
+  }
+
+  function uploadEl(ref) { return feed.querySelector('[data-ref="' + CSS.escape(ref) + '"]'); }
+
+  // Перерисовать одну заглушку, не всю ленту: прогресс меняется часто.
+  function redrawUpload(u) {
+    var el = uploadEl(u.ref);
+    if (el) el.outerHTML = uploadHtml(u);
+  }
+
+  function dropUpload(ref) {
+    uploads = uploads.filter(function (u) { return u.ref !== ref; });
+    var el = uploadEl(ref);
+    if (el) el.remove();
+  }
+
+  function kindOf(file, special) {
+    if (special) return special;
+    var type = file.type || '';
+    return /^image\//.test(type) ? 'image' : /^video\//.test(type) ? 'video' : /^audio\//.test(type) ? 'audio' : 'file';
+  }
+
+  // special — 'voice' или 'round': записанное на странице. Выбранное
+  // ограничение действует на всю пачку и после неё сбрасывается.
+  function queueFiles(files, special) {
+    if (!peer || !files.length) return;
+    var caption = input.value.trim();
+    var limit = limitOpt;
+    input.value = '';
+    setLimit('');
+    Array.prototype.forEach.call(files, function (file, i) {
+      uploads.push({
+        ref: 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+        peerId: peer.id, file: file, special: special || '', limit: limit, caption: i === 0 ? caption : '',
+        name: special ? t('chats.att.' + special) : file.name, kind: kindOf(file, special), pct: 0, state: 'queued'
+      });
+    });
+    render();
+    scrollToBottom();
+    pump();
+  }
+
+  function pump() {
+    if (sending) return;
+    var u = uploads.find(function (x) { return x.state === 'queued'; });
+    if (!u) return;
+    sending = true;
+    u.state = 'uploading';
+    redrawUpload(u);
+    var form = new FormData();
+    form.append('recipientId', u.peerId);
+    form.append('content', u.caption);
+    form.append('ref', u.ref);
+    if (u.special) form.append('special', u.special);
+    if (u.limit) form.append('limit', u.limit);
+    form.append('file', u.file, u.file.name);
+
+    var xhr = u.xhr = new XMLHttpRequest();
+    xhr.open('POST', '/messages/attach');
+    xhr.responseType = 'json';
+    // Без него ошибка приходит страницей, и причина отказа теряется.
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.upload.onprogress = function (e) {
+      if (!e.lengthComputable) return;
+      var pct = Math.min(99, Math.floor(e.loaded / e.total * 100));
+      if (pct === u.pct) return;
+      u.pct = pct;
+      var bar = uploadEl(u.ref);
+      if (!bar) return;
+      bar.querySelector('.tk-upload__bar i').style.width = pct + '%';
+      bar.querySelector('.tk-upload__state').textContent = t('chats.uploading') + ' ' + pct + '%';
+    };
+    xhr.onload = function () {
+      var data = xhr.response || {};
+      if (xhr.status === 202) {
+        u.state = 'processing';
+        u.file = null;
+        redrawUpload(u);
+      } else if (xhr.status >= 200 && xhr.status < 300) {
+        dropUpload(u.ref);
+        delivered(data);
+      } else {
+        failUpload(u, data.message);
+      }
+      next();
+    };
+    xhr.onerror = function () { failUpload(u); next(); };
+    xhr.onabort = next;
+    xhr.send(form);
+
+    function next() { u.xhr = null; sending = false; pump(); }
+  }
+
+  function failUpload(u, message) {
+    u.state = 'failed';
+    u.error = message || t('chats.uploadFailed');
+    u.file = null;
+    redrawUpload(u);
+    toast(u.error, 'error');
+  }
+
+  // Своё сообщение готово: в ленту и наверх списка диалогов.
+  function delivered(m) {
+    if (peer && (m.recipient === peer.id)) {
+      merge([m]);
+      render();
+      scrollToBottom();
+    }
+    var el = dialogEl(m.recipient);
+    if (el) setLast(el, m);
+  }
+
+  feed.addEventListener('click', function (e) {
+    var x = e.target.closest('[data-drop-upload]');
+    if (!x) return;
+    var ref = x.getAttribute('data-drop-upload');
+    var u = uploads.find(function (y) { return y.ref === ref; });
+    if (u && u.xhr) u.xhr.abort();
+    dropUpload(ref);
+  });
+
+  var fileInput = $('attachInput');
+  $('attachBtn').addEventListener('click', function () { fileInput.click(); });
+  fileInput.addEventListener('change', function () {
+    queueFiles(Array.prototype.slice.call(fileInput.files));
+    fileInput.value = '';
+  });
+
+  // Снимок из буфера — вставкой в поле.
+  input.addEventListener('paste', function (e) {
+    var files = e.clipboardData && e.clipboardData.files;
+    if (!files || !files.length) return;
+    e.preventDefault();
+    queueFiles(Array.prototype.slice.call(files));
+  });
+
+  // Перетаскивание в открытый диалог. Счётчик — потому что dragenter
+  // и dragleave приходят от каждого вложенного элемента.
+  var area = document.querySelector('.tk-chat__area');
+  var drop = $('dropZone');
+  var dragDepth = 0;
+  var hasFiles = function (e) { return peer && e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') !== -1; };
+  area.addEventListener('dragenter', function (e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    drop.hidden = false;
+  });
+  area.addEventListener('dragover', function (e) { if (hasFiles(e)) e.preventDefault(); });
+  area.addEventListener('dragleave', function () {
+    if (dragDepth && --dragDepth === 0) drop.hidden = true;
+  });
+  area.addEventListener('drop', function (e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    drop.hidden = true;
+    queueFiles(Array.prototype.slice.call(e.dataTransfer.files));
+  });
+
+  // ── Голосовое ─────────────────────────────────────────────────────────
+  // Микрофон — начать запись; ещё раз микрофон или «Отправить» — отправить,
+  // «Отмена» — выбросить. Пять минут — предел сервера, на нём запись
+  // отправляется сама. Chrome и Firefox пишут webm/opus, Safari — mp4/aac.
+  var VOICE_MAX = 5 * 60;
+  var composeForm = $('composeForm');
+  var micBtn = $('micBtn');
+  var rec = null;           // { recorder, stream, chunks, started, timer, send }
+
+  function voiceType() {
+    if (!window.MediaRecorder) return null;
+    var types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+    for (var i = 0; i < types.length; i++) if (MediaRecorder.isTypeSupported(types[i])) return types[i];
+    return '';
+  }
+
+  function recording(on) {
+    composeForm.classList.toggle('is-recording', on);
+    $('recBar').hidden = !on;
+    micBtn.setAttribute('aria-label', t(on ? 'chats.voiceSend' : 'chats.voice'));
+    micBtn.title = t(on ? 'chats.voiceSend' : 'chats.voice');
+  }
+
+  function startVoice() {
+    var type = voiceType();
+    if (type === null || !navigator.mediaDevices) return toast(t('chats.recUnsupported'), 'error');
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      if (!peer) { stream.getTracks().forEach(function (tr) { tr.stop(); }); return; }
+      var recorder = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : undefined);
+      rec = { recorder: recorder, stream: stream, chunks: [], started: Date.now(), send: false, peerId: peer.id };
+      recorder.ondataavailable = function (e) { if (e.data && e.data.size) rec.chunks.push(e.data); };
+      recorder.onstop = finishVoice;
+      recorder.start(1000);
+      $('recTime').textContent = '0:00';
+      rec.timer = setInterval(function () {
+        var sec = (Date.now() - rec.started) / 1000;
+        $('recTime').textContent = clock(Math.floor(sec));
+        if (sec >= VOICE_MAX) stopVoice(true);
+      }, 250);
+      recording(true);
+    }).catch(function () { toast(t('chats.micDenied'), 'error'); });
+  }
+
+  function stopVoice(send) {
+    if (!rec) return;
+    rec.send = send;
+    clearInterval(rec.timer);
+    if (rec.recorder.state !== 'inactive') rec.recorder.stop();
+    else finishVoice();
+  }
+
+  function finishVoice() {
+    var r = rec;
+    rec = null;
+    recording(false);
+    r.stream.getTracks().forEach(function (tr) { tr.stop(); });
+    // Меньше секунды — случайное нажатие, не отправляем.
+    if (!r.send || !r.chunks.length || Date.now() - r.started < 1000) return;
+    if (!peer || peer.id !== r.peerId) return;
+    var type = r.recorder.mimeType || r.chunks[0].type || 'audio/webm';
+    var ext = /mp4/.test(type) ? 'm4a' : 'webm';
+    var blob = new Blob(r.chunks, { type: type.split(';')[0] });
+    queueFiles([new File([blob], 'voice.' + ext, { type: blob.type })], 'voice');
+  }
+
+  micBtn.addEventListener('click', function () {
+    if (rec) stopVoice(true); else startVoice();
+  });
+  $('recCancel').addEventListener('click', function () { stopVoice(false); });
+
+  // ── Звук в ленте ──────────────────────────────────────────────────────
+  // Один проигрыватель на страницу: новое голосовое останавливает прежнее.
+  // Ход — переменной --p у строки, волна и полоса красятся по ней в CSS.
+  var sound = { audio: new Audio(), el: null, url: '' };
+  sound.audio.preload = 'none';
+
+  function soundState(playing) {
+    var el = sound.el;
+    if (!el) return;
+    el.classList.toggle('is-playing', playing);
+    var btn = el.querySelector('[data-play]');
+    btn.setAttribute('aria-label', t(playing ? 'chats.pause' : 'chats.play'));
+    btn.querySelector('svg').innerHTML = playing ? PAUSE : PLAY;
+  }
+
+  function soundTick() {
+    var el = sound.el;
+    if (!el) return;
+    var a = sound.audio;
+    var total = a.duration && isFinite(a.duration) ? a.duration : Number(el.getAttribute('data-duration')) || 0;
+    el.style.setProperty('--p', total ? Math.min(1, a.currentTime / total) : 0);
+    el.querySelector('.tk-audio__time').textContent = clock(a.currentTime > 0 ? a.currentTime : total);
+  }
+
+  // Лента перерисовалась — играющая строка теперь новый элемент.
+  function relinkSound() {
+    var el = feed.querySelector('[data-audio="' + CSS.escape(sound.url) + '"]');
+    sound.el = el;
+    if (!el) return;
+    soundState(!sound.audio.paused);
+    soundTick();
+  }
+
+  sound.audio.addEventListener('timeupdate', soundTick);
+  sound.audio.addEventListener('play', function () { soundState(true); });
+  sound.audio.addEventListener('pause', function () { soundState(false); });
+  sound.audio.addEventListener('ended', function () {
+    // Исчезающее голосовое дослушали — один просмотр израсходован.
+    var sealed = sealedOf(sound.url);
+    if (sealed) closeSealed(sealed);
+    soundState(false);
+    if (sound.el) {
+      sound.el.style.setProperty('--p', 0);
+      sound.el.querySelector('.tk-audio__time').textContent = clock(Number(sound.el.getAttribute('data-duration')));
+    }
+  });
+
+  function playSound(el) {
+    var url = el.getAttribute('data-audio');
+    if (sound.url === url) {
+      if (sound.audio.paused) sound.audio.play().catch(function () {}); else sound.audio.pause();
+      return;
+    }
+    if (sound.el) { soundState(false); sound.el.style.setProperty('--p', 0); }
+    sound.url = url;
+    sound.el = el;
+    sound.audio.src = url;
+    sound.audio.play().catch(function () { soundState(false); });
+  }
+
+  function seekSound(el, e) {
+    if (sound.el !== el || !sound.audio.duration) return;
+    var r = el.querySelector('[data-seek]').getBoundingClientRect();
+    sound.audio.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * sound.audio.duration;
+  }
+
+  // ── Просмотр фото и видео ─────────────────────────────────────────────
+  var box = $('lightbox');
+  var videoBox = $('videoBox');
+  var player = null;
+  var playerLoading = null;
+
+  // quiet — окно закрыл сервер (сообщение истекло): говорить ему «закрыто»
+  // уже незачем.
+  function closeViewers(quiet) {
+    var was = !box.classList.contains('hidden') || !videoBox.classList.contains('hidden');
+    box.classList.add('hidden');
+    if (!videoBox.classList.contains('hidden')) {
+      videoBox.classList.add('hidden');
+      if (player) player.stop();
+    }
+    if (viewing) {
+      // Исчезающее не оставляем в окне: адрес уже не отдаст файл.
+      $('lightboxImg').removeAttribute('src');
+      var id = viewing;
+      viewing = null;
+      onceTimer.hidden = true;
+      if (quiet !== true) closeSealed(id);
+    }
+    return was;
+  }
+
+  // Плеер Takebana — только когда впервые понадобился: скрипт и стили.
+  function loadPlayer() {
+    if (window.TKPlayer) return Promise.resolve();
+    if (playerLoading) return playerLoading;
+    playerLoading = new Promise(function (resolve, reject) {
+      var css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = videoBox.getAttribute('data-player-css');
+      document.head.appendChild(css);
+      var js = document.createElement('script');
+      js.src = videoBox.getAttribute('data-player-js');
+      js.onload = resolve;
+      js.onerror = function () { playerLoading = null; reject(new Error('player')); };
+      document.head.appendChild(js);
+    });
+    return playerLoading;
+  }
+
+  function openVideo(url, poster) {
+    videoBox.classList.remove('hidden');
+    loadPlayer().then(function () {
+      if (videoBox.classList.contains('hidden')) return;
+      if (!player) player = TKPlayer.mount(videoBox.querySelector('.tk-player'));
+      player.load(url, poster);
+    }).catch(function () { videoBox.classList.add('hidden'); toast(t('player.error'), 'error'); });
+  }
+
+  $('lightboxClose').addEventListener('click', function () { closeViewers(); });
+  $('videoBoxClose').addEventListener('click', function () { closeViewers(); });
+  box.addEventListener('click', function (e) { if (e.target === box) closeViewers(); });
+  videoBox.addEventListener('click', function (e) { if (e.target === videoBox) closeViewers(); });
+
+  // Клик по вложению: вне режима выбора — открыть или играть. В режиме
+  // выбора клик отмечает сообщение (обработчик ниже), ссылка на файл
+  // тоже не открывается.
+  feed.addEventListener('click', function (e) {
+    if (picking || longPressed) return;
+    var img = e.target.closest('[data-img]');
+    var vid = e.target.closest('[data-video]');
+    var aud = e.target.closest('[data-audio]');
+    var round = e.target.closest('[data-round]');
+    var seal = e.target.closest('[data-open-sealed]');
+    var hide = e.target.closest('[data-hide-sealed]');
+    if (seal) return openSealed(seal.getAttribute('data-open-sealed'));
+    if (hide) return closeSealed(hide.getAttribute('data-hide-sealed'));
+    if (round) return playRound(round);
+    if (img) {
+      $('lightboxImg').src = img.getAttribute('data-img');
+      box.classList.remove('hidden');
+    } else if (vid) {
+      openVideo(vid.getAttribute('data-video'), vid.getAttribute('data-poster'));
+    } else if (aud) {
+      if (e.target.closest('[data-play]')) playSound(aud);
+      else if (e.target.closest('[data-seek]')) seekSound(aud, e);
+    }
+  });
+
+  // ── Кружки в ленте ────────────────────────────────────────────────────
+  // Видео одно на страницу, как звук: вставляется в круг, который играет;
+  // после перерисовки ленты переезжает в новый элемент того же кружка.
+  var roundPlayer = { video: document.createElement('video'), el: null, url: '' };
+  roundPlayer.video.playsInline = true;
+  roundPlayer.video.setAttribute('playsinline', '');
+  roundPlayer.video.className = 'tk-round__video';
+
+  function roundTick() {
+    var el = roundPlayer.el, v = roundPlayer.video;
+    if (!el) return;
+    var total = v.duration && isFinite(v.duration) ? v.duration : Number(el.getAttribute('data-duration')) || 0;
+    el.style.setProperty('--p', total ? Math.min(1, v.currentTime / total) : 0);
+    el.querySelector('.tk-att__len').textContent = clock(v.currentTime > 0 ? total - v.currentTime : total);
+  }
+
+  function relinkRound() {
+    var el = feed.querySelector('[data-round="' + CSS.escape(roundPlayer.url) + '"]');
+    roundPlayer.el = el;
+    if (!el) { roundPlayer.video.pause(); return; }
+    el.appendChild(roundPlayer.video);
+    el.classList.toggle('is-playing', !roundPlayer.video.paused);
+    roundTick();
+  }
+
+  function stopRound() {
+    var v = roundPlayer.video;
+    v.pause();
+    v.removeAttribute('src');
+    v.load();
+    if (roundPlayer.el) { roundPlayer.el.classList.remove('is-playing'); roundPlayer.el.style.setProperty('--p', 0); }
+    if (v.parentNode) v.parentNode.removeChild(v);
+    roundPlayer.el = null;
+    roundPlayer.url = '';
+  }
+
+  function playRound(el) {
+    var url = el.getAttribute('data-round');
+    var v = roundPlayer.video;
+    if (roundPlayer.url === url) {
+      if (v.paused) v.play().catch(function () {}); else v.pause();
+      return;
+    }
+    stopRound();
+    if (!sound.audio.paused) sound.audio.pause();
+    roundPlayer.url = url;
+    roundPlayer.el = el;
+    v.src = url;
+    el.appendChild(v);
+    v.play().catch(function () {});
+  }
+
+  roundPlayer.video.addEventListener('timeupdate', roundTick);
+  roundPlayer.video.addEventListener('play', function () { if (roundPlayer.el) roundPlayer.el.classList.add('is-playing'); });
+  roundPlayer.video.addEventListener('pause', function () { if (roundPlayer.el) roundPlayer.el.classList.remove('is-playing'); });
+  roundPlayer.video.addEventListener('ended', function () {
+    var sealed = sealedOf(roundPlayer.url);
+    stopRound();
+    if (sealed) closeSealed(sealed);
+  });
+
+  // ── Исчезающие: открыть, закрыть, таймер ──────────────────────────────
+  var onceTimer = $('onceTimer');
+
+  // Адрес выдачи исчезающего → его id (звук и кружок узнают своё по адресу).
+  function sealedOf(url) {
+    var m = /^\/messages\/([a-f0-9]{24})\/file/.exec(url || '');
+    return m && revealed[m[1]] ? m[1] : null;
+  }
+
+  function findMessage(id) { return messages.find(function (m) { return m._id === id; }); }
+
+  function openSealed(id) {
+    var m = findMessage(id);
+    if (!m || m.sender === ME || m.expired || revealed[id]) return;
+    fetch('/messages/' + encodeURIComponent(id) + '/open', { method: 'POST', headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+      .then(function (res) {
+        if (res.status === 410) { m.expired = true; m.limit = null; render(); return; }
+        if (!res.ok) throw new Error(res.d.message || 'HTTP ' + res.status);
+        var d = res.d;
+        var a = d.attachment;
+        var kind = a ? a.kind : 'text';
+        m.limit = d.limit;
+        var until = d.limit.mode === 'timer' ? d.until : null;
+        if (kind === 'file') {
+          // Скачивание засчитано сервером; последний раз стирается по концу
+          // скачивания или по сроку выдачи.
+          var link = document.createElement('a');
+          link.href = a.url;
+          link.rel = 'noopener';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          render();
+          return;
+        }
+        if (kind === 'image' || kind === 'video') {
+          viewing = id;
+          if (kind === 'image') {
+            $('lightboxImg').src = a.url;
+            box.classList.remove('hidden');
+          } else {
+            openVideo(a.url, a.preview);
+          }
+          showOnceTimer(until);
+          render();
+          return;
+        }
+        revealed[id] = { content: d.content, att: a, until: until };
+        render();
+        var el = feed.querySelector('[data-mid="' + CSS.escape(id) + '"]');
+        var play = el && (el.querySelector('[data-round]') || el.querySelector('[data-audio]'));
+        if (play && play.hasAttribute('data-round')) playRound(play);
+        else if (play) playSound(play);
+      })
+      .catch(function (e) { toast(e.message, 'error'); });
+  }
+
+  // Закрыть раскрытое или окно: сервер стирает, если раз был последним.
+  function closeSealed(id) {
+    if (revealed[id]) {
+      delete revealed[id];
+      if (roundPlayer.url.indexOf('/messages/' + id + '/') === 0) stopRound();
+      if (sound.url.indexOf('/messages/' + id + '/') === 0) { sound.audio.pause(); sound.url = ''; sound.el = null; }
+      var top = feed.scrollTop;
+      render();
+      feed.scrollTop = top;
+    }
+    post('/messages/' + encodeURIComponent(id) + '/close', {}).catch(function () {});
+  }
+
+  function closeAllSealed() {
+    if (viewing) closeViewers();
+    Object.keys(revealed).forEach(closeSealed);
+  }
+
+  // Ушёл со страницы — закрыть всё открытое: sendBeacon доходит и при
+  // закрытии вкладки.
+  window.addEventListener('pagehide', function () {
+    var ids = Object.keys(revealed);
+    if (viewing) ids.push(viewing);
+    ids.forEach(function (id) { navigator.sendBeacon('/messages/' + encodeURIComponent(id) + '/close'); });
+  });
+
+  function showOnceTimer(until) {
+    onceTimer.hidden = !until;
+    if (until) onceTimer.setAttribute('data-until', until);
+    tickSealed();
+  }
+
+  // Раз в секунду: подписи «исчезнет через…» и конец таймера. Сервер сотрёт
+  // сам и пришлёт message:expired; здесь — чтобы не ждать его уборки.
+  function tickSealed() {
+    var now = Date.now();
+    var els = Array.prototype.slice.call(document.querySelectorAll('[data-until]'));
+    els.forEach(function (el) {
+      var left = (new Date(el.getAttribute('data-until')) - now) / 1000;
+      if (el === onceTimer) {
+        if (onceTimer.hidden) return;
+        el.textContent = clock(Math.max(0, Math.ceil(left)));
+        if (left <= 0) closeViewers();
+        return;
+      }
+      el.textContent = t('chats.policy.running', { t: span(Math.max(0, left)) });
+      var row = el.closest('[data-mid]');
+      if (left <= 0 && row) {
+        var id = row.getAttribute('data-mid');
+        var m = findMessage(id);
+        if (m && !m.expired) { delete revealed[id]; m.expired = true; m.limit = null; render(); }
+      }
+    });
+  }
+  setInterval(tickSealed, 1000);
+
+  // ── Выбор ограничения ─────────────────────────────────────────────────
+  var limitOpt = '';
+  var limitBtn = $('limitBtn');
+  var limitMenu = $('limitMenu');
+
+  function setLimit(v) {
+    limitOpt = v || '';
+    var badge = $('limitBadge');
+    badge.hidden = !limitOpt;
+    badge.textContent = limitOpt ? t('chats.limit.badge.' + limitOpt) : '';
+    limitBtn.classList.toggle('is-on', !!limitOpt);
+    limitMenu.querySelectorAll('[data-limit]').forEach(function (b) {
+      b.setAttribute('aria-checked', String(b.getAttribute('data-limit') === limitOpt));
+    });
+  }
+
+  function closeLimitMenu() {
+    if (limitMenu.hidden) return;
+    limitMenu.hidden = true;
+    limitBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  limitBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (!limitMenu.hidden) return closeLimitMenu();
+    limitMenu.hidden = false;
+    limitBtn.setAttribute('aria-expanded', 'true');
+    var r = limitBtn.getBoundingClientRect();
+    limitMenu.style.left = Math.max(8, Math.min(r.left, innerWidth - limitMenu.offsetWidth - 8)) + 'px';
+    limitMenu.style.top = Math.max(8, r.top - limitMenu.offsetHeight - 8) + 'px';
+    (limitMenu.querySelector('[aria-checked="true"]') || limitMenu.querySelector('[data-limit]')).focus();
+  });
+  limitMenu.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-limit]');
+    if (!b) return;
+    setLimit(b.getAttribute('data-limit'));
+    closeLimitMenu();
+    input.focus();
+  });
+  document.addEventListener('click', function (e) { if (!limitMenu.contains(e.target)) closeLimitMenu(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLimitMenu(); });
+
+  // ── Запись кружка ─────────────────────────────────────────────────────
+  // Камера и микрофон, квадрат из середины кадра, до минуты — на минуте
+  // отправляется сама. Сервер пережимает в 480×480 со знаком.
+  var ROUND_MAX = 60;
+  var roundRec = $('roundRec');
+  var roundPreview = $('roundPreview');
+  var rrec = null;          // { recorder, stream, chunks, started, timer, send, peerId }
+
+  function roundType() {
+    if (!window.MediaRecorder) return null;
+    var types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+    for (var i = 0; i < types.length; i++) if (MediaRecorder.isTypeSupported(types[i])) return types[i];
+    return '';
+  }
+
+  function startRound() {
+    var type = roundType();
+    if (type === null || !navigator.mediaDevices) return toast(t('chats.recUnsupported'), 'error');
+    if (rec) stopVoice(false);
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 } },
+      audio: true
+    }).then(function (stream) {
+      if (!peer) { stream.getTracks().forEach(function (tr) { tr.stop(); }); return; }
+      var recorder = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 1200000 } : undefined);
+      rrec = { recorder: recorder, stream: stream, chunks: [], started: Date.now(), send: false, peerId: peer.id };
+      recorder.ondataavailable = function (e) { if (e.data && e.data.size) rrec.chunks.push(e.data); };
+      recorder.onstop = finishRound;
+      roundPreview.srcObject = stream;
+      recorder.start(1000);
+      roundRec.classList.remove('hidden');
+      roundRec.style.setProperty('--p', 0);
+      $('roundTime').textContent = '0:00';
+      rrec.timer = setInterval(function () {
+        var sec = (Date.now() - rrec.started) / 1000;
+        $('roundTime').textContent = clock(Math.floor(sec));
+        roundRec.style.setProperty('--p', Math.min(1, sec / ROUND_MAX));
+        if (sec >= ROUND_MAX) stopRoundRec(true);
+      }, 200);
+      $('roundSend').focus();
+    }).catch(function () { toast(t('chats.camDenied'), 'error'); });
+  }
+
+  function stopRoundRec(send) {
+    if (!rrec) return;
+    rrec.send = send;
+    clearInterval(rrec.timer);
+    if (rrec.recorder.state !== 'inactive') rrec.recorder.stop();
+    else finishRound();
+  }
+
+  function finishRound() {
+    var r = rrec;
+    rrec = null;
+    roundRec.classList.add('hidden');
+    roundPreview.srcObject = null;
+    r.stream.getTracks().forEach(function (tr) { tr.stop(); });
+    if (!r.send || !r.chunks.length || Date.now() - r.started < 1000) return;
+    if (!peer || peer.id !== r.peerId) return;
+    var type = (r.recorder.mimeType || r.chunks[0].type || 'video/webm').split(';')[0];
+    var blob = new Blob(r.chunks, { type: type });
+    queueFiles([new File([blob], 'round.' + (/mp4/.test(type) ? 'mp4' : 'webm'), { type: type })], 'round');
+  }
+
+  $('roundBtn').addEventListener('click', startRound);
+  $('roundSend').addEventListener('click', function () { stopRoundRec(true); });
+  $('roundCancel').addEventListener('click', function () { stopRoundRec(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && rrec) stopRoundRec(false); });
 
   // ── События сокета ────────────────────────────────────────────────────
   document.addEventListener('tk:message:new', function (e) {
@@ -396,6 +1243,8 @@
     var p = e.detail.peer;
     var el = dialogEl(p.id) || addDialog(p);
     setLast(el, m);
+    // Готово вложение, которое отправляла эта вкладка: заглушку — прочь.
+    if (e.detail.ref) dropUpload(e.detail.ref);
 
     if (peer && peer.id === p.id) {
       var stick = atBottom() || m.sender === ME;
@@ -408,6 +1257,40 @@
       badge.textContent = String((parseInt(badge.textContent, 10) || 0) + 1);
       badge.classList.remove('hidden');
     }
+  });
+
+  // Исчезающее истекло — у обоих на его месте заглушка.
+  document.addEventListener('tk:message:expired', function (e) {
+    var fresh = e.detail.message;
+    var i = messages.findIndex(function (m) { return m._id === fresh._id; });
+    delete revealed[fresh._id];
+    if (viewing === fresh._id) closeViewers(true);
+    if (roundPlayer.url && roundPlayer.url.indexOf('/messages/' + fresh._id + '/') === 0) stopRound();
+    if (sound.url && sound.url.indexOf('/messages/' + fresh._id + '/') === 0) { sound.audio.pause(); sound.url = ''; sound.el = null; }
+    if (i === -1) return;
+    messages[i] = fresh;
+    var top = feed.scrollTop;
+    render();
+    feed.scrollTop = top;
+    var last = messages[messages.length - 1];
+    var el = dialogEl(peer.id);
+    if (el && last && last._id === fresh._id) el.querySelector('.tk-dialog__last').innerHTML = summaryHtml(fresh);
+  });
+
+  // Собеседник открыл моё исчезающее — «Открыто» и сколько осталось.
+  document.addEventListener('tk:message:limit', function (e) {
+    var m = messages.find(function (x) { return x._id === e.detail.id; });
+    if (!m) return;
+    m.limit = e.detail.limit;
+    var top = feed.scrollTop;
+    render();
+    feed.scrollTop = top;
+  });
+
+  // Видео не пережалось — заглушка этой вкладки показывает почему.
+  document.addEventListener('tk:message:failed', function (e) {
+    var u = uploads.find(function (x) { return x.ref === e.detail.ref; });
+    if (u) failUpload(u, e.detail.message);
   });
 
   document.addEventListener('tk:message:delivered', function (e) {
@@ -644,7 +1527,8 @@
     closeMenu();
     menuKey = key;
     el.classList.add('is-picked');   // правый клик выделяет то, над чем меню
-    menu.querySelectorAll('[data-for="message"]').forEach(function (b) { b.hidden = what.kind !== 'message'; });
+    // Исчезающее не копируется и не пересылается.
+    menu.querySelectorAll('[data-for="message"]').forEach(function (b) { b.hidden = what.kind !== 'message' || !plain(what.m); });
     menu.hidden = false;
     var target = el.querySelector('.tk-msg__bubble') || el;
     var r = target.getBoundingClientRect();
@@ -694,7 +1578,7 @@
     var keys = pickedKeys();
     if (!keys.length) return stopPicking();
     $('pickCount').textContent = t('chats.picked', { n: keys.length });
-    var hasText = keys.some(function (k) { return k[0] === 'm'; });
+    var hasText = keys.some(function (k) { var x = k[0] === 'm' && resolve(k).m; return x && plain(x); });
     document.querySelectorAll('#pickBar [data-pick="forward"], #pickBar [data-pick="copy"]').forEach(function (b) { b.disabled = !hasText; });
   }
 
@@ -795,6 +1679,7 @@
   });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
+    if (closeViewers()) return;
     if (!menu.hidden) closeMenu();
     else if (picking && fwd.classList.contains('hidden')) stopPicking();
   });
@@ -812,6 +1697,8 @@
     else if (act === 'delete') removeItems([key]);
   });
 
+  function plain(m) { return !m.limit && !m.expired; }
+
   // Сообщения выбранного — в порядке ленты, без звонков.
   function pickedMessages(keys) {
     return keys.filter(function (k) { return k[0] === 'm'; })
@@ -821,7 +1708,7 @@
   }
 
   function copy(keys) {
-    var text = pickedMessages(keys).map(function (m) { return m.content; }).join('\n\n');
+    var text = pickedMessages(keys).filter(plain).map(function (m) { return m.content; }).filter(Boolean).join('\n\n');
     if (!text) return;
     navigator.clipboard.writeText(text)
       .then(function () { toast(t('chats.copied'), 'ok'); stopPicking(); })
@@ -869,7 +1756,7 @@
     var last = messages[messages.length - 1];
     var el = peer && dialogEl(peer.id);
     if (el && last) el.querySelector('.tk-dialog__last').innerHTML =
-      (last.sender === ME ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : '') + escapeHtml(last.content);
+      (last.sender === ME ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : '') + summaryHtml(last);
   }
 
   // Звонки ушли — из ленты открытого диалога и из вкладки «Звонки».
@@ -942,15 +1829,15 @@
   }
 
   function openForward(keys) {
-    fwdMessages = pickedMessages(keys);
+    fwdMessages = pickedMessages(keys).filter(plain);
     if (!fwdMessages.length) return;
     fwdPicked = {};
     fwdSearch.value = '';
     fwdComment.value = '';
     // Одно — его текст; несколько — сколько и начало первого.
     $('forwardQuote').textContent = fwdMessages.length === 1
-      ? fwdMessages[0].content
-      : t('chats.forwardMany', { n: fwdMessages.length }) + ' · ' + fwdMessages[0].content;
+      ? summaryText(fwdMessages[0])
+      : t('chats.forwardMany', { n: fwdMessages.length }) + ' · ' + summaryText(fwdMessages[0]);
     fwdRender(known());
     fwdCount();
     fwd.classList.remove('hidden');

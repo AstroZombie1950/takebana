@@ -103,6 +103,8 @@
   function preview(m) {
     if (m.forwardedFrom) return t('notify.forwarded');
     var s = String(m.content || '').replace(/\s+/g, ' ').trim();
+    // Файл без подписи — «Фото», «Голосовое» и т. п.
+    if (!s && m.attachments && m.attachments[0]) s = t('chats.att.' + m.attachments[0].kind);
     return s.length > 120 ? s.slice(0, 117) + '…' : s;
   }
 

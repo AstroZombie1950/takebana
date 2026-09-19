@@ -1,4 +1,4 @@
-// Приём файлов: обложки эфиров, аватары, галерея профиля.
+// Приём файлов: обложки эфиров, аватары, галерея профиля, вложения переписки.
 //
 // Файл приходит в память и уходит на диск уже обработанным — сжатым,
 // подогнанным по размеру и без EXIF (utils/image.js). Прежде здесь стояли
@@ -48,12 +48,21 @@ const uploadGallery = inMemory(10); // фото галереи бывают кр
 // ложится во временную папку и живёт там только до пережатия со знаком
 // (utils/galleryVideo.js), которое его и удаляет.
 const VIDEO = /^video\//;
+const toTmp = multer.diskStorage({ destination: os.tmpdir(), filename: (req, file, cb) => cb(null, 'tk-upload-' + Date.now() + '-' + Math.random().toString(36).slice(2)) });
 const uploadVideo = multer({
-  storage: multer.diskStorage({ destination: os.tmpdir(), filename: (req, file, cb) => cb(null, 'tk-upload-' + Date.now() + '-' + Math.random().toString(36).slice(2)) }),
+  storage: toTmp,
   limits: { fileSize: require('../../utils/galleryVideo').MAX_MB * 1024 * 1024, files: 1 },
   fileFilter: (req, file, cb) => (VIDEO.test(file.mimetype)
     ? cb(null, true)
     : cb(Object.assign(new Error('Только видео'), { status: 400, expose: true }))),
 });
 
-module.exports = { UPLOADS, upload, uploadAvatar, uploadGallery, uploadVideo };
+// Вложения переписки — тоже на диск: видео до 200 МБ. Тип здесь не
+// проверяется — присланному браузером типу верить нельзя; вид, предел
+// и содержимое проверяет utils/attachments.js, он же удаляет файл.
+const uploadAttachment = multer({
+  storage: toTmp,
+  limits: { fileSize: require('../../utils/attachments').MAX_MB * 1024 * 1024, files: 1, fields: 8 },
+});
+
+module.exports = { UPLOADS, upload, uploadAvatar, uploadGallery, uploadVideo, uploadAttachment };

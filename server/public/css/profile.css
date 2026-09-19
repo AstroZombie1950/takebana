@@ -331,13 +331,6 @@
 
 .tk-shots__item.is-failed .tk-shot--state { color: var(--tk-accent); border-color: rgba(227, 66, 52, .45); }
 
-/* Окно просмотра видео: плеер 16:9 по ширине окна. */
-.tk-videobox__stage {
-  position: relative;
-  width: min(92vw, calc(86vh * 16 / 9));
-  aspect-ratio: 16 / 9;
-}
-
 /* ── Записи эфиров ── */
 .tk-recs {
   display: grid;
@@ -403,68 +396,6 @@
   color: var(--tk-muted);
 }
 
-/* ── Лайтбокс ─────────────────────────────────────────────────────────── */
-.tk-lightbox {
-  position: fixed;
-  inset: 0;
-  z-index: 95;
-  background: rgba(10, 10, 10, .92);
-}
-
-/* См. «Служебные классы» в app.css: display только через :not(.hidden).
- * Прежняя версия переключала классы .hidden и .flex от Tailwind — после его
- * снятия лайтбокс открывался бы пустым окном без раскладки. */
-.tk-lightbox:not(.hidden) {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tk-lightbox img {
-  max-height: 86vh;
-  max-width: 92vw;
-  display: block;
-}
-
-/* См. выше: display отдельно, иначе .hidden не спрячет стрелки, когда
- * в галерее одно фото или открыт аватар. */
-.tk-lightbox__btn:not(.hidden) { display: flex; }
-
-.tk-lightbox__btn {
-  position: absolute;
-  width: 44px;
-  height: 44px;
-  align-items: center;
-  justify-content: center;
-  background: rgba(10, 10, 10, .6);
-  border: 1px solid var(--tk-rule);
-  padding: 0;
-  cursor: pointer;
-  color: var(--tk-beige);
-  transition: color .18s ease, border-color .18s ease;
-}
-
-.tk-lightbox__btn:hover,
-.tk-lightbox__btn:focus-visible {
-  color: var(--tk-paper);
-  border-color: var(--tk-accent);
-}
-
-.tk-lightbox__close { top: 20px; right: 20px; }
-.tk-lightbox__prev { left: 20px; }
-.tk-lightbox__next { right: 20px; }
-
-.tk-lightbox__count {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-family: Oswald, sans-serif;
-  font-size: 13px;
-  letter-spacing: .1em;
-  color: var(--tk-beige);
-}
-
 /* ── Узкие экраны ─────────────────────────────────────────────────────── */
 @media (max-width: 767px) {
   .tk-prof { padding: 28px 20px 40px; }
@@ -488,10 +419,6 @@
   .tk-shot img,
   .tk-shot--video,
   .tk-shot--state { height: 110px; }
-  .tk-lightbox__btn { width: 38px; height: 38px; }
-  .tk-lightbox__close { top: 12px; right: 12px; }
-  .tk-lightbox__prev { left: 8px; }
-  .tk-lightbox__next { right: 8px; }
 }
 
 @media (max-width: 374px) {

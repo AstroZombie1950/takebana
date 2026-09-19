@@ -71,4 +71,15 @@ const geocodeLimiter = rateLimit({
     message: { message: 'Слишком много запросов адреса. Попробуйте через несколько минут.' },
 });
 
-module.exports = { authLimiter, registerLimiter, resetLimiter, geocodeLimiter };
+// Вложения в переписке: 60 файлов с адреса за 10 минут. Каждый файл — место
+// в хранилище и, у видео, минута кодирования; живому человеку хватает
+// с запасом, скрипту, заливающему хранилище, — нет.
+const attachLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    limit: Number(process.env.RATE_LIMIT_ATTACH) || 60,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { message: 'Слишком много файлов. Попробуйте через несколько минут.' },
+});
+
+module.exports = { authLimiter, registerLimiter, resetLimiter, geocodeLimiter, attachLimiter };

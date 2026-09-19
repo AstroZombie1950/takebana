@@ -17,11 +17,50 @@ const messageSchema = new Schema({
     ref: 'User', // Ссылка на получателя сообщения
     required: true
   },
+  // Текст. У сообщения с вложением может быть пустым — тогда это подпись,
+  // которой нет; «либо текст, либо вложение» проверяет маршрут отправки.
   content: {
     type: String,
-    required: true,
+    default: '',
     trim: true
   },
+  // Вложения (utils/attachments.js): файлы лежат в хранилище по key, url —
+  // адрес раздачи. Пересланное делит файлы с исходным: ключи те же, и файл
+  // стирается, когда на него не ссылается ни одно сообщение.
+  attachments: [{
+    _id: false,
+    kind: { type: String, enum: ['image', 'video', 'audio', 'voice', 'round', 'file'], required: true },
+    key: { type: String, required: true },
+    url: { type: String, required: true },
+    // Картинка: уменьшенная копия для ленты; видео: кадр-обложка.
+    previewKey: String,
+    preview: String,
+    name: String,
+    size: Number,
+    mime: String,
+    width: Number,
+    height: Number,
+    duration: Number,
+    // Голосовое: 48 столбиков громкости 0–31 для волны в ленте.
+    wave: [Number]
+  }],
+  // Ограничение (utils/messageLimit.js): просмотры, таймер после открытия или
+  // скачивания. Пока не открыто — ни текста, ни адреса файла браузеру
+  // не отдаём. Исчерпано — текст и файлы стираются, остаётся заглушка
+  // с expiredAt.
+  limit: {
+    type: new Schema({
+      mode: { type: String, enum: ['views', 'timer', 'downloads'], required: true },
+      n: Number,                        // сколько раз можно открыть или скачать
+      seconds: Number,                  // таймер: сколько живёт после открытия
+      used: { type: Number, default: 0 },
+      openedAt: Date,
+      grantUntil: Date,                 // до какого времени отдаём файл
+      expiresAt: Date,                  // когда стереть; неоткрытое — через 7 дней
+    }, { _id: false }),
+    default: undefined
+  },
+  expiredAt: { type: Date, default: null },
   sentAt: {
     type: Date,
     default: Date.now
@@ -55,5 +94,10 @@ messageSchema.index({ conversationId: 1, sentAt: -1 });
 // Непрочитанные и недоставленные получателя
 messageSchema.index({ recipient: 1, readAt: 1 });
 messageSchema.index({ recipient: 1, deliveredAt: 1 });
+// Жив ли ещё файл: удаление вложения проверяет, не ссылается ли на него
+// пересланная копия. Частичный — у большинства сообщений вложений нет.
+messageSchema.index({ 'attachments.key': 1 }, { partialFilterExpression: { 'attachments.0': { $exists: true } } });
+// Уборка исчерпанных и просроченных сообщений с ограничением.
+messageSchema.index({ 'limit.expiresAt': 1 }, { partialFilterExpression: { 'limit.expiresAt': { $exists: true } } });
 
 module.exports = mongoose.model('Message', messageSchema);

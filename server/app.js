@@ -284,6 +284,8 @@ async function startServer() {
   app.set('pendingCalls', pendingCalls);
   app.set('userRooms', userRooms);
   app.set('activeCalls', activeCalls);
+  // Сообщения с ограничением: уборка исчерпанных и просроченных.
+  require('./utils/messageLimit').start(io);
 
   // Хуки node-media-server шлют зрителям смену типа эфира при старте OBS.
   try {

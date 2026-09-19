@@ -77,4 +77,4 @@ async function ensureAll(User) {
   if (rows.length) console.log(`[nickname] выдано ников: ${rows.length}`);
 }
 
-module.exports = { RULE, normalize, problem, nextChangeAt, free, ensureAll };
+module.exports = { RULE, TRANSLIT, normalize, problem, nextChangeAt, free, ensureAll };

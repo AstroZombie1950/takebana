@@ -1,5 +1,5 @@
-// Личная переписка: список диалогов, история со звонками, отправка, пересылка,
-// удаление, статусы «доставлено» и «прочитано». Журнал звонков для соседней
+// Личная переписка: список диалогов, история со звонками, отправка, вложения,
+// пересылка, удаление, статусы «доставлено» и «прочитано». Журнал звонков для соседней
 // вкладки — routes/calls.js.
 //
 // Новые сообщения и статусы приходят в браузер сокетом — в комнату
@@ -10,6 +10,7 @@ const express = require('express');
 const router = express.Router();
 const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
+const fs = require('fs');
 const mongoose = require('mongoose');
 const User = require('../../models/User');
 const { requireAuth, requireAuthApi, requireNotBanned } = require('../../middleware/auth');
@@ -20,6 +21,12 @@ const { validate } = require('../../middleware/validate');
 const { commonDataMiddleware } = require('./shared');
 const userView = require('../../utils/userView');
 const callLog = require('../../utils/callLog');
+const errorLog = require('../../utils/errorLog');
+const attachments = require('../../utils/attachments');
+const { uploadAttachment } = require('./uploads');
+const { attachLimiter } = require('../../middleware/rateLimit');
+const limits = require('../../utils/messageLimit');
+const { view } = require('../../utils/messageView');
 
 const PAGE = 15;
 const { ObjectId } = mongoose.Types;
@@ -60,22 +67,6 @@ async function unreadAfter(userId, peers) {
   return { unreadMessages, dialogs };
 }
 
-// Сообщение в том виде, в каком его получает браузер.
-function view(m) {
-  return {
-    _id: String(m._id),
-    sender: String(m.sender),
-    recipient: String(m.recipient),
-    content: m.content,
-    sentAt: m.sentAt,
-    deliveredAt: m.deliveredAt || null,
-    readAt: m.readAt || null,
-    forwardedFrom: m.forwardedFrom && m.forwardedFrom.name
-      ? { name: m.forwardedFrom.name, sentAt: m.forwardedFrom.sentAt || null, batch: m.forwardedFrom.batch || null }
-      : null,
-  };
-}
-
 function person(user) {
   const displayName = userView.displayName(user);
   return { id: String(user._id), displayName, avatarStyle: userView.avatarStyle(user, displayName) };
@@ -87,15 +78,18 @@ const isOnline = (req, userId) => {
   return !!(rooms && rooms.has(String(userId)));
 };
 
-// Сохранить сообщение и разослать: получателю и остальным вкладкам
-// отправителя. Общее у отправки и пересылки.
-async function deliver(req, { conversation, sender, recipient, content, forwardedFrom }) {
+// Сохранить сообщение и разослать: получателю и вкладкам отправителя.
+// Общее у отправки, вложений и пересылки. ref — метка вкладки, отправившей
+// файл: по ней она меняет свою заглушку загрузки на готовое сообщение.
+async function deliver(req, { conversation, sender, recipient, content = '', attachments: files, forwardedFrom, ref, limit }) {
   const now = new Date();
   const message = await Message.create({
     conversationId: conversation._id,
     sender: sender._id,
     recipient: recipient._id,
     content,
+    attachments: files || [],
+    limit,
     sentAt: now,
     // Получатель на связи — сообщение дошло до его браузера сразу.
     deliveredAt: isOnline(req, recipient._id) ? now : null,
@@ -114,7 +108,7 @@ async function deliver(req, { conversation, sender, recipient, content, forwarde
   const socket = io(req);
   if (socket) {
     socket.to(`user:${recipient._id}`).emit('message:new', { message: out, peer: person(sender) });
-    socket.to(`user:${sender._id}`).emit('message:new', { message: out, peer: person(recipient) });
+    socket.to(`user:${sender._id}`).emit('message:new', { message: out, peer: person(recipient), ...(ref ? { ref } : {}) });
   }
   return out;
 }
@@ -158,7 +152,14 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
           _id: peer._id,
           isOnline: !!peer.isOnline,
         },
-        last: last && { content: last.content, mine: String(last.sender) === String(me) },
+        last: last && {
+          // У сообщения с ограничением текст закрыт — в списке только вид.
+          content: last.limit && last.limit.mode ? '' : last.content || '',
+          kind: last.attachments && last.attachments[0] ? last.attachments[0].kind : '',
+          limited: !!(last.limit && last.limit.mode),
+          expired: !!last.expiredAt,
+          mine: String(last.sender) === String(me),
+        },
         unread: unreadBy.get(String(c._id)) || 0,
         lastActivity: last ? last.sentAt : c.createdAt,
       };
@@ -233,8 +234,10 @@ router.get('/getMessages', requireAuthApi, async (req, res) => {
 router.post('/sendMessage', requireAuthApi, requireNotBanned, validate({
   recipientId: { type: 'objectId', required: true, label: 'Собеседник' },
   content: { type: 'string', required: true, min: 1, max: 5000, label: 'Сообщение' },
+  limit: { type: 'string', default: '', max: 8, label: 'Ограничение' },
 }), async (req, res) => {
   const { recipientId, content } = req.body;
+  if (!limits.OPTIONS.includes(req.body.limit)) return res.status(400).json({ message: 'Неверное ограничение' });
   const me = req.session.userId;
 
   const [conversation, sender, recipient] = await Promise.all([
@@ -246,7 +249,71 @@ router.post('/sendMessage', requireAuthApi, requireNotBanned, validate({
     return res.status(404).json({ message: 'Диалог не найден' });
   }
 
-  res.json(await deliver(req, { conversation, sender, recipient, content }));
+  res.json(await deliver(req, { conversation, sender, recipient, content, limit: limits.parse(req.body.limit, 'text') }));
+});
+
+
+// Вложение: один файл на сообщение, content — подпись к нему. voice=1 —
+// голосовое, записанное на странице. Картинка, документ, звук и голосовое
+// обрабатываются сразу, и ответ — готовое сообщение. Видео пережимается
+// со знаком минуту-другую: ответ 202 сразу, сообщение уходит обоим, когда
+// готово, а вкладка отправителя узнаёт своё по ref (message:new или
+// message:failed).
+router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter, uploadAttachment.single('file'), async (req, res) => {
+  const file = req.file;
+  const drop = () => file && fs.promises.rm(file.path, { force: true }).catch(() => {});
+  const { recipientId } = req.body;
+  const content = String(req.body.content || '').trim();
+  const ref = String(req.body.ref || '').slice(0, 40);
+  const special = ['voice', 'round'].includes(req.body.special) ? req.body.special : '';
+  const option = String(req.body.limit || '');
+  const me = req.session.userId;
+
+  if (!file) return res.status(400).json({ message: 'Файл не пришёл' });
+  if (typeof recipientId !== 'string' || !ObjectId.isValid(recipientId) || content.length > 5000 || !limits.OPTIONS.includes(option)) {
+    drop();
+    return res.status(400).json({ message: 'Неверный запрос' });
+  }
+  if (!attachments.enabled) {
+    drop();
+    return res.status(503).json({ message: 'Файлы сейчас не принимаются' });
+  }
+
+  const [conversation, sender, recipient] = await Promise.all([
+    findConversation(me, recipientId),
+    User.findById(me).select('nickname login email avatar').lean(),
+    User.findById(recipientId).select('nickname login email avatar').lean(),
+  ]);
+  if (!conversation || !sender || !recipient) {
+    drop();
+    return res.status(404).json({ message: 'Диалог не найден' });
+  }
+
+  let info;
+  try {
+    info = await attachments.inspect(file, { special });
+  } catch (e) {
+    drop();
+    throw e;
+  }
+
+  // У вложения с ограничением подписи нет: она ушла бы вместе с файлом
+  // в корзину. Текст уходит отдельным обычным сообщением перед ним.
+  const limit = limits.parse(option, info.kind);
+  if (limit && content) await deliver(req, { conversation, sender, recipient, content });
+  const send = async () => {
+    const stored = await attachments.store(info, conversation._id);
+    return deliver(req, { conversation, sender, recipient, content: limit ? '' : content, attachments: [stored], ref, limit });
+  };
+
+  if (!attachments.SLOW.has(info.kind)) return res.json(await send());
+
+  res.status(202).json({ pending: true, ref });
+  send().catch((e) => {
+    if (!e.expose) errorLog.media(e, 'attachments.video', { conversation: String(conversation._id) });
+    const socket = io(req);
+    if (socket) socket.to(`user:${me}`).emit('message:failed', { ref, message: e.expose ? e.message : 'Не удалось обработать видео' });
+  });
 });
 
 
@@ -267,10 +334,13 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
   }
 
   // Порядок — как в переписке, по времени, а не как их выделяли.
+  // Сообщение с ограничением не пересылается: иначе его копия жила бы
+  // без ограничения.
   const originals = await Message.find({
     _id: { $in: [...new Set(req.body.messageIds)] },
     $or: [{ sender: me }, { recipient: me }],
     deletedFor: { $ne: me },
+    'limit.mode': { $exists: false },
   }).sort({ sentAt: 1 }).lean();
   if (!originals.length) {
     return res.status(404).json({ message: 'Сообщение не найдено' });
@@ -297,7 +367,7 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
       : { user: m.sender, name: '#' + id.slice(-6), sentAt: m.sentAt, batch: batchId };
   };
   const batch = [];
-  for (const m of originals) batch.push({ content: m.content, forwardedFrom: await origin(m) });
+  for (const m of originals) batch.push({ content: m.content, attachments: m.attachments, forwardedFrom: await origin(m) });
 
   const sent = [];
   for (const recipient of recipients) {
@@ -308,6 +378,49 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
   }
 
   res.json({ success: true, messages: sent });
+});
+
+
+// ── Сообщения с ограничением (utils/messageLimit.js) ──
+// Открыть: засчитать раз, отдать текст и адреса файла на время. Открывает
+// только получатель; исчерпано или истекло — 410.
+router.post('/messages/:id/open', requireAuthApi, async (req, res) => {
+  if (!ObjectId.isValid(req.params.id)) return res.status(404).json({ message: 'Сообщение не найдено' });
+  const m = await limits.open(req.params.id, req.session.userId);
+  if (!m) return res.status(410).json({ message: 'Сообщение больше недоступно', expired: true });
+  const a = m.attachments[0];
+  const file = `/messages/${m._id}/file`;
+  const out = view(m);
+  if (io(req)) io(req).to(`user:${m.sender}`).emit('message:limit', { id: String(m._id), limit: out.limit });
+  res.json({
+    content: m.content || '',
+    attachment: a ? { ...out.attachments[0], url: file, preview: a.preview ? file + '?part=preview' : '' } : null,
+    limit: out.limit,
+    until: m.limit.mode === 'timer' ? m.limit.expiresAt : m.limit.grantUntil,
+  });
+});
+
+// Окно закрыто — последний раз стирается сразу.
+router.post('/messages/:id/close', requireAuthApi, async (req, res) => {
+  if (ObjectId.isValid(req.params.id)) await limits.close(req.params.id, req.session.userId);
+  res.json({ success: true });
+});
+
+// Файл открытого сообщения — через сервер, пока идёт окно выдачи.
+router.get('/messages/:id/file', requireAuthApi, async (req, res) => {
+  if (!ObjectId.isValid(req.params.id)) return res.status(404).end();
+  const m = await Message.findOne({
+    _id: req.params.id, recipient: req.session.userId, expiredAt: null,
+    'limit.grantUntil': { $gt: new Date() },
+  }).lean();
+  if (!m || !m.attachments[0]) return res.status(410).end();
+  // Документ скачан последний раз целиком — стираем, не дожидаясь срока.
+  // Оборванное скачивание (close без finish) не считается: можно повторить,
+  // пока идёт срок выдачи.
+  if (m.limit.mode === 'downloads' && m.limit.used >= m.limit.n) {
+    res.on('finish', () => { limits.expire(m._id).catch(() => {}); });
+  }
+  await limits.pipe(req, res, m, req.query.part === 'preview' ? 'preview' : 'main');
 });
 
 
@@ -359,7 +472,7 @@ router.post('/messages/delete', requireAuthApi, validate({
   const rest = messages.filter((m) => !mineIds.has(String(m._id)));
 
   if (mine.length) {
-    await Message.deleteMany({ _id: { $in: [...mineIds] } });
+    await attachments.deleteMessages({ _id: { $in: [...mineIds] } });
     const peers = new Set(mine.map((m) => String(m.recipient)));
     if (io(req)) {
       const ids = [...mineIds];
@@ -374,7 +487,7 @@ router.post('/messages/delete', requireAuthApi, validate({
   if (rest.length) {
     const restIds = rest.map((m) => m._id);
     await Message.updateMany({ _id: { $in: restIds } }, { $addToSet: { deletedFor: me } });
-    await Message.deleteMany({ _id: { $in: restIds }, 'deletedFor.1': { $exists: true } });
+    await attachments.deleteMessages({ _id: { $in: restIds }, 'deletedFor.1': { $exists: true } });
     if (io(req)) {
       const senders = [...new Set(rest.filter((m) => String(m.recipient) === me).map((m) => String(m.sender)))];
       io(req).to(`user:${me}`).emit('message:deleted', { ids: restIds.map(String), ...(await unreadAfter(me, senders)) });
@@ -401,7 +514,7 @@ router.post('/conversations/delete', requireAuthApi, validate({
 
   if (forAll) {
     await Promise.all([
-      Message.deleteMany({ conversationId: conversation._id }),
+      attachments.deleteMessages({ conversationId: conversation._id }),
       Notification.deleteMany({ type: 'message', $or: [{ recipient: me, sender: peerId }, { recipient: peerId, sender: me }] }),
     ]);
     await conversation.deleteOne();
@@ -411,7 +524,7 @@ router.post('/conversations/delete', requireAuthApi, validate({
     }
   } else {
     await Message.updateMany({ conversationId: conversation._id }, { $addToSet: { deletedFor: me } });
-    await Message.deleteMany({ conversationId: conversation._id, 'deletedFor.1': { $exists: true } });
+    await attachments.deleteMessages({ conversationId: conversation._id, 'deletedFor.1': { $exists: true } });
     conversation.hiddenFor.addToSet(me);
     await conversation.save();
     await Notification.deleteMany({ recipient: me, sender: peerId, type: 'message' });

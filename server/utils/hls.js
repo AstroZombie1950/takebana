@@ -66,12 +66,8 @@ const PROFILES = {
 // в кадр при кодировании: наложение поверх плеера снималось бы вместе
 // со страницей, а из кадра его так просто не убрать. Правый верхний угол:
 // там реже всего оказывается лицо ведущего и подписи.
-//
-// Файл лежит в public/img: тот же самый знак браузер кладёт поверх плеера
-// там, где в кадр его положить нечем, — в звонках и камерах заведений,
-// которые собирает Daily на стороне зрителя (класс .tk-wm в app.css).
-const WATERMARK = path.join(__dirname, '..', 'public', 'img', 'watermark.png');
-const WATERMARK_MARGIN = 24;
+// Файл и размеры знака — utils/watermark.js, общий на все медиа.
+const { WATERMARK, WATERMARK_MARGIN } = require('./watermark');
 
 // streamKey -> { proc, restarts, stopping, timer, transcode }
 const jobs = new Map();
@@ -275,4 +271,4 @@ function isRunning(streamKey) {
 }
 
 // Знак и отступ — ещё и видео галереи (utils/galleryVideo.js): один знак на всё видео сайта.
-module.exports = { start, stop, stopped, isRunning, HLS_ROOT, hlsBase, WATERMARK, WATERMARK_MARGIN };
+module.exports = { start, stop, stopped, isRunning, HLS_ROOT, hlsBase };

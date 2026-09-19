@@ -379,7 +379,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Переписка: события сокета уходят в document как tk:<событие>, их слушает
     // страница переписки (chats.js). Колокольчик зажигается на любой странице.
-    ['message:new', 'message:read', 'message:delivered', 'message:deleted', 'conversation:deleted', 'call:logged', 'call:deleted'].forEach((name) => {
+    ['message:new', 'message:failed', 'message:expired', 'message:limit', 'message:read', 'message:delivered', 'message:deleted', 'conversation:deleted', 'call:logged', 'call:deleted'].forEach((name) => {
       socket.on(name, (detail) => document.dispatchEvent(new CustomEvent('tk:' + name, { detail })));
     });
     socket.on('notification:new', () => window.setNotificationDot(true));
