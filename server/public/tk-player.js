@@ -276,11 +276,11 @@
     }
 
     function qualityLabel() {
-      if (!hls || hls.autoLevelEnabled) {
-        var l = hls && hls.levels[hls.currentLevel];
-        return t('player.auto') + (l ? ' (' + l.height + 'p)' : '');
-      }
-      return hls.levels[hls.currentLevel].height + 'p';
+      // Пока идёт переключение, currentLevel бывает -1 — тогда берём тот,
+      // что грузится.
+      var l = hls && (hls.levels[hls.currentLevel] || hls.levels[hls.loadLevel]);
+      if (!hls || hls.autoLevelEnabled || !l) return t('player.auto') + (l ? ' (' + l.height + 'p)' : '');
+      return l.height + 'p';
     }
 
     function speedLabel(s) { return s === 1 ? t('player.normal') : String(s).replace('.', ',') + '×'; }

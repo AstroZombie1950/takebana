@@ -45,8 +45,9 @@ function run(bin, args, { raw = false } = {}) {
 async function probe(file, { explain = false } = {}) {
   let out;
   try {
-    out = JSON.parse(await run(FFPROBE, ['-v', 'error',
-      '-show_entries', 'stream=codec_type,codec_name,width,height:stream_tags=rotate:stream_side_data=rotation:format=duration', '-of', 'json', file]));
+    // Потоки целиком, а не выборкой: раздела stream_side_data ffprobe 4.4
+    // на сервере (Ubuntu 22.04) не знает и отказывает во всём запросе.
+    out = JSON.parse(await run(FFPROBE, ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', file]));
   } catch (e) {
     // explain — вернуть причину вместо null: её пишет журнал панели.
     return explain ? { error: e.message } : null;
