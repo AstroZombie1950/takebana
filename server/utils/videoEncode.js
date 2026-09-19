@@ -42,13 +42,14 @@ function run(bin, args, { raw = false } = {}) {
 
 // Что внутри файла: размеры кадра (с учётом поворота), длительность, есть ли
 // видео и звук. null — ffprobe файл не разобрал.
-async function probe(file) {
+async function probe(file, { explain = false } = {}) {
   let out;
   try {
     out = JSON.parse(await run(FFPROBE, ['-v', 'error',
       '-show_entries', 'stream=codec_type,codec_name,width,height:stream_tags=rotate:stream_side_data=rotation:format=duration', '-of', 'json', file]));
   } catch (e) {
-    return null;
+    // explain — вернуть причину вместо null: её пишет журнал панели.
+    return explain ? { error: e.message } : null;
   }
   const streams = out.streams || [];
   // Обложка mp3 и m4a — тоже «видео», но одним кадром: такой файл — звук.
@@ -112,8 +113,8 @@ function roundArgs(src, out, info) {
 // round — кружок (roundArgs). Ошибки с reason — про сам файл (не видео,
 // слишком длинное), а не про сервер.
 async function encode(src, dir, { maxSeconds, round = false, log = {} }) {
-  const info = await probe(src);
-  if (!info || !info.video) throw Object.assign(new Error('в файле нет видео'), { reason: 'novideo' });
+  const info = await probe(src, { explain: true });
+  if (info.error || !info.video) throw Object.assign(new Error(info.error || 'в файле нет видеодорожки'), { reason: 'novideo' });
   // У webm из MediaRecorder длительности в заголовке нет — тогда её проверяет
   // сам ffmpeg: -t режет всё, что длиннее предела.
   if (info.duration > maxSeconds + 1) throw Object.assign(new Error('слишком длинное'), { reason: 'long' });

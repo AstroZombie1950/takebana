@@ -289,10 +289,17 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
     return res.status(404).json({ message: 'Диалог не найден' });
   }
 
+  // Записанное на странице (голосовое, кружок) браузер собирает сам, и
+  // телефоны пишут по-разному. Отказ по такому файлу — в журнал панели
+  // с тем, что прислали: иначе причину с чужого телефона не узнать.
+  const note = (e) => special && errorLog.record({ scope: 'media', err: e, route: `attach.${special}`, status: e.status || 500, req,
+    meta: { name: file.originalname, type: file.mimetype, size: file.size, head: e.head, cause: e.cause && e.cause.message } });
+
   let info;
   try {
     info = await attachments.inspect(file, { special });
   } catch (e) {
+    note(e);
     drop();
     throw e;
   }
@@ -306,11 +313,19 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
     return deliver(req, { conversation, sender, recipient, content: limit ? '' : content, attachments: [stored], ref, limit });
   };
 
-  if (!attachments.SLOW.has(info.kind)) return res.json(await send());
+  if (!attachments.SLOW.has(info.kind)) {
+    try {
+      return res.json(await send());
+    } catch (e) {
+      note(e);
+      throw e;
+    }
+  }
 
   res.status(202).json({ pending: true, ref });
   send().catch((e) => {
-    if (!e.expose) errorLog.media(e, 'attachments.video', { conversation: String(conversation._id) });
+    if (special) note(e);
+    else if (!e.expose) errorLog.media(e, 'attachments.video', { conversation: String(conversation._id) });
     const socket = io(req);
     if (socket) socket.to(`user:${me}`).emit('message:failed', { ref, message: e.expose ? e.message : 'Не удалось обработать видео' });
   });

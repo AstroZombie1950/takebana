@@ -42,21 +42,31 @@
   }
 
   // ── Звук ──
-  // Браузер пускает звук только после жеста на странице: контекст будим
-  // первым касанием или клавишей.
+  // Браузер пускает звук только после жеста на странице. На телефоне жест —
+  // отпускание пальца (touchend, click), а не касание: pointerdown там
+  // разрешения не даёт. Контекст будим на каждом жесте, пока он не
+  // заработает: iOS гасит его снова после блокировки экрана и звонков.
+  // Пустой буфер в том же жесте — отпирает звук в Safari на iPhone.
   var ctx = null;
   function audio() {
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     if (!ctx) ctx = new AC();
-    if (ctx.state === 'suspended') ctx.resume().catch(function () {});
+    if (ctx.state !== 'running') ctx.resume().catch(function () {});
     return ctx;
   }
-  ['pointerdown', 'keydown'].forEach(function (ev) {
-    document.addEventListener(ev, function wakeUp() {
-      var p = prefs();
-      if (p.sndMsg || p.sndCall) audio();
-    }, { once: true, capture: true });
+  function wakeUp() {
+    var p = prefs();
+    if (!(p.sndMsg || p.sndCall) || (ctx && ctx.state === 'running')) return;
+    var c = audio();
+    if (!c) return;
+    var s = c.createBufferSource();
+    s.buffer = c.createBuffer(1, 1, 22050);
+    s.connect(c.destination);
+    s.start(0);
+  }
+  ['touchend', 'click', 'keydown'].forEach(function (ev) {
+    document.addEventListener(ev, wakeUp, { capture: true, passive: true });
   });
 
   function tone(freq, at, dur, vol) {

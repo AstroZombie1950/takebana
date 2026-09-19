@@ -162,7 +162,8 @@ async function inspect(file, { special = '' } = {}) {
 
   const rec = RECORDED[special];
   if (rec) {
-    if (!rec.types[ext] || !rec.types[ext](head)) throw bad(rec.bad);
+    // Первые байты — в журнал панели: по ним видно, что записал телефон.
+    if (!rec.types[ext] || !rec.types[ext](head)) throw Object.assign(bad(rec.bad), { head: head.subarray(0, 16).toString('hex') });
     if (file.size > rec.mb * MB) throw bad(rec.big);
     const out = special === 'voice' ? 'voice.m4a' : 'round.mp4';
     return { kind: special, ext, mime: special === 'voice' ? 'audio/mp4' : 'video/mp4', name: out, size: file.size, path: file.path };
@@ -233,7 +234,7 @@ async function storeVideo(info, base, dir) {
     out = await schedule(() => encode(info.path, dir, { maxSeconds: round ? ROUND_SECONDS : VIDEO_SECONDS, round, log: { key: base } }));
   } catch (e) {
     if (e.reason === 'long') throw bad(round ? 'Кружок длиннее минуты' : 'Видео длиннее 10 минут');
-    if (e.reason === 'novideo') throw bad('В файле нет видео');
+    if (e.reason === 'novideo') throw Object.assign(bad('В файле нет видео'), { cause: e });
     throw e;
   }
   const items = [[out.video, `${base}.mp4`, 'video/mp4']];
@@ -260,7 +261,7 @@ async function storeVoice(info, base, dir) {
     await run(FFMPEG, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-i', info.path,
       '-vn', '-ac', '1', '-c:a', 'aac', '-b:a', '48k', '-movflags', '+faststart', out]);
   } catch (e) {
-    throw bad('Голосовое не распознано');
+    throw Object.assign(bad('Голосовое не распознано'), { cause: e });
   }
   const p = await probe(out);
   if (!p || !p.audio) throw bad('Голосовое не распознано');
