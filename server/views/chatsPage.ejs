@@ -35,6 +35,35 @@
           </a>
         </div>
 
+        <%# Недавние: с кем чаще и ближе к сегодняшнему дню общались — письмами
+            и звонками (utils/recentPeers.js). Порядок задаёт сервер, дальше
+            ленту двигает chats.js: написали кому-то — он уезжает в начало.
+            Те же data-ava-*, что у строки диалога: открывают её одним кодом. %>
+        <div class="tk-recent" id="recentPeers"<% if (tab !== 'messages' || !recent.length) { %> hidden<% } %>>
+          <p class="tk-recent__title" data-i18n="chats.recent"><%- t('chats.recent') %></p>
+          <div class="tk-recent__row" id="recentRow">
+            <% recent.forEach(function (p) { %>
+            <button
+              type="button"
+              class="tk-recent__item"
+              data-id="<%= p.id %>"
+              data-name="<%= p.displayName %>"
+              data-ava-url="<%= p.avatarStyle.url || '' %>"
+              data-ava-bg="<%= p.avatarStyle.gradient || '' %>"
+              data-ava-initial="<%= p.avatarStyle.initial || '' %>"
+              data-presence-user="<%= p.id %>"
+              title="<%= p.displayName %>"
+            >
+              <span class="tk-recent__ava"<% if (!p.avatarStyle.url) { %> style="background: <%= p.avatarStyle.gradient %>"<% } %>>
+                <% if (p.avatarStyle.url) { %><img src="<%= p.avatarStyle.url %>" alt="" loading="lazy"><% } else { %><%= p.avatarStyle.initial %><% } %>
+                <span class="presence-dot <%= p.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
+              </span>
+              <span class="tk-recent__name"><%= p.displayName %></span>
+            </button>
+            <% }); %>
+          </div>
+        </div>
+
         <%# Журнал звонков собирает chats.js из /api/calls: при открытии вкладки. %>
         <div class="tk-chat__scroll" id="callsList" role="tabpanel" aria-labelledby="tabCalls"<% if (tab !== 'calls') { %> hidden<% } %>></div>
 

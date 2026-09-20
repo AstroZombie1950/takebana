@@ -143,7 +143,9 @@
 
   // ── Сокет ──
   var updateHandlers = [];
-  var socket = io(window.location.origin, { transports: ['websocket'] });
+  // Как в tk-app.js: вебсокет, а не вышло — длинный опрос. Без запасного
+  // пути зритель за прокси не видел ни чата, ни счётчика зрителей.
+  var socket = io(window.location.origin, { transports: ['websocket', 'polling'], tryAllTransports: true });
 
   // В socket.io 4 'connect' приходит и после каждого переподключения: вход
   // в комнату и добор чата повторяются сами.

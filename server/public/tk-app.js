@@ -248,8 +248,6 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('DOMContentLoaded', function () {
   // Меньше двух символов не ищем: столько же требует сервер.
   const MIN = 2;
-  // Граница телефона — та же, что в app.css.
-  const PHONE = window.matchMedia('(max-width: 639px)');
   const GROUPS = [
     { key: 'people',     i18n: 'search.people',     href: (x) => '/userPage/' + encodeURIComponent(x._id) },
     { key: 'streams',    i18n: 'search.streams',    href: (x) => '/stream/' + encodeURIComponent(x._id) },
@@ -342,7 +340,11 @@ document.addEventListener('DOMContentLoaded', function () {
     input.addEventListener('input', () => {
       clearTimeout(timer);
       const q = input.value.trim();
-      if (q.length < MIN || PHONE.matches) return hide();
+      // Выпадашка работает и на телефоне. Раньше там её не было вовсе —
+      // поле поиска в шапке молчало, пока не нажмёшь Enter, и выглядело это
+      // как «не находит, если не до конца набрать имя». Место ей есть:
+      // она растянута по ширине поля, а поле на телефоне занимает всю шапку.
+      if (q.length < MIN) return hide();
       // Задержка: иначе каждая буква — запрос с перебором по базе.
       timer = setTimeout(() => {
         if (ctrl) ctrl.abort();
@@ -365,12 +367,34 @@ document.addEventListener('DOMContentLoaded', function () {
   attach(document.getElementById('searchInput'), document.getElementById('searchResults'));
 });
 
+// ===== Сайт как приложение на телефоне =====
+// Регистрируем service worker (public/sw.js): без него Android не предлагает
+// установку, а вкладка без сети показывает ошибку браузера вместо страницы.
+// Страницы он не кэширует — почему именно так, написано в самом файле.
+//
+// Адрес — свой, без версии в имени: worker обязан лежать в корне, иначе его
+// область не покроет весь сайт. Обновление браузер ищет сам, по этому же
+// адресу; nginx отдаёт его с перепроверкой (ops/nginx/takebana.conf).
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((e) => console.warn('[sw]', e));
+  });
+}
+
 // ===== Presence Client (глобально) =====
 (function(){
   function initPresenceAndCalls(){
   try {
     if (typeof io !== 'function' || !TK.userId) return; // socket.io — только вошедшему
-    const socket = io(window.location.origin, { transports: ['websocket'] });
+    // Вебсокет — первым, длинный опрос — запасным путём (см. app.js).
+    // Сеть, которая не пропускает Upgrade, иначе оставляла бы страницу
+    // совсем без живых обновлений и молча: connect_error повторялся бы
+    // бесконечно, а tk:reconnect не срабатывал бы ни разу — он приходит
+    // только после первого удачного подключения.
+    const socket = io(window.location.origin, {
+      transports: ['websocket', 'polling'],
+      tryAllTransports: true,
+    });
     window.callSocket = socket;
     console.log('[client] socket init');
     socket.on('connect', () => console.log('[client] socket connected id=', socket.id));
@@ -379,7 +403,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Переписка: события сокета уходят в document как tk:<событие>, их слушает
     // страница переписки (chats.js). Колокольчик зажигается на любой странице.
-    ['message:new', 'message:failed', 'message:expired', 'message:limit', 'message:read', 'message:delivered', 'message:deleted', 'conversation:deleted', 'call:logged', 'call:deleted'].forEach((name) => {
+    ['message:new', 'message:failed', 'message:expired', 'message:limit', 'message:read', 'message:delivered', 'message:deleted', 'conversation:deleted', 'call:logged', 'call:deleted', 'live:changed', 'author:live', 'recording:status'].forEach((name) => {
       socket.on(name, (detail) => document.dispatchEvent(new CustomEvent('tk:' + name, { detail })));
     });
     socket.on('notification:new', () => window.setNotificationDot(true));
@@ -403,13 +427,87 @@ document.addEventListener('DOMContentLoaded', function () {
         badge.classList.remove('hidden');
       });
     });
+    // ── Сверка с сервером ────────────────────────────────────────────────
+    //
+    // Всё живое на странице держится на событиях сокета, а значки в шапке —
+    // ещё и на приращениях к числу, отрисованному сервером. Пропустили одно
+    // событие — страница показывает не то, и до перезагрузки так и будет.
+    //
+    // Сверка идёт в двух видах. Лёгкая — счётчики точными числами
+    // (/api/badge) и присутствие тех, чьи точки сейчас на экране: дёшево
+    // и ничего на странице не двигает. Полная — она же плюс tk:reconnect,
+    // по которому страницы перечитывают своё содержимое (chats.js — открытый
+    // диалог и журнал звонков). Полная только после настоящего обрыва: она
+    // перерисовывает ленту и уводит её вниз, и делать это на каждом
+    // возвращении к вкладке значило бы терять место, где человек читал.
+    function refreshCounters() {
+      fetch('/api/badge', { headers: { Accept: 'application/json' } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!d) return;
+          window.tkChatBadge({ messages: d.unreadMessages, calls: d.missedCalls });
+          window.setNotificationDot(d.notifications > 0);
+        })
+        .catch(() => {});
+
+      const ids = Array.from(document.querySelectorAll('[data-presence-user]'))
+        .map((el) => el.getAttribute('data-presence-user')).filter(Boolean);
+      if (!ids.length) return;
+      fetch('/api/presence?ids=' + encodeURIComponent(ids.slice(0, 200).join(',')))
+        .then((r) => (r.ok ? r.json() : { users: [] }))
+        .then((d) => {
+          (d.users || []).forEach((u) => {
+            setPresence(String(u._id), !!u.isOnline, u.lastSeen);
+            // «В эфире» сверяется тем же ответом: событие author:live могло
+            // уйти, пока вкладка спала.
+            document.querySelectorAll(`[data-presence-user="${u._id}"][data-sub-id]`).forEach((row) => {
+              row.dataset.live = u.isLive ? '1' : '0';
+            });
+          });
+          if (window.tkSubscriptions) window.tkSubscriptions.sync();
+        })
+        .catch(() => {});
+    }
+
+    function resync() {
+      refreshCounters();
+      document.dispatchEvent(new CustomEvent('tk:reconnect'));
+    }
+
     // Связь вернулась после обрыва: за это время могло прийти что-то, чего
     // сокет уже не доставит.
     let connectedOnce = false;
     socket.on('connect', () => {
-      if (connectedOnce) document.dispatchEvent(new CustomEvent('tk:reconnect'));
+      if (connectedOnce) resync();
       connectedOnce = true;
     });
+
+    // Вкладка вернулась к человеку. На телефоне это главный случай: страницу,
+    // открытую с иконки на домашнем экране, айфон не перезагружает, а
+    // замораживает и потом размораживает — сокет к этому моменту давно мёртв,
+    // а страница показывает то, что было час назад. Здесь она оживает сама.
+    //
+    // bfcache («назад» в браузере) возвращает страницу так же — pageshow
+    // с persisted. Событие online — сеть вернулась, но сокет ещё не заметил.
+    let wokeAt = 0;
+    function wake() {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - wokeAt < 3000) return; // частое переключение — не повод ходить на сервер
+      wokeAt = Date.now();
+      if (!socket.connected) return socket.connect(); // connect сам позовёт resync
+
+      // Сокет считает себя живым — но замороженная вкладка возвращается
+      // с мёртвым соединением, и само оно заметит это только по таймауту
+      // пинга, до двадцати секунд. Спрашиваем сервер напрямую: не ответил —
+      // переподключаемся, и connect приведёт полную сверку.
+      socket.timeout(4000).emit('tk:alive', (err) => {
+        if (err) { socket.disconnect().connect(); return; }
+        refreshCounters();
+      });
+    }
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('pageshow', (e) => { if (e.persisted) wake(); });
+    window.addEventListener('online', wake);
 
     function setPresence(userId, online, lastSeen) {
       const nodes = document.querySelectorAll(`[data-presence-user="${userId}"]`);
@@ -452,6 +550,19 @@ document.addEventListener('DOMContentLoaded', function () {
     socket.on('presence:update', ({ userId, isOnline, lastSeen }) => {
       if (!userId) return;
       setPresence(String(userId), !!isOnline, lastSeen);
+    });
+
+    // Подписка вышла в эфир или ушла из него (utils/liveSignal.js). Приходит
+    // в ту же комнату presence:<id>, на которую страница уже подписана ради
+    // точек «в сети», — отдельной подписки не нужно. До 20.09.2026 «в эфире»
+    // не менялось вовсе и при отрисовке всегда было ложью: сервер читал поле
+    // isStreaming, которого в базе нет.
+    socket.on('author:live', ({ userId, live }) => {
+      if (!userId) return;
+      document.querySelectorAll(`[data-presence-user="${userId}"][data-sub-id]`).forEach((row) => {
+        row.dataset.live = live ? '1' : '0';
+      });
+      if (window.tkSubscriptions) window.tkSubscriptions.sync();
     });
 
     // Сервер шлёт presence:update только тем, кто подписался на конкретного

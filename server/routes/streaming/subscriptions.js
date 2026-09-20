@@ -6,6 +6,7 @@ const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const Subscription = require('../../models/Subscription');
 const User = require('../../models/User');
+const Stream = require('../../models/Stream');
 const userView = require('../../utils/userView');
 const { validate } = require('../../middleware/validate');
 
@@ -26,7 +27,7 @@ router.post('/subscribe', validate({
     return res.status(400).json({ message: 'Вы уже подписаны на этого пользователя' });
   }
 
-  const target = await User.findById(userId).select('nickname login email avatar isStreaming').lean();
+  const target = await User.findById(userId).select('nickname login email avatar').lean();
   if (!target) {
     return res.status(404).json({ message: 'Пользователь не найден' });
   }
@@ -45,7 +46,10 @@ router.post('/subscribe', validate({
       id: String(target._id),
       displayName,
       avatarStyle: userView.avatarStyle(target, displayName),
-      status: target.isStreaming ? 'online' : 'offline',
+      // По идущему эфиру, а не по полю isStreaming: его нет ни в схеме User,
+      // ни в базе — строка новой подписки всегда приходила «не в эфире»
+      // (то же чинится в shared.js).
+      status: (await Stream.exists({ userId, isActive: true })) ? 'online' : 'offline',
     },
   });
 });

@@ -26,6 +26,8 @@ const attachments = require('../../utils/attachments');
 const { uploadAttachment } = require('./uploads');
 const { attachLimiter } = require('../../middleware/rateLimit');
 const limits = require('../../utils/messageLimit');
+const { rankPeers } = require('../../utils/recentPeers');
+const { audit } = require('../../utils/audit');
 const { view } = require('../../utils/messageView');
 
 const PAGE = 15;
@@ -166,8 +168,22 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
     })
     .sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
 
+  // Лента «Недавние» над списком диалогов: с кем чаще и ближе к сегодняшнему
+  // дню общались — письмами и звонками (utils/recentPeers.js). Звонить можно
+  // и тому, с кем переписки нет, — таких собеседников догружаем отдельно.
+  const order = await rankPeers(me, conversations);
+  const known = new Map(list.map((c) => [String(c.interlocutor.id), c.interlocutor]));
+  const unknown = order.filter((id) => !known.has(id));
+  if (unknown.length) {
+    const users = await User.find({ _id: { $in: unknown } })
+      .select('nickname login email avatar isOnline')
+      .lean();
+    for (const user of users) known.set(String(user._id), { ...person(user), isOnline: !!user.isOnline });
+  }
+  const recent = order.map((id) => known.get(id)).filter(Boolean);
+
   // Вкладка «Звонки» открывается и адресом: из уведомления о пропущенном.
-  res.render('chatsPage', { conversations: list, timeAgo, tab: req.query.tab === 'calls' ? 'calls' : 'messages' });
+  res.render('chatsPage', { conversations: list, recent, timeAgo, tab: req.query.tab === 'calls' ? 'calls' : 'messages' });
 });
 
 
@@ -249,7 +265,15 @@ router.post('/sendMessage', requireAuthApi, requireNotBanned, validate({
     return res.status(404).json({ message: 'Диалог не найден' });
   }
 
-  res.json(await deliver(req, { conversation, sender, recipient, content, limit: limits.parse(req.body.limit, 'text') }));
+  try {
+    res.json(await deliver(req, { conversation, sender, recipient, content, limit: limits.parse(req.body.limit, 'text') }));
+  } catch (e) {
+    // Удачу текстового сообщения не пишем — их тысячи; отказ пишем всегда.
+    // Без этого «сообщение не отправилось» не оставляло следа нигде.
+    audit(req, 'msg.send', { result: 'fail', targetType: 'user', targetId: recipient._id,
+      meta: { error: e.message, len: content.length } });
+    throw e;
+  }
 });
 
 
@@ -295,11 +319,26 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
   const note = (e) => special && errorLog.record({ scope: 'media', err: e, route: `attach.${special}`, status: e.status || 500, req,
     meta: { name: file.originalname, type: file.mimetype, size: file.size, head: e.head, cause: e.cause && e.cause.message } });
 
+  // Что именно прислали — в журнал в обоих исходах, и начиная с проверки
+  // файла: отказы «такие файлы не принимаем» и «содержимое не совпадает
+  // с типом» случаются раньше всего и до 20.09.2026 не оставляли следа
+  // нигде, кроме ответа одному человеку. Это первое место, куда смотреть,
+  // когда говорят «кружок не отправляется».
+  const startedAt = Date.now();
+  const mark = (result, extra = {}) => audit(req, 'msg.attach', {
+    result, targetType: 'user', targetId: recipient._id,
+    meta: {
+      kind: special || 'file', ext: String(file.originalname || '').split('.').pop().slice(0, 8).toLowerCase(),
+      mb: +(file.size / 1048576).toFixed(2), ms: Date.now() - startedAt, ...extra,
+    },
+  });
+
   let info;
   try {
     info = await attachments.inspect(file, { special });
   } catch (e) {
     note(e);
+    mark('fail', { error: e.message, stage: 'inspect' });
     drop();
     throw e;
   }
@@ -315,20 +354,29 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
 
   if (!attachments.SLOW.has(info.kind)) {
     try {
-      return res.json(await send());
+      const out = await send();
+      mark('ok', { kind: info.kind, ext: info.ext });
+      return res.json(out);
     } catch (e) {
       note(e);
+      mark('fail', { kind: info.kind, ext: info.ext, error: e.message, stage: 'store' });
       throw e;
     }
   }
 
   res.status(202).json({ pending: true, ref });
-  send().catch((e) => {
-    if (special) note(e);
-    else if (!e.expose) errorLog.media(e, 'attachments.video', { conversation: String(conversation._id) });
-    const socket = io(req);
-    if (socket) socket.to(`user:${me}`).emit('message:failed', { ref, message: e.expose ? e.message : 'Не удалось обработать видео' });
-  });
+  send().then(
+    () => mark('ok', { kind: info.kind, ext: info.ext }),
+    (e) => {
+      if (special) note(e);
+      else if (!e.expose) errorLog.media(e, 'attachments.video', { conversation: String(conversation._id) });
+      // Пережатие идёт уже после ответа 202: отказ здесь человек видит
+      // заглушкой, а мы — только отсюда.
+      mark('fail', { kind: info.kind, ext: info.ext, error: e.message, stage: 'encode' });
+      const socket = io(req);
+      if (socket) socket.to(`user:${me}`).emit('message:failed', { ref, message: e.expose ? e.message : 'Не удалось обработать видео' });
+    }
+  );
 });
 
 

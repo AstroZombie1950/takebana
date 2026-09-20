@@ -26,7 +26,7 @@ const commonDataMiddleware = async (req, res, next) => {
       // Получение данных текущего пользователя
       // (lean/select) чтобы уменьшить нагрузку при каждом F5
       const currentUser = await User.findById(currentUserId)
-        .select('nickname login email avatar gallery streamKey isStreaming banned banReason adultConfirmedAt')
+        .select('nickname login email avatar gallery streamKey banned banReason adultConfirmedAt')
         .lean();
       // Пользователя уже нет: он удалил себя сам или его удалил администратор,
       // а вкладка осталась открытой. Это не ошибка сервера — гасим сеанс
@@ -57,18 +57,28 @@ const commonDataMiddleware = async (req, res, next) => {
 
       // Получение данных о подписанных пользователях
       const subscribedUserIds = (userSubscriptions || []).map(sub => sub.subscribedToId);
-      const subscribedUsers = subscribedUserIds.length
-        ? await User.find({ _id: { $in: subscribedUserIds } })
-            .select('nickname login email avatar isStreaming')
-            .lean()
-        : [];
+
+      // «В эфире» считаем по идущим эфирам, а не по полю isStreaming: такого
+      // поля нет ни в схеме User, ни в одном документе базы (проверено
+      // 20.09.2026). Из-за него статус подписки всегда выходил «не в эфире»,
+      // а счётчик «N в эфире» над списком — всегда нулём и всегда скрытым.
+      // Дальше статус ведёт сокет: author:live (utils/liveSignal.js).
+      const [subscribedUsers, liveNow] = subscribedUserIds.length
+        ? await Promise.all([
+            User.find({ _id: { $in: subscribedUserIds } })
+              .select('nickname login email avatar')
+              .lean(),
+            Stream.find({ userId: { $in: subscribedUserIds }, isActive: true }).distinct('userId'),
+          ])
+        : [[], []];
+      const live = new Set(liveNow.map(String));
 
       // Модификация данных о подписках для шаблона
       const subscriptions = subscribedUsers.map(user => {
           const displayName = userView.displayName(user);
           const avatarStyle = userView.avatarStyle(user, displayName);
 
-          const status = user.isStreaming ? 'online' : 'offline';
+          const status = live.has(String(user._id)) ? 'online' : 'offline';
 
           return {
               id: user._id,

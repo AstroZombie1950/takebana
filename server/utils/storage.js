@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const errorLog = require('./errorLog');
 
 const PROD = process.env.START_SERVER === 'prod' || process.env.NODE_ENV === 'production';
 const LOCAL_ROOT = path.join(__dirname, '..', 'public', 'uploads');
@@ -41,17 +42,36 @@ async function checked(res, what) {
   throw new Error(`Bunny ${what} ${res.status}: ${text.slice(0, 200)}`);
 }
 
+// Выгрузка в Bunny идёт по сети и может встать: медленный канал, таймаут,
+// отказ зоны. Раньше об этом узнавал только тот, кому не повезло, — исключение
+// всплывало наверх и в лучшем случае становилось 500. Теперь каждая неудача
+// и каждая слишком долгая выгрузка попадают в журнал с ключом и размером:
+// по ним видно, наше это, сети или Bunny.
+const SLOW_PUT_MS = 20000;
+
 // Файл с диска — в хранилище. Возвращает адрес, по которому его смотрят.
 async function put(file, key, contentType) {
   if (driver === 'bunny') {
     const { size } = await fs.promises.stat(file);
-    const res = await fetch(objectUrl(key), {
-      method: 'PUT',
-      headers: { AccessKey: bunny.key, 'Content-Type': contentType, 'Content-Length': String(size) },
-      body: fs.createReadStream(file),
-      duplex: 'half',
-    });
-    await checked(res, 'PUT');
+    const startedAt = Date.now();
+    let res;
+    try {
+      res = await fetch(objectUrl(key), {
+        method: 'PUT',
+        headers: { AccessKey: bunny.key, 'Content-Type': contentType, 'Content-Length': String(size) },
+        body: fs.createReadStream(file),
+        duplex: 'half',
+      });
+      await checked(res, 'PUT');
+    } catch (e) {
+      errorLog.external(e, 'storage.put', { key, mb: +(size / 1048576).toFixed(2), ms: Date.now() - startedAt });
+      throw e;
+    }
+    const ms = Date.now() - startedAt;
+    if (ms > SLOW_PUT_MS) {
+      errorLog.external(new Error(`выгрузка заняла ${Math.round(ms / 1000)} с`), 'storage.put.slow',
+        { key, mb: +(size / 1048576).toFixed(2), ms });
+    }
     return `${bunny.cdn}/${key}`;
   }
   if (driver === 'local') {

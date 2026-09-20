@@ -159,7 +159,10 @@
         <% if (recordings.length) { %>
         <div class="tk-recs">
           <% recordings.forEach(function (r) { %>
-          <a href="/recording/<%= r._id %>" class="tk-recard<%= r.status !== 'ready' ? ' is-' + r.status : '' %>">
+          <%# data-rec-id — чтобы profile.js нашёл карточку, когда придёт
+              recording:status: склейка идёт минуты, и до 20.09.2026 автор
+              не узнавал о её конце без перезагрузки. %>
+          <a href="/recording/<%= r._id %>" class="tk-recard<%= r.status !== 'ready' ? ' is-' + r.status : '' %>" data-rec-id="<%= r._id %>">
             <span class="tk-recard__thumb">
               <% if (r.thumb && r.thumb.url) { %><img src="<%= r.thumb.url %>" alt="" loading="lazy"><% } %>
               <% if (r.status === 'ready') { %>

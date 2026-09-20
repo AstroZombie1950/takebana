@@ -61,6 +61,31 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     };
 
+    // Состав идущих эфиров изменился — перечитываем сетку (utils/liveSignal.js).
+    // До 20.09.2026 витрина не менялась вовсе: событие о начале эфира уходило
+    // только в комнату самого эфира, и человек, стоящий на главной, узнавал
+    // о новом эфире лишь перезагрузкой.
+    //
+    // С задержкой и не чаще раза в пять секунд: когда эфир начинается,
+    // сигналов приходит несколько подряд (RTMP, затем /set-active), а сетку
+    // незачем перечитывать на каждый.
+    var liveTimer = null;
+    document.addEventListener('tk:live:changed', function () {
+      if (liveTimer) return;
+      liveTimer = setTimeout(function () {
+        liveTimer = null;
+        if (document.visibilityState === 'visible') load();
+      }, 5000);
+    });
+    // Сокет мог подключиться позже этого места — просимся в комнату и здесь,
+    // и на каждом переподключении.
+    var watch = function () {
+      if (window.callSocket && window.callSocket.connected) window.callSocket.emit('live:watch');
+    };
+    watch();
+    document.addEventListener('tk:reconnect', watch);
+    if (window.callSocket) window.callSocket.on('connect', watch);
+
     form.addEventListener('change', load);
     form.addEventListener('submit', function (e) {
       e.preventDefault();

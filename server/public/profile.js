@@ -399,3 +399,42 @@ document.addEventListener('DOMContentLoaded', function () {
     else if (e.key === 'ArrowRight') show(index < photos.length - 1 ? index + 1 : 0);
   });
 });
+
+// ── Запись эфира: готова или не склеилась ────────────────────────────────
+// Склейка идёт минуты и в стороне от запроса. До 20.09.2026 автор не узнавал
+// о её конце вовсе: карточка держала «обрабатывается», пока страницу не
+// обновят руками, а про неудачу не говорил никто — запись просто пропадала.
+// Событие шлёт utils/recording.js, проброс — tk-app.js.
+document.addEventListener('tk:recording:status', function (e) {
+  var d = e.detail || {};
+  var card = document.querySelector('.tk-recard[data-rec-id="' + CSS.escape(String(d.id || '')) + '"]');
+  if (!card) return;
+
+  card.classList.remove('is-processing', 'is-failed');
+  var state = card.querySelector('.tk-recard__state');
+  var thumbBox = card.querySelector('.tk-recard__thumb');
+
+  if (d.status === 'ready') {
+    if (d.thumb && thumbBox && !thumbBox.querySelector('img')) {
+      var img = document.createElement('img');
+      img.src = d.thumb;
+      img.alt = '';
+      img.loading = 'lazy';
+      thumbBox.insertBefore(img, thumbBox.firstChild);
+    }
+    if (state) {
+      // Подпись «обрабатывается» уступает место длительности — так же,
+      // как её рисует сервер у готовой записи (views/userPage.ejs).
+      var sec = Math.round(d.duration || 0);
+      state.className = 'tk-recard__len';
+      state.removeAttribute('data-i18n');
+      state.textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+    }
+    if (window.toast && window.t) window.toast(window.t('rec.readyToast'), 'ok');
+    return;
+  }
+
+  card.classList.add('is-failed');
+  if (state && window.tkText) window.tkText(state, 'rec.failed');
+  if (window.toast && window.t) window.toast(window.t('rec.failedToast'), 'error');
+});

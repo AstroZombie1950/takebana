@@ -260,12 +260,23 @@ async function startServer() {
     console.log('HTTP server started (default mode)');
   }
 
+  // Транспорт: сначала вебсокет, а если он не встал — длинный опрос.
+  // Раньше здесь стоял один 'websocket', и это молча выключало весь сайт
+  // «вживую» у того, чья сеть не пропускает Upgrade: сотовый оператор
+  // с прозрачным прокси, корпоративный файрвол, антивирус с разбором TLS.
+  // Такой человек не получал ни сообщений, ни присутствия, ни счётчиков,
+  // а кружок у него навсегда оставался «обрабатывается»: готовое видео
+  // приходит только сокетом (routes/streaming/messages.js, ответ 202).
+  // Ошибок при этом нет ни одной — просто ничего не происходит.
+  //
+  // tryAllTransports — чтобы после неудачного вебсокета была вторая попытка
+  // опросом, а не бесконечный connect_error (socket.io 4.8+).
   const io = new Server(server, {
     cors: {
       origin: '*',
       methods: ['GET', 'POST']
     },
-    transports: ['websocket']
+    transports: ['websocket', 'polling']
   });
 
   // Сокеты читают ту же сессию, что и Express: иначе socket.data.userId
@@ -281,6 +292,9 @@ async function startServer() {
 
   // Общие хранилища — маршрутам: /api/calls/create кладёт заявку сюда же.
   app.set('io', io);
+  // И фоновым делам, у которых нет req: склейке записи, пережатию видео
+  // (utils/io.js). Без этого они не могли сказать человеку ни слова.
+  require('./utils/io').set(io);
   app.set('pendingCalls', pendingCalls);
   app.set('userRooms', userRooms);
   app.set('activeCalls', activeCalls);

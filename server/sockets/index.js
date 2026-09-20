@@ -13,6 +13,7 @@ const daily = require('../utils/daily');
 const callLog = require('../utils/callLog');
 const errorLog = require('../utils/errorLog');
 const turn = require('../utils/turn');
+const { LIVE_ROOM } = require('../utils/liveSignal');
 
 // Список подписок приходит от клиента, поэтому и формат, и длина проверяются.
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -144,6 +145,20 @@ function registerSockets(io) {
         if (typeof id === 'string' && OBJECT_ID.test(id)) socket.join(`presence:${id}`);
       }
     });
+
+    // Страница со списком идущих эфиров (витрина, /authors) просит сообщать
+    // ей, когда состав эфиров меняется: кто-то вышел или ушёл. Открыто всем,
+    // включая гостей, — витрина и так открыта без входа, а в комнату уходит
+    // только «состав изменился», без единого названия и ключа.
+    socket.on('live:watch', () => socket.join(LIVE_ROOM));
+    socket.on('live:unwatch', () => socket.leave(LIVE_ROOM));
+
+    // «Ты живой?» от вернувшейся вкладки (public/tk-app.js, wake). Телефон
+    // замораживает страницу вместе с соединением, и браузер об этом не знает:
+    // сокет числится подключённым, а на деле не доставит уже ничего. Само
+    // соединение заметит разрыв только по таймауту пинга — до двадцати секунд
+    // молчания, за которые человек успеет решить, что сайт не работает.
+    socket.on('tk:alive', (ack) => { if (typeof ack === 'function') ack(); });
 
     socket.on('presence:unsubscribe', (ids) => {
       if (!Array.isArray(ids)) return;

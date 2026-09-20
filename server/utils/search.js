@@ -53,12 +53,38 @@ function authorOf(doc) {
   return { _id: user._id, displayName, avatarStyle: userView.avatarStyle(user, displayName) };
 }
 
+// Сколько подходящих смотрим, прежде чем выбрать лучшие. Раньше выборка
+// обрывалась на limit сразу в базе, без сортировки, — то есть выпадашка
+// показывала три случайных из всех совпавших. Набрал человек «ан» — в трёх
+// строках «Анастасия», «Андрей» и «Иван», а нужный Антон, который нашёлся бы
+// при полностью набранном нике, не попадал никуда. Это и есть «не находит,
+// если не до конца набрать имя».
+const POOL = 200;
+
+// Чем ответ ближе к запросу, тем выше: точное совпадение, потом начало
+// имени, потом середина. Внутри ступени — кто на связи и у кого имя короче
+// (в коротком запрос занимает большую часть — значит, попал точнее).
+function rankPeople(users, query) {
+  const q = query.toLowerCase();
+  const rank = (user) => {
+    const names = [user.nickname, user.login, (user.email || '').split('@')[0]]
+      .filter(Boolean).map((n) => n.toLowerCase());
+    if (names.some((n) => n === q)) return 0;
+    if (names.some((n) => n.startsWith(q))) return 1;
+    return 2;
+  };
+  return users
+    .map((user) => ({ user, r: rank(user), len: userView.displayName(user).length }))
+    .sort((a, b) => a.r - b.r || (b.user.isOnline ? 1 : 0) - (a.user.isOnline ? 1 : 0) || a.len - b.len)
+    .map((x) => x.user);
+}
+
 async function findPeople(query, limit) {
   const users = await User.find(peopleWhere(query))
     .select('nickname login email avatar isOnline')
-    .limit(limit)
+    .limit(POOL)
     .lean();
-  return peopleCards(users);
+  return peopleCards(rankPeople(users, query).slice(0, limit));
 }
 
 // Карточки людей (partials/personCard.ejs): имя, аватар, подписчики, в сети ли.

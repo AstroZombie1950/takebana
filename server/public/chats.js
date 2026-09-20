@@ -460,6 +460,58 @@
     if (el) select(el);
   });
 
+  // ── Недавние ──────────────────────────────────────────────────────────
+  // Лента над списком диалогов: кто ближе и чаще (utils/recentPeers.js).
+  // Порядок приходит от сервера один раз, при открытии страницы; дальше его
+  // двигает сама страница — написали или позвонили, и человек уезжает
+  // в начало, не дожидаясь перезагрузки.
+  var recentBox = $('recentPeers');
+  var recentRow = $('recentRow');
+  var RECENT_MAX = 12;
+
+  function recentEl(id) {
+    return recentRow.querySelector('.tk-recent__item[data-id="' + CSS.escape(String(id)) + '"]');
+  }
+
+  // p — как у addDialog: { id, displayName, avatarStyle }.
+  function recentAdd(p) {
+    var el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'tk-recent__item';
+    el.setAttribute('data-id', p.id);
+    el.setAttribute('data-name', p.displayName);
+    el.setAttribute('data-ava-url', (p.avatarStyle || {}).url || '');
+    el.setAttribute('data-ava-bg', (p.avatarStyle || {}).gradient || '');
+    el.setAttribute('data-ava-initial', (p.avatarStyle || {}).initial || '');
+    el.setAttribute('data-presence-user', p.id);
+    el.title = p.displayName;
+    var a = peerOf(el);
+    el.innerHTML =
+      avatar('tk-recent__ava', a, ' data-slot="ava"') +
+      '<span class="tk-recent__name">' + escapeHtml(p.displayName) + '</span>';
+    el.querySelector('[data-slot="ava"]').insertAdjacentHTML('beforeend', '<span class="presence-dot presence-offline"></span>');
+    if (window.subscribePresence) window.subscribePresence([p.id]);
+    return el;
+  }
+
+  // Наверх ленты: уже был — переставляем, не был — заводим. Хвост длиннее
+  // дюжины обрезаем: ряд прокручивается, но бесконечным ему быть незачем.
+  function bumpRecent(p) {
+    if (!p || !p.id || p.id === ME) return;
+    var el = recentEl(p.id) || recentAdd(p);
+    if (recentRow.firstChild !== el) recentRow.prepend(el);
+    while (recentRow.children.length > RECENT_MAX) recentRow.lastChild.remove();
+    if (!callsList.hidden) return; // на вкладке звонков ленту не показываем
+    recentBox.hidden = false;
+  }
+
+  recentRow.addEventListener('click', function (e) {
+    var el = e.target.closest('.tk-recent__item');
+    if (!el) return;
+    var r = peerOf(el);
+    openPeer({ id: r.id, displayName: r.name, avatarStyle: { url: r.url, gradient: r.bg, initial: r.initial } });
+  });
+
   // ── Выбор диалога ─────────────────────────────────────────────────────
   function select(el) {
     closeAllSealed();
@@ -583,9 +635,48 @@
   }
 
   function dropUpload(ref) {
-    uploads = uploads.filter(function (u) { return u.ref !== ref; });
+    uploads = uploads.filter(function (u) {
+      if (u.ref !== ref) return true;
+      if (u.watch) clearInterval(u.watch);
+      return false;
+    });
     var el = uploadEl(ref);
     if (el) el.remove();
+  }
+
+  // Видео и кружок сервер пережимает в фоне: в ответ приходит 202, а готовое
+  // сообщение — сокетом (routes/streaming/messages.js). Сокета в эту минуту
+  // может не быть — у человека за прокси он может не встать вовсе, — и тогда
+  // заглушка «Обрабатываем видео…» висела бы вечно: отправленного кружка
+  // не видел бы даже сам отправитель. Сторож перечитывает переписку и снимает
+  // заглушку, когда сообщение в ней нашлось.
+  //
+  // Узнаём его по виду вложения и времени: ref до базы не доходит, он метка
+  // вкладки. Два кружка подряд сторож может перепутать между собой — на итог
+  // это не влияет, оба сообщения на месте, снимутся обе заглушки.
+  var WATCH_EVERY = 20000;
+  var WATCH_TRIES = 15;   // пять минут — дольше любого пережатия
+
+  function watchProcessing(u) {
+    var since = Date.now();
+    var tries = 0;
+    u.watch = setInterval(function () {
+      if (u.state !== 'processing') return clearInterval(u.watch);
+      if (++tries > WATCH_TRIES) {
+        clearInterval(u.watch);
+        failUpload(u);
+        return;
+      }
+      load(u.peerId).then(function (page) {
+        var found = page.messages.some(function (m) {
+          return m.sender === ME && new Date(m.sentAt).getTime() >= since &&
+            m.attachments && m.attachments[0] && m.attachments[0].kind === u.kind;
+        });
+        if (!found) return;
+        dropUpload(u.ref);
+        if (peer && peer.id === u.peerId) openHistory();
+      }).catch(function () {});
+    }, WATCH_EVERY);
   }
 
   function kindOf(file, special) {
@@ -650,6 +741,7 @@
         u.state = 'processing';
         u.file = null;
         redrawUpload(u);
+        watchProcessing(u);
       } else if (xhr.status >= 200 && xhr.status < 300) {
         dropUpload(u.ref);
         delivered(data);
@@ -666,6 +758,7 @@
   }
 
   function failUpload(u, message) {
+    if (u.watch) { clearInterval(u.watch); u.watch = null; }
     u.state = 'failed';
     u.error = message || t('chats.uploadFailed');
     u.file = null;
@@ -802,6 +895,56 @@
   });
   $('recCancel').addEventListener('click', function () { stopVoice(false); });
 
+  // ── Когда медиа не играет ─────────────────────────────────────────────
+  // Кружки и голосовые лежат на стороннем домене (Bunny, utils/storage.js),
+  // и отказ их загрузки браузер сообщает событием error у элемента: промис
+  // play() при этом может не отклониться вовсе. Раньше оба пути кончались
+  // пустым catch — человек видел кружок, который «просто не открывается»,
+  // и ни одной ошибки ни в консоли, ни в журнале. Теперь отказ видно ему
+  // и видно нам: причину с чужого телефона иначе не узнать.
+  //
+  // Одна автоматическая попытка на сетевой отказ: на сотовой связи первый
+  // запрос к CDN срывается заметно чаще следующего.
+  var MEDIA_ERR = ['none', 'aborted', 'network', 'decode', 'unsupported'];
+  var mediaRetried = {};
+
+  function hostOf(url) {
+    try { return new URL(url, location.href).host; } catch (e) { return '?'; }
+  }
+
+  // true — отказ сетевой и попытка пошла: звать mediaFailed рано.
+  function mediaRetry(el, url) {
+    if (!url || !el.error || el.error.code !== 2 || mediaRetried[url]) return false;
+    mediaRetried[url] = 1;
+    toast(t('chats.mediaRetry'));
+    setTimeout(function () {
+      if (el.currentSrc || el.src) { el.load(); el.play().catch(function () {}); }
+    }, 700);
+    return true;
+  }
+
+  function mediaFailed(kind, url, el) {
+    var e = el.error;
+    toast(t('chats.mediaFailed'), 'error');
+    try {
+      var body = JSON.stringify({
+        page: location.pathname,
+        name: 'MediaError',
+        message: kind + ': ' + (e ? (MEDIA_ERR[e.code] || e.code) : 'no-error') + ' @ ' + hostOf(url),
+        details: [
+          'kind=' + kind,
+          'host=' + hostOf(url),
+          'code=' + (e ? e.code : '-') + ' ' + (e && e.message ? e.message : ''),
+          'networkState=' + el.networkState + ' readyState=' + el.readyState,
+          'online=' + navigator.onLine,
+          'ua=' + navigator.userAgent
+        ]
+      });
+      if (navigator.sendBeacon) navigator.sendBeacon('/api/client-error', new Blob([body], { type: 'application/json' }));
+      else fetch('/api/client-error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body, keepalive: true });
+    } catch (err) {}
+  }
+
   // ── Звук в ленте ──────────────────────────────────────────────────────
   // Один проигрыватель на страницу: новое голосовое останавливает прежнее.
   // Ход — переменной --p у строки, волна и полоса красятся по ней в CSS.
@@ -849,16 +992,25 @@
     }
   });
 
+  sound.audio.addEventListener('error', function () {
+    if (!sound.url) return; // источник сняли сами — это не отказ
+    if (mediaRetry(sound.audio, sound.url)) return;
+    soundState(false);
+    mediaFailed('voice', sound.url, sound.audio);
+  });
+
   function playSound(el) {
     var url = el.getAttribute('data-audio');
     if (sound.url === url) {
-      if (sound.audio.paused) sound.audio.play().catch(function () {}); else sound.audio.pause();
+      if (sound.audio.paused) sound.audio.play().catch(function () { soundState(false); }); else sound.audio.pause();
       return;
     }
     if (sound.el) { soundState(false); sound.el.style.setProperty('--p', 0); }
     sound.url = url;
     sound.el = el;
     sound.audio.src = url;
+    // Отказ загрузки приходит отдельным событием error (см. выше): здесь
+    // остаётся только запрет автозапуска — он не про файл и не про сеть.
     sound.audio.play().catch(function () { soundState(false); });
   }
 
@@ -978,13 +1130,13 @@
 
   function stopRound() {
     var v = roundPlayer.video;
+    roundPlayer.url = ''; // снятие src ниже само поднимет error — обработчик его пропустит
     v.pause();
     v.removeAttribute('src');
     v.load();
     if (roundPlayer.el) { roundPlayer.el.classList.remove('is-playing'); roundPlayer.el.style.setProperty('--p', 0); }
     if (v.parentNode) v.parentNode.removeChild(v);
     roundPlayer.el = null;
-    roundPlayer.url = '';
   }
 
   function playRound(el) {
@@ -1002,6 +1154,14 @@
     el.appendChild(v);
     v.play().catch(function () {});
   }
+
+  roundPlayer.video.addEventListener('error', function () {
+    if (!roundPlayer.url) return; // источник сняли сами (stopRound) — это не отказ
+    if (mediaRetry(roundPlayer.video, roundPlayer.url)) return;
+    var url = roundPlayer.url;
+    mediaFailed('round', url, roundPlayer.video);
+    stopRound();
+  });
 
   roundPlayer.video.addEventListener('timeupdate', roundTick);
   roundPlayer.video.addEventListener('play', function () { if (roundPlayer.el) roundPlayer.el.classList.add('is-playing'); });
@@ -1243,6 +1403,7 @@
     var p = e.detail.peer;
     var el = dialogEl(p.id) || addDialog(p);
     setLast(el, m);
+    bumpRecent(p);
     // Готово вложение, которое отправляла эта вкладка: заглушку — прочь.
     if (e.detail.ref) dropUpload(e.detail.ref);
 
@@ -1345,6 +1506,16 @@
   // и свежий журнал на вкладке «Звонки».
   document.addEventListener('tk:call:logged', function (e) {
     var c = e.detail.call;
+    // Звонок — тоже общение: собеседник уезжает в начало ленты недавних.
+    // Карточку берём из списка диалогов: в записи звонка её нет, а ставить
+    // в ленту человека, которого ещё нет на экране, незачем — он появится
+    // там при следующем открытии страницы.
+    var other = c.caller === ME ? c.callee : c.caller;
+    var row = dialogEl(other);
+    if (row) {
+      var a = peerOf(row);
+      bumpRecent({ id: a.id, displayName: a.name, avatarStyle: { url: a.url, gradient: a.bg, initial: a.initial } });
+    }
     if (peer && (c.caller === peer.id || c.callee === peer.id)) {
       var stick = atBottom();
       merge([], [c]);
@@ -1374,6 +1545,8 @@
     $('tabCalls').setAttribute('aria-selected', String(onCalls));
     list.hidden = onCalls;
     callsList.hidden = !onCalls;
+    // Лента недавних — часть списка диалогов: на журнале звонков ей не место.
+    recentBox.hidden = onCalls || !recentRow.children.length;
     var q = new URLSearchParams(location.search);
     if (onCalls) q.set('tab', 'calls'); else q.delete('tab');
     var qs = q.toString();

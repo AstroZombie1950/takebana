@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<!--
+  Страница, которую показывает service worker (public/sw.js), когда сети нет
+  вовсе. Самостоятельная: ни стилей, ни скриптов снаружи — за ними пришлось бы
+  идти в ту самую сеть, которой нет. Двуязычная без словаря: язык берётся
+  у браузера, строк здесь две.
+-->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Takebana</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 24px;
+    box-sizing: border-box;
+    background: #0A0A0A;
+    color: #F5F1EA;
+    font-family: Helvetica, Arial, sans-serif;
+    text-align: center;
+  }
+  h1 { margin: 0; font-size: 20px; font-weight: 900; letter-spacing: -.01em; }
+  p { margin: 0; max-width: 32ch; font-size: 14px; color: rgba(245, 241, 234, .65); line-height: 1.5; }
+  button {
+    margin-top: 6px;
+    padding: 11px 26px;
+    background: #E34234;
+    border: 0;
+    color: #F5F1EA;
+    font: inherit;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <img src="/img/app/icon-192.png" alt="Takebana" width="64" height="64">
+  <h1 id="head">Нет связи</h1>
+  <p id="text">Страница откроется, как только вернётся интернет.</p>
+  <button id="again" onclick="location.reload()">Повторить</button>
+<script>
+  if (!/^ru\b/i.test(navigator.language || '')) {
+    document.documentElement.lang = 'en';
+    document.getElementById('head').textContent = 'No connection';
+    document.getElementById('text').textContent = 'The page will open as soon as the internet is back.';
+    document.getElementById('again').textContent = 'Try again';
+  }
+  // Сеть вернулась сама — не заставляем нажимать кнопку.
+  window.addEventListener('online', function () { location.reload(); });
+</script>
+</body>
+</html>

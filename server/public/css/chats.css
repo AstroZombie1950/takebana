@@ -56,6 +56,82 @@
   color: var(--tk-paper);
 }
 
+/* ── Недавние ──────────────────────────────────────────────────────────────
+ * Лента над списком диалогов: с кем чаще и ближе к сегодняшнему дню общались
+ * (utils/recentPeers.js). Не прокручивается вместе со списком — она закреплена
+ * под вкладками, чтобы до частых собеседников был один жест с любого места.
+ * Прокрутка своя, горизонтальная: людей до двенадцати, в 360 px они не влезут. */
+.tk-recent {
+  flex: none;
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-recent[hidden] { display: none; }
+
+.tk-recent__title {
+  margin: 0 0 8px;
+  padding: 0 14px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--tk-muted);
+}
+
+.tk-recent__row {
+  display: flex;
+  gap: 4px;
+  padding: 0 10px;
+  overflow-x: auto;
+  /* Полосу прокрутки не показываем: ряд короткий, она съедала бы подписи. */
+  scrollbar-width: none;
+}
+
+.tk-recent__row::-webkit-scrollbar { display: none; }
+
+.tk-recent__item {
+  flex: none;
+  width: 62px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 2px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.tk-recent__item:hover { background: rgba(227, 66, 52, .1); }
+
+.tk-recent__ava {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  background: rgba(144, 113, 99, .35);
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-recent__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-recent__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--tk-muted);
+}
+
+.tk-recent__item:hover .tk-recent__name { color: var(--tk-paper); }
+
 /* Пропущенные звонки — тот же счётчик, что у «Сообщений» в левой панели. */
 .tk-chat__badge {
   min-width: 20px;

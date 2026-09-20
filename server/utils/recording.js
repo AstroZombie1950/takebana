@@ -24,6 +24,7 @@ const RecordingComment = require('../models/RecordingComment');
 const RecordingView = require('../models/RecordingView');
 const Report = require('../models/Report');
 const recordingHls = require('./recordingHls');
+const ioHolder = require('./io');
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 // ffprobe лежит рядом с ffmpeg: в apt они приходят одним пакетом.
@@ -115,6 +116,16 @@ async function finalize(rec, dir) {
     if (!saved) await Promise.all([storage.remove(`${base}.mp4`), storage.remove(`${base}.jpg`)]);
     console.log(`[rec ${rec._id}] готова: ${duration} с, ${(size / 1048576).toFixed(1)} МБ`);
 
+    // Автору — сейчас. Склейка идёт минуты, и до 20.09.2026 он не узнавал
+    // о ней ничего: ни что готово, ни что не вышло. Страница профиля
+    // показывала «обрабатывается», пока её не обновят руками.
+    const io = ioHolder.get();
+    if (io && saved) {
+      io.to(`user:${rec.userId}`).emit('recording:status', {
+        id: String(rec._id), status: 'ready', duration, thumb: thumbUrl || '',
+      });
+    }
+
     // Склейка идёт в стороне от запроса, поэтому действие системное — req нет.
     // Размер уходит и в отрезок эфира: на вкладке расходов гигабайты должны
     // сходиться с эфиром, который их породил.
@@ -125,7 +136,12 @@ async function finalize(rec, dir) {
   } catch (e) {
     errorLog.media(e, 'recording.finalize', { recording: String(rec._id) });
     audit(null, 'recording.fail', { actor: rec.userId, result: 'fail', targetType: 'recording', target: rec, meta: { error: e.message } });
-    await Recording.updateOne({ _id: rec._id }, { $set: { status: 'failed' } }).catch(() => {});
+    await Recording.updateOne({ _id: rec._id }, { $set: { status: 'failed' } })
+      .catch((err) => errorLog.media(err, 'recording.markFailed', { recording: String(rec._id) }));
+    // Отказ автор обязан увидеть: эфир он уже провёл, и «запись потерялась
+    // молча» — худший из возможных исходов.
+    const io = ioHolder.get();
+    if (io) io.to(`user:${rec.userId}`).emit('recording:status', { id: String(rec._id), status: 'failed' });
   } finally {
     await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
   }

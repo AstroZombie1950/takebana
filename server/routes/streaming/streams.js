@@ -24,6 +24,7 @@ const { audit } = require('../../utils/audit');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
 const { randomUUID: uuidv4 } = require('crypto');
 const errorLog = require('../../utils/errorLog');
+const liveSignal = require('../../utils/liveSignal');
 
 router.get('/stream-status/:streamId', async (req, res) => {
   if (!/^[a-f\d]{24}$/i.test(req.params.streamId)) return res.status(404).json({ message: 'Стрим не найден' });
@@ -58,7 +59,11 @@ router.post('/stream/away/:streamId', requireAuth, requireOwner(Stream, { param:
   );
   if (stream) {
     const io = req.app.get('io');
-    if (io) io.to(`stream:${stream.streamKey}`).emit('stream:update', { streamKey: stream.streamKey, away });
+    if (io) {
+      io.to(`stream:${stream.streamKey}`).emit('stream:update', { streamKey: stream.streamKey, away });
+      // Пауза — это уход из эфира для всех, кто смотрит списки.
+      liveSignal.changed(io, stream.userId, !away);
+    }
   }
   res.sendStatus(204);
 });
@@ -191,6 +196,9 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
         isActive: true,
         startedAt: stream.startedAt
       });
+      // Витрина, /authors и левая панель у подписчиков — тоже сейчас, а не
+      // после перезагрузки (utils/liveSignal.js).
+      liveSignal.changed(io, stream.userId, true);
     }
   } catch (_) {}
 
@@ -347,7 +355,10 @@ router.post('/terminate-stream', requireAuth, validate({
   await hls.stopped(stream.streamKey);
 
   const io = req.app.get('io');
-  if (io) io.to(`stream:${stream.streamKey}`).emit('stream:update', { streamKey: stream.streamKey, isActive: false, ended: true });
+  if (io) {
+    io.to(`stream:${stream.streamKey}`).emit('stream:update', { streamKey: stream.streamKey, isActive: false, ended: true });
+    liveSignal.changed(io, stream.userId, false);
+  }
 
   // Закрываем отрезок до сохранения записи: привязка записи ищет последний,
   // и он к этому моменту должен быть уже закрыт.

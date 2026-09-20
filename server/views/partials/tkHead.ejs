@@ -32,10 +32,35 @@
     } catch (e) {}
   }
   window.addEventListener('error', function (e) {
-    if (!e || !e.message) return; // ошибка загрузки файла: подробностей браузер не даёт
+    if (!e || !e.message) return;
     send({ name: e.error && e.error.name, message: e.message, stack: e.error && e.error.stack,
            source: e.filename, line: e.lineno, column: e.colno });
   });
+
+  // Не загрузился файл: картинка, скрипт, стиль, видео. Такое событие не
+  // всплывает — ловим на погружении, и у него нет message, поэтому обработчик
+  // выше его пропускал, а мы не знали ни об одной битой картинке.
+  //
+  // Это единственный способ увидеть со стороны, что у человека не открывается
+  // наш CDN: заблокированный или недоступный хост даёт ровно такую тишину —
+  // пустые рамки вместо аватаров и обложек и ни одной ошибки в консоли.
+  // Пишем хост, а не полный адрес: важно, чей он, а не какой именно файл.
+  var hosts = {};
+  window.addEventListener('error', function (e) {
+    var el = e && e.target;
+    if (!el || el === window || !el.tagName) return;
+    var tag = el.tagName.toLowerCase();
+    if (['img', 'script', 'link', 'video', 'audio', 'source'].indexOf(tag) === -1) return;
+    var url = el.src || el.href || '';
+    if (!url) return;
+    var host;
+    try { host = new URL(url, location.href).host; } catch (err) { host = '?'; }
+    // По одному сообщению на хост: если отвалился CDN, битых картинок
+    // на странице десятки, а поломка одна.
+    if (hosts[tag + host]) return;
+    hosts[tag + host] = 1;
+    send({ name: 'ResourceError', message: 'не загрузился ' + tag + ' с ' + host, source: url });
+  }, true);
   window.addEventListener('unhandledrejection', function (e) {
     var r = (e && e.reason) || {};
     send({ name: r.name || 'UnhandledRejection', message: r.message || String(r), stack: r.stack });
@@ -51,6 +76,18 @@
 <meta name="description" content="<%= headDescription %>">
 <% } %>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+<%# Сайт на домашнем экране телефона. Манифест даёт Android иконку, имя
+    и запуск без адресной строки и предлагает «Установить приложение»;
+    apple-touch-icon и две meta — то же самое для «На экран Домой» на айфоне,
+    манифест Safari почти не читает. Значки — public/img/app (сделаны из
+    favicon.svg), сам запуск и поведение без сети — public/sw.js. %>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0A0A0A">
+<link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Takebana">
 
 <%# Шрифты первого экрана. Без preload браузер находит их только после
     разбора tk.css — PageSpeed показывал цепочку «страница → tk.css → шрифт»

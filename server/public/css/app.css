@@ -591,6 +591,10 @@ body.tk-app {
   .tk-ahead--auth .tk-ahead__brand { display: block; }
 
   .tk-ahead__right { gap: 4px; }
+
+  /* Выпадашка поиска на телефоне: экранная клавиатура забирает половину
+   * экрана, и 380px списка не во что показывать. */
+  .tk-ahead__results { max-height: 56vh; }
 }
 
 /* Скрипт Tailwind подгружается в рантайме и вставляет свой preflight в конец
