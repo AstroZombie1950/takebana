@@ -100,6 +100,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Takebana">
+<%# Чей это канал и какой у зрителя доступ к нему — для живого ограничения
+    (utils/profileSignal.js, access:changed в tk-app.js). scope: profile —
+    страница человека, важны обе стороны; content — эфир и запись, важно
+    только ограничение зрителя. %>
+<% if (locals.pageOwner) { %><meta name="tk-owner" content="<%= pageOwner.id %>" data-access="<%= pageOwner.access || '' %>" data-scope="<%= pageOwner.scope %>"><% } %>
 
 <%# Шрифты первого экрана. Без preload браузер находит их только после
     разбора tk.css — PageSpeed показывал цепочку «страница → tk.css → шрифт»

@@ -11,7 +11,7 @@ const User = require('../../models/User');
 const Subscription = require('../../models/Subscription');
 const { requireAuth } = require('../../middleware/auth');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
-const { UPLOADS, uploadAvatar, uploadGallery, uploadVideo } = require('./uploads');
+const { UPLOADS, uploadAvatar, uploadGallery } = require('./uploads');
 const GalleryVideo = require('../../models/GalleryVideo');
 const galleryVideo = require('../../utils/galleryVideo');
 const { saveImage, BadImageError } = require('../../utils/image');
@@ -184,9 +184,9 @@ router.delete('/profile/gallery/:name', requireAuth, async (req, res) => {
 });
 
 // ── Видео в галерее ──────────────────────────────────────────────────────
-// Принимается ролик до часа, дальше — пережатие со знаком
-// в фоне (utils/galleryVideo.js). Страница спрашивает состояние, пока
-// ролик не готов. Без хранилища (на бою без Bunny) видео не принимаем.
+// Принимает их страница загрузки (routes/streaming/upload.js), пережатие
+// со знаком — в фоне (utils/galleryVideo.js). Здесь — состояние для
+// страницы профиля, пока ролик не готов, и удаление.
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
 function videoView(v) {
@@ -199,24 +199,6 @@ function videoView(v) {
     thumb: (v.thumb && v.thumb.url) || '',
   };
 }
-
-// Лимит — до приёма файла: иначе гигабайты успевали бы лечь на диск.
-async function videoQuota(req, res, next) {
-  if (!galleryVideo.enabled) return res.status(503).json({ success: false, message: 'Видео сейчас не принимаются' });
-  const n = await GalleryVideo.countDocuments({ userId: req.session.userId, status: { $ne: 'failed' } });
-  if (n >= galleryVideo.MAX_PER_USER) {
-    return res.status(400).json({ success: false, message: 'В галерее уже 30 видео — удалите что-нибудь' });
-  }
-  next();
-}
-
-router.post('/profile/gallery/video', requireAuth, videoQuota, uploadVideo.single('video'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ success: false, message: 'Файл не передан' });
-  const doc = await GalleryVideo.create({ userId: req.session.userId });
-  galleryVideo.enqueue(doc, req.file.path);
-  audit(req, 'profile.gallery.video', { targetType: 'user', targetId: req.session.userId, meta: { video: String(doc._id), size: req.file.size } });
-  res.json({ success: true, video: videoView(doc) });
-});
 
 router.get('/profile/gallery/video/:id', requireAuth, async (req, res) => {
   const v = OBJECT_ID.test(req.params.id)

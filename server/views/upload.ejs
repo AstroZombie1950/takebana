@@ -1,0 +1,118 @@
+<%#
+  Загрузка фото и видео в галерею (/upload, решение заказчика 21.09.2026).
+  Сверху — выбор файлов; ниже — карточки: у видео загрузка с процентами,
+  правка (обрезать, без звука, обложка) и «Опубликовать», у фото — общая
+  кнопка «Опубликовать». Видео едет в фоне и с других страниц
+  (public/tk-upload.js). Маршрут — routes/streaming/upload.js, поведение —
+  public/upload.js, вёрстка — public/css/upload.css.
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { titleKey: 'page.upload.title' }) %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/upload.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-page tk-up">
+      <a href="/userPage/<%= currentUser._id %>#gallery" class="tk-page__back">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        <span data-i18n="app.myProfile"><%- t('app.myProfile') %></span>
+      </a>
+      <h1 class="tk-page__h1" data-i18n="upload.title"><%- t('upload.title') %></h1>
+
+      <%# Выбор файлов: кнопкой или перетаскиванием на всю рамку. %>
+      <label class="tk-up__drop" id="upDrop">
+        <input type="file" id="upInput" accept="image/png,image/jpeg,image/webp<% if (videoEnabled) { %>,video/*<% } %>" multiple hidden>
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 15v5h16v-5"></path></svg>
+        <span class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="upload.pick"><%- t('upload.pick') %></span>
+        <span class="tk-up__or" data-i18n="upload.drop"><%- t('upload.drop') %></span>
+        <% var limitsKey = videoEnabled ? 'upload.limits' : 'upload.limitsPhoto'; %>
+        <span class="tk-note" data-i18n="<%= limitsKey %>"><%- t(limitsKey) %></span>
+      </label>
+
+      <%# Фото: снимки выбора и одна кнопка на все. %>
+      <section class="tk-up__photos" id="upPhotos" hidden>
+        <p class="tk-panel__title" data-i18n="upload.photos"><%- t('upload.photos') %></p>
+        <div class="tk-up__shots" id="upShots"></div>
+        <div class="tk-up__bar" id="upPhotoBar" hidden><i></i></div>
+        <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="upPhotoSend"></button>
+      </section>
+
+      <%# Видео: карточка на ролик, собирает upload.js. %>
+      <div class="tk-up__videos" id="upVideos"></div>
+    </div>
+  </main>
+</div>
+
+<%# Карточка видео — одна на все ролики, upload.js копирует её. %>
+<template id="upVideoTpl">
+  <article class="tk-upv">
+    <div class="tk-upv__stage">
+      <video class="tk-upv__video" playsinline preload="metadata" controls></video>
+      <p class="tk-upv__nofile" hidden data-i18n="upload.noPreview"><%- t('upload.noPreview') %></p>
+    </div>
+    <div class="tk-upv__side">
+      <p class="tk-upv__name"></p>
+      <div class="tk-up__bar"><i></i></div>
+      <p class="tk-upv__state" aria-live="polite"></p>
+
+      <div class="tk-upv__edit">
+        <div class="tk-upv__row">
+          <p class="tk-panel__title" data-i18n="upload.trim"><%- t('upload.trim') %></p>
+          <span class="tk-upv__len"></span>
+        </div>
+        <div class="tk-upv__trim">
+          <span class="tk-upv__fill"></span>
+          <input type="range" class="tk-upv__from" min="0" step="0.1" value="0" aria-label="<%= ta('upload.from') %>" data-i18n-aria="upload.from">
+          <input type="range" class="tk-upv__to" min="0" step="0.1" value="0" aria-label="<%= ta('upload.to') %>" data-i18n-aria="upload.to">
+        </div>
+        <div class="tk-upv__times"><span class="tk-upv__t0">0:00</span><span class="tk-upv__t1">0:00</span></div>
+
+        <label class="tk-upv__switch">
+          <input type="checkbox" class="tk-upv__mute">
+          <span data-i18n="upload.mute"><%- t('upload.mute') %></span>
+        </label>
+
+        <p class="tk-panel__title" data-i18n="upload.cover"><%- t('upload.cover') %></p>
+        <div class="tk-upv__cover">
+          <div class="tk-upv__covershot"><canvas width="320" height="180"></canvas><img alt="" hidden></div>
+          <div class="tk-upv__coverctl">
+            <div class="tk-seg" role="radiogroup">
+              <button type="button" role="radio" aria-checked="true" data-cover="frame" data-i18n="upload.coverFrame"><%- t('upload.coverFrame') %></button>
+              <button type="button" role="radio" aria-checked="false" data-cover="own" data-i18n="upload.coverOwn"><%- t('upload.coverOwn') %></button>
+            </div>
+            <input type="range" class="tk-upv__at" min="0" step="0.1" value="0" aria-label="<%= ta('upload.coverFrame') %>" data-i18n-aria="upload.coverFrame">
+            <input type="file" class="tk-upv__coverfile" accept="image/png,image/jpeg,image/webp" hidden>
+            <button type="button" class="tk-btn tk-btn--outline tk-btn--xs tk-upv__coverpick" hidden data-i18n="upload.coverPick"><%- t('upload.coverPick') %></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tk-upv__acts">
+        <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-upv__publish" data-i18n="upload.publish"><%- t('upload.publish') %></button>
+        <button type="button" class="tk-btn tk-btn--quiet tk-btn--sm tk-upv__delete" data-i18n="upload.delete"><%- t('upload.delete') %></button>
+        <a class="tk-btn tk-btn--outline tk-btn--sm tk-upv__open" href="/userPage/<%= currentUser._id %>#gallery" hidden data-i18n="upload.open"><%- t('upload.open') %></a>
+      </div>
+    </div>
+  </article>
+</template>
+
+<script>
+  window.TK_UPLOAD = {
+    drafts: <%- JSON.stringify(drafts) %>,
+    maxSeconds: <%- JSON.stringify(maxSeconds) %>,
+    videoEnabled: <%- JSON.stringify(videoEnabled) %>
+  };
+</script>
+<script defer src="<%= asset('/tk-upload.js') %>"></script>
+<script defer src="<%= asset('/upload.js') %>"></script>
+</body>
+</html>

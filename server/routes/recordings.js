@@ -105,9 +105,9 @@ router.get('/recording/:id', commonDataMiddleware, async (req, res) => {
   if (!rec || !rec.userId || (rec.status !== 'ready' && !isOwner)) {
     return res.status(404).render('streamNotFound');
   }
-  if (await restriction.isRestricted(rec.userId._id, me)) {
-    return res.status(403).render('streamNotFound', { restricted: true });
-  }
+  const blocked = await restriction.isRestricted(rec.userId._id, me);
+  res.locals.pageOwner = { id: String(rec.userId._id), scope: 'content', access: blocked ? 'them' : '' };
+  if (blocked) return res.status(403).render('streamNotFound', { restricted: true });
   const current = res.locals.currentUser;
   const adultOk = isOwner || !!(current && current.adultConfirmedAt);
   if (rec.isAdult && !adultOk) {

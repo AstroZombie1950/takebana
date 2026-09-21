@@ -487,6 +487,28 @@
 .tk-studio__form .tk-form__row .tk-field { padding: 12px 14px; }
 .tk-studio__form .tk-select { padding-right: 40px; }
 
+/* Обложка эфира: превью 16:9 и кнопки рядом. */
+.tk-studio__cover { display: flex; gap: 14px; align-items: flex-start; }
+
+.tk-studio__coverbox {
+  flex: none;
+  width: 176px;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--tk-rule);
+  background: #000;
+  overflow: hidden;
+}
+
+.tk-studio__coverbox img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tk-studio__coverbox [hidden] { display: none; }
+.tk-studio__coverph { padding: 8px; text-align: center; font-size: 12px; color: var(--tk-muted); }
+.tk-studio__coverctl { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tk-studio__coverctl .tk-form__note { flex-basis: 100%; margin: 0; }
+.tk-studio__coverctl [hidden] { display: none; }
+
 .tk-studio__pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -817,8 +839,21 @@ html.tk-stage-open { overflow: hidden; }
   .is-full .messeg-box { padding-left: 32px; }
 }
 
+/* Телефон вертикально: плеер стоял вплотную к верху экрана, и метки в ряд
+ * попадали под часы и «островок» айфона (жалоба 21.09). Сцена опускается
+ * ниже выреза (сверху — чёрная полоса под часами), метки — столбиком
+ * в левом углу картинки. Во весь экран вырез учитывают правила .is-full
+ * выше. Горизонтально — как было. */
+@media (max-width: 1023px) and (orientation: portrait) {
+  .tk-live__grid:not(.is-full) { padding-top: var(--tk-safe-t); background: #000; }
+
+  .tk-live__badges { flex-direction: column; align-items: flex-start; }
+}
+
 @media (max-width: 560px) {
   .tk-studio__pair { grid-template-columns: 1fr; }
+  .tk-studio__cover { flex-direction: column; }
+  .tk-studio__coverbox { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

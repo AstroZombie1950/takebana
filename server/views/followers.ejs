@@ -45,7 +45,7 @@
         <% tabs.forEach(function (tab) { var on = tab.key === list; %>
         <a href="<%= base + '/' + tab.key %>" class="tk-tabs__item<%= on ? ' tk-tabs__item--on' : '' %>"<%- on ? ' aria-current="page"' : '' %>>
           <span data-i18n="<%= tab.i18n %>"><%- t(tab.i18n) %></span>
-          <span class="tk-tabs__num"><%= tab.n %></span>
+          <span class="tk-tabs__num" data-count-<%= tab.key %>="<%= owner._id %>"><%= tab.n %></span>
         </a>
         <% }); %>
       </nav>

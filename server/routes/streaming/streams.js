@@ -93,9 +93,12 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
   // модерация — иначе смысл гейта теряется на первом же нажатии.
   isAdult: { type: 'bool', required: false, default: false, label: 'Контент 18+' },
   source: { type: 'string', required: true, values: Object.keys(SOURCES), label: 'Источник' },
+  // Обложка (21.09): keep — оставить прежнюю (черновика или прошлого эфира),
+  // none — убрать. Новую картинку студия шлёт следом в /upload-thumbnail.
+  cover: { type: 'string', default: 'keep', values: ['keep', 'none'], label: 'Обложка' },
 }), async (req, res) => {
   const userId = req.session.userId;
-  const { title, category, subcategory, city, description, isAdult, source } = req.body;
+  const { title, category, subcategory, city, description, isAdult, source, cover } = req.body;
 
   if (SUB_CATEGORY[subcategory] !== category) {
     return res.status(400).json({ message: 'Подкатегория не относится к выбранной категории' });
@@ -104,8 +107,9 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
   const user = await User.findById(userId);
   if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
 
+  const thumbnail = cover === 'none' ? '' : (user.streamDefaults && user.streamDefaults.thumbnail) || '';
   const fields = { title, category, subcategory, city: city || '', description: description || '', isAdult };
-  user.streamDefaults = { ...fields, source };
+  user.streamDefaults = { ...fields, source, thumbnail };
   // Ключ создаёт ещё студия, когда показывает его для OBS; здесь — страховка.
   if (!user.streamKey) user.streamKey = uuidv4();
   await user.save();
@@ -122,12 +126,13 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
       stream.dailyRoomName = null;
       stream.dailyRoom = undefined;
     }
-    Object.assign(stream, fields, SOURCES[source], { streamKey: user.streamKey, updatedAt: Date.now() });
+    Object.assign(stream, fields, SOURCES[source], { thumbnail: thumbnail || stream.thumbnail || null, streamKey: user.streamKey, updatedAt: Date.now() });
+    if (cover === 'none') stream.thumbnail = null;
     await stream.save();
   } else {
     // Куски записи прошлого эфира с этим ключом, если он оборвался без завершения.
     await recording.discard(user.streamKey);
-    stream = await Stream.create({ userId, streamKey: user.streamKey, ...fields, ...SOURCES[source], isActive: false });
+    stream = await Stream.create({ userId, streamKey: user.streamKey, ...fields, ...SOURCES[source], thumbnail: thumbnail || null, isActive: false });
   }
 
   audit(req, 'stream.setup', { targetType: 'stream', target: stream, meta: { source, category, subcategory, city: city || '', isAdult: !!isAdult } });
@@ -269,64 +274,41 @@ router.post('/set-inactive', requireAuth, validate({
   });
 });
 
-// Маршрут для загрузки заглавной картинки (thumbnail).
+// Обложка эфира — из студии, после /start-stream (public/tk-studio.js).
+// Та же картинка — обложка по умолчанию для следующих эфиров
+// (User.streamDefaults.thumbnail) и обложка записи (utils/recording.js).
 // requireAuth перед multer — см. комментарий у /profile/avatar.
 router.post('/upload-thumbnail', requireAuth, upload.single('thumbnail'), validate({
   streamId: { type: 'objectId', required: true, label: 'Эфир' },
-  oldThumbnailPath: { type: 'string', max: 300, label: 'Прежняя обложка' },
 }), async (req, res) => {
-  const { streamId, oldThumbnailPath } = req.body;
   const userId = req.session.userId;
+  const stream = await Stream.findOne({ _id: req.body.streamId, userId });
+  if (!stream) return res.status(404).json({ message: 'Стрим не найден' });
+  if (!req.file) return res.status(400).json({ message: 'Изображение не загружено.' });
 
-  if (!streamId || !userId) {
-      return res.status(400).json({ message: 'Недостаточно данных' });
+  // Обложка ложится на диск уже подогнанной под 16:9, сжатой и со знаком
+  // (utils/image.js).
+  const thumbsDir = path.join(UPLOADS, 'thumbnails');
+  let name;
+  try {
+    name = await saveImage(req.file.buffer, 'thumbnail', thumbsDir);
+  } catch (e) {
+    if (!(e instanceof BadImageError)) throw e;
+    return res.status(400).json({ message: e.message });
   }
 
-  // Найдем стрим и проверим, что он принадлежит текущему пользователю
-  const stream = await Stream.findOne({ _id: streamId, userId: userId });
+  // Прежнюю — с диска. Путь берём из базы, а не из запроса: раньше он
+  // приходил в теле, и `../что-угодно` удаляло произвольный файл.
+  const oldName = stream.thumbnail ? path.basename(stream.thumbnail) : null;
+  const oldPath = isPlainFileName(oldName) ? resolveWithin(thumbsDir, oldName) : null;
 
-  if (!stream) {
-      return res.status(404).json({ message: 'Стрим не найден' });
-  }
+  stream.thumbnail = `/uploads/thumbnails/${name}`;
+  await stream.save();
+  await User.updateOne({ _id: userId }, { $set: { 'streamDefaults.thumbnail': stream.thumbnail } });
+  if (oldPath) fs.promises.rm(oldPath, { force: true }).catch(() => {});
 
-  if (req.file) {
-      // Удаляем старое изображение, если оно существует
-      // oldThumbnailPath приходит из тела запроса. Без проверки границ
-      // сюда подставлялось `../что-угодно` и удалялся произвольный файл.
-      // Старую обложку ищем только внутри папки обложек и только по имени.
-      const thumbsDir = path.join(UPLOADS, 'thumbnails');
-      const oldName = oldThumbnailPath ? path.basename(String(oldThumbnailPath)) : null;
-      const fullOldPath = isPlainFileName(oldName) ? resolveWithin(thumbsDir, oldName) : null;
-
-      if (fullOldPath) {
-          fs.unlink(fullOldPath, (err) => {
-              if (err) {
-                  console.error('Ошибка при удалении старого изображения:', err);
-              } else {
-                  console.log('Старое изображение успешно удалено.');
-              }
-          });
-      }
-
-      // Обложка ложится на диск уже подогнанной под 16:9 и сжатой
-      // (utils/image.js): до этого на диск шёл присланный файл как есть.
-      let name;
-      try {
-          name = await saveImage(req.file.buffer, 'thumbnail', thumbsDir);
-      } catch (e) {
-          if (!(e instanceof BadImageError)) throw e;
-          return res.status(400).json({ message: e.message });
-      }
-
-      // Обновляем поле thumbnail в документе Stream
-      stream.thumbnail = `/uploads/thumbnails/${name}`;
-      await stream.save();
-
-      audit(req, 'stream.thumbnail', { targetType: 'stream', target: stream });
-      res.status(200).json({ message: 'Заглавная картинка загружена.', thumbnailPath: stream.thumbnail });
-  } else {
-      res.status(400).json({ message: 'Изображение не загружено.' });
-  }
+  audit(req, 'stream.thumbnail', { targetType: 'stream', target: stream });
+  res.json({ message: 'Заглавная картинка загружена.', thumbnailPath: stream.thumbnail });
 });
 
 

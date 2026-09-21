@@ -29,6 +29,33 @@
     return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
   }
 
+  // «Как разрешить?» раскрывается и сворачивается плавно: <details> сам
+  // делает это рывком. Анимируется высота всего блока — от строки-ссылки
+  // до полной; open снимается, когда сворачивание доиграло.
+  var calm = window.matchMedia('(prefers-reduced-motion: reduce)');
+  document.querySelectorAll('.tk-set__how').forEach(function (box) {
+    var summary = box.querySelector('summary');
+    var run = null;
+    summary.addEventListener('click', function (e) {
+      if (calm.matches || !box.animate) return;
+      e.preventDefault();
+      var opening = !box.open || box.classList.contains('is-closing');
+      // Нажали посреди анимации — продолжаем с той высоты, что на экране.
+      var from = box.getBoundingClientRect().height;
+      if (run) run.cancel();
+      box.open = opening || box.open;
+      box.classList.toggle('is-closing', !opening);
+      var to = opening ? box.getBoundingClientRect().height : summary.getBoundingClientRect().height;
+      box.style.overflow = 'hidden';
+      run = box.animate([{ height: from + 'px' }, { height: to + 'px' }], { duration: 260, easing: 'cubic-bezier(.2, .7, .2, 1)' });
+      run.onfinish = function () {
+        run = null;
+        box.style.overflow = '';
+        if (!opening) { box.open = false; box.classList.remove('is-closing'); }
+      };
+    });
+  });
+
   // ── Имя и никнейм ─────────────────────────────────────────────────────
   // Ник проверяется на ходу: формат — здесь же, занятость — запросом
   // (routes/userRoutes.js), с паузой на набор. Правила — utils/nickname.js.

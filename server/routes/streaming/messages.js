@@ -30,6 +30,16 @@ const push = require('../../utils/push');
 const { rankPeers } = require('../../utils/recentPeers');
 const { audit } = require('../../utils/audit');
 const { view } = require('../../utils/messageView');
+const restriction = require('../../utils/restrict');
+
+// Ограничение доступа закрывает и переписку (utils/restrict.js): 403
+// с объяснением, кто кого ограничил. true — ответ уже отправлен.
+async function refuseRestricted(res, me, peerId) {
+  const who = await restriction.between(me, peerId);
+  if (!who) return false;
+  res.status(403).json({ success: false, restricted: who, message: restriction.BLOCKED[who] });
+  return true;
+}
 
 const PAGE = 15;
 const { ObjectId } = mongoose.Types;
@@ -244,6 +254,7 @@ router.post('/start-conversation', requireAuthApi, requireNotBanned, validate({
   if (recipientId === String(me)) {
     return res.status(400).json({ success: false, message: 'Нельзя написать самому себе' });
   }
+  if (await refuseRestricted(res, me, recipientId)) return;
 
   let conversation = await findConversation(me, recipientId);
   if (!conversation) {
@@ -292,7 +303,7 @@ router.get('/getMessages', requireAuthApi, async (req, res) => {
   const from = messages.length === PAGE ? messages[messages.length - 1].sentAt : null;
   const calls = await callLog.between(me, recipientId, { from, to: before });
 
-  res.json({ messages: messages.reverse().map(view), calls });
+  res.json({ messages: messages.reverse().map(view), calls, restricted: await restriction.between(me, recipientId) });
 });
 
 
@@ -304,6 +315,7 @@ router.post('/sendMessage', requireAuthApi, requireNotBanned, validate({
   const { recipientId, content } = req.body;
   if (!limits.OPTIONS.includes(req.body.limit)) return res.status(400).json({ message: 'Неверное ограничение' });
   const me = req.session.userId;
+  if (await refuseRestricted(res, me, recipientId)) return;
 
   const [conversation, sender, recipient] = await Promise.all([
     findConversation(me, recipientId),
@@ -350,6 +362,10 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
   if (!attachments.enabled) {
     drop();
     return res.status(503).json({ message: 'Файлы сейчас не принимаются' });
+  }
+  if (await restriction.between(me, recipientId)) {
+    drop();
+    return refuseRestricted(res, me, recipientId);
   }
 
   const [conversation, sender, recipient] = await Promise.all([
@@ -440,9 +456,15 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
 }), async (req, res) => {
   const me = String(req.session.userId);
   const { comment } = req.body;
-  const recipientIds = [...new Set(req.body.recipientIds)].filter((id) => id !== me);
-  if (!recipientIds.length) {
+  const chosen = [...new Set(req.body.recipientIds)].filter((id) => id !== me);
+  if (!chosen.length) {
     return res.status(400).json({ message: 'Выберите, кому переслать' });
+  }
+  // Тем, с кем стоит ограничение доступа, не пересылается (utils/restrict.js).
+  const barred = await Promise.all(chosen.map((id) => restriction.between(me, id)));
+  const recipientIds = chosen.filter((id, i) => !barred[i]);
+  if (!recipientIds.length) {
+    return res.status(403).json({ restricted: barred[0], message: restriction.BLOCKED[barred[0]] });
   }
 
   // Порядок — как в переписке, по времени, а не как их выделяли.

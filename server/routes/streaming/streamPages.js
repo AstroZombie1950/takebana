@@ -82,9 +82,9 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
   if (!page) return res.status(404).render('streamNotFound');
 
   const isStreamer = String(page.user._id) === String(req.session.userId);
-  if (await restriction.isRestricted(page.user._id, req.session.userId)) {
-    return res.status(403).render('streamNotFound', { restricted: true });
-  }
+  const blocked = await restriction.isRestricted(page.user._id, req.session.userId);
+  res.locals.pageOwner = { id: String(page.user._id), scope: 'content', access: blocked ? 'them' : '' };
+  if (blocked) return res.status(403).render('streamNotFound', { restricted: true });
 
   // Гейт 18+ — до всего остального: страница помеченного эфира не должна
   // ни отдать плеер, ни записать зрителя в комнату, пока возраст не

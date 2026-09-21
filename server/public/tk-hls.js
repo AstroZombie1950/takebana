@@ -8,6 +8,9 @@
 // качество и одна дорожка. Грузится лениво: 117 КБ сжатого скрипта нужны
 // только браузерам без своего HLS и только когда плейлист уже есть.
 (function () {
+  // Safari (и любой браузер на айфоне — там всё на WebKit): свой HLS надёжен.
+  var SAFARI = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Android|Edg\//.test(navigator.userAgent);
+
   // Подписи — из общего словаря (public/tk-i18n.js).
   var t = function (key, arg) { return window.t ? window.t(key, arg) : ''; };
   var SRC = '/vendor/hls-1.7.2.light.min.js';
@@ -108,7 +111,13 @@
         // потоке с MEDIA_ERR_SRC_NOT_SUPPORTED. Поэтому ошибка своего плеера —
         // повод перейти на hls.js, если в браузере есть MSE. Заодно Safari с MSE
         // получает восстановление после обрыва, которого у своего плеера нет.
-        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        //
+        // С 21.09 Chrome (Android, у него MSE есть) идёт в hls.js сразу:
+        // его провал своим плеером всякий раз попадал в журнал ошибок
+        // как «не загрузился video с live.takebana.com» — ложная тревога,
+        // эфир при этом играл через hls.js. Свой плеер — только Safari
+        // и браузерам без MSE.
+        if (video.canPlayType('application/vnd.apple.mpegurl') && (SAFARI || !(window.MediaSource || window.ManagedMediaSource))) {
           video.addEventListener('error', function onError() {
             video.removeEventListener('error', onError);
             if (stopped || !(window.MediaSource || window.ManagedMediaSource)) return;

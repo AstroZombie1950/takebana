@@ -117,6 +117,47 @@
   category.addEventListener('change', function () { fillSubs(''); });
   fillSubs(sub.dataset.value);
 
+  // ── Обложка ───────────────────────────────────────────────────────────
+  // Выбранная картинка видна сразу, а на сервер уходит после /start-stream:
+  // до него эфира может ещё не быть. «Убрать» — cover=none.
+  var coverFile = null;
+  var coverImg = $('coverImg');
+  function showCover(src) {
+    if (coverImg.src && coverImg.src.indexOf('blob:') === 0) URL.revokeObjectURL(coverImg.src);
+    coverImg.hidden = !src;
+    if (src) coverImg.src = src; else coverImg.removeAttribute('src');
+    $('coverPh').hidden = !!src;
+    $('coverClear').hidden = !src;
+  }
+  $('coverPick').addEventListener('click', function () { $('coverInput').click(); });
+  $('coverInput').addEventListener('change', function (e) {
+    var file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) return toast(t('studio.coverHeavy'), 'error');
+    coverFile = file;
+    form.elements.cover.value = 'keep';
+    showCover(URL.createObjectURL(file));
+  });
+  $('coverClear').addEventListener('click', function () {
+    coverFile = null;
+    form.elements.cover.value = 'none';
+    showCover('');
+  });
+
+  function sendCover(streamId) {
+    if (!coverFile) return Promise.resolve();
+    var body = new FormData();
+    body.append('streamId', streamId);
+    body.append('thumbnail', coverFile);
+    return fetch('/upload-thumbnail', { method: 'POST', headers: { Accept: 'application/json' }, body: body })
+      .then(function (r) {
+        if (r.ok) return;
+        return r.json().catch(function () { return {}; }).then(function (b) { toast(t('app.errorShort', { message: b.message || 'HTTP ' + r.status }), 'error'); });
+      })
+      .catch(function () {});
+  }
+
   // ── Выйти в эфир ──────────────────────────────────────────────────────
   form.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -136,7 +177,8 @@
         city: f.city.value,
         description: f.description.value.trim(),
         isAdult: f.isAdult.checked,
-        source: source()
+        source: source(),
+        cover: f.cover.value
       })
     })
       .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
@@ -144,8 +186,9 @@
         if (res.b.streamId) {
           // Камеру освобождаем до перехода: на телефоне её держит один владелец.
           stopPreview();
-          location.href = '/stream/' + res.b.streamId + (res.ok && source() === 'web' ? '?go=1' : '');
-          return;
+          var next = '/stream/' + res.b.streamId + (res.ok && source() === 'web' ? '?go=1' : '');
+          // Отказ обложки эфир не держит — о нём скажет тост, эфир идёт.
+          return (res.ok ? sendCover(res.b.streamId) : Promise.resolve()).then(function () { location.href = next; });
         }
         throw new Error(res.b.message || 'HTTP');
       })

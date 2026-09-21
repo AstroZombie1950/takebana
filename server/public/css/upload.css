@@ -1,0 +1,244 @@
+/* Страница загрузки фото и видео в галерею (views/upload.ejs, 21.09.2026). */
+
+.tk-up { max-width: 980px; }
+
+/* ── Выбор файлов: рамка на всю ширину, в неё же бросают файлы ── */
+.tk-up__drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 36px 20px;
+  border: 1px dashed var(--tk-rule);
+  text-align: center;
+  color: var(--tk-beige);
+  cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease;
+}
+
+.tk-up__drop:hover,
+.tk-up__drop.is-over { border-color: var(--tk-accent); background: rgba(227, 66, 52, .06); }
+.tk-up__drop:focus-within { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
+.tk-up__or { font-family: Oswald, sans-serif; font-size: 14px; letter-spacing: .04em; }
+.tk-up__drop .tk-note { max-width: 520px; margin: 0; }
+
+/* ── Полоса загрузки: общая у фото и видео ── */
+.tk-up__bar {
+  height: 4px;
+  background: rgba(201, 194, 183, .15);
+  overflow: hidden;
+}
+
+.tk-up__bar[hidden] { display: none; }
+
+.tk-up__bar i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--tk-accent);
+  transition: width .3s ease;
+}
+
+/* ── Фото ── */
+.tk-up__photos {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-up__photos[hidden] { display: none; }
+.tk-up__photos .tk-up__bar { align-self: stretch; }
+
+.tk-up__shots {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.tk-up__shot { position: relative; aspect-ratio: 1; background: #000; }
+.tk-up__shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ── Видео: карточка — превью слева, состояние и правка справа ── */
+.tk-up__videos { display: flex; flex-direction: column; gap: 16px; }
+
+.tk-upv {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-upv__stage {
+  position: relative;
+  background: #000;
+  aspect-ratio: 16 / 9;
+  align-self: start;
+}
+
+.tk-upv__video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.tk-upv__video[hidden] { display: none; }
+
+.tk-upv__nofile {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+  color: var(--tk-muted);
+  font-size: 14px;
+}
+
+.tk-upv__nofile[hidden] { display: none; }
+
+.tk-upv__side { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+
+.tk-upv__name {
+  margin: 0;
+  font-family: Oswald, sans-serif;
+  font-size: 16px;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-upv__state { margin: 0; font-size: 14px; color: var(--tk-beige); }
+.tk-upv[data-status="ready"] .tk-upv__state { color: var(--tk-green-live); }
+.tk-upv[data-status="failed"] .tk-upv__state { color: var(--tk-accent); }
+
+.tk-upv__edit { display: flex; flex-direction: column; gap: 10px; }
+.tk-upv__edit .tk-panel__title { margin: 6px 0 0; }
+/* Опубликовано — правка застыла: видно, что выбрано, но менять нечего. */
+.tk-upv.is-locked .tk-upv__edit { opacity: .55; pointer-events: none; }
+/* Без файла в браузере резать нечего. */
+.tk-upv.is-nofile .tk-upv__row,
+.tk-upv.is-nofile .tk-upv__trim,
+.tk-upv.is-nofile .tk-upv__times,
+.tk-upv.is-nofile [data-cover="frame"] { display: none; }
+
+.tk-upv__row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.tk-upv__len,
+.tk-upv__times { font-family: Oswald, sans-serif; font-size: 13px; letter-spacing: .04em; color: var(--tk-muted); font-variant-numeric: tabular-nums; }
+.tk-upv__times { display: flex; justify-content: space-between; margin-top: -4px; }
+
+/* Обрезка: два ползунка на одной дорожке. Сами дорожки прозрачны
+ * и нажатий не ловят — ловят только ручки; между ручками — залитый отрезок
+ * (--a и --b ставит upload.js). */
+.tk-upv__trim {
+  --a: 0%;
+  --b: 100%;
+  position: relative;
+  height: 28px;
+}
+
+.tk-upv__trim::before,
+.tk-upv__fill {
+  content: '';
+  position: absolute;
+  top: 12px;
+  height: 4px;
+}
+
+.tk-upv__trim::before { left: 0; right: 0; background: rgba(201, 194, 183, .18); }
+.tk-upv__fill { left: var(--a); width: calc(var(--b) - var(--a)); background: var(--tk-accent); }
+
+.tk-upv__trim input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.tk-upv__trim input::-webkit-slider-runnable-track { background: none; height: 28px; }
+.tk-upv__trim input::-moz-range-track { background: none; }
+
+.tk-upv__trim input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 28px;
+  background: var(--tk-paper);
+  border: 0;
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+
+.tk-upv__trim input::-moz-range-thumb {
+  width: 14px;
+  height: 28px;
+  border: 0;
+  border-radius: 0;
+  background: var(--tk-paper);
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+
+.tk-upv__trim input:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
+
+/* Кадр обложки — обычный ползунок в цвет сайта. */
+.tk-upv__at { width: 100%; accent-color: var(--tk-accent); }
+.tk-upv__at[hidden] { display: none; }
+
+.tk-upv__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  color: var(--tk-paper);
+  cursor: pointer;
+}
+
+.tk-upv__switch input { width: 18px; height: 18px; accent-color: var(--tk-accent); }
+
+.tk-upv__cover { display: flex; gap: 12px; align-items: flex-start; }
+.tk-upv__covershot { flex: none; width: 128px; background: #000; }
+.tk-upv__covershot[hidden] { display: none; }
+.tk-upv__covershot canvas,
+.tk-upv__covershot img { display: block; width: 100%; height: auto; }
+.tk-upv__covershot [hidden] { display: none; }
+.tk-upv__coverctl { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.tk-upv__coverpick[hidden] { display: none; }
+
+/* Выбор «кадр / своя» — сегментами. */
+.tk-upv .tk-seg { display: inline-flex; border: 1px solid var(--tk-rule); }
+
+.tk-upv .tk-seg button {
+  padding: 7px 12px;
+  background: none;
+  border: 0;
+  color: var(--tk-beige);
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .04em;
+  cursor: pointer;
+}
+
+.tk-upv .tk-seg button[aria-checked="true"] { background: var(--tk-paper); color: var(--tk-ink); }
+
+.tk-upv__acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.tk-upv__acts [hidden] { display: none; }
+
+@media (max-width: 767px) {
+  .tk-upv { grid-template-columns: 1fr; gap: 14px; padding: 12px; }
+  .tk-up__drop { padding: 28px 16px; }
+  .tk-upv__acts .tk-upv__publish { flex: 1; }
+  .tk-upv__cover { flex-direction: column; align-items: stretch; }
+  .tk-upv__covershot { width: 100%; max-width: 280px; }
+  .tk-upv__coverctl { align-items: stretch; }
+  .tk-upv .tk-seg button { flex: 1; white-space: nowrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-up__bar i { transition: none; }
+}

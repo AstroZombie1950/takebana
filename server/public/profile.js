@@ -25,8 +25,11 @@ document.addEventListener('DOMContentLoaded', function () {
         body: JSON.stringify({ recipientId: P.userId })
       })
         .then(function (r) {
-          if (!r.ok) throw new Error('Network response was not ok');
-          return r.json();
+          return r.json().catch(function () { return {}; }).then(function (data) {
+            // Ограничение доступа (utils/restrict.js) — отказ с объяснением.
+            if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+            return data;
+          });
         })
         .then(function (data) {
           if (data.success) {
@@ -36,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function () {
             window.location.href = '/chatsPage?peer=' + encodeURIComponent(P.userId);
           }
         })
-        .catch(function (e) { console.error('start-conversation:', e); });
+        .catch(function (e) { toast(e.message, 'error'); });
     });
   }
 
@@ -80,6 +83,37 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     subscribeButton.addEventListener('click', toggleSubscription);
+
+    // Подписка поменялась не здесь: в другой вкладке или автор убрал меня
+    // из подписчиков (utils/profileSignal.js). Новую строку в левую панель
+    // добавит клик в той вкладке — здесь только кнопка.
+    document.addEventListener('tk:follow:changed', function (e) {
+      if (e.detail.peerId !== P.userId) return;
+      var on = !!e.detail.subscribed;
+      if (subscribeButton.classList.contains('unsubscribe') === on) return;
+      subscribeButton.classList.toggle('unsubscribe', on);
+      window.tkText(label, on ? 'stream.unsubscribe' : 'stream.subscribe');
+    });
+  }
+
+  // ── Меню «⋯»: жалоба и ограничение ─────────────────────────────────────
+  // Закрывается кликом мимо, Esc и выбором пункта (окно жалобы и вопрос
+  // об ограничении открываются уже без него).
+  var moreBtn = document.getElementById('profMore');
+  var menu = document.getElementById('profMenu');
+  if (moreBtn && menu) {
+    // keyboard — открыли с клавиатуры: фокус переезжает на первый пункт.
+    var setMenu = function (open, keyboard) {
+      menu.hidden = !open;
+      moreBtn.setAttribute('aria-expanded', String(open));
+      if (open && keyboard) menu.querySelector('button').focus();
+    };
+    moreBtn.addEventListener('click', function (e) { e.stopPropagation(); setMenu(menu.hidden, e.detail === 0); });
+    menu.addEventListener('click', function () { setMenu(false); });
+    document.addEventListener('click', function (e) { if (!menu.hidden && !menu.contains(e.target)) setMenu(false); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !menu.hidden) { setMenu(false); moreBtn.focus(); }
+    });
   }
 
   // ── Ограничить доступ к каналу (utils/restrict.js) ──────────────────────
@@ -88,8 +122,13 @@ document.addEventListener('DOMContentLoaded', function () {
     restrictButton.addEventListener('click', function () {
       var on = !restrictButton.getAttribute('data-on');
       var ask = on ? confirmDialog(pt('user.restrictQ', { name: P.displayName }), { okText: pt('user.restrict') }) : Promise.resolve(true);
+      // Метка доступа страницы — до запроса: событие access:changed этой же
+      // вкладке может прийти раньше ответа, и она перезагрузилась бы зря.
+      var owner = document.querySelector('meta[name="tk-owner"]');
+      var was = owner ? owner.dataset.access : '';
       ask.then(function (yes) {
         if (!yes) return;
+        if (owner) owner.dataset.access = on ? 'me' : '';
         return fetch('/restrict', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -98,11 +137,18 @@ document.addEventListener('DOMContentLoaded', function () {
           return r.json().catch(function () { return {}; }).then(function (data) {
             if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
             restrictButton.setAttribute('data-on', on ? '1' : '');
+            // Ограничение закрывает и общение — кнопки «Написать» и звонков
+            // уходят вместе с ним и возвращаются, когда доступ вернули.
+            var talk = document.getElementById('talkActions');
+            if (talk) talk.hidden = on;
             window.tkText(restrictButton.querySelector('[data-i18n]'), on ? 'user.unrestrict' : 'user.restrict');
             toast(pt(on ? 'user.restricted' : 'user.unrestricted', { name: P.displayName }), 'ok');
           });
         });
-      }).catch(function (e) { toast(e.message, 'error'); });
+      }).catch(function (e) {
+        if (owner) owner.dataset.access = was;
+        toast(e.message, 'error');
+      });
     });
   }
 
@@ -125,18 +171,16 @@ document.addEventListener('DOMContentLoaded', function () {
   if (videoBtn) videoBtn.addEventListener('click', function () { call('video'); });
   if (audioBtn) audioBtn.addEventListener('click', function () { call('audio'); });
 
-  // ── Своя галерея: загрузка и удаление ──────────────────────────────────
-  // Раньше это жило в настройках, а здесь было видно только результат.
-  // Выбрал файлы — они сразу уходят на сервер (сжатие и подгонка размера —
-  // utils/image.js); без промежуточного «Загрузить (N)».
+  // ── Своя галерея: удаление и ролики в работе ───────────────────────────
+  // Добавляют со страницы загрузки (/upload, public/upload.js): «Добавить»
+  // ведёт туда. Здесь — удаление и то, что ещё в работе: загружается
+  // (проценты приходят от фоновой загрузки, public/tk-upload.js),
+  // ждёт публикации, пережимается.
   var gallery = document.getElementById('gallery');
   if (gallery && gallery.hasAttribute('data-own')) {
     var shots = document.getElementById('galleryShots');
-    var input = document.getElementById('galleryInput');
-    var addBtn = document.getElementById('galleryAdd');
     var countEl = document.getElementById('galleryCount');
     var empty = document.getElementById('galleryEmpty');
-    var CROSS = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>';
 
     var json = function (url, options) {
       options.headers = { Accept: 'application/json' };
@@ -151,41 +195,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // Счётчик — то, что можно смотреть: без роликов, которые ещё грузятся,
     // пережимаются или не вышли.
     var recount = function () {
-      countEl.textContent = String(shots.querySelectorAll('.tk-shots__item:not(.is-uploading):not(.is-processing):not(.is-failed)').length);
+      countEl.textContent = String(shots.querySelectorAll('.tk-shots__item:not([class*=" is-"])').length);
       empty.hidden = shots.children.length > 0;
     };
 
-    // Пределы — в браузере, до загрузки: человек узнаёт о них, только когда
-    // за них вышел. Сервер проверяет то же самое (routes/streaming/profile.js).
-    var PHOTO_MB = 10;
-    var PHOTOS_AT_ONCE = 100;
-    var VIDEO_SECONDS = 3600;
-    var alarm = function (key, vars) { toast(pt(key, vars), 'error'); };
-
-    // Длительность ролика — из его заголовка, не загружая файл: час видео
-    // весит гигабайты, и узнать о пределе после загрузки было бы обидно.
-    // Не разобрал браузер (редкий кодек) — пропускаем: проверит сервер.
-    var duration = function (file) {
-      return new Promise(function (resolve) {
-        var v = document.createElement('video');
-        var url = URL.createObjectURL(file);
-        var done = function (s) { URL.revokeObjectURL(url); resolve(s); };
-        v.preload = 'metadata';
-        v.onloadedmetadata = function () { done(isFinite(v.duration) ? v.duration : 0); };
-        v.onerror = function () { done(0); };
-        setTimeout(function () { done(0); }, 8000);
-        v.src = url;
-      });
-    };
-
-    var shotHtml = function (url) {
-      var name = url.split('/').pop();
-      return '<div class="tk-shots__item"><button type="button" class="tk-shot" aria-label="' + escapeHtml(pt('user.gallery')) + '">' +
-        '<img src="' + escapeHtml(url) + '" alt="" loading="lazy" decoding="async" data-photo-url="' + escapeHtml(url) + '"></button>' +
-        '<button type="button" class="tk-thumb__del" data-name="' + escapeHtml(name) + '" aria-label="' + escapeHtml(pt('common.delete')) + '" data-i18n-aria="common.delete">' + CROSS + '</button></div>';
-    };
-
-    // ── Видео: загрузка с процентами, потом ожидание пережатия ──
     var PLAY = '<span class="tk-shot__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5.5v13L20 12z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>';
     var clock = function (s) { s = Math.round(s || 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 
@@ -197,15 +210,6 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       var key = v.status === 'failed' ? (v.error === 'long' ? 'user.videoLong' : 'user.videoFailed') : 'user.videoProcessing';
       return '<div class="tk-shot tk-shot--state"><span data-i18n="' + key + '">' + escapeHtml(pt(key)) + '</span></div>';
-    };
-
-    var videoTile = function (v) {
-      var el = document.createElement('div');
-      el.className = 'tk-shots__item' + (v.status !== 'ready' ? ' is-' + v.status : '');
-      if (v.id) el.setAttribute('data-video-id', v.id);
-      el.innerHTML = videoInner(v) +
-        '<button type="button" class="tk-thumb__del" data-video-del aria-label="' + escapeHtml(pt('common.delete')) + '" data-i18n-aria="common.delete">' + CROSS + '</button>';
-      return el;
     };
 
     var paintVideo = function (el, v) {
@@ -230,90 +234,21 @@ document.addEventListener('DOMContentLoaded', function () {
       watch(el, el.getAttribute('data-video-id'));
     });
 
-    // XHR, а не fetch: у fetch нет прогресса отправки, а ролик на сотни
-    // мегабайт без процентов выглядит зависшим.
-    var uploadVideo = function (file) {
-      var el = videoTile({ status: 'uploading' });
-      el.firstElementChild.innerHTML = '<span></span>';
-      var label = el.firstElementChild.firstChild;
-      window.tkText(label, 'user.videoUploading', { p: 0 });
-      shots.insertBefore(el, shots.firstChild);
-      recount();
-      var form = new FormData();
-      form.append('video', file);
-      var xhr = new XMLHttpRequest();
-      xhr.open('POST', '/profile/gallery/video');
-      xhr.setRequestHeader('Accept', 'application/json');
-      xhr.upload.onprogress = function (e) {
-        if (e.lengthComputable) window.tkText(label, 'user.videoUploading', { p: Math.floor(e.loaded / e.total * 100) });
-      };
-      xhr.onload = function () {
-        var d = {};
-        try { d = JSON.parse(xhr.responseText); } catch (_) {}
-        if (xhr.status !== 200 || !d.video) {
-          el.remove();
-          recount();
-          return toast(window.t('app.errorShort', { message: d.message || 'HTTP ' + xhr.status }), 'error');
-        }
-        el.setAttribute('data-video-id', d.video.id);
-        paintVideo(el, d.video);
-        watch(el, d.video.id);
-      };
-      xhr.onerror = function () {
-        el.remove();
-        recount();
-        toast(window.t('common.noNetwork'), 'error');
-      };
-      xhr.send(form);
-    };
-
-    var upload = function (list) {
-      var all = Array.prototype.slice.call(list || []);
-      var videos = all.filter(function (f) { return /^video\//.test(f.type); });
-      var photos = all.filter(function (f) { return /^image\/(png|jpeg|webp)$/.test(f.type); });
-      if (videos.length + photos.length < all.length) alarm('user.galleryBadType');
-      if (photos.length > PHOTOS_AT_ONCE) {
-        alarm('user.galleryTooMany', { n: PHOTOS_AT_ONCE });
-        photos = [];
+    // Фоновая загрузка сообщает проценты с любой страницы (tk-upload.js).
+    // Доехало и опубликовано — дальше плитка ждёт пережатия, как обычно.
+    document.addEventListener('tk:upload', function (e) {
+      var d = e.detail;
+      var el = shots.querySelector('.tk-shots__item[data-video-id="' + CSS.escape(d.id) + '"]');
+      if (!el) return;
+      var label = el.querySelector('[data-upload-pct]');
+      if (d.status === 'uploading' && label) {
+        window.tkText(label, 'user.videoUploading', { p: Math.floor(d.received / d.size * 100) });
+      } else if (d.status === 'processing' && !el.classList.contains('is-processing')) {
+        paintVideo(el, { status: 'processing' });
+        watch(el, d.id);
+      } else if (d.status === 'draft' && el.classList.contains('is-uploading')) {
+        location.reload(); // плитка черновика рисуется сервером
       }
-      var heavy = photos.filter(function (f) { return f.size > PHOTO_MB * 1024 * 1024; });
-      if (heavy.length) alarm(heavy.length === 1 ? 'user.photoHeavy' : 'user.photosHeavy', { name: heavy[0].name, n: heavy.length, mb: PHOTO_MB });
-      var files = photos.filter(function (f) { return heavy.indexOf(f) === -1; });
-
-      videos.forEach(function (f) {
-        duration(f).then(function (s) {
-          if (s > VIDEO_SECONDS + 1) return alarm('user.videoTooLong', { name: f.name });
-          uploadVideo(f);
-        });
-      });
-      if (!files.length) return;
-      var form = new FormData();
-      files.forEach(function (f) { form.append('photos', f); });
-      addBtn.disabled = true;
-      window.tkText(addBtn, 'app.uploading');
-      json('/profile/gallery', { method: 'POST', body: form })
-        .then(function (d) {
-          shots.insertAdjacentHTML('beforeend', (d.urls || []).map(shotHtml).join(''));
-          recount();
-          toast(pt('app.galleryDone', { total: d.total }), 'ok');
-        })
-        .catch(function (err) { toast(window.t('app.errorShort', { message: err.message }), 'error'); })
-        .then(function () {
-          addBtn.disabled = false;
-          window.tkText(addBtn, 'user.galleryAdd');
-        });
-    };
-
-    addBtn.addEventListener('click', function () { input.click(); });
-    input.addEventListener('change', function () { upload(input.files); input.value = ''; });
-
-    // Файлы можно бросить на всю секцию галереи.
-    gallery.addEventListener('dragover', function (e) { e.preventDefault(); gallery.classList.add('is-over'); });
-    gallery.addEventListener('dragleave', function (e) { if (!gallery.contains(e.relatedTarget)) gallery.classList.remove('is-over'); });
-    gallery.addEventListener('drop', function (e) {
-      e.preventDefault();
-      gallery.classList.remove('is-over');
-      upload(e.dataTransfer.files);
     });
 
     shots.addEventListener('click', function (e) {

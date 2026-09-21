@@ -113,22 +113,36 @@ function roundArgs(src, out, info) {
 // Пережать src в dir/video.mp4 со знаком и снять обложку dir/thumb.jpg.
 // round — кружок (roundArgs). Ошибки с reason — про сам файл (не видео,
 // слишком длинное), а не про сервер.
-async function encode(src, dir, { maxSeconds, round = false, log = {} }) {
+//
+// edit — правка со страницы загрузки (21.09): start/end — обрезка в секундах
+// исходника (end 0 — до конца), mute — без звука, coverAt — секунда
+// исходника для обложки (-1 — сами: третья секунда или середина).
+async function encode(src, dir, { maxSeconds, round = false, log = {}, edit = {} }) {
   const info = await probe(src, { explain: true });
   if (info.error || !info.video) throw Object.assign(new Error(info.error || 'в файле нет видеодорожки'), { reason: 'novideo' });
+  const start = Math.max(0, Number(edit.start) || 0);
+  const end = Number(edit.end) > start ? Number(edit.end) : 0;
+  const length = (end || info.duration) - start;
   // У webm из MediaRecorder длительности в заголовке нет — тогда её проверяет
   // сам ffmpeg: -t режет всё, что длиннее предела.
-  if (info.duration > maxSeconds + 1) throw Object.assign(new Error('слишком длинное'), { reason: 'long' });
+  if (length > maxSeconds + 1) throw Object.assign(new Error('слишком длинное'), { reason: 'long' });
 
   const video = path.join(dir, 'video.mp4');
   const thumb = path.join(dir, 'thumb.jpg');
-  const args = round ? roundArgs(src, video, info) : ffmpegArgs(src, video, info);
-  args.splice(args.length - 1, 0, '-t', String(maxSeconds + 1));
+  const shape = edit.mute ? { ...info, audio: false } : info;
+  const args = round ? roundArgs(src, video, shape) : ffmpegArgs(src, video, shape);
+  // Обрезка: -ss перед входом (быстрый поиск, ffmpeg 4.4 режет точно по
+  // кадру при перекодировании), -t — длина на выходе.
+  if (start) args.splice(args.indexOf('-i'), 0, '-ss', start.toFixed(3));
+  args.splice(args.length - 1, 0, '-t', String(Math.min(end ? length : Infinity, maxSeconds + 1)));
   await run(FFMPEG, args);
   const out = await probe(video);
-  const seconds = (out && out.duration) || info.duration;
+  const seconds = (out && out.duration) || length;
+  const at = Number(edit.coverAt) >= 0
+    ? Math.min(Math.max(0, Number(edit.coverAt) - start), Math.max(0, seconds - 0.1))
+    : Math.min(3, seconds / 2);
   await run(FFMPEG, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
-    '-ss', String(Math.min(3, seconds / 2)), '-i', video, '-frames:v', '1', '-vf', "scale='min(640,iw)':-2", thumb])
+    '-ss', at.toFixed(3), '-i', video, '-frames:v', '1', '-vf', "scale='min(640,iw)':-2", thumb])
     .catch((e) => errorLog.media(e, 'video.thumb', log));
 
   const size = round ? { w: ROUND, h: ROUND } : fit(info.width, info.height);

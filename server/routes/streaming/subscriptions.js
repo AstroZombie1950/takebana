@@ -12,6 +12,7 @@ const userView = require('../../utils/userView');
 const push = require('../../utils/push');
 const errorLog = require('../../utils/errorLog');
 const restriction = require('../../utils/restrict');
+const profileSignal = require('../../utils/profileSignal');
 
 // Подписка и отписка туда-обратно — не повод звать человека каждый раз:
 // от одного подписчика не чаще раза в сутки.
@@ -62,6 +63,8 @@ router.post('/subscribe', validate({
   }
 
   await Subscription.create({ subscriberId, subscribedToId: userId });
+  profileSignal.counts([userId, subscriberId]);
+  profileSignal.follow(subscriberId, userId, true);
   User.findById(subscriberId).select('nickname login email').lean()
     .then((me) => me && notifyFollow(req.app.get('io'), me, userId))
     .catch((e) => errorLog.server(e, 'subscribe.notify'));
@@ -104,6 +107,8 @@ router.delete('/unsubscribe', validate({
   if (!subscription) {
     return res.status(400).json({ message: 'Вы не подписаны на этого пользователя' });
   }
+  profileSignal.counts([userId, subscriberId]);
+  profileSignal.follow(subscriberId, userId, false);
 
   res.status(200).json({
     message: 'Отписка успешно выполнена',
@@ -118,6 +123,8 @@ router.post('/followers/remove', requireAuthApi, validate({
 }), async (req, res) => {
   const me = req.session.userId;
   await Subscription.deleteOne({ subscriberId: req.body.userId, subscribedToId: me });
+  profileSignal.counts([me, req.body.userId]);
+  profileSignal.follow(req.body.userId, me, false);
   res.json({ success: true, followers: await Subscription.countDocuments({ subscribedToId: me }) });
 });
 
@@ -132,6 +139,9 @@ router.post('/restrict', requireAuthApi, validate({
   if (!(await User.exists({ _id: userId }))) return res.status(404).json({ message: 'Пользователь не найден' });
   if (on) await restriction.restrict(me, userId);
   else await restriction.unrestrict(me, userId);
+  profileSignal.access(me, userId, on);
+  if (on) profileSignal.follow(userId, me, false);
+  profileSignal.counts([me, userId]);
   res.json({ success: true, restricted: on, followers: await Subscription.countDocuments({ subscribedToId: me }) });
 });
 

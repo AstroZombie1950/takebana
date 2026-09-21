@@ -12,6 +12,7 @@ const { validate } = require('../middleware/validate');
 const userView = require('../utils/userView');
 const User = require('../models/User');
 const callLog = require('../utils/callLog');
+const restriction = require('../utils/restrict');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
 const { randomUUID: uuidv4 } = require('crypto');
 
@@ -30,6 +31,9 @@ router.post('/api/calls/create', requireAuthApi, requireNotBanned, validate({
   const callerId = String(req.session.userId);
   const { calleeId, type, own } = req.body;
   if (calleeId === callerId) return res.status(400).json({ error: 'self_call' });
+  // Ограничение доступа закрывает и звонки — в обе стороны (utils/restrict.js).
+  const barred = await restriction.between(callerId, calleeId);
+  if (barred) return res.status(403).json({ success: false, restricted: barred, message: restriction.BLOCKED[barred] });
   const callId = uuidv4();
   // Общие хранилища кладёт app.js после запуска сокетов.
   const io = req.app.get('io');

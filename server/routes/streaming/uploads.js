@@ -44,20 +44,10 @@ const upload = inMemory(5);         // обложки эфиров
 const uploadAvatar = inMemory(5);
 const uploadGallery = inMemory(10); // фото галереи бывают крупнее
 
-// Видео галереи — исключение: оно большое, и в память его не берём. Файл
-// ложится во временную папку и живёт там только до пережатия со знаком
-// (utils/galleryVideo.js), которое его и удаляет.
-const VIDEO = /^video\//;
+// Большое в память не берём: файл ложится во временную папку.
 const toTmp = multer.diskStorage({ destination: os.tmpdir(), filename: (req, file, cb) => cb(null, 'tk-upload-' + Date.now() + '-' + Math.random().toString(36).slice(2)) });
-const uploadVideo = multer({
-  storage: toTmp,
-  limits: { fileSize: require('../../utils/galleryVideo').MAX_MB * 1024 * 1024, files: 1 },
-  fileFilter: (req, file, cb) => (VIDEO.test(file.mimetype)
-    ? cb(null, true)
-    : cb(Object.assign(new Error('Только видео'), { status: 400, expose: true }))),
-});
 
-// Вложения переписки — тоже на диск: видео до 200 МБ. Тип здесь не
+// Вложения переписки — на диск: видео до 200 МБ. Тип здесь не
 // проверяется — присланному браузером типу верить нельзя; вид, предел
 // и содержимое проверяет utils/attachments.js, он же удаляет файл.
 const uploadAttachment = multer({
@@ -65,4 +55,4 @@ const uploadAttachment = multer({
   limits: { fileSize: require('../../utils/attachments').MAX_MB * 1024 * 1024, files: 1, fields: 8 },
 });
 
-module.exports = { UPLOADS, upload, uploadAvatar, uploadGallery, uploadVideo, uploadAttachment };
+module.exports = { UPLOADS, upload, uploadAvatar, uploadGallery, uploadAttachment };

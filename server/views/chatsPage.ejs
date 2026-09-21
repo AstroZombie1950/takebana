@@ -158,31 +158,43 @@
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14M5 21h14M7 3l5 9-5 9M17 3l-5 9 5 9"></path></svg>
               <span class="tk-chat__limit-badge" id="limitBadge" hidden></span>
             </button>
-            <input type="text" id="messageInput" class="tk-field" placeholder="<%= ta('chats.messagePh') %>" data-i18n-placeholder="chats.messagePh" autocomplete="off" maxlength="5000">
-            <%# Пока держат микрофон — вместо поля: точка, время, живая волна
-                и подсказка. Кнопки «Отмена» здесь нет: запись отменяют,
-                уведя палец в сторону от микрофона (chats.js). %>
-            <div class="tk-rec" id="recBar" hidden>
-              <span class="tk-rec__dot" aria-hidden="true"></span>
-              <span class="tk-rec__time" id="recTime">0:00</span>
-              <span class="tk-rec__wave" id="recWave" aria-hidden="true"></span>
-              <span class="tk-rec__hint" id="recHint" data-i18n="chats.recHint"><%- t('chats.recHint') %></span>
+            <input type="text" id="messageInput" class="tk-field" placeholder="<%= ta('chats.messagePh') %>" data-i18n-placeholder="chats.messagePh" autocomplete="off" maxlength="5000" enterkeyhint="send">
+            <%# Одно гнездо на две смены, как в WhatsApp (21.09): поле пустое —
+                микрофон и кружок, в поле текст — «Отправить». Смена плавная
+                (chats.css, .has-text). %>
+            <div class="tk-chat__acts">
+              <div class="tk-chat__media">
+                <button type="button" class="tk-chat__tool tk-chat__mic" id="micBtn" aria-label="<%= ta('chats.voice') %>" data-i18n-aria="chats.voice" title="<%= ta('chats.voice') %>" data-i18n-title="chats.voice">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"></path></svg>
+                </button>
+                <button type="button" class="tk-chat__tool tk-chat__cam" id="roundBtn" aria-label="<%= ta('chats.round') %>" data-i18n-aria="chats.round" title="<%= ta('chats.round') %>" data-i18n-title="chats.round">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3.5"></circle></svg>
+                </button>
+              </div>
+              <button type="submit" class="tk-chat__send" id="sendBtn" tabindex="-1" aria-label="<%= ta('chats.send') %>" data-i18n-aria="chats.send" title="<%= ta('chats.send') %>" data-i18n-title="chats.send">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"></path></svg>
+              </button>
             </div>
-            <%# Нажать и держать — как в мессенджерах. touch-action, иначе
-                браузер на телефоне примет удержание за прокрутку. %>
-            <button type="button" class="tk-chat__tool tk-chat__mic" id="micBtn" aria-label="<%= ta('chats.voice') %>" data-i18n-aria="chats.voice" title="<%= ta('chats.voice') %>" data-i18n-title="chats.voice">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"></path></svg>
-            </button>
-            <button type="button" class="tk-chat__tool tk-chat__cam" id="roundBtn" aria-label="<%= ta('chats.round') %>" data-i18n-aria="chats.round" title="<%= ta('chats.round') %>" data-i18n-title="chats.round">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3.5"></circle></svg>
-            </button>
-            <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm tk-chat__send" aria-label="<%= ta('chats.send') %>" data-i18n-aria="chats.send">
-              <span data-i18n="chats.send"><%- t('chats.send') %></span>
-              <%# На телефоне вместо слова — стрелка: поле ввода делит строку
-                  с четырьмя кнопками (chats.css). %>
-              <svg class="tk-chat__send-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"></path></svg>
-            </button>
+            <%# Запись голосового — как в WhatsApp (21.09): нажали микрофон —
+                поле уступает место полосе записи: отмена, время, живая волна,
+                пауза и «Отправить». Держать палец больше не нужно. %>
+            <div class="tk-rec" id="recBar" aria-hidden="true">
+              <button type="button" class="tk-chat__tool tk-rec__cancel" id="recCancel" aria-label="<%= ta('chats.recCancel') %>" data-i18n-aria="chats.recCancel" title="<%= ta('chats.recCancel') %>" data-i18n-title="chats.recCancel">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>
+              </button>
+              <span class="tk-rec__dot" aria-hidden="true"></span>
+              <span class="tk-rec__time" id="recTime" role="timer">0:00</span>
+              <span class="tk-rec__wave" id="recWave" aria-hidden="true"></span>
+              <button type="button" class="tk-chat__tool tk-rec__pause" id="recPause" aria-pressed="false" aria-label="<%= ta('chats.pause') %>" data-i18n-aria="chats.pause" title="<%= ta('chats.pause') %>" data-i18n-title="chats.pause">
+                <svg class="tk-ico-pause" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><rect x="6.5" y="5" width="3.5" height="14"></rect><rect x="14" y="5" width="3.5" height="14"></rect></svg>
+                <svg class="tk-ico-play" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13L19 12z"></path></svg>
+              </button>
+              <button type="button" class="tk-chat__send" id="recSend" aria-label="<%= ta('chats.send') %>" data-i18n-aria="chats.send" title="<%= ta('chats.send') %>" data-i18n-title="chats.send">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"></path></svg>
+              </button>
+            </div>
           </form>
+          <p class="tk-chat__blocked" id="chatBlocked" hidden></p>
         </div>
         <div class="tk-chat__drop" id="dropZone" hidden><span data-i18n="chats.dropHere"><%- t('chats.dropHere') %></span></div>
       </section>
@@ -252,10 +264,23 @@
     <svg class="tk-roundrec__ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48"></circle></svg>
   </div>
   <span class="tk-roundrec__time" id="roundTime">0:00</span>
+  <%# На телефоне три текстовые кнопки не помещались в ширину — теперь
+      значки: отмена, пауза/продолжить, отправить (21.09). Подписи — в
+      aria-label; на широком экране слова рядом со значками остаются. %>
   <div class="tk-roundrec__acts">
-    <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" id="roundCancel" data-i18n="common.cancel"><%- t('common.cancel') %></button>
-    <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="roundPause" data-i18n="chats.pause"><%- t('chats.pause') %></button>
-    <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="roundSend" data-i18n="chats.send"><%- t('chats.send') %></button>
+    <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-roundrec__btn" id="roundCancel" aria-label="<%= ta('common.cancel') %>" data-i18n-aria="common.cancel">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+      <span data-i18n="common.cancel"><%- t('common.cancel') %></span>
+    </button>
+    <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-roundrec__btn" id="roundPause" aria-pressed="false" aria-label="<%= ta('chats.pause') %>" data-i18n-aria="chats.pause">
+      <svg class="tk-ico-pause" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><rect x="6.5" y="5" width="3.5" height="14"></rect><rect x="14" y="5" width="3.5" height="14"></rect></svg>
+      <svg class="tk-ico-play" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13L19 12z"></path></svg>
+      <span data-i18n="chats.pause"><%- t('chats.pause') %></span>
+    </button>
+    <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-roundrec__btn" id="roundSend" aria-label="<%= ta('chats.send') %>" data-i18n-aria="chats.send">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"></path></svg>
+      <span data-i18n="chats.send"><%- t('chats.send') %></span>
+    </button>
   </div>
 </div>
 

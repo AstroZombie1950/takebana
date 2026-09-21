@@ -72,7 +72,11 @@
       body: JSON.stringify(body)
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (data) {
-        if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+        if (!r.ok) {
+          var err = new Error(data.message || 'HTTP ' + r.status);
+          err.status = r.status;
+          throw err;
+        }
         return data;
       });
     });
@@ -104,8 +108,12 @@
   }
 
   // ── Лента ─────────────────────────────────────────────────────────────
-  var TICK = '<path d="M3 12.5l4.5 4.5L17 7.5"></path>';
+  // Одна галочка — та же, что первая из двух: при «доставлено» вторая
+  // дорисовывается рядом, а первая не прыгает.
+  var TICK = '<path d="M1.5 12.5 6 17l9.5-9.5"></path>';
   var TICKS = '<path d="M1.5 12.5 6 17l9.5-9.5"></path><path d="M11 16.5l.5.5L21 7.5"></path>';
+
+  var ticks = {};            // id сообщения → статус при прошлой отрисовке
 
   function status(m) {
     if (m.readAt) return { key: 'chats.status.read', cls: 'is-read', icon: TICKS };
@@ -295,7 +303,13 @@
     var when = '<time>' + escapeHtml(tkDate(m.sentAt)) + '</time>';
     if (out) {
       var s = status(m);
-      when += ' <svg class="tk-msg__tick ' + s.cls + '" viewBox="0 0 22 24" width="17" height="16" fill="none" stroke="currentColor" stroke-width="2" role="img" aria-label="' +
+      // Статус сменился с прошлой отрисовки — галочка меняется анимацией:
+      // вторая дорисовывается, зелёный проявляется (chats.css, is-fresh).
+      // Класс только в той отрисовке, где смена замечена впервые.
+      var was = ticks[m._id];
+      ticks[m._id] = s.key;
+      var fresh = was && was !== s.key ? ' is-fresh' + (was === 'chats.status.sent' ? ' is-drawn' : '') : '';
+      when += ' <svg class="tk-msg__tick ' + s.cls + fresh + '" viewBox="0 0 22 24" width="17" height="16" fill="none" stroke="currentColor" stroke-width="2" role="img" aria-label="' +
         escapeHtml(t(s.key)) + '"><title>' + escapeHtml(t(s.key)) + '</title>' + s.icon + '</svg>';
     }
     var key = 'm:' + m._id;
@@ -406,6 +420,7 @@
       messages = page.messages;
       calls = page.calls;
       allLoaded = page.messages.length < PAGE;
+      setBlocked(page.restricted);
       render();
       scrollToBottom();
       markRead();
@@ -431,6 +446,86 @@
     }).catch(function (e) { console.error('getMessages (старые):', e); })
       .finally(function () { loadingOld = false; });
   });
+
+  // ── Ограничение доступа ───────────────────────────────────────────────
+  // Между нами стоит ограничение (utils/restrict.js) — вместо поля ввода
+  // объяснение: кто кого ограничил. who: 'me' | 'them' | null. Приходит
+  // с историей диалога и живым событием access:changed (tk-app.js).
+  function setBlocked(who) {
+    var note = $('chatBlocked');
+    var form = $('composeForm');
+    if (who && rec) cancelVoice();
+    form.hidden = !!who;
+    note.hidden = !who;
+    if (who) say(note, who === 'me' ? 'chats.blockedMe' : 'chats.blockedThem');
+  }
+
+  document.addEventListener('tk:access:changed', function (e) {
+    if (peer && peer.id === e.detail.peerId) setBlocked(e.detail.restricted ? e.detail.by : null);
+  });
+
+  // ── Сверка открытого диалога ──────────────────────────────────────────
+  // Статусы — «доставлено», «прочитано», «исчезло», «открыто» — приходят
+  // сокетом. Но телефон замораживает вкладку, мобильная сеть молча рвёт
+  // соединение, и событие, ушедшее в эту минуту, не придёт уже никогда:
+  // заказчик 21.09 смотрел на свои сообщения, а собеседник их давно прочитал
+  // и исчезающее давно исчезло. Поэтому открытый диалог сверяется с сервером
+  // сам: после обрыва, при возвращении к вкладке и, пока есть чего ждать
+  // (моё непрочитанное или неисчезнувшее исчезающее), раз в SYNC_MS.
+  // Место в ленте не теряется: внизу — остаёмся внизу, выше — на месте.
+  var SYNC_MS = 20000;
+  var syncing = false;
+
+  function softSync() {
+    if (!peer || syncing || !messages.length) return;
+    syncing = true;
+    var id = peer.id;
+    load(id).then(function (page) {
+      if (!peer || peer.id !== id) return;
+      setBlocked(page.restricted);
+      var byId = {};
+      page.messages.forEach(function (m) { byId[m._id] = m; });
+      var oldest = page.messages.length ? page.messages[0].sentAt : null;
+      var changed = false;
+      // Что есть на странице сервера — берём оттуда; чего там нет, хотя по
+      // времени должно быть, — удалено.
+      messages = messages.filter(function (m) {
+        var f = byId[m._id];
+        if (f) {
+          if (f.readAt !== m.readAt || f.deliveredAt !== m.deliveredAt || f.expired !== m.expired || JSON.stringify(f.limit) !== JSON.stringify(m.limit)) changed = true;
+          delete byId[m._id];
+          return Object.assign(m, f);
+        }
+        var gone = oldest && new Date(m.sentAt) >= new Date(oldest);
+        if (gone) changed = true;
+        return !gone;
+      });
+      var fresh = Object.keys(byId).map(function (k) { return byId[k]; });
+      if (fresh.length) changed = true;
+      if (!changed) return;
+      var stick = atBottom();
+      var top = feed.scrollTop;
+      merge(fresh, page.calls);
+      render();
+      if (stick) scrollToBottom(); else feed.scrollTop = top;
+      if (fresh.length) markRead();
+    }).catch(function () {})
+      .finally(function () { syncing = false; });
+  }
+
+  function waiting() {
+    return messages.some(function (m) {
+      return (m.sender === ME && !m.readAt) || (m.limit && !m.expired);
+    });
+  }
+
+  setInterval(function () {
+    if (document.visibilityState === 'visible' && waiting()) softSync();
+  }, SYNC_MS);
+
+  // Вкладка вернулась и сокет жив (tk-app.js, tk:wake) — события, ушедшие,
+  // пока она спала, могли потеряться и при живом сокете.
+  document.addEventListener('tk:wake', softSync);
 
   // ── Прочтение ─────────────────────────────────────────────────────────
   // Входящие открытого диалога читаются, только пока вкладку видно: иначе
@@ -619,6 +714,7 @@
     var content = input.value.trim();
     if (!peer || !content) return;
     input.value = '';
+    syncActs();
     var limit = limitOpt;
     setLimit('');
     post('/sendMessage', { recipientId: peer.id, content: content, limit: limit })
@@ -631,8 +727,9 @@
       })
       .catch(function (err) {
         console.error('sendMessage:', err);
-        if (!input.value) { input.value = content; setLimit(limit); } // текст не теряем
-        toast(t('chats.sendFailed'), 'error');
+        if (!input.value) { input.value = content; setLimit(limit); syncActs(); } // текст не теряем
+        // Ограничение доступа (utils/restrict.js) — сервер объясняет сам.
+        toast(err.status === 403 && err.message ? err.message : t('chats.sendFailed'), 'error');
       });
   });
 
@@ -858,33 +955,49 @@
   });
 
   // ── Голосовое ─────────────────────────────────────────────────────────
-  // Микрофон держат — идёт запись, отпустили — ушла: так это сделано
-  // в мессенджерах, и так не нужна кнопка отмены, которая налезала на полосу
-  // записи. Чтобы отменить, палец (или курсор) уводят от микрофона в сторону
-  // и отпускают там. Вместо голого таймера — живая волна: видно, что запись
-  // идёт и что микрофон слышит. Пять минут — предел сервера, на нём запись
-  // отправляется сама. Chrome и Firefox пишут webm/opus, Safari — mp4/aac.
+  // Как в WhatsApp (решение заказчика 21.09.2026; до этого микрофон надо было
+  // держать): нажали микрофон — поле уступает место полосе записи. На ней
+  // отмена, время, живая волна (видно, что микрофон слышит), пауза
+  // и «Отправить». Пять минут — предел сервера, на нём запись уходит сама.
+  // Chrome и Firefox пишут webm/opus, Safari — mp4/aac.
+  //
+  // С паузой хронометраж — сумма записанных отрезков: ms — записано до
+  // нынешнего отрезка, at — когда он начался (так же у кружка ниже).
   var VOICE_MAX = 5 * 60;
-  var CANCEL_AWAY = 60;     // на сколько увести от кнопки, чтобы запись отменилась
-  var WAVE_BARS = 28;
+  var WAVE_BARS = 120;     // с запасом на широкий экран: лишние уходят за край
   var composeForm = $('composeForm');
   var micBtn = $('micBtn');
   var recBar = $('recBar');
   var recWave = $('recWave');
-  var recHint = $('recHint');
-  var rec = null;           // { recorder, stream, chunks, started, timer, send, meter }
-  var voiceHold = false;    // микрофон ещё держат
-  var voiceKeep = true;     // отпустят здесь — отправим, в стороне — выбросим
-  var micBox = null;        // рамка кнопки, снятая на нажатии: за запись она не двигается
+  var recPause = $('recPause');
+  var rec = null;           // { recorder, stream, chunks, at, ms, timer, send, peerId, meter }
+  var voiceAsking = false;  // браузер спрашивает разрешение на микрофон
 
   function say(el, key) {
     el.setAttribute('data-i18n', key);
     el.textContent = t(key);
   }
 
+  // Кнопка паузы у голосового и у кружка: значок, подпись и состояние.
+  function pauseLabel(btn, paused) {
+    var key = paused ? 'stream.resume' : 'chats.pause';
+    btn.classList.toggle('is-paused', paused);
+    btn.setAttribute('aria-pressed', String(paused));
+    btn.setAttribute('data-i18n-aria', key);
+    btn.setAttribute('aria-label', t(key));
+    if (btn.hasAttribute('title')) { btn.setAttribute('data-i18n-title', key); btn.title = t(key); }
+    var span = btn.querySelector('span');
+    if (span) say(span, key);
+  }
+
+  // Айфон (и всё на WebKit без Chrome) пишет и webm, и mp4, но webm у него
+  // выходит битым: в журнале 21.09 — голосовые с iPhone без заголовка
+  // файла, сервер их не распознавал. Ему — mp4 первым.
+  var WEBKIT = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Android|Edg\//.test(navigator.userAgent);
+
   function voiceType() {
     if (!window.MediaRecorder) return null;
-    var types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+    var types = WEBKIT ? ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'] : ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
     for (var i = 0; i < types.length; i++) if (MediaRecorder.isTypeSupported(types[i])) return types[i];
     return '';
   }
@@ -927,81 +1040,83 @@
     return Math.min(1, Math.sqrt(sum / m.data.length) * 3.2);
   }
 
-  function recording(on) {
+  // keyboard — начали с клавиатуры: фокус переезжает на полосу записи.
+  function recording(on, keyboard) {
     composeForm.classList.toggle('is-recording', on);
-    recBar.hidden = !on;
-    micBtn.setAttribute('aria-label', t(on ? 'chats.voiceSend' : 'chats.voice'));
-    micBtn.title = micBtn.getAttribute('aria-label');
-    if (!on) voiceAim(true);
+    recBar.setAttribute('aria-hidden', String(!on));
+    // Спрятанную полосу нельзя достать и клавиатурой.
+    recBar.querySelectorAll('button').forEach(function (b) { b.tabIndex = on ? 0 : -1; });
+    if (on && keyboard) $('recSend').focus();
+    else if (!on && document.activeElement && recBar.contains(document.activeElement)) input.focus();
+    if (on && !keyboard && document.activeElement === micBtn) micBtn.blur();
   }
 
-  // Палец увели от кнопки — отпускание отменит запись. Подпись меняется
-  // сразу, чтобы это было видно до того, как палец подняли.
-  function voiceAim(keep) {
-    if (keep === voiceKeep) return;
-    voiceKeep = keep;
-    recBar.classList.toggle('is-cancel', !keep);
-    say(recHint, keep ? 'chats.recHint' : 'chats.recCancelHint');
+  function voiceSec(r) {
+    return (r.ms + (r.recorder.state === 'paused' ? 0 : Date.now() - r.at)) / 1000;
   }
 
-  function startVoice() {
-    if (rec || !peer) return;
+  // У каждой записи — свой объект: куски, таймер и обработчики держатся
+  // за него, а не за общую переменную rec. Раньше onstop и таймер читали
+  // rec, который к тому времени уже обнулили или заменили новой записью:
+  // на айфоне это давало TypeError (null.chunks, null.started, null.stream
+  // в журнале 21.09), а куски одной записи попадали в другую.
+  // Без timeslice: весь файл приходит одним куском при остановке — на
+  // Safari так надёжнее, а голосовое на пять минут — это около мегабайта.
+  function startVoice(e) {
+    var keyboard = !!e && e.detail === 0;
+    if (rec || voiceAsking || !peer) return;
     var type = voiceType();
     if (type === null || !navigator.mediaDevices) return toast(t('chats.recUnsupported'), 'error');
-    voiceHold = true;
-    micBox = micBtn.getBoundingClientRect();
+    voiceAsking = true;
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
-      // Пока браузер спрашивал разрешение, кнопку могли отпустить.
-      // Так бывает при первом разрешении: кнопку отпускают, чтобы нажать
-      // «Разрешить». Молчать нельзя — подсказываем, что теперь её держат.
-      if (!voiceHold || !peer) {
-        stream.getTracks().forEach(function (tr) { tr.stop(); });
-        if (peer) toast(t('chats.recHold'));
-        return;
-      }
+      voiceAsking = false;
+      if (!peer || rrec || rec) { stream.getTracks().forEach(function (tr) { tr.stop(); }); return; }
       var recorder = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : undefined);
-      rec = { recorder: recorder, stream: stream, chunks: [], started: Date.now(), send: false, peerId: peer.id, meter: meterOn(stream) };
-      recorder.ondataavailable = function (e) { if (e.data && e.data.size) rec.chunks.push(e.data); };
-      recorder.onstop = finishVoice;
-      recorder.start(1000);
+      var r = { recorder: recorder, stream: stream, chunks: [], at: Date.now(), ms: 0, send: false, peerId: peer.id, meter: meterOn(stream) };
+      rec = r;
+      recorder.ondataavailable = function (ev) { if (ev.data && ev.data.size) r.chunks.push(ev.data); };
+      recorder.onstop = function () { finishVoice(r); };
+      recorder.start();
       waveReset();
+      pauseLabel(recPause, false);
+      recBar.classList.remove('is-paused');
       $('recTime').textContent = '0:00';
       var shown = 0;
-      rec.timer = setInterval(function () {
-        var sec = Math.floor((Date.now() - rec.started) / 1000);
+      r.timer = setInterval(function () {
+        if (rec !== r) return clearInterval(r.timer);
+        var sec = Math.floor(voiceSec(r));
         if (sec !== shown) { shown = sec; $('recTime').textContent = clock(sec); }
-        if (rec.meter) waveStep(meterLevel(rec.meter));
-        if (sec >= VOICE_MAX) { voiceHold = false; stopVoice(true); }
+        if (r.meter && recorder.state === 'recording') waveStep(meterLevel(r.meter));
+        if (sec >= VOICE_MAX) stopVoice(true);
       }, 80);
-      recording(true);
-    }).catch(function () { voiceHold = false; toast(t('chats.micDenied'), 'error'); });
+      recording(true, keyboard);
+    }).catch(function () { voiceAsking = false; toast(t('chats.micDenied'), 'error'); });
   }
 
   function stopVoice(send) {
-    if (!rec) return;
-    rec.send = send;
-    clearInterval(rec.timer);
-    if (rec.recorder.state !== 'inactive') rec.recorder.stop();
-    else finishVoice();
+    var r = rec;
+    if (!r || r.stopping) return;
+    r.stopping = true;
+    r.send = send;
+    r.sec = voiceSec(r);
+    clearInterval(r.timer);
+    if (r.recorder.state !== 'inactive') r.recorder.stop();
+    else finishVoice(r);
   }
 
   // Микрофон бросаем и не отправляем — из тех мест, где начинается что-то
-  // другое: запись кружка, уход со страницы.
-  function cancelVoice() {
-    voiceHold = false;
-    stopVoice(false);
-  }
+  // другое: запись кружка, смена диалога.
+  function cancelVoice() { stopVoice(false); }
 
-  function finishVoice() {
-    var r = rec;
-    rec = null;
-    recording(false);
+  function finishVoice(r) {
+    if (r.done) return;
+    r.done = true;
+    clearInterval(r.timer);
+    if (rec === r) { rec = null; recording(false); }
     r.stream.getTracks().forEach(function (tr) { tr.stop(); });
     if (r.meter) try { r.meter.ctx.close(); } catch (e) {}
-    // Короткое нажатие — не запись, а промах по кнопке: подсказываем, что её
-    // надо держать. Молча ничего не делать хуже: кажется, что не работает.
-    if (Date.now() - r.started < 700) { if (r.send) toast(t('chats.recHold')); return; }
-    if (!r.send || !r.chunks.length) return;
+    // Меньше полусекунды — промах, а не голосовое.
+    if (!r.send || !r.chunks.length || r.sec < 0.5) return;
     if (!peer || peer.id !== r.peerId) return;
     var type = r.recorder.mimeType || r.chunks[0].type || 'audio/webm';
     var ext = /mp4/.test(type) ? 'm4a' : 'webm';
@@ -1009,53 +1124,34 @@
     queueFiles([new File([blob], 'voice.' + ext, { type: blob.type })], 'voice');
   }
 
-  // Нажатие ловим на кнопке, отпускание — на всём документе: палец к этому
-  // времени может быть где угодно, в том числе за окном.
-  micBtn.addEventListener('pointerdown', function (e) {
-    if (e.button) return;
-    startVoice();
-  });
-
-  // Android на удержании шлёт contextmenu — меню над кнопкой записи ни к чему.
-  micBtn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-
-  // Далеко ли указатель от кнопки. Считаем и на движении (чтобы подпись
-  // менялась заранее), и на отпускании: указатель может оказаться в стороне
-  // и без единого pointermove — например, после прокрутки страницы.
-  function nearMic(e) {
-    if (!micBox) return true;
-    var dx = Math.max(micBox.left - e.clientX, e.clientX - micBox.right, 0);
-    var dy = Math.max(micBox.top - e.clientY, e.clientY - micBox.bottom, 0);
-    return dx * dx + dy * dy < CANCEL_AWAY * CANCEL_AWAY;
-  }
-
-  document.addEventListener('pointermove', function (e) {
-    if (voiceHold) voiceAim(nearMic(e));
-  });
-
-  document.addEventListener('pointerup', function (e) {
-    if (!voiceHold) return;
-    voiceHold = false;
-    stopVoice(nearMic(e));
-  });
-
-  document.addEventListener('pointercancel', cancelVoice);
-
-  // С клавиатуры кнопку так же «держат»: пробел или Enter. preventDefault
-  // снимает и повтор нажатия, и click, который иначе пришёл бы следом.
-  micBtn.addEventListener('keydown', function (e) {
-    if (e.key !== ' ' && e.key !== 'Enter') return;
-    e.preventDefault();
-    if (!e.repeat) startVoice();
-  });
-
-  micBtn.addEventListener('keyup', function (e) {
-    if ((e.key !== ' ' && e.key !== 'Enter') || !voiceHold) return;
-    voiceHold = false;
-    stopVoice(true);
+  micBtn.addEventListener('click', startVoice);
+  $('recSend').addEventListener('click', function () { stopVoice(true); });
+  $('recCancel').addEventListener('click', cancelVoice);
+  recPause.addEventListener('click', function () {
+    if (!rec || rec.stopping) return;
+    var pause = rec.recorder.state === 'recording';
+    if (pause) { rec.ms += Date.now() - rec.at; rec.recorder.pause(); }
+    else { rec.at = Date.now(); rec.recorder.resume(); }
+    pauseLabel(recPause, pause);
+    recBar.classList.toggle('is-paused', pause);
   });
 
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && rec) cancelVoice(); });
+
+  // ── Микрофон и кружок ↔ «Отправить» ───────────────────────────────────
+  // Поле пустое — микрофон и кружок, в поле текст — стрелка отправки на их
+  // месте (как в WhatsApp). Отправить можно и клавишей ввода на клавиатуре
+  // телефона (enterkeyhint="send"). Смена плавная — chats.css, .has-text.
+  function syncActs() {
+    var has = input.value.trim().length > 0;
+    if (composeForm.classList.contains('has-text') === has) return;
+    composeForm.classList.toggle('has-text', has);
+    $('sendBtn').tabIndex = has ? 0 : -1;
+    micBtn.tabIndex = $('roundBtn').tabIndex = has ? -1 : 0;
+  }
+  input.addEventListener('input', syncActs);
+  syncActs();
+  recBar.querySelectorAll('button').forEach(function (b) { b.tabIndex = -1; });
 
   // ── Когда медиа не играет ─────────────────────────────────────────────
   // Кружки и голосовые лежат на стороннем домене (Bunny, utils/storage.js),
@@ -1513,46 +1609,51 @@
   var roundPauseBtn = $('roundPause');
   var rrec = null;          // { recorder, stream, chunks, at, ms, timer, send, peerId }
 
-  function roundSec() {
-    return (rrec.ms + (rrec.recorder.state === 'paused' ? 0 : Date.now() - rrec.at)) / 1000;
+  function roundSec(r) {
+    return (r.ms + (r.recorder.state === 'paused' ? 0 : Date.now() - r.at)) / 1000;
   }
 
   // Картинку тоже останавливаем: замерший кадр — самый понятный знак, что
   // запись стоит, и его видно раньше, чем подпись кнопки.
   function roundPaused(on) {
     roundRec.classList.toggle('is-paused', on);
-    say(roundPauseBtn, on ? 'stream.resume' : 'chats.pause');
+    pauseLabel(roundPauseBtn, on);
     if (on) roundPreview.pause(); else roundPreview.play().catch(function () {});
   }
 
   function roundType() {
     if (!window.MediaRecorder) return null;
-    var types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+    // Айфону — mp4 первым, как и у голосового (WEBKIT выше).
+    var types = WEBKIT ? ['video/mp4', 'video/webm'] : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
     for (var i = 0; i < types.length; i++) if (MediaRecorder.isTypeSupported(types[i])) return types[i];
     return '';
   }
 
+  // Как у голосового: у записи свой объект, обработчики держатся за него.
   function startRound() {
     var type = roundType();
     if (type === null || !navigator.mediaDevices) return toast(t('chats.recUnsupported'), 'error');
+    if (rrec) return;
     if (rec) cancelVoice();
     navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 } },
       audio: true
     }).then(function (stream) {
-      if (!peer) { stream.getTracks().forEach(function (tr) { tr.stop(); }); return; }
+      if (!peer || rrec) { stream.getTracks().forEach(function (tr) { tr.stop(); }); return; }
       var recorder = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 1200000 } : undefined);
-      rrec = { recorder: recorder, stream: stream, chunks: [], at: Date.now(), ms: 0, send: false, peerId: peer.id };
-      recorder.ondataavailable = function (e) { if (e.data && e.data.size) rrec.chunks.push(e.data); };
-      recorder.onstop = finishRound;
+      var r = { recorder: recorder, stream: stream, chunks: [], at: Date.now(), ms: 0, send: false, peerId: peer.id };
+      rrec = r;
+      recorder.ondataavailable = function (e) { if (e.data && e.data.size) r.chunks.push(e.data); };
+      recorder.onstop = function () { finishRound(r); };
       roundPreview.srcObject = stream;
-      recorder.start(1000);
+      recorder.start();
       roundRec.classList.remove('hidden');
       roundRec.style.setProperty('--p', 0);
       roundPaused(false);
       $('roundTime').textContent = '0:00';
-      rrec.timer = setInterval(function () {
-        var sec = roundSec();
+      r.timer = setInterval(function () {
+        if (rrec !== r) return clearInterval(r.timer);
+        var sec = roundSec(r);
         $('roundTime').textContent = clock(Math.floor(sec));
         roundRec.style.setProperty('--p', Math.min(1, sec / ROUND_MAX));
         if (sec >= ROUND_MAX) stopRoundRec(true);
@@ -1562,19 +1663,25 @@
   }
 
   function stopRoundRec(send) {
-    if (!rrec) return;
-    rrec.send = send;
-    rrec.sec = roundSec();
-    clearInterval(rrec.timer);
-    if (rrec.recorder.state !== 'inactive') rrec.recorder.stop();
-    else finishRound();
+    var r = rrec;
+    if (!r || r.stopping) return;
+    r.stopping = true;
+    r.send = send;
+    r.sec = roundSec(r);
+    clearInterval(r.timer);
+    if (r.recorder.state !== 'inactive') r.recorder.stop();
+    else finishRound(r);
   }
 
-  function finishRound() {
-    var r = rrec;
-    rrec = null;
-    roundRec.classList.add('hidden');
-    roundPreview.srcObject = null;
+  function finishRound(r) {
+    if (r.done) return;
+    r.done = true;
+    clearInterval(r.timer);
+    if (rrec === r) {
+      rrec = null;
+      roundRec.classList.add('hidden');
+      roundPreview.srcObject = null;
+    }
     r.stream.getTracks().forEach(function (tr) { tr.stop(); });
     if (!r.send || !r.chunks.length || r.sec < 1) return;
     if (!peer || peer.id !== r.peerId) return;
@@ -1586,7 +1693,7 @@
   $('roundBtn').addEventListener('click', startRound);
 
   roundPauseBtn.addEventListener('click', function () {
-    if (!rrec) return;
+    if (!rrec || rrec.stopping) return;
     var pause = rrec.recorder.state === 'recording';
     if (pause) { rrec.ms += Date.now() - rrec.at; rrec.recorder.pause(); }
     else { rrec.at = Date.now(); rrec.recorder.resume(); }
@@ -1729,7 +1836,7 @@
   // Пока сокета не было, что-то могло прийти или прочитаться — перечитываем
   // открытый диалог целиком.
   document.addEventListener('tk:reconnect', function () {
-    if (peer) openHistory();
+    if (peer) (messages.length ? softSync : openHistory)();
     journalStale = true;
     if (!callsList.hidden) loadJournal();
   });

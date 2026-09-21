@@ -26,7 +26,9 @@ const PRESETS = {
   avatar:        { width: 512,  height: 512,  fit: 'cover',  quality: 82 },
   // Галерея — контент человека: со знаком (решение заказчика 18.09.2026).
   gallery:       { width: 1600, height: 1600, fit: 'inside', quality: 80, watermark: true },
-  thumbnail:     { width: 1280, height: 720,  fit: 'cover',  quality: 80 },
+  // Обложка эфира — тоже со знаком (21.09): её видно в поиске и на витрине,
+  // и она же становится обложкой записи эфира (utils/recording.js).
+  thumbnail:     { width: 1280, height: 720,  fit: 'cover',  quality: 80, watermark: true },
   establishment: { width: 1600, height: 1200, fit: 'inside', quality: 80 },
 };
 
@@ -50,7 +52,13 @@ async function saveImage(buffer, preset, dir) {
 
   let data;
   try {
-    if (p.watermark) data = (await stamp(buffer, p, p.quality)).data;
+    if (p.watermark) {
+      // stamp вписывает, а не кадрирует: обложку 16:9 сперва режем по кадру.
+      const src = p.fit === 'cover'
+        ? await sharp(buffer).rotate().resize({ width: p.width, height: p.height, fit: 'cover', withoutEnlargement: true }).png().toBuffer()
+        : buffer;
+      data = (await stamp(src, p, p.quality)).data;
+    }
     else data = await sharp(buffer)
       // По EXIF: снимок с телефона иначе ложится набок. Только до resize —
       // после поворота размеры меняются местами.

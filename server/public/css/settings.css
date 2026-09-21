@@ -120,12 +120,19 @@
 
 .tk-set__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
+/* Кнопки фото — столбиком одной ширины, подпись форматов — по той же оси.
+ * Раньше кнопки стояли по своей ширине, а подпись — от края колонки:
+ * на телефоне у каждой строки текст начинался в своём месте (21.09). */
 .tk-set__side {
+  flex: 0 1 240px;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  text-align: center;
 }
+
+.tk-set__side .tk-panel__actions { flex-direction: column; align-items: stretch; gap: 6px; }
 
 /* display у кнопок сильнее браузерного [hidden]. */
 .tk-set .tk-btn[hidden],
@@ -190,7 +197,8 @@
 .tk-set__how summary:hover { color: var(--tk-paper); }
 .tk-set__how summary:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
 .tk-set__how[open] summary { margin-bottom: 6px; }
-.tk-set__how .tk-note { margin: 0; }
+.tk-set__how .tk-note { margin: 0; transition: opacity .26s; }
+.tk-set__how.is-closing .tk-note { opacity: 0; }
 
 .tk-set__perms {
   display: grid;
@@ -290,6 +298,5 @@
 
 @media (max-width: 767px) {
   .tk-set__exit.tk-btn { display: flex; }
-  .tk-set__photo { align-items: flex-start; }
   .tk-set__ava { width: 72px; height: 72px; font-size: 26px; }
 }

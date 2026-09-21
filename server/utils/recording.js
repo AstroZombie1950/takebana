@@ -70,7 +70,10 @@ function run(bin, args) {
 
 // Склейка, обложка, выгрузка. Идёт после ответа ведущему: на часовом эфире
 // копирование — секунды, выгрузка в хранилище — минуты.
-async function finalize(rec, dir) {
+// cover — обложка эфира (/uploads/thumbnails/…): есть — она и становится
+// обложкой записи (21.09); до этого обложкой всегда был кадр с третьей
+// секунды, случайный кусок видео.
+async function finalize(rec, dir, cover) {
   const work = path.join(dir, 'out');
   try {
     const parts = (await fs.promises.readdir(dir))
@@ -103,17 +106,20 @@ async function finalize(rec, dir) {
     const base = `recordings/${rec.userId}/${rec._id}`;
     const { size } = await fs.promises.stat(video);
     const videoUrl = await storage.put(video, `${base}.mp4`, 'video/mp4');
-    const thumbUrl = fs.existsSync(thumb) ? await storage.put(thumb, `${base}.jpg`, 'image/jpeg') : '';
+    const own = cover && ownCover(cover);
+    const thumbKey = own ? `${base}.webp` : fs.existsSync(thumb) ? `${base}.jpg` : '';
+    const thumbUrl = own ? await storage.put(own, thumbKey, 'image/webp')
+      : thumbKey ? await storage.put(thumb, thumbKey, 'image/jpeg') : '';
 
     // Запись могли удалить, пока шла выгрузка, — тогда убираем и файлы.
     const saved = await Recording.findOneAndUpdate({ _id: rec._id }, {
       $set: {
         status: 'ready', duration, size,
         video: { url: videoUrl, key: `${base}.mp4` },
-        thumb: { url: thumbUrl, key: thumbUrl ? `${base}.jpg` : '' },
+        thumb: { url: thumbUrl, key: thumbKey },
       },
     });
-    if (!saved) await Promise.all([storage.remove(`${base}.mp4`), storage.remove(`${base}.jpg`)]);
+    if (!saved) await Promise.all([storage.remove(`${base}.mp4`), storage.remove(thumbKey)]);
     console.log(`[rec ${rec._id}] готова: ${duration} с, ${(size / 1048576).toFixed(1)} МБ`);
 
     // Автору — сейчас. Склейка идёт минуты, и до 20.09.2026 он не узнавал
@@ -172,8 +178,16 @@ async function save(stream) {
     audit(null, 'recording.fail', { actor: rec.userId, result: 'fail', targetType: 'recording', target: rec, meta: { error: 'нет кусков' } });
     return rec;
   }
-  finalize(rec, detached);
+  finalize(rec, detached, stream.thumbnail);
   return rec;
+}
+
+// Файл обложки эфира на диске — только из папки обложек и только по имени.
+function ownCover(url) {
+  const name = path.basename(String(url));
+  if (!/^[\w.-]+\.webp$/.test(name)) return '';
+  const file = path.join(__dirname, '..', 'public', 'uploads', 'thumbnails', name);
+  return fs.existsSync(file) ? file : '';
 }
 
 // Запись после склейки — удалить из хранилища и базы.

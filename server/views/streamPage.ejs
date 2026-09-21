@@ -142,6 +142,27 @@
           <textarea id="streamDescription" name="description" class="tk-field" rows="3" maxlength="5000" placeholder="<%= ta('studio.descriptionPh') %>" data-i18n-placeholder="studio.descriptionPh"><%= defaults.description || '' %></textarea>
         </div>
 
+        <%# Обложка (21.09): картинка эфира в поиске и на витрине, она же —
+            обложка записи. Без неё там кадр из эфира. Файл уходит после
+            /start-stream (tk-studio.js). %>
+        <% var coverUrl = defaults.thumbnail || ''; %>
+        <div class="tk-form__row">
+          <span class="tk-form__label"><span data-i18n="studio.cover"><%- t('studio.cover') %></span> <span class="tk-form__hint" data-i18n="common.optional"><%- t('common.optional') %></span></span>
+          <div class="tk-studio__cover">
+            <div class="tk-studio__coverbox">
+              <img id="coverImg" alt=""<% if (coverUrl) { %> src="<%= coverUrl %>"<% } else { %> hidden<% } %>>
+              <span class="tk-studio__coverph" id="coverPh"<% if (coverUrl) { %> hidden<% } %> data-i18n="studio.coverNone"><%- t('studio.coverNone') %></span>
+            </div>
+            <div class="tk-studio__coverctl">
+              <input type="file" id="coverInput" accept="image/png,image/jpeg,image/webp" hidden>
+              <input type="hidden" name="cover" value="keep">
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" id="coverPick" data-i18n="upload.coverPick"><%- t('upload.coverPick') %></button>
+              <button type="button" class="tk-btn tk-btn--quiet tk-btn--xs" id="coverClear"<% if (!coverUrl) { %> hidden<% } %> data-i18n="studio.coverClear"><%- t('studio.coverClear') %></button>
+              <p class="tk-form__note" data-i18n="studio.coverNote"><%- t('studio.coverNote') %></p>
+            </div>
+          </div>
+        </div>
+
         <div class="tk-form__row">
           <label class="tk-form__toggle">
             <input type="checkbox" name="isAdult"<%= defaults.isAdult ? ' checked' : '' %>>

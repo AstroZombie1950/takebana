@@ -74,7 +74,52 @@
   transition: color .18s ease, border-color .18s ease;
 }
 
-.tk-prof__gear:hover { color: var(--tk-paper); border-color: var(--tk-beige); }
+.tk-prof__gear:hover,
+.tk-prof__gear[aria-expanded="true"] { color: var(--tk-paper); border-color: var(--tk-beige); }
+
+/* Меню «⋯» чужого профиля: жалоба и ограничение (21.09). Кнопка стоит там
+ * же, где у своего шестерёнка; меню раскрывается под ней вправо-вниз. */
+.tk-prof__more { position: absolute; top: 0; right: 0; z-index: 5; }
+.tk-prof__more .tk-prof__gear { position: static; background: none; cursor: pointer; padding: 0; }
+
+.tk-prof__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  background: var(--tk-ink);
+  border: 1px solid var(--tk-rule);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .5);
+  text-align: left;
+  animation: tk-prof-menu .16s ease both;
+}
+
+.tk-prof__menu[hidden] { display: none; }
+
+@keyframes tk-prof-menu { from { opacity: 0; transform: translateY(-4px); } }
+
+.tk-prof__menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  background: none;
+  border: 0;
+  color: var(--tk-paper);
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  letter-spacing: .04em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tk-prof__menu button:hover,
+.tk-prof__menu button:focus-visible { background: rgba(245, 241, 234, .06); }
+.tk-prof__menu .is-danger { color: var(--tk-accent); }
+.tk-prof__menu svg { flex: none; }
 
 /* Присутствие: одна строка под именем. Раньше это была отдельная панель
  * с двумя строками «ключ — значение» в сетке ниже. */
@@ -146,12 +191,19 @@
 .tk-prof__acts {
   margin-top: 24px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
 }
+
+/* Кнопки на виду (21.09): общение — написать и позвонить; ниже отдельно
+ * подписка. Жалоба и ограничение — в меню «⋯» (.tk-prof__menu). */
+.tk-prof__acts-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.tk-prof__acts-row[hidden] { display: none; }
 
 .tk-prof__acts .tk-btn { gap: 8px; }
 .tk-prof__acts svg { flex: none; }
+
 
 /* ── Секции ───────────────────────────────────────────────────────────── */
 .tk-panel--prof {
@@ -413,8 +465,14 @@
   .tk-prof__ava { width: 92px; height: 92px; font-size: 30px; }
   .tk-prof__name { font-size: 28px; }
   .tk-prof__stats { justify-content: center; }
-  .tk-prof__acts { justify-content: center; }
-  .tk-prof__acts .tk-btn { flex: 1 1 140px; }
+  /* Телефон: «Написать» забирает строку, звонки — квадратами со значком;
+   * подписка — во всю ширину под ними. */
+  .tk-prof__acts { align-items: stretch; }
+  .tk-prof__acts-row .tk-btn { flex: 1 1 0; min-width: 0; }
+  .tk-prof__talk { flex-wrap: nowrap; }
+  .tk-prof__talk .tk-prof__call { flex: none; width: 46px; padding: 0; }
+  .tk-prof__call span { display: none; }
+  .tk-prof__chan .subscribe__button { flex-basis: 100%; }
   .tk-panel--prof { margin-top: 26px; }
   .tk-prof__meta { justify-content: center; }
   .tk-shots { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
@@ -425,5 +483,4 @@
 
 @media (max-width: 374px) {
   .tk-prof__name { font-size: 23px; }
-  .tk-prof__acts .tk-btn { flex: 1 1 100%; }
 }

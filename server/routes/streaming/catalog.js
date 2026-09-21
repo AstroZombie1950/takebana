@@ -193,8 +193,10 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
   // Видео галереи: чужому — готовые, владельцу — и те, что пережимаются.
   const videos = restricted ? [] : await GalleryVideo.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
     .sort({ createdAt: -1 })
-    .select('status error duration video thumb')
+    .select('status error duration video thumb upload')
     .lean();
+
+  res.locals.pageOwner = { id: String(userId), scope: 'profile', access: restricted ? 'them' : iRestricted ? 'me' : '' };
 
   // Передача данных в шаблон
   res.render('userPage', {

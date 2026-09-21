@@ -255,6 +255,19 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   background:rgba(245,241,234,.08);
 }
 
+/* Тихое второстепенное действие — текстом, без рамки: пожаловаться,
+ * ограничить, удалить черновик. */
+.tk-btn--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--tk-beige);
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.tk-btn--quiet:hover,
+.tk-btn--quiet:focus-visible { color: var(--tk-paper); background: rgba(245, 241, 234, .06); }
+
 /* Разрушающее действие: завершить эфир, отменить звонок. */
 .tk-btn--danger {
   background:#E34234;
@@ -693,6 +706,43 @@ a:focus-visible, button:focus-visible, input:focus-visible {
     padding-left: calc(20px + var(--tk-safe-l));
     padding-right: calc(20px + var(--tk-safe-r));
   }
+}
+
+/* ── Фоновая загрузка видео ──
+ * Плашка «Загрузка видео 45%» в углу на любой странице, пока ролик едет
+ * (public/tk-upload.js); ведёт на страницу загрузки. Кольцо — сколько
+ * доехало. Над полосой системных кнопок и под вырезами. */
+.tk-upchip {
+  --p: 0;
+  position: fixed;
+  right: calc(16px + var(--tk-safe-r));
+  bottom: calc(16px + var(--tk-safe-b));
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 10px 10px;
+  background: var(--tk-ink);
+  border: 1px solid var(--tk-rule);
+  color: var(--tk-paper);
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .06em;
+  text-decoration: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+}
+
+.tk-upchip[hidden] { display: none; }
+.tk-upchip:hover { border-color: var(--tk-paper); }
+
+.tk-upchip__ring {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: conic-gradient(var(--tk-accent) calc(var(--p) * 360deg), rgba(201, 194, 183, .2) 0);
+  -webkit-mask: radial-gradient(circle, transparent 7px, #000 7.5px);
+  mask: radial-gradient(circle, transparent 7px, #000 7.5px);
 }
 
 /* ── Зоны нажатия на сенсорных экранах ─────────────────────────────────────

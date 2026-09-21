@@ -506,6 +506,14 @@
 .tk-msg__tick { flex: none; }
 .tk-msg__tick.is-read { color: var(--tk-green); }
 
+/* Смена статуса — плавно (21.09): доставлено — вторая галочка дорисовывается
+ * штрихом, прочитано — зелёный проявляется из серого. */
+.tk-msg__tick.is-drawn path + path { stroke-dasharray: 16; animation: tk-tick-draw .45s cubic-bezier(.2, .7, .2, 1) both; }
+.tk-msg__tick.is-read.is-fresh { animation: tk-tick-read .6s ease .15s both; }
+
+@keyframes tk-tick-draw { from { stroke-dashoffset: 16; } to { stroke-dashoffset: 0; } }
+@keyframes tk-tick-read { from { color: var(--tk-muted); } }
+
 .tk-msg--in .tk-msg__when { margin-left: 40px; }
 
 /* Звонок в ленте: строка посередине между сообщениями. */
@@ -540,40 +548,133 @@
   border-top: 1px solid var(--tk-rule);
 }
 
+/* position — для полосы записи: она ложится поверх всей строки. */
+/* Ограничение доступа — вместо поля ввода строка-объяснение. */
+.tk-chat__compose form[hidden] { display: none; }
+
+.tk-chat__blocked {
+  margin: 0;
+  padding: 12px 0;
+  text-align: center;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  letter-spacing: .04em;
+  color: var(--tk-muted);
+}
+
+.tk-chat__blocked[hidden] { display: none; }
+
 .tk-chat__compose form {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: 10px;
+  --tk-acts-media: 82px;   /* микрофон и кружок: 36 + 10 + 36 */
+  --tk-ease: cubic-bezier(.2, .7, .2, 1);
 }
 
 .tk-chat__compose .tk-field {
   flex: 1;
+  min-width: 0;
   padding: 12px 16px;
 }
 
-.tk-chat__send { flex: none; }
-
-/* Скрепка и микрофон по краям поля. */
+/* Скрепка и исчезающее по краям поля. */
 .tk-chat__compose .tk-chat__tool { align-self: center; }
-.is-recording .tk-chat__mic { color: var(--tk-accent); border-color: var(--tk-accent); }
 
-/* Идёт запись голосового: вместо поля и скрепки — полоса записи. */
-.is-recording #messageInput,
-.is-recording .tk-chat__clip { display: none; }
-
-/* Полоса записи: точка, время, живая волна и подсказка. Кнопки здесь нет —
- * запись отменяют, уведя палец от микрофона (chats.js). */
-.tk-rec:not([hidden]) {
-  flex: 1;
-  min-width: 0;
+/* «Отправить» — квадрат со стрелкой, во всю высоту поля. */
+.tk-chat__send {
+  flex: none;
+  width: 44px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 16px;
-  border: 1px solid var(--tk-rule);
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  cursor: pointer;
+  transition: background-color .18s ease;
 }
 
-.tk-rec.is-cancel { border-color: var(--tk-accent); }
+.tk-chat__send:hover,
+.tk-chat__send:focus-visible { background: var(--tk-paper); }
+
+/* Гнездо справа от поля (21.09): поле пустое — микрофон и кружок, в поле
+ * текст — «Отправить». Обе смены лежат в одной клетке сетки, ширина гнезда
+ * перетекает между ними; уходящая половина гаснет и сжимается, приходящая
+ * проявляется. visibility — с задержкой, чтобы погасшая не ловила нажатия
+ * и фокус, но успела доиграть. */
+.tk-chat__acts {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: var(--tk-acts-media);
+  transition: width .24s var(--tk-ease);
+}
+
+.has-text .tk-chat__acts { width: 44px; }
+
+.tk-chat__media,
+.tk-chat__acts .tk-chat__send {
+  grid-area: 1 / 1;
+  transition: opacity .18s ease, transform .24s var(--tk-ease), visibility 0s linear 0s;
+}
+
+.tk-chat__media {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.tk-chat__acts .tk-chat__send { justify-self: end; }
+
+.tk-chat__acts .tk-chat__send,
+.has-text .tk-chat__media {
+  opacity: 0;
+  transform: scale(.6);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .18s ease, transform .24s var(--tk-ease), visibility 0s linear .24s;
+}
+
+.has-text .tk-chat__acts .tk-chat__send {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity .18s ease, transform .24s var(--tk-ease), visibility 0s linear 0s;
+}
+
+/* Запись голосового (21.09, как в WhatsApp): полоса ложится поверх строки
+ * ввода и проявляется — отмена, время, живая волна, пауза, «Отправить».
+ * Строка под ней остаётся на месте, поэтому вёрстка не прыгает. */
+.is-recording > :not(.tk-rec) { pointer-events: none; }
+
+.tk-rec {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--tk-ink);
+  opacity: 0;
+  transform: translateY(6px);
+  visibility: hidden;
+  transition: opacity .2s ease, transform .24s var(--tk-ease), visibility 0s linear .24s;
+}
+
+.is-recording .tk-rec {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition: opacity .2s ease, transform .24s var(--tk-ease), visibility 0s linear 0s;
+}
+
+.tk-rec .tk-chat__send { align-self: stretch; }
+.tk-rec__cancel:hover { color: var(--tk-accent); }
 
 .tk-rec__dot {
   width: 10px;
@@ -588,6 +689,7 @@
 
 .tk-rec__time {
   flex: none;
+  min-width: 3.2em;
   font-family: Oswald, sans-serif;
   font-size: 15px;
   letter-spacing: .06em;
@@ -595,41 +697,39 @@
   color: var(--tk-paper);
 }
 
-/* Волна: полоски одной ширины, высоту им ставит chats.js по громкости.
- * min-height — чтобы в тишине полоса не исчезала совсем. */
+/* Волна: узкие полоски, новые справа; что не влезло — уходит за левый край.
+ * Высоту ставит chats.js по громкости, min-height — чтобы в тишине полоса
+ * не исчезала совсем. */
 .tk-rec__wave {
   flex: 1;
   min-width: 0;
   height: 24px;
   display: flex;
   align-items: center;
-  gap: 2px;
+  justify-content: flex-end;
+  gap: 3px;
   overflow: hidden;
 }
 
 .tk-rec__wave i {
-  flex: 1;
-  min-width: 2px;
+  flex: none;
+  width: 3px;
   height: 6%;
   min-height: 2px;
   background: var(--tk-beige);
-  transition: height .08s linear;
+  transition: height .08s linear, background-color .2s ease;
 }
 
-.tk-rec.is-cancel .tk-rec__wave i { background: var(--tk-accent); }
+/* Пауза: точка не мигает, волна и время притихли. */
+.tk-rec.is-paused .tk-rec__dot { animation: none; background: var(--tk-muted); }
+.tk-rec.is-paused .tk-rec__wave i { background: var(--tk-muted); }
+.tk-rec.is-paused .tk-rec__time { color: var(--tk-muted); }
 
-.tk-rec__hint {
-  flex: none;
-  font-family: Oswald, sans-serif;
-  font-size: 12px;
-  letter-spacing: .06em;
-  color: var(--tk-muted);
-}
-
-.tk-rec.is-cancel .tk-rec__hint { color: var(--tk-accent); }
-
-/* Удержание не должно уезжать прокруткой и выделением текста. */
-.tk-chat__mic { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+/* Значки паузы: пауза, а на паузе — «продолжить». Общие у голосового
+ * и кружка. */
+.tk-ico-play,
+.is-paused > .tk-ico-pause { display: none; }
+.is-paused > .tk-ico-play { display: block; }
 
 /* Перетаскивание файла в диалог: рамка поверх ленты. */
 .tk-chat__area { position: relative; }
@@ -861,8 +961,14 @@
 
 @media (prefers-reduced-motion: reduce) {
   .tk-rec__dot,
-  .tk-upload__bar.is-busy i { animation: none; }
+  .tk-upload__bar.is-busy i,
+  .tk-msg__tick.is-fresh,
+  .tk-msg__tick.is-drawn path + path { animation: none; }
   .tk-round { transition: none; }
+  .tk-chat__acts,
+  .tk-chat__media,
+  .tk-chat__acts .tk-chat__send,
+  .tk-rec { transition: none; }
 }
 
 /* ── Кружки ── */
@@ -996,6 +1102,8 @@
 }
 
 .tk-roundrec__acts { display: flex; gap: 12px; }
+.tk-roundrec__btn { gap: 8px; }
+.tk-roundrec__btn svg { flex: none; }
 
 /* ── Исчезающие ── */
 .tk-chat__limit { position: relative; }
@@ -1144,24 +1252,21 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 
 .tk-oncetimer[hidden] { display: none; }
 
-.tk-chat__send-ico { display: none; }
-
 @media (max-width: 640px) {
   .tk-round { width: 200px; }
   .tk-round.is-live { width: 300px; }
 
-  /* Поле ввода и четыре кнопки в одну строку: «Отправить» — стрелкой,
-   * кнопки уже, поле забирает остальное. */
-  .tk-chat__compose form { gap: 4px; }
+  /* Поле ввода и кнопки в одну строку: кнопки уже, поле забирает остальное. */
+  .tk-chat__compose form { gap: 4px; --tk-acts-media: 68px; }
   .tk-chat__compose .tk-chat__tool { width: 32px; }
-  .tk-chat__compose .tk-field { min-width: 0; padding: 12px; }
-  .tk-chat__send { width: 44px; padding: 0; display: flex; align-items: center; justify-content: center; }
-  .tk-chat__send span { display: none; }
-  .tk-chat__send-ico { display: block; }
+  .tk-chat__media { gap: 4px; }
+  .tk-chat__compose .tk-field { padding: 12px; }
+  .tk-rec { gap: 8px; }
 
-  /* Подсказка про отмену не влезает — остаются время и волна. */
-  .tk-rec__hint { display: none; }
-  .tk-rec:not([hidden]) { gap: 8px; padding: 0 10px; }
+  /* Запись кружка: подписи не влезали в ширину — остаются значки. */
+  .tk-roundrec__acts { gap: 20px; }
+  .tk-roundrec__btn { width: 56px; height: 56px; padding: 0; }
+  .tk-roundrec__btn span { display: none; }
 }
 
 /* ── Журнал звонков ── */

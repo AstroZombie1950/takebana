@@ -405,6 +405,19 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   });
 }
 
+// Фоновая загрузка видео (tk-upload.js) — только там, где есть что
+// докачивать: метку ставит сама загрузка. Страница загрузки подключает
+// скрипт сама.
+(function () {
+  var has = false;
+  try { has = !!localStorage.getItem('tk.uploads'); } catch (e) {}
+  if (!has || !window.TK || !TK.upload || window.TKUpload || document.querySelector('script[src="' + TK.upload + '"]')) return;
+  var s = document.createElement('script');
+  s.src = TK.upload;
+  s.defer = true;
+  document.head.appendChild(s);
+})();
+
 // ===== Presence Client (глобально) =====
 (function(){
   function initPresenceAndCalls(){
@@ -422,7 +435,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     window.callSocket = socket;
     console.log('[client] socket init');
     socket.on('connect', () => console.log('[client] socket connected id=', socket.id));
-    socket.on('connect_error', (err) => console.error('[client] socket connect_error', err));
+    socket.on('connect_error', (err) => console.warn('[client] socket connect_error', err.message)); // сеть пропала — штатно, переподключится сам
     socket.on('disconnect', (reason) => console.log('[client] socket disconnected', reason));
 
     // Переписка: события сокета уходят в document как tk:<событие>, их слушает
@@ -527,6 +540,9 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       socket.timeout(4000).emit('tk:alive', (err) => {
         if (err) { socket.disconnect().connect(); return; }
         refreshCounters();
+        // Сокет жив, но пока вкладка спала, событие могло не дойти и до
+        // живого: страницы сверяют своё лёгким способом (chats.js).
+        document.dispatchEvent(new CustomEvent('tk:wake'));
       });
     }
     document.addEventListener('visibilitychange', wake);
@@ -587,6 +603,36 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
         row.dataset.live = live ? '1' : '0';
       });
       if (window.tkSubscriptions) window.tkSubscriptions.sync();
+    });
+
+    // Число подписчиков и подписок поменялось (utils/profileSignal.js):
+    // кто-то подписался, отписался или его убрали из подписчиков.
+    socket.on('profile:counts', ({ userId, followers, following }) => {
+      if (!userId) return;
+      document.querySelectorAll(`[data-count-followers="${userId}"]`).forEach((el) => { el.textContent = String(followers); });
+      document.querySelectorAll(`[data-count-following="${userId}"]`).forEach((el) => { el.textContent = String(following); });
+    });
+
+    // Подписка появилась или пропала — в том числе автор убрал меня из
+    // подписчиков. Левая панель — здесь, кнопка на профиле — profile.js.
+    socket.on('follow:changed', (d) => {
+      if (!d || !d.peerId) return;
+      if (!d.subscribed && window.tkSubscriptions) window.tkSubscriptions.remove(d.peerId);
+      document.dispatchEvent(new CustomEvent('tk:follow:changed', { detail: d }));
+    });
+
+    // Ограничение доступа поставили или сняли (utils/profileSignal.js).
+    // Страница чужого канала с устаревшим доступом перезагружается: что
+    // показать — эфир, запись или отказ — решает сервер. by: 'me' — это я
+    // ограничил peerId, 'them' — он меня. Эфиру и записи важно только второе.
+    socket.on('access:changed', (d) => {
+      if (!d || !d.peerId) return;
+      document.dispatchEvent(new CustomEvent('tk:access:changed', { detail: d }));
+      const owner = document.querySelector('meta[name="tk-owner"]');
+      if (!owner || owner.content !== d.peerId) return;
+      if (owner.dataset.scope === 'content' && d.by !== 'them') return;
+      const now = d.restricted ? d.by : '';
+      if (owner.dataset.access !== now) location.reload();
     });
 
     // Сервер шлёт presence:update только тем, кто подписался на конкретного
@@ -705,10 +751,14 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       setTimeout(() => closeCall(callId), 800);
     });
 
-    // Инициализация: подхватить присутствующие на странице id
+    // Инициализация: подхватить присутствующие на странице id. Счётчики
+    // подписчиков живут в тех же комнатах (utils/profileSignal.js).
     const ids = Array.from(document.querySelectorAll('[data-presence-user]'))
       .map(el => el.getAttribute('data-presence-user'))
       .filter(Boolean);
+    const counted = Array.from(document.querySelectorAll('[data-count-followers], [data-count-following]'))
+      .map(el => el.getAttribute('data-count-followers') || el.getAttribute('data-count-following'));
+    window.subscribePresence(counted);
     if (ids.length) {
       window.subscribePresence(ids);
       fetch('/api/presence?ids=' + encodeURIComponent(ids.join(',')))

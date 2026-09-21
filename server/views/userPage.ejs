@@ -31,6 +31,26 @@
         <a href="/settings" class="tk-prof__gear" aria-label="<%= ta('settings.title') %>" title="<%= ta('settings.title') %>" data-i18n-aria="settings.title" data-i18n-title="settings.title">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"></path></svg>
         </a>
+        <% } else if (currentUser) { %>
+        <%# Чужой профиль: в том же углу, где у своего шестерёнка, — меню
+            «⋯» с жалобой и ограничением (21.09): в лицо их не ставим. %>
+        <div class="tk-prof__more">
+          <button type="button" class="tk-prof__gear" id="profMore" aria-haspopup="menu" aria-expanded="false" aria-controls="profMenu" aria-label="<%= ta('user.more') %>" title="<%= ta('user.more') %>" data-i18n-aria="user.more" data-i18n-title="user.more">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>
+          </button>
+          <div class="tk-prof__menu" id="profMenu" role="menu" hidden>
+            <%# Окно жалобы лежит в общем партиале шапки, здесь только пункт. %>
+            <button type="button" role="menuitem" data-report="user" data-report-id="<%= user._id %>" data-report-name="<%= user.displayName %>">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M5 21V4h9l.6 2H20v9h-6l-.6-2H5"></path></svg>
+              <span data-i18n="user.reportUser"><%- t('user.reportUser') %></span>
+            </button>
+            <% var rKey = iRestricted ? 'user.unrestrict' : 'user.restrict'; %>
+            <button type="button" role="menuitem" class="is-danger" id="restrictButton" data-on="<%= iRestricted ? '1' : '' %>">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M6 6l12 12"></path></svg>
+              <span data-i18n="<%= rKey %>"><%- t(rKey) %></span>
+            </button>
+          </div>
+        </div>
         <% } %>
 
         <div class="tk-prof__ava"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
@@ -73,11 +93,11 @@
               считались, но не показывались. %>
           <div class="tk-prof__stats">
             <a href="/userPage/<%= user._id %>/followers" class="tk-prof__stat">
-              <span class="tk-prof__num" id="followersCount"><%= user.followersCount %></span>
+              <span class="tk-prof__num" id="followersCount" data-count-followers="<%= user._id %>"><%= user.followersCount %></span>
               <span class="tk-prof__lbl" data-i18n="user.subscribers"><%- t('user.subscribers') %></span>
             </a>
             <a href="/userPage/<%= user._id %>/following" class="tk-prof__stat">
-              <span class="tk-prof__num"><%= user.followingCount %></span>
+              <span class="tk-prof__num" data-count-following="<%= user._id %>"><%= user.followingCount %></span>
               <span class="tk-prof__lbl" data-i18n="user.followingLabel"><%- t('user.followingLabel') %></span>
             </a>
           </div>
@@ -86,7 +106,7 @@
           <%# Гостю — те же «Написать» и «Подписаться», но через вход: после него
               человек вернётся на эту страницу. Звонки и жалоба — только вошедшим. %>
           <% var loginBack = '/login?next=' + encodeURIComponent(url); %>
-          <div class="tk-prof__acts">
+          <div class="tk-prof__acts tk-prof__acts-row">
             <a href="<%= loginBack %>" class="tk-btn tk-btn--primary tk-btn--sm">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
               <span data-i18n="user.message"><%- t('user.message') %></span>
@@ -97,46 +117,39 @@
             </a>
           </div>
           <% } else if (!isSelf) { %>
+          <%# На виду (решение 21.09): общение — написать и позвонить — и
+              отдельно подписка. Жалоба и ограничение — в меню «⋯» в углу
+              шапки. Ограничение в любую сторону закрывает и общение
+              (utils/restrict.js), поэтому первой группы тогда нет вовсе.
+              Поведение — profile.js. %>
           <div class="tk-prof__acts">
-            <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="message-button" data-user-id="<%= user._id %>">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
-              <span data-i18n="user.message"><%- t('user.message') %></span>
-            </button>
+            <div class="tk-prof__acts-row tk-prof__talk" id="talkActions"<% if (restricted || iRestricted) { %> hidden<% } %>>
+              <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-prof__write" id="message-button" data-user-id="<%= user._id %>">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
+                <span data-i18n="user.message"><%- t('user.message') %></span>
+              </button>
 
-            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="video-call-button" data-user-id="<%= user._id %>">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M15.5 10.5l4.5-2.25v7.5l-4.5-2.25"></path><rect x="3.5" y="6" width="12" height="12"></rect></svg>
-              <span data-i18n="user.videoCall"><%- t('user.videoCall') %></span>
-            </button>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-prof__call" id="video-call-button" data-user-id="<%= user._id %>" aria-label="<%= ta('user.videoCall') %>" data-i18n-aria="user.videoCall">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M15.5 10.5l4.5-2.25v7.5l-4.5-2.25"></path><rect x="3.5" y="6" width="12" height="12"></rect></svg>
+                <span data-i18n="user.videoCall"><%- t('user.videoCall') %></span>
+              </button>
 
-            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="audio-call-button" data-user-id="<%= user._id %>">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M6.5 3h-2A1.5 1.5 0 003 4.5C3 13 11 21 19.5 21a1.5 1.5 0 001.5-1.5v-2l-4-1.5-1.7 2A14 14 0 018 11.7l2-1.7L8.5 6l-2-3Z"></path></svg>
-              <span data-i18n="user.audioCall"><%- t('user.audioCall') %></span>
-            </button>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-prof__call" id="audio-call-button" data-user-id="<%= user._id %>" aria-label="<%= ta('user.audioCall') %>" data-i18n-aria="user.audioCall">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M6.5 3h-2A1.5 1.5 0 003 4.5C3 13 11 21 19.5 21a1.5 1.5 0 001.5-1.5v-2l-4-1.5-1.7 2A14 14 0 018 11.7l2-1.7L8.5 6l-2-3Z"></path></svg>
+                <span data-i18n="user.audioCall"><%- t('user.audioCall') %></span>
+              </button>
+            </div>
 
             <% if (!restricted) { %>
-            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm subscribe__button<%= user.isSubscribed ? ' unsubscribe' : '' %>">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
-              <% var subKey = user.isSubscribed ? 'stream.unsubscribe' : 'stream.subscribe'; %>
-              <span data-i18n="<%= subKey %>"><%- t(subKey) %></span>
-            </button>
-            <% } %>
+            <div class="tk-prof__acts-row tk-prof__chan">
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm subscribe__button<%= user.isSubscribed ? ' unsubscribe' : '' %>">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
+                <% var subKey = user.isSubscribed ? 'stream.unsubscribe' : 'stream.subscribe'; %>
+                <span data-i18n="<%= subKey %>"><%- t(subKey) %></span>
+              </button>
+              <% } %>
 
-            <%# Окно жалобы лежит в общем партиале шапки, здесь только кнопка. %>
-            <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm"
-                    data-report="user"
-                    data-report-id="<%= user._id %>"
-                    data-report-name="<%= user.displayName %>">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M5 21V4h9l.6 2H20v9h-6l-.6-2H5"></path></svg>
-              <span data-i18n="user.reportUser"><%- t('user.reportUser') %></span>
-            </button>
-
-            <%# Закрыть свой канал от этого человека и вернуть доступ
-                (utils/restrict.js). Поведение — profile.js. %>
-            <% var rKey = iRestricted ? 'user.unrestrict' : 'user.restrict'; %>
-            <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" id="restrictButton" data-on="<%= iRestricted ? '1' : '' %>">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M6 6l12 12"></path></svg>
-              <span data-i18n="<%= rKey %>"><%- t(rKey) %></span>
-            </button>
+            </div>
           </div>
           <% } %>
         </div>
@@ -224,6 +237,16 @@
               <span class="tk-shot__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5.5v13L20 12z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
               <span class="tk-shot__len"><%= clock(v.duration) %></span>
             </button>
+            <% } else if (v.status === 'uploading' || v.status === 'draft') { %>
+            <%# Незаконченное со страницы загрузки — ссылкой туда: там докачка,
+                правка и «Опубликовать». Проценты ставит profile.js. %>
+            <a class="tk-shot tk-shot--state" href="/upload#v<%= v._id %>">
+              <% if (v.status === 'uploading') { var pct = v.upload && v.upload.size ? Math.floor(v.upload.received / v.upload.size * 100) : 0; %>
+              <span data-upload-pct data-i18n="user.videoUploading" data-i18n-vars='<%= JSON.stringify({ p: pct }) %>'><%- t('user.videoUploading', { p: pct }) %></span>
+              <% } else { %>
+              <span data-i18n="user.videoDraft"><%- t('user.videoDraft') %></span>
+              <% } %>
+            </a>
             <% } else { %>
             <% var vKey = v.status === 'failed' ? (v.error === 'long' ? 'user.videoLong' : 'user.videoFailed') : 'user.videoProcessing'; %>
             <div class="tk-shot tk-shot--state"><span data-i18n="<%= vKey %>"><%- t(vKey) %></span></div>
@@ -250,13 +273,12 @@
         </div>
         <p class="tk-note tk-note--center" id="galleryEmpty" data-i18n="user.galleryEmpty"<% if ((user.gallery || []).length || videos.length) { %> hidden<% } %>><%- t('user.galleryEmpty') %></p>
 
-        <%# Добавить — под снимками, по центру. Пределы (фото до 10 МБ и до
-            100 за раз, видео до часа) не расписаны текстом: браузер скажет
-            о них, только если файл за них выйдет (public/profile.js). %>
+        <%# Добавить — под снимками, по центру: ведёт на страницу загрузки
+            (/upload, 21.09) — там выбор файлов, докачка, правка видео
+            и «Опубликовать». %>
         <% if (isSelf) { %>
-        <input id="galleryInput" type="file" accept="image/png,image/jpeg,image/webp,video/*" multiple hidden>
         <div class="tk-prof__gal-add">
-          <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" id="galleryAdd" data-i18n="user.galleryAdd"><%- t('user.galleryAdd') %></button>
+          <a href="/upload" class="tk-btn tk-btn--outline tk-btn--xs" id="galleryAdd" data-i18n="user.galleryAdd"><%- t('user.galleryAdd') %></a>
         </div>
         <% } %>
       </section>

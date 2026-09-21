@@ -11,9 +11,29 @@ const fileSchema = new Schema({
 
 const galleryVideoSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  // processing — пережимается; ready — можно смотреть; failed — не вышло,
-  // видит только владелец и удаляет сам.
-  status: { type: String, enum: ['processing', 'ready', 'failed'], default: 'processing' },
+  // uploading — файл ещё едет кусками со страницы загрузки (/upload);
+  // draft — доехал, ждёт «Опубликовать»; processing — пережимается;
+  // ready — можно смотреть; failed — не вышло. Всё, кроме ready, видит
+  // только владелец.
+  status: { type: String, enum: ['uploading', 'draft', 'processing', 'ready', 'failed'], default: 'processing' },
+  // Загрузка кусками (routes/streaming/upload.js): сколько всего и сколько
+  // доехало. Файл копится в media/upload/<id>.part.
+  upload: {
+    name: { type: String, default: '' },
+    size: { type: Number, default: 0 },
+    received: { type: Number, default: 0 },
+  },
+  // Правка со страницы загрузки: обрезка (секунды от начала исходника),
+  // без звука, кадр обложки. Своя картинка обложки — media/upload/<id>.cover,
+  // флаг cover. publish — «Опубликовать» нажали: доедет файл — пережимаем.
+  edit: {
+    start: { type: Number, default: 0 },
+    end: { type: Number, default: 0 },   // 0 — до конца
+    mute: { type: Boolean, default: false },
+    coverAt: { type: Number, default: -1 }, // -1 — кадр выбирает сервер
+    cover: { type: Boolean, default: false },
+  },
+  publish: { type: Boolean, default: false },
   error: { type: String, default: '' },
   duration: { type: Number, default: 0 }, // секунды
   size: { type: Number, default: 0 },     // байты после пережатия
@@ -24,5 +44,7 @@ const galleryVideoSchema = new Schema({
 
 // Галерея человека — новые сверху.
 galleryVideoSchema.index({ userId: 1, createdAt: -1 });
+// Уборка брошенных загрузок (utils/galleryVideo.js, sweepDrafts).
+galleryVideoSchema.index({ status: 1, createdAt: 1 });
 
 module.exports = mongoose.model('GalleryVideo', galleryVideoSchema);

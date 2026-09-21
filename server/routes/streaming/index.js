@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 
 router.use(require('./profile'));
+router.use(require('./upload'));
 router.use(require('./notifications'));
 router.use(require('./catalog'));
 router.use(require('./subscriptions'));
