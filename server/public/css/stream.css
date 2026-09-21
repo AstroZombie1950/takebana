@@ -372,8 +372,8 @@
 .tk-live__chat {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 108px);
-  height: calc(100dvh - 108px);
+  height: calc(100vh - var(--tk-head-h) - 44px);
+  height: calc(100dvh - var(--tk-head-h) - 44px);
   min-height: 420px;
   border: 1px solid var(--tk-rule);
   background: var(--tk-ink);
@@ -687,7 +687,7 @@ html.tk-stage-open { overflow: hidden; }
     border-bottom: 1px solid var(--tk-rule);
   }
 
-  .messeg-box { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
+  .messeg-box { padding: 10px 12px calc(10px + var(--tk-safe-b)); }
 
   /* Во весь экран: картинка на весь экран, кнопки ведущего снизу, чат —
    * по кнопке, полупрозрачно поверх нижней части картинки (горизонтально —
@@ -717,17 +717,17 @@ html.tk-stage-open { overflow: hidden; }
     z-index: 5;
     border: 0;
     padding-top: 16px;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    padding-bottom: calc(8px + var(--tk-safe-b));
     background: linear-gradient(rgba(10, 10, 10, 0), rgba(10, 10, 10, .8) 40%);
   }
 
-  .is-full .tk-live__fs { top: calc(10px + env(safe-area-inset-top)); }
+  .is-full .tk-live__fs { top: calc(10px + var(--tk-safe-t)); }
   .is-full .tk-live__chatbtn { display: flex; }
   .is-full:not(.chat-open) .tk-live__chat { display: none; }
 
   /* Метки — столбиком в левом углу: справа кнопки экрана и чата. */
   .is-full .tk-live__badges {
-    top: calc(12px + env(safe-area-inset-top));
+    top: calc(12px + var(--tk-safe-t));
     flex-direction: column;
     align-items: flex-start;
   }
@@ -737,7 +737,7 @@ html.tk-stage-open { overflow: hidden; }
     position: absolute;
     left: 0;
     right: 0;
-    bottom: calc(var(--tk-under) + env(safe-area-inset-bottom));
+    bottom: calc(var(--tk-under) + var(--tk-safe-b));
     z-index: 4;
     height: 44%;
     border: 0;
@@ -754,7 +754,7 @@ html.tk-stage-open { overflow: hidden; }
     right: 0;
     bottom: 0;
     z-index: 3;
-    height: calc(44% + var(--tk-under) + env(safe-area-inset-bottom));
+    height: calc(44% + var(--tk-under) + var(--tk-safe-b));
     background: linear-gradient(rgba(10, 10, 10, 0), rgba(10, 10, 10, .78) 18%);
     pointer-events: none;
   }

@@ -46,6 +46,11 @@ const EN = {
     'Неверный текущий пароль': 'The current password is incorrect',
     'Слишком много запросов. Попробуйте через 15 минут.': 'Too many requests. Try again in 15 minutes.',
 
+    // Пуш-уведомления (routes/push.js)
+    'Пуш-уведомления не настроены': 'Push notifications are not set up',
+    'Негодная подписка': 'Invalid subscription',
+    'Ни одно устройство не подписано': 'No device is subscribed',
+
     // Восстановление пароля: ответы и письма (routes/passwordReset.js)
     'Если учётная запись с этой почтой есть, мы отправили на неё письмо со ссылкой': 'If an account with this email exists, we have sent it an email with a link',
     'Ссылка устарела или уже использована. Запросите новую': 'The link has expired or has already been used. Request a new one',
@@ -290,6 +295,17 @@ function localizeMessages(req, res, next) {
 const TK_I18N = { ru: require('../public/tk-i18n-ru'), en: require('../public/tk-i18n-en') };
 const LOCALE = { ru: 'ru-RU', en: 'en-US' }; // как tkDate в браузере
 
+// Строка словаря по языку, без запроса. Шаблонам её подаёт pageLocals ниже
+// (он же t), а отдельно она нужна там, где запроса нет вовсе: текст пуша
+// собирается для спящего устройства, и язык берётся из его подписки
+// (utils/push.js). Запасная строка и подстановки — как у t() в браузере.
+function text(lang, key, arg) {
+    const v = TK_I18N[lang === 'en' ? 'en' : 'ru'][key];
+    if (v === undefined) return typeof arg === 'string' ? arg : '';
+    if (!arg || typeof arg !== 'object') return v;
+    return v.replace(/\{(\w+)\}/g, (whole, name) => (arg[name] === undefined ? whole : arg[name]));
+}
+
 // Часовой пояс посетителя — cookie `tz` из tk-i18n.js. Без неё или с чужим
 // значением — пояс сервера.
 function timeZoneOf(req) {
@@ -311,13 +327,7 @@ function timeZoneOf(req) {
 //   date(user.lastSeen)   date(expiresAt, { day: '2-digit', month: '2-digit', year: 'numeric' })
 function pageLocals(req, res, next) {
     const lang = langOf(req);
-    const dict = TK_I18N[lang];
-    const t = (key, arg) => {
-        const v = dict[key];
-        if (v === undefined) return typeof arg === 'string' ? arg : '';
-        if (!arg || typeof arg !== 'object') return v;
-        return v.replace(/\{(\w+)\}/g, (whole, name) => (arg[name] === undefined ? whole : arg[name]));
-    };
+    const t = (key, arg) => text(lang, key, arg);
     res.locals.lang = lang;
     res.locals.t = t;
     res.locals.ta = (key, arg) => t(key, arg).replace(/<[^>]*>/g, '');
@@ -342,4 +352,4 @@ function pageLocals(req, res, next) {
     next();
 }
 
-module.exports = { EN, langOf, tr, localizeMessages, pageLocals };
+module.exports = { EN, langOf, tr, text, localizeMessages, pageLocals };

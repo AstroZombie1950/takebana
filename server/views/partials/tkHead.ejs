@@ -8,7 +8,15 @@
                       : typeof description !== 'undefined' ? description : '';
 %>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<%# viewport-fit=cover — страница раскладывается во весь экран, включая чёлку
+    и полосу системных кнопок; сами отступы под них берёт вёрстка из токенов
+    --tk-safe-* (tk.css). Без cover браузер не отдаёт env(safe-area-inset-*),
+    и на Android 15 поле ввода переписки наполовину уходило под кнопки.
+
+    interactive-widget=resizes-content — экранная клавиатура ужимает страницу,
+    а не наезжает на неё: в переписке поле ввода само встаёт над клавиатурой,
+    потому что высота считается от 100dvh. %>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 
 <%# Ошибки браузера — в тот же журнал, что серверные (routes/clientErrors.js).
     Инлайном и первым: отдельный файл с defer выполнился бы позже инлайновых

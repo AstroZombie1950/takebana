@@ -10,6 +10,7 @@ const streamLog = require('./utils/streamLog');
 const { audit } = require('./utils/audit');
 const errorLog = require('./utils/errorLog');
 const liveSignal = require('./utils/liveSignal');
+const liveNotify = require('./utils/liveNotify');
 
 // Право публиковать проверяется подписью, а не знанием ключа: ключ трансляции
 // уходит каждому зрителю в исходнике страницы — по нему собирается адрес
@@ -87,6 +88,9 @@ async function markObsStreamStarted(streamKey) {
       // Эфир с OBS начинается приходом потока, а не нажатием на сайте:
       // витрина и подписчики узнают о нём только отсюда.
       liveSignal.changed(ioRef, updated && updated.userId, true);
+      // Подписчикам — строка в колокольчик и пуш. Переподключение вещателя
+      // второй раз их не разбудит: отметка в самом эфире (utils/liveNotify.js).
+      liveNotify.quiet(ioRef, updated);
     }
 
     // Отрезок эфира открывается именно здесь: эфир с OBS начинается приходом

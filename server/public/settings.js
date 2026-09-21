@@ -269,6 +269,79 @@
     sysBlocked();
   }
 
+  // ── Пуши: уведомления с закрытой вкладкой (tk-push.js) ────────────────
+  // Три тумблера разного свойства. «Присылать» — это подписка устройства
+  // у пуш-сервиса и разрешение браузера, поэтому спрашивается по нажатию.
+  // «Показывать текст» и «об эфирах» — выбор, который хранит сервер рядом
+  // с подпиской: уведомление собирает он, и знать об этом должен он.
+  var pushPanel = $('pushPanel');
+  if (pushPanel && window.TKPush) {
+    var P = window.TKPush;
+    var pushState = $('pushState');
+    var pushBoxes = {};
+    document.querySelectorAll('[data-push]').forEach(function (box) { pushBoxes[box.getAttribute('data-push')] = box; });
+
+    var pushSay = function (key) {
+      pushState.hidden = !key;
+      if (key) tkText(pushState, key);
+    };
+    // Пока не подписано, выбор показа текста и эфиров ни на что не влияет.
+    var pushLock = function (on) {
+      ['preview', 'live'].forEach(function (name) { pushBoxes[name].disabled = !on; });
+      $('pushTest').disabled = !on;
+    };
+
+    // Что выбрано на этом устройстве, знает сервер: страница не помнит ничего,
+    // подписка живёт дольше вкладки. Поэтому после подписки тумблеры тоже
+    // расставляет он — иначе «об эфирах» осталось бы снятым, хотя по умолчанию
+    // мы про эфиры шлём.
+    var pushPrefs = function (endpoint) {
+      return send('/api/push/state?endpoint=' + encodeURIComponent(endpoint))
+        .then(function (d) { pushBoxes.preview.checked = !!d.preview; pushBoxes.live.checked = !!d.live; })
+        .catch(function () {});
+    };
+
+    P.state().then(function (st) {
+      pushBoxes.on.checked = st.on;
+      pushLock(st.on);
+      pushSay(!st.supported ? 'settings.pushNone' : st.permission === 'denied' ? 'settings.pushDenied' : '');
+      if (st.on) pushPrefs(st.endpoint);
+    });
+
+    pushBoxes.on.addEventListener('change', function () {
+      var on = pushBoxes.on.checked;
+      pushLock(false);
+      (on ? P.enable() : P.disable())
+        .then(function (sub) {
+          pushLock(on);
+          pushSay('');
+          if (on && sub) return pushPrefs(sub.endpoint);
+        })
+        .catch(function (e) {
+          pushBoxes.on.checked = false;
+          pushLock(false);
+          pushSay(e.message === 'denied' ? 'settings.pushDenied' : 'settings.pushNone');
+        });
+    });
+
+    ['preview', 'live'].forEach(function (name) {
+      pushBoxes[name].addEventListener('change', function () {
+        var patch = {};
+        patch[name] = pushBoxes[name].checked;
+        P.prefs(patch).catch(function (e) {
+          pushBoxes[name].checked = !pushBoxes[name].checked;
+          toast(t('settings.pushFail', { message: e.message }), 'error');
+        });
+      });
+    });
+
+    $('pushTest').addEventListener('click', function () {
+      P.test()
+        .then(function () { toast(t('settings.pushSent'), 'ok'); })
+        .catch(function (e) { toast(t('settings.pushFail', { message: e.message }), 'error'); });
+    });
+  }
+
   // ── Камера и микрофон: что разрешил браузер, и проверка ──
   // Сайт не выдаёт себе доступ сам — его даёт браузер по жесту и запоминает
   // ответ. «Проверить» и есть такой жест: разрешили один раз — звонки

@@ -17,8 +17,10 @@
   // углы, Golos Text, кнопки как .tk-btn--sm. Значения здесь, а не токенами:
   // файл подключается и там, где tk.css может не быть.
   const CSS = `
+/* Отступы от вырезов — env() напрямую: токены --tk-safe-* живут в tk.css,
+   а этот файл подключается и без него (см. выше). */
 .tb-toasts {
-  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+  position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
   z-index: 10000; display: flex; flex-direction: column; gap: 8px;
   width: min(420px, calc(100vw - 32px)); pointer-events: none;
 }
@@ -45,7 +47,8 @@
 .tb-backdrop {
   position: fixed; inset: 0; z-index: 10001;
   background: rgba(10, 10, 10, .78);
-  display: flex; align-items: center; justify-content: center; padding: 16px;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
   opacity: 0; transition: opacity .15s ease;
 }
 .tb-backdrop.tb-in { opacity: 1; }

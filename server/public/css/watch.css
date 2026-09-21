@@ -38,8 +38,8 @@
 
 .tk-watch.is-theater .tk-watch__player {
   width: 100%;
-  max-height: calc(100vh - 120px);
-  max-height: calc(100dvh - 120px);
+  max-height: calc(100vh - var(--tk-head-h) - 56px);
+  max-height: calc(100dvh - var(--tk-head-h) - 56px);
 }
 
 /* ── Название, автор, кнопки ── */

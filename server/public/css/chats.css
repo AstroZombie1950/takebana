@@ -9,10 +9,12 @@
  */
 
 /* Высота = экран минус шапка. dvh — видимая часть экрана: на айфоне 100vh
- * выше неё на панель Safari, и поле ввода пряталось под адресной строкой. */
+ * выше неё на панель Safari, и поле ввода пряталось под адресной строкой.
+ * Высота шапки — с вырезом сверху (--tk-head-h, tk.css), --tk-kb — сколько
+ * экрана закрыла клавиатура на айфоне (chats.js). */
 .tk-chat {
-  height: calc(100vh - 64px);
-  height: calc(100dvh - 64px);
+  height: calc(100vh - var(--tk-head-h) - var(--tk-kb, 0px));
+  height: calc(100dvh - var(--tk-head-h) - var(--tk-kb, 0px));
   display: flex;
   overflow: hidden;
 }
@@ -529,9 +531,12 @@
 .tk-callnote.is-missed svg { color: var(--tk-accent); }
 
 /* ── Поле ввода ── */
+/* Нижний отступ — с полосой системных кнопок: сама полоса лежит поверх
+ * страницы, и без добавки поле ввода наполовину уходило под неё (скриншот
+ * заказчика от 20.09.2026). Фон при этом доходит до края экрана. */
 .tk-chat__compose {
   flex: none;
-  padding: 14px 20px;
+  padding: 14px 20px calc(14px + var(--tk-safe-b));
   border-top: 1px solid var(--tk-rule);
 }
 
@@ -881,6 +886,9 @@
   align-items: center;
   justify-content: center;
   gap: 18px;
+  /* Окно во весь экран: кнопки «Отмена» и «Отправить» держим над полосой
+   * системных кнопок, круг — под чёлкой. */
+  padding: calc(16px + var(--tk-safe-t)) calc(16px + var(--tk-safe-r)) calc(16px + var(--tk-safe-b)) calc(16px + var(--tk-safe-l));
 }
 
 .tk-roundrec__stage {
@@ -1014,7 +1022,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 /* Осталось у исчезающего в окне просмотра — поверх окна. */
 .tk-oncetimer {
   position: fixed;
-  top: 20px;
+  top: calc(20px + var(--tk-safe-t));
   left: 50%;
   z-index: 96;
   transform: translateX(-50%);
@@ -1361,7 +1369,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   .tk-callrow__main { padding-left: 16px; }
   .tk-chat__head { padding: 10px 16px; }
   .tk-chat__feed { --feed-x: 16px; padding: 10px 0; }
-  .tk-chat__compose { padding: 12px 16px; }
+  .tk-chat__compose { padding: 12px 16px calc(12px + var(--tk-safe-b)); }
   .tk-msg > .tk-msg__bubble,
   .tk-msg > .tk-msg__row { max-width: 92%; }
   .tk-msg--fwd > .tk-msg__bubble,

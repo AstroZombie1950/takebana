@@ -40,8 +40,11 @@ body.tk-app {
   position: sticky;
   top: 0;
   z-index: 40;
-  height: 64px;
-  padding: 0 20px;
+  /* Высота с вырезом сверху: под чёлкой и строкой состояния шапки не видно,
+   * поэтому она вырастает ровно на вырез, а содержимое отодвигается
+   * отступом — так его середина остаётся серединой видимых 64px. */
+  height: var(--tk-head-h);
+  padding: var(--tk-safe-t) calc(20px + var(--tk-safe-r)) 0 calc(20px + var(--tk-safe-l));
   display: flex;
   align-items: center;
   gap: 18px;
@@ -269,11 +272,13 @@ body.tk-app {
  */
 .tk-aside {
   position: fixed;
-  top: 64px;
+  top: var(--tk-head-h);
   left: 0;
   bottom: 0;
   z-index: 30;
   width: 260px;
+  /* Телефон боком: панель упирается в вырез левым краем. */
+  padding-left: var(--tk-safe-l);
   display: flex;
   flex-direction: column;
   background: var(--tk-ink);
@@ -362,10 +367,18 @@ body.tk-app {
 
 .tk-aside__lang { margin: 4px 18px 8px; }
 
+/* Боковые вырезы (телефон боком): содержимое любой страницы кабинета
+ * отодвигается от них здесь, одним правилом, — отдельным страницам считать
+ * их не нужно. На экране без вырезов это padding: 0. */
+.tk-app-main {
+  padding-left: var(--tk-safe-l);
+  padding-right: var(--tk-safe-r);
+}
+
 /* Контент страницы уходит вправо на ширину панели. Тот же порог, что был
  * у прежней вёрстки: ниже 1024 панель выезжает поверх. */
 @media (min-width: 1024px) {
-  .tk-app-main { padding-left: 260px; }
+  .tk-app-main { padding-left: calc(260px + var(--tk-safe-l)); }
 }
 
 .tk-aside__title {
@@ -515,7 +528,7 @@ body.tk-app {
   position: sticky;
   bottom: 0;
   border-top: 1px solid var(--tk-rule);
-  padding: 10px 0 calc(6px + env(safe-area-inset-bottom));
+  padding: 10px 0 calc(6px + var(--tk-safe-b));
   background: var(--tk-ink);
 }
 
@@ -537,7 +550,7 @@ body.tk-app {
 /* Затемнение под выехавшей панелью — только на узких экранах. */
 .tk-aside__overlay {
   position: fixed;
-  inset: 64px 0 0;
+  inset: var(--tk-head-h) 0 0;
   z-index: 29;
   background: rgba(10, 10, 10, .6);
 }
@@ -579,7 +592,7 @@ body.tk-app {
  * освобождают логотип и запуск эфира: эфир запускается из левой панели. */
 @media (max-width: 639px) {
   .tk-ahead {
-    padding: 0 12px;
+    padding: var(--tk-safe-t) calc(12px + var(--tk-safe-r)) 0 calc(12px + var(--tk-safe-l));
     gap: 10px;
   }
 
@@ -629,7 +642,7 @@ body.tk-app {
   position: fixed;
   inset: 0;
   z-index: 90;
-  padding: 24px 20px;
+  padding: calc(24px + var(--tk-safe-t)) calc(20px + var(--tk-safe-r)) calc(24px + var(--tk-safe-b)) calc(20px + var(--tk-safe-l));
   overflow-y: auto;
   background: rgba(10, 10, 10, .78);
   color: var(--tk-paper);
@@ -648,7 +661,7 @@ body.tk-app {
   margin: auto;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px - var(--tk-safe-t) - var(--tk-safe-b));
   background: var(--tk-ink);
   border: 1px solid var(--tk-rule);
   /* Появление держит CSS: анимация стартует сама, когда блок получает
@@ -1080,7 +1093,7 @@ body.tk-app {
 /* Высоту окно берёт только когда есть что показывать: до соединения видео
  * скрыто, и фиксированная высота давала полэкрана пустоты. */
 .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) {
-  height: min(760px, calc(100vh - 48px));
+  height: min(760px, calc(100dvh - 48px - var(--tk-safe-t) - var(--tk-safe-b)));
 }
 
 .tk-call__who {
@@ -1352,7 +1365,7 @@ body.tk-app {
 
 /* ── Узкий экран ── */
 @media (max-width: 640px) {
-  .tk-modal { padding: 0; }
+  .tk-modal { padding: var(--tk-safe-t) var(--tk-safe-r) 0 var(--tk-safe-l); }
 
   /* Окно — на весь экран. Высота — от самого окна (оно fixed во весь
    * видимый экран), а не 100vh: на айфоне 100vh выше видимой части на панель
@@ -1369,16 +1382,18 @@ body.tk-app {
   }
 
   .tk-modal__head { padding: 14px 16px; }
-  .tk-modal__body { padding: 16px; }
-  .tk-modal__body--list { padding: 0 16px; }
-  .tk-modal__foot { padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
+  /* Низ окна на телефоне лежит на полосе системных кнопок: если подвала
+   * с кнопками нет (уведомления, жалоба), отступ добирает само тело. */
+  .tk-modal__body { padding: 16px 16px calc(16px + var(--tk-safe-b)); }
+  .tk-modal__body--list { padding: 0 16px calc(8px + var(--tk-safe-b)); }
+  .tk-modal__foot { padding: 14px 16px calc(14px + var(--tk-safe-b)); }
   .tk-notice { margin: 0 -16px; padding-left: 13px; padding-right: 16px; }
 
   /* Звонок без видео — дозвон, аудиозвонок, «только голос»: статус и кнопки
    * одной группой посередине экрана, а не кнопки у нижнего края под пустотой. */
   .tk-call__body {
     justify-content: center;
-    padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+    padding: 16px 16px calc(24px + var(--tk-safe-b));
   }
   .tk-call__actions { margin-top: 32px; }
 
@@ -1422,14 +1437,14 @@ body.tk-app {
     position: absolute;
     left: 16px;
     right: 16px;
-    bottom: calc(24px + env(safe-area-inset-bottom));
+    bottom: calc(24px + var(--tk-safe-b));
     z-index: 2;
     margin: 0;
     padding: 0;
   }
 
   /* Своя картинка — над кнопками, а не под ними. */
-  .pip-local { bottom: calc(96px + env(safe-area-inset-bottom)); right: 12px; }
+  .pip-local { bottom: calc(96px + var(--tk-safe-b)); right: 12px; }
 }
 
 /* Бургер по одной из сторон уже пальца. Увеличиваем зону нажатия, не трогая рисунок. */

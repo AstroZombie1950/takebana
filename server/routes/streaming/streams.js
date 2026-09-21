@@ -25,6 +25,7 @@ const { audit } = require('../../utils/audit');
 const { randomUUID: uuidv4 } = require('crypto');
 const errorLog = require('../../utils/errorLog');
 const liveSignal = require('../../utils/liveSignal');
+const liveNotify = require('../../utils/liveNotify');
 
 router.get('/stream-status/:streamId', async (req, res) => {
   if (!/^[a-f\d]{24}$/i.test(req.params.streamId)) return res.status(404).json({ message: 'Стрим не найден' });
@@ -200,6 +201,10 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
       // после перезагрузки (utils/liveSignal.js).
       liveSignal.changed(io, stream.userId, true);
     }
+    // Подписчикам — строка в колокольчик и пуш. Вне проверки на io: эфир
+    // начался и без сокета, а колокольчик человек увидит при следующем
+    // заходе (utils/liveNotify.js).
+    if (stream) liveNotify.quiet(io, stream);
   } catch (_) {}
 
   res.status(200).json({

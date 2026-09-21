@@ -10,6 +10,8 @@
 
 const Call = require('../models/Call');
 const Notification = require('../models/Notification');
+const User = require('../models/User');
+const push = require('./push');
 const userView = require('./userView');
 const errorLog = require('./errorLog');
 
@@ -59,10 +61,29 @@ async function finished(io, callId, outcome) {
       io.to(`user:${call.callee}`).emit('notification:new');
       io.to(`user:${call.callee}`).emit('call:missed');
     }
+    // Пуш — только тому, у кого вкладки нет: на связи он окно звонка уже
+    // видел и сам решил не брать трубку. Без задержки, в отличие от
+    // сообщения: звонок уже кончился, ждать нечего.
+    if (!push.online(call.callee)) quiet(missedPush(call));
   }
   // После call:missed: открытая вкладка звонков, получив запись, перечитывает
   // журнал и гасит счётчик — он должен успеть вырасти до этого.
   if (io) io.to(`user:${call.caller}`).to(`user:${call.callee}`).emit('call:logged', { call: view(call) });
+}
+
+// «Вам звонили», а не «вам звонят»: пуш идёт секунды, иногда десятки секунд —
+// пуш-сервисы копят сообщения, чтобы не будить телефон зря. Звонок за это
+// время кончится, и уведомление про идущий звонок было бы враньём.
+async function missedPush(call) {
+  const caller = await User.findById(call.caller).select('nickname login email').lean();
+  if (!caller) return;
+  return push.send(call.callee, {
+    topic: 'call',
+    title: userView.displayName(caller),
+    bodyKey: 'push.missedCall',
+    tag: 'call-' + String(call.caller),
+    url: '/chatsPage?tab=calls',
+  });
 }
 
 function ended(io, callId, outcome = 'canceled') {

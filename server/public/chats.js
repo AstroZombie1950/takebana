@@ -24,6 +24,32 @@
 
   function uiLang() { return window.tkLang ? window.tkLang() : 'ru'; }
 
+  // Экранная клавиатура. На Android её берёт на себя браузер: страница
+  // ужимается (interactive-widget=resizes-content в partials/tkHead.ejs),
+  // вместе с ней ужимается и 100dvh. Safari на айфоне этого не умеет —
+  // он кладёт клавиатуру поверх страницы, и поле ввода оказывалось под ней.
+  // Считаем, сколько экрана она закрыла, и на столько же укорачиваем
+  // переписку: высота .tk-chat вычитает --tk-kb (chats.css).
+  //
+  // Порог в 80px — чтобы не принять за клавиатуру адресную строку Safari:
+  // её появление и так учитывает dvh.
+  var vv = window.visualViewport;
+  if (vv) {
+    var keyboard = function () {
+      var hidden = Math.max(0, window.innerHeight - vv.height);
+      document.documentElement.style.setProperty('--tk-kb', hidden > 80 ? hidden + 'px' : '0px');
+    };
+    vv.addEventListener('resize', keyboard);
+    keyboard();
+  }
+
+  // Выпадающие меню кладём в живую часть экрана: по краям лежат системные
+  // панели (чёлка, полоса кнопок Android), их размеры — в токенах --tk-safe-*
+  // (tk.css). Без этого меню сообщения у нижнего края открывалось под кнопками.
+  function safe(side) {
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tk-safe-' + side)) || 0;
+  }
+
   // «5 минут назад» на языке интерфейса — так же, как сервер
   // (routes/streaming/messages.js).
   var AGO_STEPS = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60], ['second', 1]];
@@ -1314,8 +1340,8 @@
     limitMenu.hidden = false;
     limitBtn.setAttribute('aria-expanded', 'true');
     var r = limitBtn.getBoundingClientRect();
-    limitMenu.style.left = Math.max(8, Math.min(r.left, innerWidth - limitMenu.offsetWidth - 8)) + 'px';
-    limitMenu.style.top = Math.max(8, r.top - limitMenu.offsetHeight - 8) + 'px';
+    limitMenu.style.left = Math.max(8 + safe('l'), Math.min(r.left, innerWidth - safe('r') - limitMenu.offsetWidth - 8)) + 'px';
+    limitMenu.style.top = Math.max(8 + safe('t'), Math.min(r.top - limitMenu.offsetHeight - 8, innerHeight - safe('b') - limitMenu.offsetHeight - 8)) + 'px';
     (limitMenu.querySelector('[aria-checked="true"]') || limitMenu.querySelector('[data-limit]')).focus();
   });
   limitMenu.addEventListener('click', function (e) {
@@ -1708,9 +1734,9 @@
     var w = menu.offsetWidth;
     var h = menu.offsetHeight;
     var left = el.classList.contains('tk-msg--out') ? r.right - w : el.classList.contains('tk-callnote') ? r.left + (r.width - w) / 2 : r.left;
-    var top = r.bottom + 6 + h > innerHeight ? r.top - h - 6 : r.bottom + 6;
-    menu.style.left = Math.max(8, Math.min(left, innerWidth - w - 8)) + 'px';
-    menu.style.top = Math.max(8, top) + 'px';
+    var top = r.bottom + 6 + h > innerHeight - safe('b') ? r.top - h - 6 : r.bottom + 6;
+    menu.style.left = Math.max(8 + safe('l'), Math.min(left, innerWidth - safe('r') - w - 8)) + 'px';
+    menu.style.top = Math.max(8 + safe('t'), Math.min(top, innerHeight - safe('b') - h - 8)) + 'px';
     menu.querySelector('button:not([hidden])').focus();
   }
 

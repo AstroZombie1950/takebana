@@ -9,8 +9,8 @@
   position: relative;
   display: grid;
   grid-template-columns: 360px minmax(0, 1fr);
-  height: calc(100vh - 64px);
-  height: calc(100dvh - 64px);
+  height: calc(100vh - var(--tk-head-h));
+  height: calc(100dvh - var(--tk-head-h));
   background: var(--tk-ink);
   color: var(--tk-paper);
 }
@@ -607,7 +607,7 @@
 .tk-vphoto img {
   display: block;
   max-width: 100%;
-  max-height: calc(100vh - 96px);
+  max-height: calc(100dvh - 96px - var(--tk-safe-t) - var(--tk-safe-b));
   margin: 0 auto;
   border: 1px solid var(--tk-rule);
 }
@@ -724,12 +724,16 @@
 
   .tk-venues__panel {
     position: fixed;
-    left: 0;
-    right: 0;
+    /* fixed считает края от экрана, а не от .tk-app-main с её отступами:
+     * вырезы добираем здесь сами. */
+    left: var(--tk-safe-l);
+    right: var(--tk-safe-r);
     bottom: 0;
     z-index: 35;
     max-height: min(78vh, calc(100vh - 88px));
     max-height: min(78dvh, calc(100dvh - 88px));
+    /* Панель прижата к низу экрана — под ней полоса системных кнопок. */
+    padding-bottom: calc(24px + var(--tk-safe-b));
     border-right: 0;
     border-top: 1px solid var(--tk-rule);
     box-shadow: 0 -14px 34px rgba(0, 0, 0, .55);
@@ -749,7 +753,7 @@
   .tk-venues__open {
     position: absolute;
     left: 50%;
-    bottom: 20px;
+    bottom: calc(20px + var(--tk-safe-b));
     z-index: 4;
     transform: translateX(-50%);
     display: flex;
@@ -782,14 +786,15 @@
   .tk-vcard {
     position: fixed;
     top: auto;
-    left: 0;
-    right: 0;
+    left: var(--tk-safe-l);
+    right: var(--tk-safe-r);
     bottom: 0;
     z-index: 36;
     width: auto;
     min-width: 0;
     max-height: min(82vh, calc(100vh - 80px));
     max-height: min(82dvh, calc(100dvh - 80px));
+    padding-bottom: var(--tk-safe-b);
     border-width: 1px 0 0;
   }
 

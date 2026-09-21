@@ -103,7 +103,11 @@
   window.TK = {
     userId: <%- JSON.stringify(guest ? '' : String(currentUser._id)) %>,
     // Словари обоих языков: второй tk-i18n.js догружает при переключении.
-    dicts: <%- JSON.stringify({ ru: asset('/tk-i18n-ru.js'), en: asset('/tk-i18n-en.js') }) %>
+    dicts: <%- JSON.stringify({ ru: asset('/tk-i18n-ru.js'), en: asset('/tk-i18n-en.js') }) %>,
+    // Публичный ключ VAPID: им браузер подписывается на пуши (tk-push.js).
+    // Он для того и публичный — его видно в разметке, и это нормально.
+    // Пусто — пуши на сервере не настроены, тумблера в настройках нет.
+    vapid: <%- JSON.stringify(guest ? '' : (vapidPublic || '')) %>
   };
 </script>
 <%# Словарь языка страницы и переключатель — одни на весь сайт
@@ -115,5 +119,6 @@
     поверх него, и он это видит. %>
 <script defer src="<%= asset('/tk-listbox.js') %>"></script>
 <% if (!guest || typeof socket !== 'undefined') { %><script defer src="/socket.io/socket.io.js"></script><% } %>
-<% if (!guest) { %><script defer src="<%= asset('/tk-daily.js') %>"></script><script defer src="<%= asset('/tk-peer.js') %>"></script><script defer src="<%= asset('/tk-notify.js') %>"></script><% } %>
+<% if (!guest) { %><script defer src="<%= asset('/tk-daily.js') %>"></script><script defer src="<%= asset('/tk-peer.js') %>"></script><script defer src="<%= asset('/tk-notify.js') %>"></script><%# Пуши: подписка сверяется с сервером на каждой странице — адрес
+    подписки браузер меняет сам, и протухшая молча перестала бы работать. %><script defer src="<%= asset('/tk-push.js') %>"></script><% } %>
 <script defer src="<%= asset('/tk-app.js') %>"></script>

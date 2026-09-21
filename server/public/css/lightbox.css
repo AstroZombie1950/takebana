@@ -47,13 +47,15 @@
   border-color: var(--tk-accent);
 }
 
-.tk-lightbox__close { top: 20px; right: 20px; }
-.tk-lightbox__prev { left: 20px; }
-.tk-lightbox__next { right: 20px; }
+/* Окно во весь экран, поверх него — системные панели: крестик держим ниже
+ * чёлки, стрелки — правее и левее скруглённых углов. */
+.tk-lightbox__close { top: calc(20px + var(--tk-safe-t)); right: calc(20px + var(--tk-safe-r)); }
+.tk-lightbox__prev { left: calc(20px + var(--tk-safe-l)); }
+.tk-lightbox__next { right: calc(20px + var(--tk-safe-r)); }
 
 .tk-lightbox__count {
   position: absolute;
-  bottom: 20px;
+  bottom: calc(20px + var(--tk-safe-b));
   left: 50%;
   transform: translateX(-50%);
   font-family: Oswald, sans-serif;
@@ -71,7 +73,7 @@
 
 @media (max-width: 767px) {
   .tk-lightbox__btn { width: 38px; height: 38px; }
-  .tk-lightbox__close { top: 12px; right: 12px; }
-  .tk-lightbox__prev { left: 8px; }
-  .tk-lightbox__next { right: 8px; }
+  .tk-lightbox__close { top: calc(12px + var(--tk-safe-t)); right: calc(12px + var(--tk-safe-r)); }
+  .tk-lightbox__prev { left: calc(8px + var(--tk-safe-l)); }
+  .tk-lightbox__next { right: calc(8px + var(--tk-safe-r)); }
 }

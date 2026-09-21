@@ -138,6 +138,23 @@
           </div>
         </section>
 
+        <%# Пуши: приходят и с закрытой вкладкой. Панели нет вовсе, пока
+            на сервере не задана пара VAPID (utils/push.js): нерабочий
+            тумблер хуже отсутствующего. Поведение — public/tk-push.js. %>
+        <% if (vapidPublic) { %>
+        <section class="tk-panel" id="pushPanel">
+          <p class="tk-panel__title" data-i18n="settings.push"><%- t('settings.push') %></p>
+          <div class="tk-set__form">
+            <label class="tk-form__toggle"><input type="checkbox" data-push="on"><span data-i18n="settings.pushOn"><%- t('settings.pushOn') %></span></label>
+            <label class="tk-form__toggle"><input type="checkbox" data-push="preview"><span data-i18n="settings.pushPreview"><%- t('settings.pushPreview') %></span></label>
+            <label class="tk-form__toggle"><input type="checkbox" data-push="live"><span data-i18n="settings.pushLive"><%- t('settings.pushLive') %></span></label>
+            <p class="tk-note tk-set__warn" id="pushState" hidden></p>
+            <p class="tk-note" data-i18n="settings.pushHint"><%- t('settings.pushHint') %></p>
+            <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" id="pushTest" data-i18n="settings.pushTest"><%- t('settings.pushTest') %></button>
+          </div>
+        </section>
+        <% } %>
+
         <!-- Камера и микрофон: что разрешил браузер, и проверка -->
         <section class="tk-panel" id="devicesPanel">
           <p class="tk-panel__title" data-i18n="settings.devices"><%- t('settings.devices') %></p>

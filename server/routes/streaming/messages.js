@@ -26,6 +26,7 @@ const attachments = require('../../utils/attachments');
 const { uploadAttachment } = require('./uploads');
 const { attachLimiter } = require('../../middleware/rateLimit');
 const limits = require('../../utils/messageLimit');
+const push = require('../../utils/push');
 const { rankPeers } = require('../../utils/recentPeers');
 const { audit } = require('../../utils/audit');
 const { view } = require('../../utils/messageView');
@@ -80,10 +81,54 @@ const isOnline = (req, userId) => {
   return !!(rooms && rooms.has(String(userId)));
 };
 
+// Сколько ждём, прежде чем будить телефон человека, у которого открыта
+// вкладка. Правило «есть сокет — молчим» было бы неверным: вкладка, забытая
+// открытой на рабочем ноутбуке, навсегда отключила бы пуши на телефон.
+// Поэтому ждём полминуты и смотрим, прочитано ли. Прочитал — будить незачем.
+const PUSH_WAIT_MS = 30000;
+
+// Что показать в пуше вместо текста, когда текста нет, и когда показывать
+// его нельзя вовсе. Правило то же, что у уведомления открытой вкладки
+// (public/tk-notify.js), кроме исчезающих: их не видно и в самой переписке,
+// пока не откроешь, — тем более незачем показывать на заблокированном экране.
+function pushText(m) {
+  if (m.limit) return {};
+  // Именно .name, а не сам forwardedFrom: это вложенный объект схемы, и у
+  // обычного сообщения он не пустой, а пустой объект — то есть истина.
+  // Так же его проверяет utils/messageView.js.
+  if (m.forwardedFrom && m.forwardedFrom.name) return { previewKey: 'notify.forwarded' };
+  const content = String(m.content || '').trim();
+  if (content) return { preview: content };
+  const kind = m.attachments && m.attachments[0] && m.attachments[0].kind;
+  return kind ? { previewKey: 'chats.att.' + kind } : {};
+}
+
+// Пуш о сообщении: на устройства получателя, когда он не читает его прямо
+// сейчас. Ничего не ждёт и ничего не роняет — пуш не важнее сообщения.
+function pushMessage({ message, sender, recipient, online }) {
+  const note = Object.assign({
+    topic: 'message',
+    title: userView.displayName(sender),
+    bodyKey: 'push.newMessage',
+    // Метка по собеседнику: пять сообщений подряд — одно уведомление
+    // на экране, а не стопка из пяти.
+    tag: 'msg-' + String(sender._id),
+    url: '/chatsPage?peer=' + String(sender._id),
+  }, pushText(message));
+
+  const fire = () => Message.findById(message._id).select('readAt').lean()
+    .then((fresh) => (fresh && !fresh.readAt ? push.send(recipient._id, note) : null))
+    .catch((e) => errorLog.server(e, 'push.message'));
+
+  if (!online) return fire();
+  // unref: недоотправленный пуш не повод держать процесс живым при остановке.
+  setTimeout(fire, PUSH_WAIT_MS).unref();
+}
+
 // Сохранить сообщение и разослать: получателю и вкладкам отправителя.
 // Общее у отправки, вложений и пересылки. ref — метка вкладки, отправившей
 // файл: по ней она меняет свою заглушку загрузки на готовое сообщение.
-async function deliver(req, { conversation, sender, recipient, content = '', attachments: files, forwardedFrom, ref, limit }) {
+async function deliver(req, { conversation, sender, recipient, content = '', attachments: files, forwardedFrom, ref, limit, silent }) {
   const now = new Date();
   const message = await Message.create({
     conversationId: conversation._id,
@@ -112,6 +157,9 @@ async function deliver(req, { conversation, sender, recipient, content = '', att
     socket.to(`user:${recipient._id}`).emit('message:new', { message: out, peer: person(sender) });
     socket.to(`user:${sender._id}`).emit('message:new', { message: out, peer: person(recipient), ...(ref ? { ref } : {}) });
   }
+  // silent — пересылка пачкой: двадцать писем за секунду это одно действие
+  // человека, и будить телефон двадцать раз незачем. Пуш уходит с последним.
+  if (!silent) pushMessage({ message, sender, recipient, online: isOnline(req, recipient._id) });
   return out;
 }
 
@@ -436,8 +484,11 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
   for (const recipient of recipients) {
     let conversation = await findConversation(me, recipient._id);
     if (!conversation) conversation = await Conversation.create({ userOne: me, userTwo: recipient._id });
-    if (comment) sent.push(await deliver(req, { conversation, sender, recipient, content: comment }));
-    for (const item of batch) sent.push(await deliver(req, { conversation, sender, recipient, ...item }));
+    // Пуш — один на всю пересылку, с последним сообщением пачки.
+    if (comment) sent.push(await deliver(req, { conversation, sender, recipient, content: comment, silent: batch.length > 0 }));
+    for (let i = 0; i < batch.length; i++) {
+      sent.push(await deliver(req, { conversation, sender, recipient, ...batch[i], silent: i < batch.length - 1 }));
+    }
   }
 
   res.json({ success: true, messages: sent });

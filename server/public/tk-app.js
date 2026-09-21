@@ -203,13 +203,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const name = sender.name || t('modal.notifications.unknown');
             const isCall = n.type === 'call';
             const isComment = n.type === 'comment';
+            // Эфир: ведёт на сам эфир, а текстом — его название (utils/liveNotify.js).
+            const isLive = n.type === 'live';
             const href = isCall ? '/chatsPage?tab=calls'
-              : isComment ? (n.link || '/')
+              : isComment || isLive ? (n.link || '/')
               : '/chatsPage?peer=' + encodeURIComponent(sender._id || '');
             const title = isCall ? t('modal.notifications.missedCall', { name })
               : isComment ? t('modal.notifications.comment', { name })
+              : isLive ? t('modal.notifications.live', { name })
               : t('modal.notifications.from') + ' ' + name;
-            const text = isCall ? '' : (n.content || t('modal.notifications.fallback'));
+            const text = isCall ? '' : isLive ? (n.content || '') : (n.content || t('modal.notifications.fallback'));
             return `
             <a class="tk-notice${n.isRead ? '' : ' tk-notice--new'}" href="${escapeHtml(href)}">
               <span class="tk-notice__top">
@@ -375,7 +378,10 @@ document.addEventListener('DOMContentLoaded', function () {
 // Адрес — свой, без версии в имени: worker обязан лежать в корне, иначе его
 // область не покроет весь сайт. Обновление браузер ищет сам, по этому же
 // адресу; nginx отдаёт его с перепроверкой (ops/nginx/takebana.conf).
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
+// isSecureContext, а не «протокол https»: localhost и 127.0.0.1 браузер
+// тоже считает надёжными, и без этого service worker — а с ним и пуши —
+// не работали при разработке вовсе, только после выкладки.
+if ('serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch((e) => console.warn('[sw]', e));
   });

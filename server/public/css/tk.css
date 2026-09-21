@@ -80,6 +80,25 @@
   --tk-muted: #8A827C;        /* второстепенный текст */
   --tk-link-hover: #F5F1EA;
   --tk-link: #E34234;         /* ссылка: на тёмном это та же киноварь, 4.8:1 */
+
+  /* ── Вырезы экрана ──
+   * Чёлка и «дом» на айфоне, полоса кнопок на Android: страница раскладывается
+   * во весь экран (viewport-fit=cover в partials/tkHead.ejs), а системные
+   * панели лежат поверх неё. Заказчик прислал скриншот, где полоса навигации
+   * закрывала половину поля ввода в переписке.
+   *
+   * Переменными, а не env() россыпью: во-первых, запасной ноль написан один
+   * раз, во-вторых, отступ виден в отладчике числом. На экране без вырезов
+   * все четыре — 0px, и вёрстка считается ровно как до этого. */
+  --tk-safe-t: env(safe-area-inset-top, 0px);
+  --tk-safe-r: env(safe-area-inset-right, 0px);
+  --tk-safe-b: env(safe-area-inset-bottom, 0px);
+  --tk-safe-l: env(safe-area-inset-left, 0px);
+
+  /* Шапка кабинета: 64px рисунка плюс вырез сверху, под которым её не видно.
+   * Высоту вычитают из экрана переписка, карта и эфир. */
+  --tk-head: 64px;
+  --tk-head-h: calc(var(--tk-head) + var(--tk-safe-t));
 }
 
 [data-bg="paper"] {
@@ -506,10 +525,15 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 
 /* Полоса контента. Шире 1440 страница не растягивается — за её краями
  * тёмный фон body, в цвет шапки и подвала. */
+/* Обёртка страниц без кабинетной сетки: «О нас», вход, документы. Боковые
+ * вырезы (телефон боком) отодвигают содержимое здесь — так же, как
+ * .tk-app-main делает это для страниц кабинета. */
 .tk-shell {
   width: 100%;
   max-width: 1440px;
   margin: 0 auto;
+  padding-left: var(--tk-safe-l);
+  padding-right: var(--tk-safe-r);
   background: var(--tk-ink);
   color: var(--tk-paper);
 }
@@ -560,7 +584,7 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 
 /* ── Подвал ── */
 .tk-footer {
-  padding: 64px 56px 56px;
+  padding: 64px calc(56px + var(--tk-safe-r)) 56px calc(56px + var(--tk-safe-l));
   display: grid;
   grid-template-columns: 1fr 200px 200px 260px;
   gap: 40px;
@@ -613,7 +637,7 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 
 /* ── Нижняя полоса ── */
 .tk-copy {
-  padding: 22px 56px 26px;
+  padding: 22px calc(56px + var(--tk-safe-r)) calc(26px + var(--tk-safe-b)) calc(56px + var(--tk-safe-l));
   border-top: 1px solid var(--tk-rule);
   border-image: linear-gradient(var(--tk-rule), var(--tk-rule)) 1 0 0 / 1px 0 0 / 0 100vmax;
   display: flex;
@@ -636,8 +660,8 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 @media (max-width: 1439px) {
   .tk-footer,
   .tk-copy {
-    padding-left: 40px;
-    padding-right: 40px;
+    padding-left: calc(40px + var(--tk-safe-l));
+    padding-right: calc(40px + var(--tk-safe-r));
   }
 }
 
@@ -648,8 +672,8 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 
   .tk-footer,
   .tk-copy {
-    padding-left: 28px;
-    padding-right: 28px;
+    padding-left: calc(28px + var(--tk-safe-l));
+    padding-right: calc(28px + var(--tk-safe-r));
   }
 }
 
@@ -666,8 +690,8 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 
   .tk-footer,
   .tk-copy {
-    padding-left: 20px;
-    padding-right: 20px;
+    padding-left: calc(20px + var(--tk-safe-l));
+    padding-right: calc(20px + var(--tk-safe-r));
   }
 }
 

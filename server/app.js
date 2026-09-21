@@ -124,6 +124,10 @@ app.locals.googleOAuthConfigured = googleOAuthConfigured;
 app.locals.mailConfigured = require('./utils/mail').mailConfigured;
 // Откуда зритель берёт HLS: пусто — со своего домена, иначе — адрес CDN.
 app.locals.hlsBase = require('./utils/hls').hlsBase;
+// Публичный ключ VAPID для подписки на пуши (utils/push.js). Пусто — пуши
+// не настроены, и тумблера в настройках нет: нерабочий тумблер хуже
+// отсутствующего, как и кнопка Google без ключей.
+app.locals.vapidPublic = require('./utils/push').publicKey;
 // Длительность записи эфира в шаблонах: страница записи и карточки профиля.
 app.locals.clock = require('./utils/recording').clock;
 // Категории и города: форма эфира живёт в шапке каждой страницы кабинета.
@@ -224,6 +228,7 @@ require('./utils/nickname').ensureAll(require('./models/User')).catch((e) => req
 require('./utils/streamLog').sweep();
 
 app.use(require('./routes/presence'));
+app.use(require('./routes/push'));
 app.use(require('./routes/calls'));
 app.use(require('./routes/recordings'));
 app.use(require('./routes/pages'));

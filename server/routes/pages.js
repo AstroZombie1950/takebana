@@ -82,6 +82,10 @@ router.get('/main', commonDataMiddleware, async (req, res) => {
 router.get('/logout', (req, res) => {
   // До destroy: после него в сессии уже некого записывать.
   audit(req, 'auth.logout');
+  // Подписка на пуши принадлежит устройству, а не человеку: оставить её —
+  // значит слать уведомления вышедшего тому, кто войдёт на этом телефоне
+  // следующим. Адрес запомнили при подписке (routes/push.js).
+  if (req.session.pushEndpoint) require('../utils/push').unsubscribe(req.session.pushEndpoint).catch(() => {});
   req.session.destroy(err => {
     if (err) {
       return res.redirect('/');

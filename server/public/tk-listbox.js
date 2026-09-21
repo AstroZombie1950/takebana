@@ -134,7 +134,12 @@
     // absolute-список обрезался бы их краем. Не влезает вниз — открываем вверх.
     function place() {
       var r = button.getBoundingClientRect();
-      var below = innerHeight - r.bottom, above = r.top;
+      // Под нижним краем экрана может лежать полоса системных кнопок, под
+      // верхним — чёлка: в эту часть список не раскрываем (токены — tk.css).
+      var css = getComputedStyle(document.documentElement);
+      var safeB = parseFloat(css.getPropertyValue('--tk-safe-b')) || 0;
+      var safeT = parseFloat(css.getPropertyValue('--tk-safe-t')) || 0;
+      var below = innerHeight - safeB - r.bottom, above = r.top - safeT;
       var up = below < Math.min(list.scrollHeight, 280) + 12 && above > below;
       list.style.left = r.left + 'px';
       list.style.minWidth = r.width + 'px';
