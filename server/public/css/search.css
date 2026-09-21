@@ -132,6 +132,21 @@
   transition: border-color .18s ease, background-color .18s ease;
 }
 
+/* Своя карточка подписчика: под ней — убрать и закрыть канал. */
+.tk-person-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.tk-person-row .tk-person { flex: 1; }
+
+.tk-person-row__acts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 6px;
+}
+
 .tk-person:hover {
   border-color: var(--tk-accent);
   background: rgba(227, 66, 52, .06);

@@ -2,7 +2,8 @@
 //
 // Само пережатие — utils/videoEncode.js, общее с вложениями переписки.
 // Хранилище — Bunny (utils/storage.js; решение «куда грузим файлы» 17.09),
-// ключ gallery/<userId>/<id>.mp4. Ролик до 10 минут — минута-две.
+// ключ gallery/<userId>/<id>.mp4. Ролик — до часа (решение 21.09.2026,
+// было 10 минут); пережимается примерно за свою длительность.
 
 const fs = require('fs');
 const os = require('os');
@@ -12,8 +13,10 @@ const errorLog = require('./errorLog');
 const { encode, schedule } = require('./videoEncode');
 const GalleryVideo = require('../models/GalleryVideo');
 
-const MAX_SECONDS = 10 * 60;
-const MAX_MB = 300;
+const MAX_SECONDS = 60 * 60;
+// По весу предела для человека нет — только по длительности. 8 ГБ —
+// технический потолок, чтобы один файл не забил диск сервера.
+const MAX_MB = 8192;
 const MAX_PER_USER = 30;
 
 async function convert(doc, src) {

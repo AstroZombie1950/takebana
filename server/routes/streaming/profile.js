@@ -35,13 +35,22 @@ router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
   // commonDataMiddleware роль не тянет, и ради одной страницы добавлять её
   // в выборку каждой страницы кабинета незачем.
   const user = await User.findById(req.session.userId)
-    .select('provider role login nickname nicknameChangedAt email emailChange emailVerifiedAt').lean();
+    .select('provider role login nickname nicknameChangedAt email emailChange emailVerifiedAt restricted').lean();
   if (!user) return res.redirect('/login');
+  // Кому закрыт канал (utils/restrict.js): здесь доступ можно вернуть.
+  const restrictedUsers = (user.restricted || []).length
+    ? await User.find({ _id: { $in: user.restricted } }).select('nickname login email avatar').lean()
+    : [];
+  const restricted = restrictedUsers.map((u) => {
+    const displayName = userView.displayName(u);
+    return { _id: String(u._id), displayName, avatarStyle: userView.avatarStyle(u, displayName) };
+  });
   const pending = user.emailChange && user.emailChange.expiresAt > new Date() ? user.emailChange.email : '';
   res.render('settings', {
     hasPassword: (user.provider || '') === PASSWORD_PROVIDER,
     canDelete: user.role !== 'admin',
     mailOn: mailConfigured,
+    restricted,
     profile: {
       login: user.login || '',
       nickname: user.nickname || '',
@@ -175,7 +184,7 @@ router.delete('/profile/gallery/:name', requireAuth, async (req, res) => {
 });
 
 // ── Видео в галерее ──────────────────────────────────────────────────────
-// Принимается файл до 300 МБ и 10 минут, дальше — пережатие со знаком
+// Принимается ролик до часа, дальше — пережатие со знаком
 // в фоне (utils/galleryVideo.js). Страница спрашивает состояние, пока
 // ролик не готов. Без хранилища (на бою без Bunny) видео не принимаем.
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -191,7 +200,7 @@ function videoView(v) {
   };
 }
 
-// Лимит — до приёма файла: иначе 300 МБ успевали бы лечь на диск.
+// Лимит — до приёма файла: иначе гигабайты успевали бы лечь на диск.
 async function videoQuota(req, res, next) {
   if (!galleryVideo.enabled) return res.status(503).json({ success: false, message: 'Видео сейчас не принимаются' });
   const n = await GalleryVideo.countDocuments({ userId: req.session.userId, status: { $ne: 'failed' } });

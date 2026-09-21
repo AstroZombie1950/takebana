@@ -173,6 +173,7 @@
               <p class="tk-note" data-i18n="settings.permHowText"><%- t('settings.permHowText') %></p>
             </details>
             <p class="tk-note tk-set__foot" data-i18n="settings.pushHint"><%- t('settings.pushHint') %></p>
+            <p class="tk-note" data-i18n="settings.pushMobile"><%- t('settings.pushMobile') %></p>
             <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" id="pushTest" data-i18n="settings.pushTest"><%- t('settings.pushTest') %></button>
           </div>
         </section>
@@ -224,7 +225,30 @@
         </section>
       </div>
 
-      <a href="/logout" class="tk-set__exit" data-i18n="settings.logout"><%- t('settings.logout') %></a>
+      <%# Ограниченный доступ к каналу: список появляется, только когда
+          кому-то канал закрыт. Закрывают — со страницы человека или
+          из своих подписчиков (utils/restrict.js). %>
+      <% if (restricted.length) { %>
+      <section class="tk-panel tk-set__restricted" id="restrictedPanel">
+        <p class="tk-panel__title" data-i18n="settings.restricted"><%- t('settings.restricted') %></p>
+        <p class="tk-note" data-i18n="settings.restrictedHint"><%- t('settings.restrictedHint') %></p>
+        <ul class="tk-set__people">
+          <% restricted.forEach(function (p) { %>
+          <li class="tk-set__person" data-restricted="<%= p._id %>">
+            <a href="/userPage/<%= p._id %>" class="tk-set__person-name"><%= p.displayName %></a>
+            <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-unrestrict data-i18n="user.unrestrict"><%- t('user.unrestrict') %></button>
+          </li>
+          <% }); %>
+        </ul>
+      </section>
+      <% } %>
+
+      <%# Выход — только на телефоне: на десктопе он в левой панели. Кнопкой
+          во всю ширину, как остальные кнопки настроек. %>
+      <a href="/logout" class="tk-btn tk-btn--outline tk-btn--sm tk-set__exit">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M10 4H4v16h6M16 8l4 4-4 4M20 12H9"></path></svg>
+        <span data-i18n="settings.logout"><%- t('settings.logout') %></span>
+      </a>
     </div>
   </main>
 </div>

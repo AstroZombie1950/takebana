@@ -11,7 +11,7 @@ var P = window.TK_PROFILE || { userId: '', displayName: '', avatarUrl: '' };
 
 // Подписи — из общего словаря (public/tk-i18n.js): свой переводчик
 // с запасными строками здесь стоял, пока у кабинета был отдельный словарь.
-var pt = function (key) { return window.t ? window.t(key) : ''; };
+var pt = function (key, vars) { return window.t ? window.t(key, vars) : ''; };
 
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -82,6 +82,30 @@ document.addEventListener('DOMContentLoaded', function () {
     subscribeButton.addEventListener('click', toggleSubscription);
   }
 
+  // ── Ограничить доступ к каналу (utils/restrict.js) ──────────────────────
+  var restrictButton = document.getElementById('restrictButton');
+  if (restrictButton) {
+    restrictButton.addEventListener('click', function () {
+      var on = !restrictButton.getAttribute('data-on');
+      var ask = on ? confirmDialog(pt('user.restrictQ', { name: P.displayName }), { okText: pt('user.restrict') }) : Promise.resolve(true);
+      ask.then(function (yes) {
+        if (!yes) return;
+        return fetch('/restrict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: P.userId, on: on })
+        }).then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (data) {
+            if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+            restrictButton.setAttribute('data-on', on ? '1' : '');
+            window.tkText(restrictButton.querySelector('[data-i18n]'), on ? 'user.unrestrict' : 'user.restrict');
+            toast(pt(on ? 'user.restricted' : 'user.unrestricted', { name: P.displayName }), 'ok');
+          });
+        });
+      }).catch(function (e) { toast(e.message, 'error'); });
+    });
+  }
+
   // ── Звонки ──────────────────────────────────────────────────────────────
   function call(type) {
     if (!window.showOutgoingCall) return;
@@ -109,7 +133,7 @@ document.addEventListener('DOMContentLoaded', function () {
   if (gallery && gallery.hasAttribute('data-own')) {
     var shots = document.getElementById('galleryShots');
     var input = document.getElementById('galleryInput');
-    var hint = document.getElementById('galleryHint');
+    var addBtn = document.getElementById('galleryAdd');
     var countEl = document.getElementById('galleryCount');
     var empty = document.getElementById('galleryEmpty');
     var CROSS = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>';
@@ -131,7 +155,28 @@ document.addEventListener('DOMContentLoaded', function () {
       empty.hidden = shots.children.length > 0;
     };
 
-    var say = function (key, vars) { if (hint) window.tkText(hint, key, vars); };
+    // Пределы — в браузере, до загрузки: человек узнаёт о них, только когда
+    // за них вышел. Сервер проверяет то же самое (routes/streaming/profile.js).
+    var PHOTO_MB = 10;
+    var PHOTOS_AT_ONCE = 100;
+    var VIDEO_SECONDS = 3600;
+    var alarm = function (key, vars) { toast(pt(key, vars), 'error'); };
+
+    // Длительность ролика — из его заголовка, не загружая файл: час видео
+    // весит гигабайты, и узнать о пределе после загрузки было бы обидно.
+    // Не разобрал браузер (редкий кодек) — пропускаем: проверит сервер.
+    var duration = function (file) {
+      return new Promise(function (resolve) {
+        var v = document.createElement('video');
+        var url = URL.createObjectURL(file);
+        var done = function (s) { URL.revokeObjectURL(url); resolve(s); };
+        v.preload = 'metadata';
+        v.onloadedmetadata = function () { done(isFinite(v.duration) ? v.duration : 0); };
+        v.onerror = function () { done(0); };
+        setTimeout(function () { done(0); }, 8000);
+        v.src = url;
+      });
+    };
 
     var shotHtml = function (url) {
       var name = url.split('/').pop();
@@ -141,7 +186,6 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     // ── Видео: загрузка с процентами, потом ожидание пережатия ──
-    var VIDEO_MAX = 300 * 1024 * 1024;
     var PLAY = '<span class="tk-shot__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5.5v13L20 12z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>';
     var clock = function (s) { s = Math.round(s || 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 
@@ -225,26 +269,42 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var upload = function (list) {
       var all = Array.prototype.slice.call(list || []);
-      var videos = all.filter(function (f) { return /^video\//.test(f.type) && f.size <= VIDEO_MAX; });
-      var files = all.filter(function (f) {
-        return /^image\/(png|jpeg|webp)$/.test(f.type) && f.size <= 10 * 1024 * 1024;
+      var videos = all.filter(function (f) { return /^video\//.test(f.type); });
+      var photos = all.filter(function (f) { return /^image\/(png|jpeg|webp)$/.test(f.type); });
+      if (videos.length + photos.length < all.length) alarm('user.galleryBadType');
+      if (photos.length > PHOTOS_AT_ONCE) {
+        alarm('user.galleryTooMany', { n: PHOTOS_AT_ONCE });
+        photos = [];
+      }
+      var heavy = photos.filter(function (f) { return f.size > PHOTO_MB * 1024 * 1024; });
+      if (heavy.length) alarm(heavy.length === 1 ? 'user.photoHeavy' : 'user.photosHeavy', { name: heavy[0].name, n: heavy.length, mb: PHOTO_MB });
+      var files = photos.filter(function (f) { return heavy.indexOf(f) === -1; });
+
+      videos.forEach(function (f) {
+        duration(f).then(function (s) {
+          if (s > VIDEO_SECONDS + 1) return alarm('user.videoTooLong', { name: f.name });
+          uploadVideo(f);
+        });
       });
-      if (!files.length && !videos.length) return say('user.galleryBadFiles');
-      videos.forEach(uploadVideo);
       if (!files.length) return;
       var form = new FormData();
       files.forEach(function (f) { form.append('photos', f); });
-      say('app.uploading');
+      addBtn.disabled = true;
+      window.tkText(addBtn, 'app.uploading');
       json('/profile/gallery', { method: 'POST', body: form })
         .then(function (d) {
           shots.insertAdjacentHTML('beforeend', (d.urls || []).map(shotHtml).join(''));
           recount();
-          say('app.galleryDone', { total: d.total });
+          toast(pt('app.galleryDone', { total: d.total }), 'ok');
         })
-        .catch(function (err) { say('user.galleryLimit'); toast(window.t('app.errorShort', { message: err.message }), 'error'); });
+        .catch(function (err) { toast(window.t('app.errorShort', { message: err.message }), 'error'); })
+        .then(function () {
+          addBtn.disabled = false;
+          window.tkText(addBtn, 'user.galleryAdd');
+        });
     };
 
-    document.getElementById('galleryAdd').addEventListener('click', function () { input.click(); });
+    addBtn.addEventListener('click', function () { input.click(); });
     input.addEventListener('change', function () { upload(input.files); input.value = ''; });
 
     // Файлы можно бросить на всю секцию галереи.

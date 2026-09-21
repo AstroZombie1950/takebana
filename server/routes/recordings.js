@@ -4,6 +4,7 @@
 // (routes/streaming/catalog.js), подборку «Смотрите также» — utils/recommend.js.
 
 const crypto = require('crypto');
+const restriction = require('../utils/restrict');
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
@@ -103,6 +104,9 @@ router.get('/recording/:id', commonDataMiddleware, async (req, res) => {
   const isOwner = !!rec && !!rec.userId && String(rec.userId._id) === String(me);
   if (!rec || !rec.userId || (rec.status !== 'ready' && !isOwner)) {
     return res.status(404).render('streamNotFound');
+  }
+  if (await restriction.isRestricted(rec.userId._id, me)) {
+    return res.status(403).render('streamNotFound', { restricted: true });
   }
   const current = res.locals.currentUser;
   const adultOk = isOwner || !!(current && current.adultConfirmedAt);

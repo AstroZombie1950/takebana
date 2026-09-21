@@ -1,6 +1,7 @@
 // Чат внутри эфира: отправка и дозагрузка новых сообщений.
 
 const express = require('express');
+const restriction = require('../../utils/restrict');
 const router = express.Router();
 const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
@@ -25,6 +26,18 @@ router.post('/chat/message', requireAuth, requireNotBanned, validate({
   }
   const username = userView.displayName(author);
 
+  // Рассылаем в комнату эфира. Комнаты именованы по ключу трансляции —
+  // так к ним присоединяются обе страницы эфира (sockets/index.js), поэтому
+  // ключ приходится достать. Заодно это проверка, что эфир вообще есть:
+  // раньше сообщение писалось в базу с любым существующим ObjectId.
+  const stream = await Stream.findById(streamId).select('streamKey userId').lean();
+  if (!stream) {
+      return res.status(404).json({ message: 'Эфир не найден' });
+  }
+  if (await restriction.isRestricted(stream.userId, author._id)) {
+      return res.status(403).json({ message: 'Автор ограничил вам доступ к своему каналу' });
+  }
+
   // Создаём новое сообщение
   const chatMessage = new ChatMessage({
       streamId,
@@ -35,15 +48,6 @@ router.post('/chat/message', requireAuth, requireNotBanned, validate({
 
   // Сохраняем сообщение в базу данных
   await chatMessage.save();
-
-  // Рассылаем в комнату эфира. Комнаты именованы по ключу трансляции —
-  // так к ним присоединяются обе страницы эфира (sockets/index.js), поэтому
-  // ключ приходится достать. Заодно это проверка, что эфир вообще есть:
-  // раньше сообщение писалось в базу с любым существующим ObjectId.
-  const stream = await Stream.findById(streamId).select('streamKey').lean();
-  if (!stream) {
-      return res.status(404).json({ message: 'Эфир не найден' });
-  }
 
   const io = req.app.get('io');
   if (io) {

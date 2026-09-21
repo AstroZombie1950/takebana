@@ -41,6 +41,10 @@
   }
   window.addEventListener('error', function (e) {
     if (!e || !e.message) return;
+    // «Script error.» без файла — ошибка чужого скрипта (расширение браузера,
+    // встроенный браузер почты): подробности браузер прячет, наши файлы все
+    // с этого же домена. Чинить в ней нечего, а журнал она засоряет.
+    if (/^Script error\.?$/.test(e.message) && !e.filename) return;
     send({ name: e.error && e.error.name, message: e.message, stack: e.error && e.error.stack,
            source: e.filename, line: e.lineno, column: e.colno });
   });

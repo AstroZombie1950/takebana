@@ -7,8 +7,34 @@ asyncify(router); // ошибки async-обработчиков уходят в
 const Subscription = require('../../models/Subscription');
 const User = require('../../models/User');
 const Stream = require('../../models/Stream');
+const Notification = require('../../models/Notification');
 const userView = require('../../utils/userView');
+const push = require('../../utils/push');
+const errorLog = require('../../utils/errorLog');
+const restriction = require('../../utils/restrict');
+
+// Подписка и отписка туда-обратно — не повод звать человека каждый раз:
+// от одного подписчика не чаще раза в сутки.
+const FOLLOW_AGAIN_MS = 24 * 3600 * 1000;
+
+// Новый подписчик: строка в колокольчик и пуш, если вкладки нет.
+async function notifyFollow(io, subscriber, targetId) {
+  const since = new Date(Date.now() - FOLLOW_AGAIN_MS);
+  if (await Notification.exists({ recipient: targetId, sender: subscriber._id, type: 'follow', createdAt: { $gt: since } })) return;
+  const link = '/userPage/' + String(subscriber._id);
+  await Notification.create({ recipient: targetId, sender: subscriber._id, type: 'follow', link });
+  if (io) io.to(`user:${targetId}`).emit('notification:new');
+  if (push.online(targetId)) return;
+  await push.send(targetId, {
+    topic: 'follow',
+    title: userView.displayName(subscriber),
+    bodyKey: 'push.follow',
+    tag: 'follow-' + String(subscriber._id),
+    url: link,
+  });
+}
 const { validate } = require('../../middleware/validate');
+const { requireAuthApi } = require('../../middleware/auth');
 
 router.post('/subscribe', validate({
   userId: { type: 'objectId', required: true, label: 'Пользователь' },
@@ -31,8 +57,14 @@ router.post('/subscribe', validate({
   if (!target) {
     return res.status(404).json({ message: 'Пользователь не найден' });
   }
+  if (await restriction.isRestricted(userId, subscriberId)) {
+    return res.status(403).json({ message: 'Автор ограничил вам доступ к своему каналу' });
+  }
 
   await Subscription.create({ subscriberId, subscribedToId: userId });
+  User.findById(subscriberId).select('nickname login email').lean()
+    .then((me) => me && notifyFollow(req.app.get('io'), me, userId))
+    .catch((e) => errorLog.server(e, 'subscribe.notify'));
 
   // Строка для левой панели: страница дорисовывает подписку без перезагрузки
   // (window.tkSubscriptions в public/tk-app.js). Поля — те же, что готовит
@@ -77,6 +109,30 @@ router.delete('/unsubscribe', validate({
     message: 'Отписка успешно выполнена',
     followers: await Subscription.countDocuments({ subscribedToId: userId }),
   });
+});
+
+// Убрать человека из своих подписчиков. Подписаться снова он может —
+// чтобы не мог, есть «Ограничить доступ» ниже.
+router.post('/followers/remove', requireAuthApi, validate({
+  userId: { type: 'objectId', required: true, label: 'Пользователь' },
+}), async (req, res) => {
+  const me = req.session.userId;
+  await Subscription.deleteOne({ subscriberId: req.body.userId, subscribedToId: me });
+  res.json({ success: true, followers: await Subscription.countDocuments({ subscribedToId: me }) });
+});
+
+// Ограничить доступ к своему каналу или вернуть его (utils/restrict.js).
+router.post('/restrict', requireAuthApi, validate({
+  userId: { type: 'objectId', required: true, label: 'Пользователь' },
+  on: { type: 'bool', required: true, label: 'Ограничение' },
+}), async (req, res) => {
+  const me = req.session.userId;
+  const { userId, on } = req.body;
+  if (String(userId) === String(me)) return res.status(400).json({ message: 'Себе ограничить доступ нельзя' });
+  if (!(await User.exists({ _id: userId }))) return res.status(404).json({ message: 'Пользователь не найден' });
+  if (on) await restriction.restrict(me, userId);
+  else await restriction.unrestrict(me, userId);
+  res.json({ success: true, restricted: on, followers: await Subscription.countDocuments({ subscribedToId: me }) });
 });
 
 // Списки человека: кто на него подписан (/followers) и на кого подписан он

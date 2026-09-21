@@ -436,6 +436,8 @@
   align-items: stretch;
 }
 
+.tk-live__send-ico { display: none; }
+
 /* Гостю вместо поля — кнопка входа во всю ширину полосы. */
 .tk-live__chat-guest > .tk-btn { flex: 1; }
 
@@ -686,6 +688,11 @@ html.tk-stage-open { overflow: hidden; }
     border-top: 0;
     border-bottom: 1px solid var(--tk-rule);
   }
+
+  /* «Отправить» — стрелкой: поле забирает строку (как в переписке). */
+  .tk-live__send { flex: none; width: 44px; padding: 0; }
+  .tk-live__send span { display: none; }
+  .tk-live__send-ico { display: block; }
 
   .messeg-box { padding: 10px 12px calc(10px + var(--tk-safe-b)); }
 

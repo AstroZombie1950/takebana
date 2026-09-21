@@ -14,6 +14,7 @@ const { SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
 const { commonDataMiddleware, getActiveStreamsCount } = require('./shared');
 const authors = require('../../utils/authors');
 const userView = require('../../utils/userView');
+const restriction = require('../../utils/restrict');
 
 // Вкладки каталога. popular — все категории разом, остальные совпадают
 // с кодами категорий в config/catalog.js.
@@ -177,12 +178,20 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
   // Записи эфиров: чужому — только готовые, автору — и те, что ещё
   // сохраняются или не сохранились.
   const isSelf = String(userId) === String(currentUserId);
-  const recordings = await Recording.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
+  // Ограничение доступа (utils/restrict.js) — в обе стороны: закрыл ли
+  // хозяин страницы канал от меня и закрыл ли я свой от него.
+  const [restricted, iRestricted] = currentUserId && !isSelf
+    ? await Promise.all([
+      restriction.isRestricted(userId, currentUserId),
+      restriction.isRestricted(currentUserId, userId),
+    ])
+    : [false, false];
+  const recordings = restricted ? [] : await Recording.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
     .sort({ createdAt: -1 })
     .select('title status duration thumb isAdult createdAt views')
     .lean();
   // Видео галереи: чужому — готовые, владельцу — и те, что пережимаются.
-  const videos = await GalleryVideo.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
+  const videos = restricted ? [] : await GalleryVideo.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
     .sort({ createdAt: -1 })
     .select('status error duration video thumb')
     .lean();
@@ -191,6 +200,8 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
   res.render('userPage', {
     recordings,
     videos,
+    restricted,
+    iRestricted,
     user: {
       displayName,
       avatarStyle,
@@ -200,8 +211,10 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
       isSubscribed, // Передаем статус подписки
       isStreaming: !!activeStream,
       activeStreamId: activeStream ? activeStream._id : null,
-      gallery: Array.isArray(user.gallery) ? user.gallery : [],
-      isOnline: !!user.isOnline,
+      gallery: !restricted && Array.isArray(user.gallery) ? user.gallery : [],
+      // Свою страницу человек смотрит сам — значит, он в сети, что бы ни
+      // успела записать база.
+      isOnline: !!user.isOnline || String(currentUserId) === String(user._id),
       lastSeen: user.lastSeen || null
     }
   });

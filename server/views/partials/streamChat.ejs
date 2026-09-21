@@ -10,7 +10,11 @@
   <% if (currentUser) { %>
   <form class="input__messeng-box" id="chatForm">
     <textarea class="tk-field input__messeng" rows="1" data-i18n-placeholder="chats.messagePh" placeholder="<%= ta('chats.messagePh') %>" maxlength="140" aria-label="<%= ta('chats.messagePh') %>" data-i18n-aria="chats.messagePh"></textarea>
-    <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm starting__buttone" data-i18n="chats.send"><%- t('chats.send') %></button>
+    <%# На телефоне и планшете вместо слова — стрелка: место под поле (stream.css). %>
+    <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm tk-live__send" aria-label="<%= ta('chats.send') %>" data-i18n-aria="chats.send">
+      <span data-i18n="chats.send"><%- t('chats.send') %></span>
+      <svg class="tk-live__send-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"></path></svg>
+    </button>
   </form>
   <% } else { %>
   <%# Гость чат читает; писать — после входа, с возвратом в этот же эфир. %>

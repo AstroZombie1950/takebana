@@ -38,8 +38,10 @@
 }
 
 .tk-set__form .tk-field { padding: 12px 16px; }
-/* Кнопка по центру блока и прижата к низу — у соседей они на одной линии. */
-.tk-set__form .tk-btn { align-self: center; margin-top: auto; }
+/* Кнопка во всю ширину блока и прижата к низу — у соседей они на одной
+ * линии и одной ширины (решение 21.09.2026: раньше по центру и каждая
+ * по своему тексту). */
+.tk-set__form .tk-btn { align-self: stretch; margin-top: auto; }
 .tk-set__form .tk-note { margin: -4px 0 0; }
 .tk-set__form .tk-form__label { margin-top: 4px; }
 .tk-set__form .tk-form__label:first-child { margin-top: 0; }
@@ -48,6 +50,10 @@
  * общее правило для .tk-note выше по весу и margin-top: auto не возьмётся. */
 .tk-set__form .tk-set__foot { margin-top: auto; }
 .tk-set__foot + .tk-btn { margin-top: 14px; }
+/* Вторая строка сноски (у пушей — про ярлык на экране «Домой») — вплотную
+ * к первой, кнопка — под ней. */
+.tk-set__foot + .tk-note { margin: 0; }
+.tk-set__foot + .tk-note + .tk-btn { margin-top: 14px; }
 
 /* ── Почта: поля, под ними нынешний адрес, внизу кнопка ──
  * Поля лежат в своей форме, кнопка вынесена из неё (form=) — иначе адрес
@@ -61,7 +67,7 @@
 /* Нынешний адрес — к низу блока, кнопка сразу под ним: у пароля слева
  * кнопка тоже упирается в низ, и обе стоят на одной линии. */
 .tk-set__current { margin-top: auto; padding-top: 16px; }
-.tk-set__go { align-self: center; margin-top: 16px; }
+.tk-set__go { align-self: stretch; margin-top: 16px; }
 
 /* ── Никнейм: «@» перед полем, строка состояния под ним ── */
 .tk-set__nick { position: relative; }
@@ -236,26 +242,54 @@
 .tk-set__zone { border-color: rgba(227, 66, 52, .45); }
 .tk-set__zone .tk-panel__title { color: var(--tk-accent); }
 
-/* Выход — только на узком экране. На десктопе он в левой панели; на
- * телефоне панель спрятана под бургер, поэтому здесь выход остаётся. */
-.tk-set__exit {
-  display: none;
-  align-self: flex-start;
-  margin-top: 20px;
-  font-family: Oswald, sans-serif;
-  font-size: 14px;
-  color: var(--tk-accent);
-  transition: color .18s ease;
+/* Кому закрыт канал — список с «Вернуть доступ». */
+.tk-set__restricted { margin: 16px 0 0; }
+
+.tk-set__people {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.tk-set__exit:hover { color: var(--tk-paper); }
+.tk-set__person {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--tk-rule);
+}
+
+.tk-set__person-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  color: var(--tk-paper);
+}
+
+.tk-set__person-name:hover { color: var(--tk-accent); }
+
+/* Выход — только на узком экране. На десктопе он в левой панели; на
+ * телефоне панель спрятана под бургер, поэтому здесь выход остаётся —
+ * кнопкой во всю ширину, как кнопки блоков выше. */
+.tk-set__exit.tk-btn {
+  display: none;
+  width: 100%;
+  gap: 8px;
+  margin-top: 20px;
+}
 
 @media (max-width: 1023px) {
   .tk-set__grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 767px) {
-  .tk-set__exit { display: inline-block; }
+  .tk-set__exit.tk-btn { display: flex; }
   .tk-set__photo { align-items: flex-start; }
   .tk-set__ava { width: 72px; height: 72px; font-size: 26px; }
 }

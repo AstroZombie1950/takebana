@@ -113,11 +113,13 @@
               <span data-i18n="user.audioCall"><%- t('user.audioCall') %></span>
             </button>
 
+            <% if (!restricted) { %>
             <button type="button" class="tk-btn tk-btn--outline tk-btn--sm subscribe__button<%= user.isSubscribed ? ' unsubscribe' : '' %>">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
               <% var subKey = user.isSubscribed ? 'stream.unsubscribe' : 'stream.subscribe'; %>
               <span data-i18n="<%= subKey %>"><%- t(subKey) %></span>
             </button>
+            <% } %>
 
             <%# Окно жалобы лежит в общем партиале шапки, здесь только кнопка. %>
             <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm"
@@ -127,11 +129,27 @@
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M5 21V4h9l.6 2H20v9h-6l-.6-2H5"></path></svg>
               <span data-i18n="user.reportUser"><%- t('user.reportUser') %></span>
             </button>
+
+            <%# Закрыть свой канал от этого человека и вернуть доступ
+                (utils/restrict.js). Поведение — profile.js. %>
+            <% var rKey = iRestricted ? 'user.unrestrict' : 'user.restrict'; %>
+            <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" id="restrictButton" data-on="<%= iRestricted ? '1' : '' %>">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M6 6l12 12"></path></svg>
+              <span data-i18n="<%= rKey %>"><%- t(rKey) %></span>
+            </button>
           </div>
           <% } %>
         </div>
       </div>
 
+      <% if (restricted) { %>
+      <section class="tk-panel--prof">
+        <div class="tk-prof__none">
+          <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M6 6l12 12"></path></svg>
+          <p data-i18n="restricted.text"><%- t('restricted.text') %></p>
+        </div>
+      </section>
+      <% } else { %>
       <!-- Идёт ли эфир -->
       <section class="tk-panel--prof">
         <p class="tk-kicker" data-i18n="user.stream"><%- t('user.stream') %></p>
@@ -195,15 +213,7 @@
         <div class="tk-prof__gal-head">
           <p class="tk-kicker tk-prof__gal-title" data-i18n="user.gallery"><%- t('user.gallery') %></p>
           <span class="tk-note" id="galleryCount"><%= galleryCount %></span>
-          <% if (isSelf) { %>
-          <input id="galleryInput" type="file" accept="image/png,image/jpeg,image/webp,video/*" multiple hidden>
-          <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" id="galleryAdd" data-i18n="user.galleryAdd"><%- t('user.galleryAdd') %></button>
-          <% } %>
         </div>
-
-        <% if (isSelf) { %>
-        <p class="tk-note tk-prof__gal-hint" id="galleryHint" data-i18n="user.galleryLimit"><%- t('user.galleryLimit') %></p>
-        <% } %>
 
         <div class="tk-shots" id="galleryShots">
           <% videos.forEach(function (v) { %>
@@ -239,7 +249,18 @@
           <% }); %>
         </div>
         <p class="tk-note tk-note--center" id="galleryEmpty" data-i18n="user.galleryEmpty"<% if ((user.gallery || []).length || videos.length) { %> hidden<% } %>><%- t('user.galleryEmpty') %></p>
+
+        <%# Добавить — под снимками, по центру. Пределы (фото до 10 МБ и до
+            100 за раз, видео до часа) не расписаны текстом: браузер скажет
+            о них, только если файл за них выйдет (public/profile.js). %>
+        <% if (isSelf) { %>
+        <input id="galleryInput" type="file" accept="image/png,image/jpeg,image/webp,video/*" multiple hidden>
+        <div class="tk-prof__gal-add">
+          <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" id="galleryAdd" data-i18n="user.galleryAdd"><%- t('user.galleryAdd') %></button>
+        </div>
+        <% } %>
       </section>
+      <% } %>
 
     </div>
   </main>

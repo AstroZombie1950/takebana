@@ -11,6 +11,8 @@
   ];
   var pageHref = function (p) { return base + '/' + list + (p > 1 ? '?page=' + p : ''); };
   var titleKey = list === 'followers' ? 'page.followers.title' : 'page.following.title';
+  // Своих подписчиков можно убрать и закрыть им канал (public/followers.js).
+  var manage = list === 'followers' && !!currentUser && String(currentUser._id) === String(owner._id);
 %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
@@ -57,7 +59,17 @@
       <section class="tk-search__sec">
         <div class="tk-people">
           <% people.forEach(function (person) { %>
+          <% if (manage) { %>
+          <div class="tk-person-row" data-follower="<%= person._id %>">
+            <%- include('partials/personCard', { person: person }) %>
+            <div class="tk-person-row__acts">
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-follower-remove data-i18n="user.followerRemove"><%- t('user.followerRemove') %></button>
+              <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs" data-follower-restrict data-i18n="user.restrict"><%- t('user.restrict') %></button>
+            </div>
+          </div>
+          <% } else { %>
           <%- include('partials/personCard', { person: person }) %>
+          <% } %>
           <% }); %>
         </div>
       </section>
@@ -73,5 +85,6 @@
     </div>
   </main>
 </div>
+<% if (manage) { %><script defer src="<%= asset('/followers.js') %>"></script><% } %>
 </body>
 </html>

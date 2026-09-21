@@ -9,31 +9,35 @@
 // стояли числовые ключи старого lang.js, и у HoReCa с «Презентацией» ключа
 // не было вовсе: в словарь их не добавляли, потому что он уходил. Теперь
 // словарь один, ключи у всех.
+// По шесть подкатегорий в разделе (решение 21.09.2026): «Креатив» убран —
+// размыт и пересекался с «Модой»; «Презентация» — это формат, а не тема;
+// HoReCa названа по-человечески, код остался прежним.
 // У городов ключи тоже есть: в фильтрах и формах их подписи переводятся,
 // в данных заведений и эфиров остаётся код.
 
 const CATEGORIES = {
   entertainment: {
     name: 'Развлечения', i18n: 'cat.entertainment',
-    note: 'Игры, музыка, творчество', noteI18n: 'cat.entertainmentNote',
+    note: 'Игры, музыка, спорт', noteI18n: 'cat.entertainmentNote',
     subs: [
+      { code: 'games', name: 'Игры', i18n: 'sub.games' },
+      { code: 'music', name: 'Музыка', i18n: 'sub.music' },
       { code: 'podcasts', name: 'Подкасты', i18n: 'sub.podcasts' },
       { code: 'tourism', name: 'Туризм', i18n: 'sub.tourism' },
-      { code: 'creative', name: 'Креатив', i18n: 'sub.creative' },
-      { code: 'music', name: 'Музыка', i18n: 'sub.music' },
+      { code: 'sport', name: 'Спорт', i18n: 'sub.sport' },
+      { code: 'food', name: 'Еда и напитки', i18n: 'sub.food' },
     ],
   },
   business: {
     name: 'Бизнес', i18n: 'cat.business',
-    note: 'Презентации, обучение', noteI18n: 'cat.businessNote',
+    note: 'Недвижимость, услуги, обучение', noteI18n: 'cat.businessNote',
     subs: [
       { code: 'real_estate', name: 'Недвижимость', i18n: 'sub.real_estate' },
       { code: 'services', name: 'Услуги', i18n: 'sub.services' },
       { code: 'education', name: 'Образование', i18n: 'sub.education' },
       { code: 'auto', name: 'Авто', i18n: 'sub.auto' },
-      { code: 'horeca', name: 'HoReCa', i18n: 'sub.horeca' },
+      { code: 'horeca', name: 'Рестораны и отели', i18n: 'sub.horeca' },
       { code: 'manufacturing', name: 'Производство', i18n: 'sub.manufacturing' },
-      { code: 'presentation', name: 'Презентация', i18n: 'sub.presentation' },
     ],
   },
   fashion: {

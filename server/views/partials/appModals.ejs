@@ -14,6 +14,8 @@
   <div class="tk-modal__card">
     <div class="tk-modal__head">
       <h3 class="tk-modal__title" data-i18n="modal.notifications.title"><%- t('modal.notifications.title') %></h3>
+      <%# Видна, только когда в ленте что-то есть (tk-app.js). %>
+      <button type="button" class="tk-modal__action hidden" id="clearNotifications" data-i18n="modal.notifications.clear"><%- t('modal.notifications.clear') %></button>
       <button type="button" class="tk-modal__close" id="closeNotificationModal" aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
       </button>

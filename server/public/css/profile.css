@@ -240,10 +240,12 @@
 /* Рубрика секции тянется, число и кнопка — справа. Было инлайном в разметке. */
 .tk-prof__gal-title { margin: 0; flex: 1; }
 
-/* Кнопка «Добавить фото» — по центру строки, а не по базовой линии текста. */
-.tk-prof__gal-head .tk-btn { align-self: center; }
-
-.tk-prof__gal-hint { margin: -8px 0 16px; }
+/* «Добавить фото или видео» — под снимками, по центру блока. */
+.tk-prof__gal-add {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
 
 /* Перетащили файлы на галерею — подсветка, как у зоны загрузки. */
 .tk-prof__gal.is-over { border-color: var(--tk-accent); background: rgba(227, 66, 52, .06); }

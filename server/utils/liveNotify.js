@@ -74,7 +74,10 @@ async function started(io, stream) {
 
   const out = await push.sendMany(offline, {
     topic: 'live',
-    title: name,
+    // «Имя в эфире», а под ним название: одно название с именем в заголовке
+    // читалось как сообщение от человека, а не как начало эфира.
+    titleKey: 'push.liveTitle',
+    titleVars: { name },
     bodyKey: 'push.live',
     // Название эфира — не личная переписка: его видно на витрине любому,
     // поэтому оно уходит всем, а не только тем, кто разрешил показывать

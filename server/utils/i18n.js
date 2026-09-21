@@ -46,6 +46,11 @@ const EN = {
     'Неверный текущий пароль': 'The current password is incorrect',
     'Слишком много запросов. Попробуйте через 15 минут.': 'Too many requests. Try again in 15 minutes.',
 
+    // Подписчики и ограничение доступа (routes/streaming/subscriptions.js)
+    'Автор ограничил вам доступ к своему каналу': 'The author has restricted your access to their channel',
+    'Себе ограничить доступ нельзя': 'You cannot restrict yourself',
+    'Ограничение': 'Restriction',
+
     // Пуш-уведомления (routes/push.js)
     'Пуш-уведомления не настроены': 'Push notifications are not set up',
     'Негодная подписка': 'Invalid subscription',

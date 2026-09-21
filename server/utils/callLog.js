@@ -162,4 +162,12 @@ async function remove(me, ids) {
   return result.matchedCount;
 }
 
-module.exports = { created, answered, switched, ended, missedCount, journal, between, remove, MISSED };
+// Очистить журнал целиком: «Очистить всё» на вкладке «Звонки». Возвращает
+// убранные callId — другие вкладки убирают по ним строки и из ленты диалога.
+async function removeAll(me) {
+  const ids = await Call.find({ $or: [{ caller: me }, { callee: me }], endedAt: { $ne: null }, deletedFor: { $ne: me } }).distinct('callId');
+  if (ids.length) await remove(me, ids);
+  return ids;
+}
+
+module.exports = { created, answered, switched, ended, missedCount, journal, between, remove, removeAll, MISSED };

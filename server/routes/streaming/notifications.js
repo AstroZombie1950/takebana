@@ -42,5 +42,15 @@ router.put('/api/notifications/read', async (req, res) => {
   res.json({ success: true });
 });
 
+// Очистить ленту. Строки о сообщениях не трогаем: их в ленте и нет, а снимает
+// их вход в диалог (messages.js).
+router.delete('/api/notifications', async (req, res) => {
+  const userId = req.session.userId;
+  if (!userId) {
+    return res.status(401).json({ message: 'Необходима авторизация' });
+  }
+  await Notification.deleteMany({ recipient: userId, type: { $ne: 'message' } });
+  res.json({ success: true });
+});
 
 module.exports = router;

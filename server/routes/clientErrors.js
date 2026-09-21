@@ -31,10 +31,13 @@ const cut = (v, n) => String(v == null ? '' : v).slice(0, n);
 router.post('/api/client-error', clientErrorLimiter, express.json({ limit: '16kb' }), (req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const message = cut(body.message, 500);
+    // Старые вкладки ещё шлют «Script error.» — ошибку чужого скрипта без
+    // подробностей (см. partials/tkHead.ejs). Не пишем и её.
+    const opaque = /^Script error\.?$/.test(message) && !body.source;
 
     // Пустое сообщение записывать нечего: так приходят ошибки загрузки
     // сторонних файлов, у которых браузер прячет подробности.
-    if (message) {
+    if (message && !opaque) {
         record({
             scope: 'client',
             err: { name: cut(body.name, 100) || 'ClientError', message, stack: cut(body.stack, 4000) },

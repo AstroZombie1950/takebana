@@ -429,3 +429,29 @@
     window.addEventListener('pagehide', stopCheck);
   }
 })();
+
+// Кому закрыт канал: «Вернуть доступ» убирает строку (routes/streaming/subscriptions.js).
+(function () {
+  var panel = document.getElementById('restrictedPanel');
+  if (!panel) return;
+  panel.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-unrestrict]');
+    if (!btn) return;
+    var row = btn.closest('[data-restricted]');
+    btn.disabled = true;
+    fetch('/restrict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: row.getAttribute('data-restricted'), on: false })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (data) {
+        if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+        row.remove();
+        if (!panel.querySelector('[data-restricted]')) panel.remove();
+      });
+    }).catch(function (err) {
+      btn.disabled = false;
+      toast(err.message, 'error');
+    });
+  });
+})();

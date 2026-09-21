@@ -36,7 +36,7 @@ else console.warn('Пуши выключены: нет VAPID_PUBLIC / VAPID_PRIV
 // и пропущенному звонку сутки ни к чему, но и минуты мало: телефон в кармане
 // в метро вернётся через час. Эфир — дело короткое: пришедшее через час
 // «началось» ведёт на уже кончившееся.
-const TTL = { message: 4 * 3600, call: 4 * 3600, live: 30 * 60 };
+const TTL = { message: 4 * 3600, call: 4 * 3600, follow: 24 * 3600, live: 30 * 60 };
 
 // Полезная нагрузка ограничена примерно четырьмя килобайтами, и длинный
 // текст на экране всё равно обрежет система. 120 знаков — то же правило,
@@ -95,6 +95,12 @@ function online(userId) {
   return !!(server && server.sockets.adapter.rooms.has('user:' + String(userId)));
 }
 
+// Заголовок: имя человека как есть или строка словаря с ним внутри
+// («{name} в эфире») — на языке устройства.
+function titleFor(sub, note) {
+  return note.titleKey ? text(sub.lang, note.titleKey, note.titleVars) : note.title;
+}
+
 // Что видно на экране. title — имя человека, его не переводим; bodyKey —
 // строка словаря («Новое сообщение»), собирается на языке устройства.
 //
@@ -140,7 +146,7 @@ async function sendMany(userIds, note) {
 
   const results = await Promise.all(subs.map(async (sub) => {
     const payload = JSON.stringify({
-      title: note.title,
+      title: titleFor(sub, note),
       body: bodyFor(sub, note),
       tag: note.tag || topic,
       url: note.url || '/',

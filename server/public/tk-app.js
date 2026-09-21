@@ -183,6 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // горела, сколько список ни открывай.
   const notificationButton = document.getElementById('notificationButton');
   const notificationsContent = document.getElementById('notificationsContent');
+  const clearNotifications = document.getElementById('clearNotifications');
   const note = (key, bad) => `<p class="tk-note tk-note--center${bad ? ' tk-note--bad' : ''}" data-i18n="${key}">${escapeHtml(t(key))}</p>`;
 
   if (notificationButton && notificationsContent) {
@@ -195,6 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!response.ok) throw new Error(response.status);
         const notifications = await response.json();
 
+        if (clearNotifications) clearNotifications.classList.toggle('hidden', !notifications.length);
         if (!notifications.length) {
           notificationsContent.innerHTML = note('modal.notifications.empty');
         } else {
@@ -205,14 +207,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const isComment = n.type === 'comment';
             // Эфир: ведёт на сам эфир, а текстом — его название (utils/liveNotify.js).
             const isLive = n.type === 'live';
+            const isFollow = n.type === 'follow';
             const href = isCall ? '/chatsPage?tab=calls'
-              : isComment || isLive ? (n.link || '/')
+              : isComment || isLive || isFollow ? (n.link || '/')
               : '/chatsPage?peer=' + encodeURIComponent(sender._id || '');
             const title = isCall ? t('modal.notifications.missedCall', { name })
               : isComment ? t('modal.notifications.comment', { name })
               : isLive ? t('modal.notifications.live', { name })
+              : isFollow ? t('modal.notifications.follow', { name })
               : t('modal.notifications.from') + ' ' + name;
-            const text = isCall ? '' : isLive ? (n.content || '') : (n.content || t('modal.notifications.fallback'));
+            const text = isCall || isFollow ? '' : isLive ? (n.content || '') : (n.content || t('modal.notifications.fallback'));
             return `
             <a class="tk-notice${n.isRead ? '' : ' tk-notice--new'}" href="${escapeHtml(href)}">
               <span class="tk-notice__top">
@@ -231,6 +235,20 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         console.error('Уведомления:', error);
         notificationsContent.innerHTML = note('modal.notifications.error', true);
+      }
+    });
+  }
+
+  if (clearNotifications && notificationsContent) {
+    clearNotifications.addEventListener('click', async () => {
+      try {
+        const r = await fetch('/api/notifications', { method: 'DELETE' });
+        if (!r.ok) throw new Error(r.status);
+        notificationsContent.innerHTML = note('modal.notifications.empty');
+        clearNotifications.classList.add('hidden');
+        window.setNotificationDot(false);
+      } catch (e) {
+        toast(t('modal.notifications.clearFailed'), 'error');
       }
     });
   }

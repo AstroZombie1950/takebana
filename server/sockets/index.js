@@ -26,6 +26,16 @@ const PRESENCE_SUBSCRIBE_LIMIT = 200;
 // сам ждёт восстановления своей сигнализации, прежде чем выкинуть участника.
 const CALL_GRACE_MS = 20000;
 
+// Сколько ждать, прежде чем объявить человека вне сети. Сайт — многостраничный:
+// каждый переход по ссылке закрывает сокет старой страницы и открывает новый.
+// Без отсрочки человек на каждом клике на миг уходил в офлайн, а запись
+// «в сети» от новой страницы могла проиграть в базе записи «вне сети» от
+// старой — и он оставался офлайн, сидя на сайте (жалоба заказчика 21.09).
+// Минута (решение 21.09.2026): телефон на секунды теряет сеть в лифте
+// и метро, и мигать «вне сети» из-за этого незачем. Смотреть видео или
+// печатать — это открытая вкладка, то есть «в сети» и без отсрочки.
+const PRESENCE_GRACE_MS = 60000;
+
 // Сигналы своего пути (SDP, кандидаты) — объект от браузера. SDP звонка —
 // единицы килобайт; больше — не сигнал.
 const SIGNAL_MAX = 32000;
@@ -37,6 +47,31 @@ function registerSockets(io) {
   const userRooms = new Map(); // userId -> Set(socketIds)
   const pendingCalls = new Map(); // callId -> {callerId, calleeId, type, createdAt}
   const activeCalls = new Map(); // callId -> {callerId, calleeId, type, engine: 'daily'|'own', roomName, startedAt}
+  const offlineTimers = new Map(); // userId -> таймер отсрочки офлайна
+  const presenceWrites = new Map(); // userId -> последняя запись присутствия в очереди
+
+  // Присутствие в базу — по очереди на человека и всегда то, что есть в эту
+  // секунду, а не то, что было, когда запись ставили в очередь. Две записи
+  // одного человека по разным соединениям пула приходят в базу в любом
+  // порядке; очередь и чтение состояния в момент записи это исключают.
+  function syncPresence(userId) {
+    const prev = presenceWrites.get(userId) || Promise.resolve();
+    const next = prev.then(async () => {
+      const isOnline = userConnections.has(userId) || offlineTimers.has(userId);
+      const set = isOnline ? { isOnline } : { isOnline, lastSeen: new Date() };
+      const before = await User.findOneAndUpdate({ _id: userId }, { $set: set }, { projection: { isOnline: 1 } }).lean();
+      if (before && !!before.isOnline === isOnline) return; // ничего не поменялось — и звать некого
+      io.to(`presence:${userId}`).emit('presence:update', { userId, isOnline, lastSeen: set.lastSeen });
+    }).catch((e) => errorLog.server(e, 'socket.presence'));
+    presenceWrites.set(userId, next);
+    next.then(() => { if (presenceWrites.get(userId) === next) presenceWrites.delete(userId); });
+  }
+
+  // После перезапуска в базе остаются «в сети» те, кто был подключён к прошлому
+  // процессу. Кто жив — переподключится за секунды и вернёт себе отметку.
+  User.updateMany({ isOnline: true }, { $set: { isOnline: false, lastSeen: new Date() } })
+    .then(() => { for (const userId of userConnections.keys()) syncPresence(userId); })
+    .catch((e) => errorLog.server(e, 'socket.presenceReset'));
 
   // Зрители эфира — все сокеты в его комнате, кроме вкладок самого ведущего.
   // Раньше ведущий считал и себя: «1 зритель», когда не смотрит никто.
@@ -117,16 +152,15 @@ function registerSockets(io) {
         const count = (userConnections.get(userId) || 0) + 1;
         userConnections.set(userId, count);
         if (count === 1) {
-          // Без await: обработчики ниже обязаны встать в момент подключения.
-          // Пока ждали запись в базу, первый сокет пользователя терял всё, что
-          // клиент слал сразу после connect, — вход в комнату эфира в том числе.
-          // Страницы эфира прятали это за setTimeout(100) перед входом.
-          User.updateOne({ _id: userId }, { $set: { isOnline: true } })
-            .then(() => {
-              io.to(`presence:${userId}`).emit('presence:update', { userId, isOnline: true });
-              console.log('[presence] user online', userId);
-            })
-            .catch((e) => errorLog.server(e, 'socket.presence'));
+          // Вернулся в пределах отсрочки (обычный переход по ссылке) — для всех
+          // он и не уходил: ни записи, ни события.
+          if (offlineTimers.has(userId)) {
+            clearTimeout(offlineTimers.get(userId));
+            offlineTimers.delete(userId);
+          } else {
+            // Без await: обработчики ниже обязаны встать в момент подключения.
+            syncPresence(userId);
+          }
           markDelivered(userId).catch((e) => errorLog.server(e, 'socket.delivered'));
         }
       }
@@ -228,10 +262,11 @@ function registerSockets(io) {
           const cur = (userConnections.get(userId) || 1) - 1;
           if (cur <= 0) {
             userConnections.delete(userId);
-            const lastSeen = new Date();
-            await User.updateOne({ _id: userId }, { $set: { isOnline: false, lastSeen } });
-            io.to(`presence:${userId}`).emit('presence:update', { userId, isOnline: false, lastSeen });
-            console.log('[presence] user offline', userId, 'lastSeen=', lastSeen.toISOString());
+            clearTimeout(offlineTimers.get(userId));
+            offlineTimers.set(userId, setTimeout(() => {
+              offlineTimers.delete(userId);
+              if (!userConnections.has(userId)) syncPresence(userId);
+            }, PRESENCE_GRACE_MS).unref());
           } else {
             userConnections.set(userId, cur);
           }

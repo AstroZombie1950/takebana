@@ -91,4 +91,12 @@ router.post('/api/calls/delete', requireAuthApi, validate({
   res.json({ success: true, deleted, missed: await callLog.missedCount(me) });
 });
 
+router.post('/api/calls/clear', requireAuthApi, async (req, res) => {
+  const me = String(req.session.userId);
+  const ids = await callLog.removeAll(me);
+  const io = req.app.get('io');
+  if (io && ids.length) io.to(`user:${me}`).emit('call:deleted', { ids });
+  res.json({ success: true, ids, missed: await callLog.missedCount(me) });
+});
+
 module.exports = router;

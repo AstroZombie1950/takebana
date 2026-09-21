@@ -206,7 +206,8 @@ body.tk-app {
 }
 
 /* «Что такое Takebana?» — первой в правой группе, заметной кнопкой. На телефоне
- * места нет: там тот же пункт в левой панели и плашка над витриной. */
+ * и планшете места нет, в том числе на телефоне боком: кнопка съедала поле
+ * поиска до одной лупы. Там тот же пункт в левой панели и плашка над витриной. */
 .tk-ahead__about { flex: none; white-space: nowrap; }
 
 /* Гостю: язык, вход и регистрация. У .tk-lang отступ под шапку лендинга. */
@@ -218,9 +219,17 @@ body.tk-app {
   .tk-ahead__lang { display: none; }
 }
 
+@media (max-width: 1023px) {
+  .tk-ahead__about { display: none; }
+}
+
 @media (max-width: 767px) {
-  .tk-ahead__about,
   .tk-ahead__signup { display: none; }
+}
+
+/* Телефон боком: ширина как у планшета, а высоты нет — ориентируемся на неё. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .tk-ahead__about { display: none; }
 }
 
 .tk-ahead__icon {
@@ -434,11 +443,6 @@ body.tk-app {
 }
 
 .tk-aside__item--on svg { color: var(--tk-accent); }
-
-/* Пункт только для узкого экрана: с 768px он кнопкой в шапке. */
-@media (min-width: 768px) {
-  .tk-aside__item--phone { display: none; }
-}
 
 .tk-aside__rule {
   height: 1px;
@@ -728,6 +732,25 @@ body.tk-app {
 
 .tk-modal__close:hover,
 .tk-modal__close:focus-visible { color: var(--tk-accent); }
+
+/* Действие над всем списком рядом с крестиком: «Очистить». Прижато вправо,
+ * к крестику, — заголовок остаётся слева. */
+.tk-modal__action {
+  margin-left: auto;
+  margin-right: -8px;
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tk-muted);
+  transition: color .18s ease;
+}
+
+.tk-modal__action:hover,
+.tk-modal__action:focus-visible { color: var(--tk-accent); }
 
 .tk-modal__body {
   flex: 1;

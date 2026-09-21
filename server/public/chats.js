@@ -1792,7 +1792,8 @@
       callsList.innerHTML = '<p class="tk-note tk-chat__empty-list">' + escapeHtml(t('calls.empty')) + '</p>';
       return;
     }
-    callsList.innerHTML = journal.map(function (c, i) {
+    callsList.innerHTML = '<div class="tk-callbar"><button type="button" class="tk-callbar__clear" data-clear-all>' + escapeHtml(t('calls.clearAll')) + '</button></div>' +
+      journal.map(function (c, i) {
       var info = callInfo(c);
       var p = journalPeer(c);
       var arrow = info.out ? '<path d="M7 17L17 7M9 7h8v8"></path>' : '<path d="M17 7L7 17M15 17H7V9"></path>';
@@ -1820,7 +1821,12 @@
     var call = e.target.closest('[data-call]');
     var open = e.target.closest('[data-open]');
     var del = e.target.closest('[data-del]');
-    if (del) {
+    if (e.target.closest('[data-clear-all]')) {
+      confirmDialog(t('calls.clearAllQ'), { okText: t('calls.clearAll') }).then(function (yes) {
+        if (!yes) return;
+        return post('/api/calls/clear', {}).then(function (r) { afterCallsDeleted(r.ids || [], r); });
+      }).catch(function (err) { toast(t('calls.deleteFailed') + ': ' + err.message, 'error'); });
+    } else if (del) {
       var gone = journal[Number(del.getAttribute('data-del'))];
       confirmDialog(t('calls.deleteQ'), { okText: t('chats.delete') }).then(function (yes) {
         if (!yes) return;
