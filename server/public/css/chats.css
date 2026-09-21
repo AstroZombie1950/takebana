@@ -561,15 +561,19 @@
 .is-recording #messageInput,
 .is-recording .tk-chat__clip { display: none; }
 
+/* Полоса записи: точка, время, живая волна и подсказка. Кнопки здесь нет —
+ * запись отменяют, уведя палец от микрофона (chats.js). */
 .tk-rec:not([hidden]) {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 4px 0 16px;
+  padding: 0 16px;
   border: 1px solid var(--tk-rule);
 }
+
+.tk-rec.is-cancel { border-color: var(--tk-accent); }
 
 .tk-rec__dot {
   width: 10px;
@@ -583,13 +587,49 @@
 @keyframes tk-rec { 50% { opacity: .25; } }
 
 .tk-rec__time {
-  flex: 1;
+  flex: none;
   font-family: Oswald, sans-serif;
   font-size: 15px;
   letter-spacing: .06em;
   font-variant-numeric: tabular-nums;
   color: var(--tk-paper);
 }
+
+/* Волна: полоски одной ширины, высоту им ставит chats.js по громкости.
+ * min-height — чтобы в тишине полоса не исчезала совсем. */
+.tk-rec__wave {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.tk-rec__wave i {
+  flex: 1;
+  min-width: 2px;
+  height: 6%;
+  min-height: 2px;
+  background: var(--tk-beige);
+  transition: height .08s linear;
+}
+
+.tk-rec.is-cancel .tk-rec__wave i { background: var(--tk-accent); }
+
+.tk-rec__hint {
+  flex: none;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .06em;
+  color: var(--tk-muted);
+}
+
+.tk-rec.is-cancel .tk-rec__hint { color: var(--tk-accent); }
+
+/* Удержание не должно уезжать прокруткой и выделением текста. */
+.tk-chat__mic { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 
 /* Перетаскивание файла в диалог: рамка поверх ленты. */
 .tk-chat__area { position: relative; }
@@ -822,14 +862,18 @@
 @media (prefers-reduced-motion: reduce) {
   .tk-rec__dot,
   .tk-upload__bar.is-busy i { animation: none; }
+  .tk-round { transition: none; }
 }
 
 /* ── Кружки ── */
 .tk-round {
   --p: 0;
   position: relative;
+  /* Высоту держит aspect-ratio, а не второе число: тогда при росте ширины
+   * кружок остаётся круглым на каждом кадре перехода. */
   width: 240px;
-  height: 240px;
+  height: auto;
+  aspect-ratio: 1;
   max-width: 100%;
   padding: 0;
   border: 0;
@@ -837,7 +881,13 @@
   overflow: hidden;
   background: rgba(144, 113, 99, .25);
   cursor: pointer;
+  transition: width .25s ease;
 }
+
+/* Открытый кружок больше: его смотрят, а не проглядывают. В узкую ленту
+ * он вписывается через max-width выше; min(…, 100%) здесь не годится —
+ * ширину пузыря задаёт сам кружок, и 100% оказались бы его же 240px. */
+.tk-round.is-live { width: 360px; }
 
 .tk-round img,
 .tk-round__video {
@@ -849,7 +899,13 @@
   display: block;
 }
 
-/* Ход — кольцом по краю. */
+/* Ход — кольцом по краю, от двенадцати часов (поворот на -90°).
+ *
+ * Длина дуги задаётся первым числом dasharray: при --p: 0 это ноль, и кольца
+ * не видно совсем. Раньше дуга пряталась сдвигом (dashoffset) полной линии,
+ * и в покое от неё оставался хвостик. Второе число — длина окружности
+ * при r=48 в поле 100×100 (2πr ≈ 301.6): считаем от неё, а не от pathLength,
+ * который старые Safari у <circle> не понимают. */
 .tk-round__ring,
 .tk-roundrec__ring {
   position: absolute;
@@ -860,14 +916,38 @@
   pointer-events: none;
 }
 
+/* Видео вставляется в кружок последним и лежит поверх всего, что уже в нём
+ * есть: без слоёв кольцо и плашка времени пропадали ровно при запуске —
+ * это и выглядело «полоской, которая исчезает» (замечание 20.09.2026). */
+.tk-round__ring { z-index: 1; }
+.tk-round__sign,
+.tk-round .tk-att__len { z-index: 2; }
+
 .tk-round__ring circle,
 .tk-roundrec__ring circle {
   fill: none;
   stroke: var(--tk-accent);
   stroke-width: 3;
-  stroke-dasharray: 100;
-  stroke-dashoffset: calc(100 - var(--p) * 100);
+  stroke-dasharray: calc(var(--p) * 301.6) 301.6;
 }
+
+/* Кружок на паузе — знак «пустить дальше» поверх замершего кадра. */
+.tk-round__sign {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60px;
+  height: 60px;
+  margin: -30px 0 0 -30px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(10, 10, 10, .72);
+  color: var(--tk-paper);
+}
+
+.tk-round.is-live:not(.is-playing) .tk-round__sign { display: flex; }
 
 .tk-round .tk-att__len { left: 50%; right: auto; bottom: 12px; transform: translateX(-50%); }
 
@@ -902,6 +982,10 @@
 
 /* Своя камера — зеркалом, как в зеркале; в файл кадр уходит как есть. */
 .tk-roundrec__stage video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
+
+/* Пауза: кадр замер (video.pause в chats.js), и это видно по цвету. */
+.tk-roundrec.is-paused .tk-roundrec__stage video { filter: grayscale(1) brightness(.7); }
+.tk-roundrec.is-paused .tk-roundrec__time { color: var(--tk-muted); }
 
 .tk-roundrec__time {
   font-family: Oswald, sans-serif;
@@ -941,16 +1025,40 @@
   color: var(--tk-label);
 }
 
-.tk-limitmenu [aria-checked="true"] { color: var(--tk-paper); }
-.tk-limitmenu [aria-checked="true"]::before {
+/* Два раздела условий, отчёркнутых сверху: сколько раз откроют и сколько
+ * времени живёт открытое. Восемь строк подряд читались одним списком. */
+.tk-limitmenu__sec {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--tk-rule);
+}
+
+.tk-limitmenu__group {
+  margin: 0;
+  padding: 10px 16px 2px;
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-limitmenu__sec button { padding-block: 8px; }
+
+/* Метка выбранного стоит у всех строк, у невыбранных — пустая: иначе
+ * подписи прыгали бы вбок при переключении. */
+.tk-limitmenu button::before {
   content: "";
   display: inline-block;
   width: 7px;
   height: 7px;
   margin-right: 8px;
   vertical-align: 1px;
-  background: var(--tk-accent);
+  background: transparent;
 }
+
+.tk-limitmenu [aria-checked="true"] { color: var(--tk-paper); }
+.tk-limitmenu [aria-checked="true"]::before { background: var(--tk-accent); }
 
 .tk-limitmenu__hint {
   margin: 0;
@@ -1039,7 +1147,8 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 .tk-chat__send-ico { display: none; }
 
 @media (max-width: 640px) {
-  .tk-round { width: 200px; height: 200px; }
+  .tk-round { width: 200px; }
+  .tk-round.is-live { width: 300px; }
 
   /* Поле ввода и четыре кнопки в одну строку: «Отправить» — стрелкой,
    * кнопки уже, поле забирает остальное. */
@@ -1049,6 +1158,10 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   .tk-chat__send { width: 44px; padding: 0; display: flex; align-items: center; justify-content: center; }
   .tk-chat__send span { display: none; }
   .tk-chat__send-ico { display: block; }
+
+  /* Подсказка про отмену не влезает — остаются время и волна. */
+  .tk-rec__hint { display: none; }
+  .tk-rec:not([hidden]) { gap: 8px; padding: 0 10px; }
 }
 
 /* ── Журнал звонков ── */

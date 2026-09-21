@@ -141,7 +141,10 @@
       <section class="tk-cat__sec">
         <p class="tk-kicker" data-i18n="catalog.categories"><%- t('catalog.categories') %></p>
 
-        <div class="tk-groups">
+        <%# На «Популярном» рамок три и каждая узкая: подкатегории в них
+            встают колонками (tk-groups--multi), иначе получается ворох.
+            На странице одной категории рамка широкая — там строка. %>
+        <div class="tk-groups<%= groups.length > 1 ? ' tk-groups--multi' : '' %>">
           <% groups.forEach(function (code) { var cat = catalog.CATEGORIES[code]; %>
           <div class="tk-group" role="group" aria-label="<%= ta(cat.i18n, cat.name) %>">
             <div class="tk-group__head">

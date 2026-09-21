@@ -160,10 +160,16 @@
     }
     if (a.kind === 'round') {
       // Кружок: кадр-обложка в круге; видео одно на страницу и вставляется
-      // сюда при воспроизведении (roundPlay). Ход — кольцом по --p.
-      return '<button type="button" class="tk-att tk-round" data-round="' + escapeHtml(a.url) + '" data-duration="' + (a.duration || 0) + '" aria-label="' + escapeHtml(t('chats.play')) + '">' +
+      // сюда при воспроизведении (roundPlay). Ход — кольцом по краю, от
+      // двенадцати часов; в покое кольца нет вовсе. На паузе поверх кадра —
+      // знак «пустить дальше».
+      // Играющий после перерисовки ленты сразу рождается крупным: иначе он
+      // сжимался бы до 240 и заново «вырастал» на каждом новом сообщении.
+      var live = roundPlayer && roundPlayer.url === a.url ? ' is-live' : '';
+      return '<button type="button" class="tk-att tk-round' + live + '" data-round="' + escapeHtml(a.url) + '" data-duration="' + (a.duration || 0) + '" aria-label="' + escapeHtml(t('chats.play')) + '">' +
         (a.preview ? '<img src="' + escapeHtml(a.preview) + '" alt="" loading="lazy" decoding="async">' : '') +
-        '<svg class="tk-round__ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48.5" pathLength="100"></circle></svg>' +
+        '<svg class="tk-round__ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48"></circle></svg>' +
+        '<span class="tk-round__sign" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30">' + PLAY + '</svg></span>' +
         '<span class="tk-att__len">' + clock(a.duration) + '</span></button>';
     }
     if (a.kind === 'audio' || a.kind === 'voice') {
@@ -852,13 +858,29 @@
   });
 
   // ── Голосовое ─────────────────────────────────────────────────────────
-  // Микрофон — начать запись; ещё раз микрофон или «Отправить» — отправить,
-  // «Отмена» — выбросить. Пять минут — предел сервера, на нём запись
+  // Микрофон держат — идёт запись, отпустили — ушла: так это сделано
+  // в мессенджерах, и так не нужна кнопка отмены, которая налезала на полосу
+  // записи. Чтобы отменить, палец (или курсор) уводят от микрофона в сторону
+  // и отпускают там. Вместо голого таймера — живая волна: видно, что запись
+  // идёт и что микрофон слышит. Пять минут — предел сервера, на нём запись
   // отправляется сама. Chrome и Firefox пишут webm/opus, Safari — mp4/aac.
   var VOICE_MAX = 5 * 60;
+  var CANCEL_AWAY = 60;     // на сколько увести от кнопки, чтобы запись отменилась
+  var WAVE_BARS = 28;
   var composeForm = $('composeForm');
   var micBtn = $('micBtn');
-  var rec = null;           // { recorder, stream, chunks, started, timer, send }
+  var recBar = $('recBar');
+  var recWave = $('recWave');
+  var recHint = $('recHint');
+  var rec = null;           // { recorder, stream, chunks, started, timer, send, meter }
+  var voiceHold = false;    // микрофон ещё держат
+  var voiceKeep = true;     // отпустят здесь — отправим, в стороне — выбросим
+  var micBox = null;        // рамка кнопки, снятая на нажатии: за запись она не двигается
+
+  function say(el, key) {
+    el.setAttribute('data-i18n', key);
+    el.textContent = t(key);
+  }
 
   function voiceType() {
     if (!window.MediaRecorder) return null;
@@ -867,31 +889,92 @@
     return '';
   }
 
+  // Волна: полоски заводим один раз, дальше самую старую переносим в конец
+  // и задаём ей высоту — одна перестановка на кадр вместо перерисовки всей.
+  function waveReset() {
+    if (!recWave.firstChild) {
+      var f = document.createDocumentFragment();
+      for (var i = 0; i < WAVE_BARS; i++) f.appendChild(document.createElement('i'));
+      recWave.appendChild(f);
+    }
+    for (var b = recWave.firstElementChild; b; b = b.nextElementSibling) b.style.height = '';
+  }
+
+  function waveStep(level) {
+    var bar = recWave.firstElementChild;
+    bar.style.height = (6 + level * 94).toFixed(0) + '%';
+    recWave.appendChild(bar);
+  }
+
+  // Громкость берём анализатором: MediaRecorder её не отдаёт. Нет Web Audio —
+  // волна просто стоит, запись от этого не страдает.
+  function meterOn(stream) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try {
+      var ctx = new AC();
+      var node = ctx.createAnalyser();
+      node.fftSize = 512;
+      ctx.createMediaStreamSource(stream).connect(node);
+      return { ctx: ctx, node: node, data: new Uint8Array(node.fftSize) };
+    } catch (e) { return null; }
+  }
+
+  function meterLevel(m) {
+    m.node.getByteTimeDomainData(m.data);
+    var sum = 0;
+    for (var i = 0; i < m.data.length; i++) { var v = (m.data[i] - 128) / 128; sum += v * v; }
+    return Math.min(1, Math.sqrt(sum / m.data.length) * 3.2);
+  }
+
   function recording(on) {
     composeForm.classList.toggle('is-recording', on);
-    $('recBar').hidden = !on;
+    recBar.hidden = !on;
     micBtn.setAttribute('aria-label', t(on ? 'chats.voiceSend' : 'chats.voice'));
-    micBtn.title = t(on ? 'chats.voiceSend' : 'chats.voice');
+    micBtn.title = micBtn.getAttribute('aria-label');
+    if (!on) voiceAim(true);
+  }
+
+  // Палец увели от кнопки — отпускание отменит запись. Подпись меняется
+  // сразу, чтобы это было видно до того, как палец подняли.
+  function voiceAim(keep) {
+    if (keep === voiceKeep) return;
+    voiceKeep = keep;
+    recBar.classList.toggle('is-cancel', !keep);
+    say(recHint, keep ? 'chats.recHint' : 'chats.recCancelHint');
   }
 
   function startVoice() {
+    if (rec || !peer) return;
     var type = voiceType();
     if (type === null || !navigator.mediaDevices) return toast(t('chats.recUnsupported'), 'error');
+    voiceHold = true;
+    micBox = micBtn.getBoundingClientRect();
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
-      if (!peer) { stream.getTracks().forEach(function (tr) { tr.stop(); }); return; }
+      // Пока браузер спрашивал разрешение, кнопку могли отпустить.
+      // Так бывает при первом разрешении: кнопку отпускают, чтобы нажать
+      // «Разрешить». Молчать нельзя — подсказываем, что теперь её держат.
+      if (!voiceHold || !peer) {
+        stream.getTracks().forEach(function (tr) { tr.stop(); });
+        if (peer) toast(t('chats.recHold'));
+        return;
+      }
       var recorder = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : undefined);
-      rec = { recorder: recorder, stream: stream, chunks: [], started: Date.now(), send: false, peerId: peer.id };
+      rec = { recorder: recorder, stream: stream, chunks: [], started: Date.now(), send: false, peerId: peer.id, meter: meterOn(stream) };
       recorder.ondataavailable = function (e) { if (e.data && e.data.size) rec.chunks.push(e.data); };
       recorder.onstop = finishVoice;
       recorder.start(1000);
+      waveReset();
       $('recTime').textContent = '0:00';
+      var shown = 0;
       rec.timer = setInterval(function () {
-        var sec = (Date.now() - rec.started) / 1000;
-        $('recTime').textContent = clock(Math.floor(sec));
-        if (sec >= VOICE_MAX) stopVoice(true);
-      }, 250);
+        var sec = Math.floor((Date.now() - rec.started) / 1000);
+        if (sec !== shown) { shown = sec; $('recTime').textContent = clock(sec); }
+        if (rec.meter) waveStep(meterLevel(rec.meter));
+        if (sec >= VOICE_MAX) { voiceHold = false; stopVoice(true); }
+      }, 80);
       recording(true);
-    }).catch(function () { toast(t('chats.micDenied'), 'error'); });
+    }).catch(function () { voiceHold = false; toast(t('chats.micDenied'), 'error'); });
   }
 
   function stopVoice(send) {
@@ -902,13 +985,23 @@
     else finishVoice();
   }
 
+  // Микрофон бросаем и не отправляем — из тех мест, где начинается что-то
+  // другое: запись кружка, уход со страницы.
+  function cancelVoice() {
+    voiceHold = false;
+    stopVoice(false);
+  }
+
   function finishVoice() {
     var r = rec;
     rec = null;
     recording(false);
     r.stream.getTracks().forEach(function (tr) { tr.stop(); });
-    // Меньше секунды — случайное нажатие, не отправляем.
-    if (!r.send || !r.chunks.length || Date.now() - r.started < 1000) return;
+    if (r.meter) try { r.meter.ctx.close(); } catch (e) {}
+    // Короткое нажатие — не запись, а промах по кнопке: подсказываем, что её
+    // надо держать. Молча ничего не делать хуже: кажется, что не работает.
+    if (Date.now() - r.started < 700) { if (r.send) toast(t('chats.recHold')); return; }
+    if (!r.send || !r.chunks.length) return;
     if (!peer || peer.id !== r.peerId) return;
     var type = r.recorder.mimeType || r.chunks[0].type || 'audio/webm';
     var ext = /mp4/.test(type) ? 'm4a' : 'webm';
@@ -916,10 +1009,53 @@
     queueFiles([new File([blob], 'voice.' + ext, { type: blob.type })], 'voice');
   }
 
-  micBtn.addEventListener('click', function () {
-    if (rec) stopVoice(true); else startVoice();
+  // Нажатие ловим на кнопке, отпускание — на всём документе: палец к этому
+  // времени может быть где угодно, в том числе за окном.
+  micBtn.addEventListener('pointerdown', function (e) {
+    if (e.button) return;
+    startVoice();
   });
-  $('recCancel').addEventListener('click', function () { stopVoice(false); });
+
+  // Android на удержании шлёт contextmenu — меню над кнопкой записи ни к чему.
+  micBtn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  // Далеко ли указатель от кнопки. Считаем и на движении (чтобы подпись
+  // менялась заранее), и на отпускании: указатель может оказаться в стороне
+  // и без единого pointermove — например, после прокрутки страницы.
+  function nearMic(e) {
+    if (!micBox) return true;
+    var dx = Math.max(micBox.left - e.clientX, e.clientX - micBox.right, 0);
+    var dy = Math.max(micBox.top - e.clientY, e.clientY - micBox.bottom, 0);
+    return dx * dx + dy * dy < CANCEL_AWAY * CANCEL_AWAY;
+  }
+
+  document.addEventListener('pointermove', function (e) {
+    if (voiceHold) voiceAim(nearMic(e));
+  });
+
+  document.addEventListener('pointerup', function (e) {
+    if (!voiceHold) return;
+    voiceHold = false;
+    stopVoice(nearMic(e));
+  });
+
+  document.addEventListener('pointercancel', cancelVoice);
+
+  // С клавиатуры кнопку так же «держат»: пробел или Enter. preventDefault
+  // снимает и повтор нажатия, и click, который иначе пришёл бы следом.
+  micBtn.addEventListener('keydown', function (e) {
+    if (e.key !== ' ' && e.key !== 'Enter') return;
+    e.preventDefault();
+    if (!e.repeat) startVoice();
+  });
+
+  micBtn.addEventListener('keyup', function (e) {
+    if ((e.key !== ' ' && e.key !== 'Enter') || !voiceHold) return;
+    voiceHold = false;
+    stopVoice(true);
+  });
+
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && rec) cancelVoice(); });
 
   // ── Когда медиа не играет ─────────────────────────────────────────────
   // Кружки и голосовые лежат на стороннем домене (Bunny, utils/storage.js),
@@ -1150,6 +1286,7 @@
     roundPlayer.el = el;
     if (!el) { roundPlayer.video.pause(); return; }
     el.appendChild(roundPlayer.video);
+    el.classList.add('is-live');
     el.classList.toggle('is-playing', !roundPlayer.video.paused);
     roundTick();
   }
@@ -1160,7 +1297,10 @@
     v.pause();
     v.removeAttribute('src');
     v.load();
-    if (roundPlayer.el) { roundPlayer.el.classList.remove('is-playing'); roundPlayer.el.style.setProperty('--p', 0); }
+    if (roundPlayer.el) {
+      roundPlayer.el.classList.remove('is-live', 'is-playing');
+      roundPlayer.el.style.setProperty('--p', 0);
+    }
     if (v.parentNode) v.parentNode.removeChild(v);
     roundPlayer.el = null;
   }
@@ -1178,7 +1318,13 @@
     roundPlayer.el = el;
     v.src = url;
     el.appendChild(v);
+    el.classList.add('is-live');
     v.play().catch(function () {});
+    // Открытый кружок вырос — если он при этом ушёл за нижний край ленты,
+    // подтягиваем его обратно. nearest: стоящий на виду не дёргаем.
+    setTimeout(function () {
+      if (roundPlayer.el === el) el.scrollIntoView({ block: 'nearest' });
+    }, 280);
   }
 
   roundPlayer.video.addEventListener('error', function () {
@@ -1357,10 +1503,27 @@
   // ── Запись кружка ─────────────────────────────────────────────────────
   // Камера и микрофон, квадрат из середины кадра, до минуты — на минуте
   // отправляется сама. Сервер пережимает в 480×480 со знаком.
+  //
+  // Три кнопки: отмена, пауза, отправить. С паузой хронометраж считается
+  // не «сколько прошло с начала», а суммой записанных отрезков: ms — что
+  // записано до нынешнего, at — когда он начался.
   var ROUND_MAX = 60;
   var roundRec = $('roundRec');
   var roundPreview = $('roundPreview');
-  var rrec = null;          // { recorder, stream, chunks, started, timer, send, peerId }
+  var roundPauseBtn = $('roundPause');
+  var rrec = null;          // { recorder, stream, chunks, at, ms, timer, send, peerId }
+
+  function roundSec() {
+    return (rrec.ms + (rrec.recorder.state === 'paused' ? 0 : Date.now() - rrec.at)) / 1000;
+  }
+
+  // Картинку тоже останавливаем: замерший кадр — самый понятный знак, что
+  // запись стоит, и его видно раньше, чем подпись кнопки.
+  function roundPaused(on) {
+    roundRec.classList.toggle('is-paused', on);
+    say(roundPauseBtn, on ? 'stream.resume' : 'chats.pause');
+    if (on) roundPreview.pause(); else roundPreview.play().catch(function () {});
+  }
 
   function roundType() {
     if (!window.MediaRecorder) return null;
@@ -1372,23 +1535,24 @@
   function startRound() {
     var type = roundType();
     if (type === null || !navigator.mediaDevices) return toast(t('chats.recUnsupported'), 'error');
-    if (rec) stopVoice(false);
+    if (rec) cancelVoice();
     navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 } },
       audio: true
     }).then(function (stream) {
       if (!peer) { stream.getTracks().forEach(function (tr) { tr.stop(); }); return; }
       var recorder = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 1200000 } : undefined);
-      rrec = { recorder: recorder, stream: stream, chunks: [], started: Date.now(), send: false, peerId: peer.id };
+      rrec = { recorder: recorder, stream: stream, chunks: [], at: Date.now(), ms: 0, send: false, peerId: peer.id };
       recorder.ondataavailable = function (e) { if (e.data && e.data.size) rrec.chunks.push(e.data); };
       recorder.onstop = finishRound;
       roundPreview.srcObject = stream;
       recorder.start(1000);
       roundRec.classList.remove('hidden');
       roundRec.style.setProperty('--p', 0);
+      roundPaused(false);
       $('roundTime').textContent = '0:00';
       rrec.timer = setInterval(function () {
-        var sec = (Date.now() - rrec.started) / 1000;
+        var sec = roundSec();
         $('roundTime').textContent = clock(Math.floor(sec));
         roundRec.style.setProperty('--p', Math.min(1, sec / ROUND_MAX));
         if (sec >= ROUND_MAX) stopRoundRec(true);
@@ -1400,6 +1564,7 @@
   function stopRoundRec(send) {
     if (!rrec) return;
     rrec.send = send;
+    rrec.sec = roundSec();
     clearInterval(rrec.timer);
     if (rrec.recorder.state !== 'inactive') rrec.recorder.stop();
     else finishRound();
@@ -1411,7 +1576,7 @@
     roundRec.classList.add('hidden');
     roundPreview.srcObject = null;
     r.stream.getTracks().forEach(function (tr) { tr.stop(); });
-    if (!r.send || !r.chunks.length || Date.now() - r.started < 1000) return;
+    if (!r.send || !r.chunks.length || r.sec < 1) return;
     if (!peer || peer.id !== r.peerId) return;
     var type = (r.recorder.mimeType || r.chunks[0].type || 'video/webm').split(';')[0];
     var blob = new Blob(r.chunks, { type: type });
@@ -1419,6 +1584,15 @@
   }
 
   $('roundBtn').addEventListener('click', startRound);
+
+  roundPauseBtn.addEventListener('click', function () {
+    if (!rrec) return;
+    var pause = rrec.recorder.state === 'recording';
+    if (pause) { rrec.ms += Date.now() - rrec.at; rrec.recorder.pause(); }
+    else { rrec.at = Date.now(); rrec.recorder.resume(); }
+    roundPaused(pause);
+  });
+
   $('roundSend').addEventListener('click', function () { stopRoundRec(true); });
   $('roundCancel').addEventListener('click', function () { stopRoundRec(false); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && rrec) stopRoundRec(false); });

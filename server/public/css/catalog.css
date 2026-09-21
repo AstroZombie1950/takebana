@@ -246,6 +246,8 @@
 }
 
 .tk-group {
+  display: flex;
+  flex-direction: column;
   padding: 22px;
   border: 1px solid var(--tk-rule);
 }
@@ -275,7 +277,34 @@
   color: var(--tk-muted);
 }
 
-/* Теги (.tk-tag, .tk-tags) — в app.css: ими же фильтрует карта заведений. */
+/* Теги (.tk-tag, .tk-tags) — в app.css: ими же фильтрует карта заведений.
+ *
+ * В «Популярном» рамок три, и каждая уже трети экрана: свободная обёртка
+ * ставила подкатегории рваными строками — где две, где одна. Внутри узкой
+ * рамки они идут ровной сеткой в две колонки, нечётная последняя тянется
+ * во всю ширину, чтобы не висела одна в колонке, а строки везде одной
+ * высоты — сколько бы подкатегорий ни было в разделе.
+ */
+.tk-groups--multi .tk-group__head { margin-bottom: 16px; }
+
+.tk-groups--multi .tk-tags {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(34px, auto);
+  align-content: start;
+}
+
+.tk-groups--multi .tk-tag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 8px;
+  text-align: center;
+}
+
+/* Нечётная последняя — во всю ширину, чтобы не висела одна в колонке. */
+.tk-groups--multi .tk-tag:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
 /* ── Фильтры над сеткой ── */
 .tk-cat__bar {
@@ -504,6 +533,9 @@
   .tk-cat__sec { padding-top: 36px; }
   .tk-cat__hero { padding-bottom: 36px; }
   .tk-groups { grid-template-columns: 1fr; }
+  /* Одна колонка — рамка снова широкая: подкатегории идут строкой. */
+  .tk-groups--multi .tk-tags { display: flex; flex-wrap: wrap; }
+  .tk-groups--multi .tk-tag { display: inline-flex; padding: 7px 12px; }
   .tk-grid { grid-template-columns: 1fr; }
   .tk-cat__ctl { flex: 1 1 160px; }
 }

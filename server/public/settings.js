@@ -108,7 +108,9 @@
       var pass = $('emailPassword');
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast(t('settings.emailBad'), 'error');
       if (!pass.value) return toast(t('settings.delete.needPassword'), 'error');
-      var btn = emailForm.querySelector('[type="submit"]');
+      // Кнопка стоит вне формы (под нынешним адресом) и держится за неё
+      // через form=, поэтому внутри формы её не найти.
+      var btn = document.querySelector('button[form="emailForm"]');
       btn.disabled = true;
       send('/settings/email', json({ email: email, password: pass.value }))
         .then(function () {
@@ -237,11 +239,15 @@
   var notifyState = $('notifyState');
   if (notifyState && window.TKNotify) {
     var N = window.TKNotify;
+    var notifyHow = $('notifyHow');
     var sysBlocked = function () {
       var key = !N.supported() ? 'settings.notifyNone'
         : Notification.permission === 'denied' ? 'settings.notifyDenied' : '';
       notifyState.hidden = !key;
       if (key) tkText(notifyState, key);
+      // «Как разрешить» — только у запрета: браузеру, который уведомлений
+      // не умеет вовсе, разрешать нечего.
+      if (notifyHow) notifyHow.hidden = key !== 'settings.notifyDenied';
       return !!key;
     };
     var saved = N.prefs();
@@ -281,9 +287,11 @@
     var pushBoxes = {};
     document.querySelectorAll('[data-push]').forEach(function (box) { pushBoxes[box.getAttribute('data-push')] = box; });
 
+    var pushHow = $('pushHow');
     var pushSay = function (key) {
       pushState.hidden = !key;
       if (key) tkText(pushState, key);
+      if (pushHow) pushHow.hidden = key !== 'settings.pushDenied';
     };
     // Пока не подписано, выбор показа текста и эфиров ни на что не влияет.
     var pushLock = function (on) {

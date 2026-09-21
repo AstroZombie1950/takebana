@@ -43,9 +43,7 @@
           <p class="tk-panel__title" data-i18n="settings.who"><%- t('settings.who') %></p>
           <form class="tk-form tk-set__form" id="nameForm" novalidate>
             <label class="tk-form__label" for="profileName" data-i18n="settings.name"><%- t('settings.name') %></label>
-            <input id="profileName" class="tk-field" type="text" maxlength="64" value="<%= profile.login %>" placeholder="<%= ta('settings.namePh') %>" data-i18n-placeholder="settings.namePh" aria-describedby="nameHint">
-            <p class="tk-note" id="nameHint" data-i18n="settings.nameHint"><%- t('settings.nameHint') %></p>
-
+            <input id="profileName" class="tk-field" type="text" maxlength="64" value="<%= profile.login %>" placeholder="<%= ta('settings.namePh') %>" data-i18n-placeholder="settings.namePh">
 
             <label class="tk-form__label" for="profileNick" data-i18n="settings.nickname"><%- t('settings.nickname') %></label>
             <div class="tk-set__nick">
@@ -98,29 +96,42 @@
           <% } %>
         </section>
 
-        <!-- Почта: меняется по ссылке из письма на новый адрес -->
+        <%# Почта: меняется по ссылке из письма на новый адрес.
+            Порядок здесь тот же, что у пароля слева: сначала поля — они
+            встают на одну линию с полями пароля, — потом нынешний адрес
+            и его состояние, и внизу кнопка, напротив «Сохранить пароль».
+            Кнопка вынесена из формы: сама форма кончается полями, а между
+            ними и кнопкой стоит адрес. Отправку это не меняет — form=. %>
         <section class="tk-panel">
           <p class="tk-panel__title" data-i18n="settings.email"><%- t('settings.email') %></p>
-          <p class="tk-set__email"><%= profile.email %></p>
-          <% if (profile.emailVerified) { %>
-          <p class="tk-set__verified is-ok" data-i18n="settings.emailVerified"><%- t('settings.emailVerified') %></p>
-          <% } else { %>
-          <p class="tk-set__verified is-bad"><span data-i18n="settings.emailUnverified"><%- t('settings.emailUnverified') %></span>
-            <% if (mailOn) { %><button type="button" class="tk-set__link" id="verifyBtn" data-i18n="settings.emailVerifySend"><%- t('settings.emailVerifySend') %></button><% } %>
-          </p>
-          <% } %>
           <% if (hasPassword && mailOn) { %>
-          <p class="tk-note tk-set__pending" id="emailPending"<% if (!profile.pendingEmail) { %> hidden<% } %>>
-            <span data-i18n="settings.emailPending"><%- t('settings.emailPending') %></span> <b id="emailPendingAddr"><%= profile.pendingEmail %></b>
-          </p>
-          <form class="tk-form tk-set__form" id="emailForm" novalidate>
+          <form class="tk-form tk-set__fields" id="emailForm" novalidate>
             <input class="tk-field" type="email" id="newEmail" autocomplete="email" placeholder="<%= ta('settings.emailNew') %>" data-i18n-placeholder="settings.emailNew">
             <input class="tk-field" type="password" id="emailPassword" autocomplete="current-password" placeholder="<%= ta('settings.emailPassword') %>" data-i18n-placeholder="settings.emailPassword">
             <p class="tk-note" data-i18n="settings.emailHint"><%- t('settings.emailHint') %></p>
-            <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="settings.emailSend"><%- t('settings.emailSend') %></button>
           </form>
           <% } else if (!hasPassword) { %>
           <p class="tk-note" data-i18n="settings.emailGoogle"><%- t('settings.emailGoogle') %></p>
+          <% } %>
+
+          <div class="tk-set__current">
+            <p class="tk-set__email"><%= profile.email %></p>
+            <% if (profile.emailVerified) { %>
+            <p class="tk-set__verified is-ok" data-i18n="settings.emailVerified"><%- t('settings.emailVerified') %></p>
+            <% } else { %>
+            <p class="tk-set__verified is-bad"><span data-i18n="settings.emailUnverified"><%- t('settings.emailUnverified') %></span>
+              <% if (mailOn) { %><button type="button" class="tk-set__link" id="verifyBtn" data-i18n="settings.emailVerifySend"><%- t('settings.emailVerifySend') %></button><% } %>
+            </p>
+            <% } %>
+            <% if (hasPassword && mailOn) { %>
+            <p class="tk-note tk-set__pending" id="emailPending"<% if (!profile.pendingEmail) { %> hidden<% } %>>
+              <span data-i18n="settings.emailPending"><%- t('settings.emailPending') %></span> <b id="emailPendingAddr"><%= profile.pendingEmail %></b>
+            </p>
+            <% } %>
+          </div>
+
+          <% if (hasPassword && mailOn) { %>
+          <button type="submit" form="emailForm" class="tk-btn tk-btn--primary tk-btn--sm tk-set__go" data-i18n="settings.emailSend"><%- t('settings.emailSend') %></button>
           <% } %>
         </section>
 
@@ -134,7 +145,13 @@
             <label class="tk-form__toggle"><input type="checkbox" data-notify="sndCall"><span data-i18n="settings.notifyCall"><%- t('settings.notifyCall') %></span></label>
             <label class="tk-form__toggle"><input type="checkbox" data-notify="sys"><span data-i18n="settings.notifySys"><%- t('settings.notifySys') %></span></label>
             <p class="tk-note tk-set__warn" id="notifyState" hidden></p>
-            <p class="tk-note" data-i18n="settings.notifyHint"><%- t('settings.notifyHint') %></p>
+            <%# Отказ с сайта не отменить — показываем, где это переключается
+                в самом браузере. Раскрывается по нажатию, свёрнутое не мешает. %>
+            <details class="tk-set__how" id="notifyHow" hidden>
+              <summary data-i18n="settings.permHow"><%- t('settings.permHow') %></summary>
+              <p class="tk-note" data-i18n="settings.permHowText"><%- t('settings.permHowText') %></p>
+            </details>
+            <p class="tk-note tk-set__foot" data-i18n="settings.notifyHint"><%- t('settings.notifyHint') %></p>
           </div>
         </section>
 
@@ -149,7 +166,13 @@
             <label class="tk-form__toggle"><input type="checkbox" data-push="preview"><span data-i18n="settings.pushPreview"><%- t('settings.pushPreview') %></span></label>
             <label class="tk-form__toggle"><input type="checkbox" data-push="live"><span data-i18n="settings.pushLive"><%- t('settings.pushLive') %></span></label>
             <p class="tk-note tk-set__warn" id="pushState" hidden></p>
-            <p class="tk-note" data-i18n="settings.pushHint"><%- t('settings.pushHint') %></p>
+            <%# Отказ с сайта не отменить — показываем, где это переключается
+                в самом браузере. Раскрывается по нажатию, свёрнутое не мешает. %>
+            <details class="tk-set__how" id="pushHow" hidden>
+              <summary data-i18n="settings.permHow"><%- t('settings.permHow') %></summary>
+              <p class="tk-note" data-i18n="settings.permHowText"><%- t('settings.permHowText') %></p>
+            </details>
+            <p class="tk-note tk-set__foot" data-i18n="settings.pushHint"><%- t('settings.pushHint') %></p>
             <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" id="pushTest" data-i18n="settings.pushTest"><%- t('settings.pushTest') %></button>
           </div>
         </section>

@@ -155,15 +155,21 @@
             <%# Исчезающее: выбор действует на следующее сообщение, файл,
                 голосовое или кружок и после отправки сбрасывается. %>
             <button type="button" class="tk-chat__tool tk-chat__limit" id="limitBtn" aria-haspopup="menu" aria-expanded="false" aria-label="<%= ta('chats.limit.button') %>" data-i18n-aria="chats.limit.button" title="<%= ta('chats.limit.button') %>" data-i18n-title="chats.limit.button">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9s8 4 8 9"></path></svg>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14M5 21h14M7 3l5 9-5 9M17 3l-5 9 5 9"></path></svg>
               <span class="tk-chat__limit-badge" id="limitBadge" hidden></span>
             </button>
             <input type="text" id="messageInput" class="tk-field" placeholder="<%= ta('chats.messagePh') %>" data-i18n-placeholder="chats.messagePh" autocomplete="off" maxlength="5000">
+            <%# Пока держат микрофон — вместо поля: точка, время, живая волна
+                и подсказка. Кнопки «Отмена» здесь нет: запись отменяют,
+                уведя палец в сторону от микрофона (chats.js). %>
             <div class="tk-rec" id="recBar" hidden>
               <span class="tk-rec__dot" aria-hidden="true"></span>
               <span class="tk-rec__time" id="recTime">0:00</span>
-              <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" id="recCancel" data-i18n="chats.recCancel"><%- t('chats.recCancel') %></button>
+              <span class="tk-rec__wave" id="recWave" aria-hidden="true"></span>
+              <span class="tk-rec__hint" id="recHint" data-i18n="chats.recHint"><%- t('chats.recHint') %></span>
             </div>
+            <%# Нажать и держать — как в мессенджерах. touch-action, иначе
+                браузер на телефоне примет удержание за прокрутку. %>
             <button type="button" class="tk-chat__tool tk-chat__mic" id="micBtn" aria-label="<%= ta('chats.voice') %>" data-i18n-aria="chats.voice" title="<%= ta('chats.voice') %>" data-i18n-title="chats.voice">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"></path></svg>
             </button>
@@ -219,11 +225,22 @@
   </div>
 </div>
 
-<%# Выбор ограничения: значения — utils/messageLimit.js (OPTIONS). %>
+<%# Выбор ограничения: значения — utils/messageLimit.js (OPTIONS).
+    Восемь строк подряд читались одним списком, хотя условия разной природы:
+    теперь «сколько раз» и «сколько времени» — два раздела с заголовками. %>
 <div class="tk-msgmenu tk-limitmenu" id="limitMenu" role="menu" hidden>
   <p class="tk-limitmenu__title" data-i18n="chats.limit.title"><%- t('chats.limit.title') %></p>
-  <% ['', 'n1', 'n2', 'n3', 't10', 't60', 't600', 't3600'].forEach(function (v) { var key = 'chats.limit.' + (v || 'none'); %>
-  <button type="button" role="menuitemradio" aria-checked="<%= v === '' %>" data-limit="<%= v %>" data-i18n="<%= key %>"><%- t(key) %></button>
+  <button type="button" role="menuitemradio" aria-checked="true" data-limit="" data-i18n="chats.limit.none"><%- t('chats.limit.none') %></button>
+  <% [
+       { id: 'Count', title: 'chats.limit.group.count', opts: ['n1', 'n2', 'n3'] },
+       { id: 'Time',  title: 'chats.limit.group.time',  opts: ['t10', 't60', 't600', 't3600'] }
+     ].forEach(function (g) { %>
+  <div class="tk-limitmenu__sec" role="group" aria-labelledby="limitGrp<%= g.id %>">
+    <p class="tk-limitmenu__group" id="limitGrp<%= g.id %>" data-i18n="<%= g.title %>"><%- t(g.title) %></p>
+    <% g.opts.forEach(function (v) { var key = 'chats.limit.' + v; %>
+    <button type="button" role="menuitemradio" aria-checked="false" data-limit="<%= v %>" data-i18n="<%= key %>"><%- t(key) %></button>
+    <% }); %>
+  </div>
   <% }); %>
   <p class="tk-limitmenu__hint" data-i18n="chats.limit.hint"><%- t('chats.limit.hint') %></p>
 </div>
@@ -232,12 +249,13 @@
 <div class="tk-roundrec hidden" id="roundRec" role="dialog" aria-modal="true" aria-label="<%= ta('chats.round') %>" data-i18n-aria="chats.round">
   <div class="tk-roundrec__stage">
     <video id="roundPreview" muted playsinline autoplay></video>
-    <svg class="tk-roundrec__ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48.5" pathLength="100"></circle></svg>
+    <svg class="tk-roundrec__ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48"></circle></svg>
   </div>
   <span class="tk-roundrec__time" id="roundTime">0:00</span>
   <div class="tk-roundrec__acts">
-    <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" id="roundCancel" data-i18n="chats.recCancel"><%- t('chats.recCancel') %></button>
-    <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="roundSend" data-i18n="chats.roundSend"><%- t('chats.roundSend') %></button>
+    <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" id="roundCancel" data-i18n="common.cancel"><%- t('common.cancel') %></button>
+    <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="roundPause" data-i18n="chats.pause"><%- t('chats.pause') %></button>
+    <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" id="roundSend" data-i18n="chats.send"><%- t('chats.send') %></button>
   </div>
 </div>
 
