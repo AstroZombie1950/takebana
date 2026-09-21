@@ -1386,8 +1386,12 @@ body.tk-app {
   border-radius: 50%;
 }
 
-/* ── Узкий экран ── */
-@media (max-width: 640px) {
+/* ── Узкий экран и телефон боком ──
+ * Телефон боком шире 640px, и звонок уходил в десктопное окно посреди
+ * экрана высотой в пару сотен пикселей. Телефон остаётся телефоном
+ * (21.09): звонок на весь экран в любом положении. Признак — как у шапки:
+ * низкий экран в горизонтали. */
+@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) {
   .tk-modal { padding: var(--tk-safe-t) var(--tk-safe-r) 0 var(--tk-safe-l); }
 
   /* Окно — на весь экран. Высота — от самого окна (оно fixed во весь
@@ -1468,6 +1472,20 @@ body.tk-app {
 
   /* Своя картинка — над кнопками, а не под ними. */
   .pip-local { bottom: calc(96px + var(--tk-safe-b)); right: 12px; }
+}
+
+/* Телефон боком: кнопки звонка не растягиваем на всю длинную сторону —
+ * посередине, до 340px, чтобы своя картинка справа внизу не наезжала на них
+ * даже на узком айфоне (667px). */
+@media (max-height: 500px) and (orientation: landscape) {
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__actions {
+    max-width: 340px;
+    margin: 0 auto;
+    bottom: calc(16px + var(--tk-safe-b));
+  }
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__status { top: 60px; }
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__timer { top: 84px; }
+  .pip-local { width: 150px; height: 94px; bottom: calc(16px + var(--tk-safe-b)); right: 12px; }
 }
 
 /* Бургер по одной из сторон уже пальца. Увеличиваем зону нажатия, не трогая рисунок. */

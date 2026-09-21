@@ -133,12 +133,19 @@ function clean(dir) {
 // уезжает вперёд на эту разницу до конца эфира.
 const AUDIO_SYNC = 'aresample=async=1000:first_pts=0';
 
+// Ужать по короткой стороне: вертикальный кадр (телефон ведущего, 720×1280)
+// остаётся 720×1280, а не 405×720. Только вниз — меньшее не растягиваем.
+// Отрицательная сторона из выражения значит «по пропорции» и в ffmpeg 4.4.
+function fitScale(short) {
+    return `scale='if(gt(iw,ih),-2,min(${short},iw))':'if(gt(iw,ih),min(${short},ih),-2)'`;
+}
+
 function videoArgs(profile) {
     const p = PROFILES[profile];
     return [
         '-i', WATERMARK,
         '-filter_complex',
-        `[0:v]scale=-2:'min(${p.height},ih)'[v];` +
+        `[0:v]${fitScale(p.height)}[v];` +
         `[1:v]scale=-1:${p.watermarkHeight}[wm];` +
         `[v][wm]overlay=W-w-${WATERMARK_MARGIN}:${WATERMARK_MARGIN}[out]`,
         '-fpsmax', '30',

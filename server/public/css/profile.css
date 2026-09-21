@@ -204,6 +204,20 @@
 .tk-prof__acts .tk-btn { gap: 8px; }
 .tk-prof__acts svg { flex: none; }
 
+/* Десктоп: все кнопки одной ширины — по самой длинной подписи (решение
+ * 21.09). Ряды растворяются в общей сетке из трёх равных колонок; 1fr в
+ * сетке по содержимому берёт ширину самой широкой кнопки. Подписка
+ * начинает новую строку в первой колонке. */
+@media (min-width: 768px) {
+  .tk-prof__acts {
+    display: inline-grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px 10px;
+  }
+  .tk-prof__acts-row { display: contents; }
+  .tk-prof__chan .tk-btn { grid-column: 1; }
+}
+
 
 /* ── Секции ───────────────────────────────────────────────────────────── */
 .tk-panel--prof {

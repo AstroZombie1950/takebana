@@ -14,7 +14,11 @@ const errorLog = require('./errorLog');
 
 // Выход сразу таким, каким его отдаёт наш транскод: 720p30, 2500 кбит/с —
 // по умолчанию Daily шлёт 1080p30 на 5 Мбит/с, и мы бы гоняли лишнее.
-const OUTPUT = { width: 1280, height: 720, fps: 30, videoBitrate: 2500, audioBitrate: 128 };
+// Кадр — по камере ведущего: телефон вертикально — 720×1280. Всегда
+// 1280×720 вшивал вертикальной камере чёрные полосы по бокам, и на телефоне
+// во весь экран запись шла ещё и с полосами сверху и снизу (21.09).
+const OUTPUT = { fps: 30, videoBitrate: 2500, audioBitrate: 128 };
+const size = (portrait) => (portrait ? { width: 720, height: 1280 } : { width: 1280, height: 720 });
 
 // Выход живёт не дольше комнаты (ROOM_TTL_S в utils/daily.js). Без эфира
 // в комнате — минута: закрытая вкладка ведущего не должна час слать зрителям
@@ -37,7 +41,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const RESTART_DELAY_MS = 5000;
 const MAX_RESTARTS = 3;
 
-// streamKey -> { room, rtmpUrl, restarts }
+// streamKey -> { room, rtmpUrl, portrait, restarts }
 const outputs = new Map();
 
 function ingestUrl(host, streamKey) {
@@ -45,10 +49,11 @@ function ingestUrl(host, streamKey) {
   return `rtmp://${host}:1935/live/${key}${key.includes('?') ? '&' : '?'}src=daily`;
 }
 
-function launch(room, rtmpUrl) {
+function launch(room, rtmpUrl, portrait) {
   return daily.startLiveStreaming(room, {
     rtmpUrl,
     ...OUTPUT,
+    ...size(portrait),
     layout: { preset: 'default' },
     maxDuration: MAX_DURATION_S,
     minIdleTimeOut: IDLE_TIMEOUT_S,
@@ -57,11 +62,11 @@ function launch(room, rtmpUrl) {
 
 // Ведущий уже в комнате: без звонка Daily выход не запустит. Хост — тот,
 // на котором открыт пульт, как у адреса приёма для OBS (streamPages.js).
-async function start({ streamKey, dailyRoomName }, host) {
+async function start({ streamKey, dailyRoomName, portrait }, host) {
   const rtmpUrl = ingestUrl(host, streamKey);
   for (let attempt = 1; ; attempt++) {
     try {
-      await launch(dailyRoomName, rtmpUrl);
+      await launch(dailyRoomName, rtmpUrl, portrait);
       if (attempt > 1) console.log(`[webLive ${streamKey}] выход Daily запущен с попытки ${attempt}`);
       break;
     } catch (err) {
@@ -69,7 +74,7 @@ async function start({ streamKey, dailyRoomName }, host) {
       await sleep(START_RETRY_MS);
     }
   }
-  outputs.set(streamKey, { room: dailyRoomName, rtmpUrl, restarts: 0 });
+  outputs.set(streamKey, { room: dailyRoomName, rtmpUrl, portrait, restarts: 0 });
 }
 
 // Ведущий остановил эфир. Удаление комнаты гасит выход и само, но пауза
@@ -99,7 +104,7 @@ function ended(streamKey) {
         return;
       }
       console.warn(`[webLive ${streamKey}] выход Daily оборвался, запуск ${out.restarts}/${MAX_RESTARTS}`);
-      await launch(out.room, out.rtmpUrl);
+      await launch(out.room, out.rtmpUrl, out.portrait);
     } catch (err) {
       errorLog.external(err, 'webLive.restart', { streamKey });
     }

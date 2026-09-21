@@ -150,6 +150,19 @@
     showHint(track ? null : 'stream.pausedHint');
   }
 
+  // Камера вертикальная — выход эфира собирается в кадр 720×1280
+  // (utils/webLive.js). Верней всего — размер уже показанной картинки: он
+  // учитывает поворот телефона. Нет его — настройки дорожки, затем экран.
+  function portrait(track) {
+    var w = localVideo.videoWidth, h = localVideo.videoHeight;
+    if (!w && track && track.getSettings) {
+      var st = track.getSettings();
+      w = st.width; h = st.height;
+    }
+    if (w && h) return h > w;
+    return matchMedia('(pointer: coarse) and (orientation: portrait)').matches;
+  }
+
   // Камера: «device:<id>» или, если браузер список не отдал (iOS),
   // «facing:user» / «facing:environment». Выбор помнит студия (tk_camera).
   function useCamera(call, value) {
@@ -273,7 +286,7 @@
         ready = true;
         if (track) showLocal(track);
       })
-      .then(function () { return post('/set-active', { streamKey: streamKey }); })
+      .then(function () { return post('/set-active', { streamKey: streamKey, portrait: portrait(track) }); })
       .then(function () {
         self.connected = true;
         live(true);

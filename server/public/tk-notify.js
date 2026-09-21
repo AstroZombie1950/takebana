@@ -6,7 +6,8 @@
  * /settings (settings.js), события подаёт tk-app.js:
  *   TKNotify.message(d)   — пришло сообщение (d из message:new);
  *   TKNotify.ring(call)   — входящий звонок { callId, name, video };
- *   TKNotify.stopRing()   — звонок принят, отклонён или отменён.
+ *   TKNotify.stopRing()   — звонок принят, отклонён или отменён;
+ *   TKNotify.talking(on)  — разговор начался / закончился (см. «Звук»).
  *
  * Звук синтезируется WebAudio — файлов нет. Вкладок открыто несколько —
  * звучит одна: видимая сразу, фоновые с задержкой занимают событие
@@ -47,17 +48,24 @@
   // разрешения не даёт. Контекст будим на каждом жесте, пока он не
   // заработает: iOS гасит его снова после блокировки экрана и звонков.
   // Пустой буфер в том же жесте — отпирает звук в Safari на iPhone.
+  //
+  // На время разговора контекста нет вовсе (21.09): на iPhone запущенный
+  // WebAudio рядом с захватом микрофона уводит звук собеседника в разговорный
+  // динамик на едва слышной громкости — слышно было только по громкой связи.
+  // Контекст жил всю сессию: будился на каждом касании, в том числе
+  // посреди звонка.
   var ctx = null;
+  var inCall = false;
   function audio() {
     var AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
+    if (!AC || inCall) return null;
     if (!ctx) ctx = new AC();
     if (ctx.state !== 'running') ctx.resume().catch(function () {});
     return ctx;
   }
   function wakeUp() {
     var p = prefs();
-    if (!(p.sndMsg || p.sndCall) || (ctx && ctx.state === 'running')) return;
+    if (inCall || !(p.sndMsg || p.sndCall) || (ctx && ctx.state === 'running')) return;
     var c = audio();
     if (!c) return;
     var s = c.createBufferSource();
@@ -149,6 +157,13 @@
     if (ringNote) { ringNote.close(); ringNote = null; }
   }
 
+  function talking(on) {
+    inCall = !!on;
+    if (!inCall) return;
+    stopRing();
+    if (ctx) { ctx.close().catch(function () {}); ctx = null; }
+  }
+
   window.TKNotify = {
     prefs: prefs,
     setPref: setPref,
@@ -156,6 +171,7 @@
     message: message,
     ring: ring,
     stopRing: stopRing,
+    talking: talking,
     // Пробный звук при включении тумблера в настройках.
     preview: function (name) { if (name === 'sndMsg') ping(); else if (name === 'sndCall') ringOnce(); },
   };

@@ -905,6 +905,8 @@ document.addEventListener('DOMContentLoaded', function(){
       else tkText(s.status, hadPeer ? 'call.peerReconnecting' : 'call.waitingPeer');
     }
 
+    // До входа в комнату, то есть до захвата микрофона (tk-notify.js).
+    if (window.TKNotify) window.TKNotify.talking(true);
     goLive(s, isVideo);
     paint();
     // Окну всё равно, каким путём идёт разговор: и Daily, и свой путь
@@ -1070,6 +1072,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
   function stopMedia() {
     if (window._call) { window._call.leave(); window._call = null; }
+    if (window.TKNotify) window.TKNotify.talking(false);
     clearInterval(window._callTick);
     [OUT, IN].forEach((s) => {
       [s.remoteVideo, s.localVideo, s.remoteAudio].forEach((el) => TKDaily.attach(el, null));

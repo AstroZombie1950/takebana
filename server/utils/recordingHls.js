@@ -64,10 +64,13 @@ function run(bin, args) {
 }
 
 async function probe(file) {
-  const out = JSON.parse(await run(FFPROBE, ['-v', 'error', '-show_entries', 'stream=codec_type,height', '-of', 'json', file]));
+  const out = JSON.parse(await run(FFPROBE, ['-v', 'error', '-show_entries', 'stream=codec_type,width,height', '-of', 'json', file]));
   const streams = out.streams || [];
   const video = streams.find((s) => s.codec_type === 'video');
-  return { height: video ? Number(video.height) || 720 : 0, audio: streams.some((s) => s.codec_type === 'audio') };
+  const w = video ? Number(video.width) || 0 : 0;
+  const h = video ? Number(video.height) || 720 : 0;
+  // Ступени лестницы — по короткой стороне: у вертикальной записи это ширина.
+  return { height: w ? Math.min(w, h) : h, portrait: w > 0 && w < h, audio: streams.some((s) => s.codec_type === 'audio') };
 }
 
 // MP4 записи на диск: локально он уже там, из Bunny — скачиваем.
@@ -93,7 +96,7 @@ function ffmpegArgs(src, out, info) {
   const maps = ['-map', '0:v:0'];
   if (levels.length) {
     const split = `[0:v:0]split=${levels.length}` + levels.map((_, i) => `[s${i}]`).join('') + ';' +
-      levels.map((l, i) => `[s${i}]scale=-2:${l.height}[v${i}]`).join(';');
+      levels.map((l, i) => `[s${i}]scale=${info.portrait ? `${l.height}:-2` : `-2:${l.height}`}[v${i}]`).join(';');
     args.push('-filter_complex', split);
     levels.forEach((_, i) => maps.push('-map', `[v${i}]`));
   }

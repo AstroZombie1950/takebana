@@ -143,6 +143,7 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
 // Роут для активации стрима (isActive: true)
 router.post('/set-active', requireAuth, requireNotBanned, validate({
   streamKey: { type: 'key', required: true, label: 'Ключ трансляции' },
+  portrait: { type: 'bool', label: 'Вертикальная камера' },
 }), async (req, res) => {
   const { streamKey } = req.body;
 
@@ -154,7 +155,7 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
   // подписка на комнату сокета), поэтому без него любой вошедший мог
   // включать и гасить чужой эфир. Чужой стрим просто не найдётся — 404.
   const current = await Stream.findOne({ streamKey, userId: req.session.userId })
-    .select('streamKey streamType dailyRoomName').lean();
+    .select('streamKey streamType dailyRoomName portrait').lean();
   if (!current) {
     return res.status(404).json({ message: 'Стрим не найден' });
   }
@@ -162,12 +163,14 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
   // Веб-эфир зрители смотрят в HLS: до отметки «в эфире» комната должна
   // пойти на наш приём (utils/webLive.js). Не пошла — эфира для зрителей
   // нет, и ведущему об этом говорим сразу, а не молчаливым чёрным экраном.
+  // Ориентация кадра — с первого выхода, дальше та же (models/Stream.js).
+  const portrait = current.portrait ?? !!req.body.portrait;
   if (current.streamType === 'daily-stream') {
     if (!current.dailyRoomName) {
       return res.status(409).json({ message: 'Комната эфира не создана' });
     }
     try {
-      await webLive.start(current, req.hostname);
+      await webLive.start({ ...current, portrait }, req.hostname);
     } catch (err) {
       errorLog.external(err, 'webLive.start', { stream: String(current._id) });
       return res.status(502).json({ message: 'Сервис видео не запустил трансляцию, попробуйте ещё раз' });
@@ -178,7 +181,7 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
   const now = new Date();
   const stream = await Stream.findOneAndUpdate(
     { streamKey, userId: req.session.userId },
-    [{ $set: { isActive: true, hostAway: false, startedAt: now, updatedAt: now, firstLiveAt: { $ifNull: ['$firstLiveAt', now] } } }],
+    [{ $set: { isActive: true, hostAway: false, startedAt: now, updatedAt: now, firstLiveAt: { $ifNull: ['$firstLiveAt', now] }, portrait: { $ifNull: ['$portrait', portrait] } } }],
     { new: true }
   );
 
@@ -222,6 +225,7 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
 // // Роут для деактивации стрима (isActive: false)
 router.post('/set-inactive', requireAuth, validate({
   streamKey: { type: 'key', required: true, label: 'Ключ трансляции' },
+  portrait: { type: 'bool', label: 'Вертикальная камера' },
 }), async (req, res) => {
   const { streamKey } = req.body;
 

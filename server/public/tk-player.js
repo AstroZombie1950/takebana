@@ -269,9 +269,12 @@
     var speed = live ? 1 : load('speed', 1);
     if (SPEEDS.indexOf(speed) < 0) speed = 1;
 
+    // Качество — по короткой стороне: у вертикального кадра 720×1280 это 720p.
+    function tier(l) { return l.width ? Math.min(l.width, l.height) : l.height; }
+
     function levels() {
       if (!hls || !hls.levels || hls.levels.length < 2) return null;
-      return hls.levels.map(function (l, i) { return { i: i, height: l.height }; })
+      return hls.levels.map(function (l, i) { return { i: i, height: tier(l) }; })
         .sort(function (a, b) { return b.height - a.height; });
     }
 
@@ -279,8 +282,8 @@
       // Пока идёт переключение, currentLevel бывает -1 — тогда берём тот,
       // что грузится.
       var l = hls && (hls.levels[hls.currentLevel] || hls.levels[hls.loadLevel]);
-      if (!hls || hls.autoLevelEnabled || !l) return t('player.auto') + (l ? ' (' + l.height + 'p)' : '');
-      return l.height + 'p';
+      if (!hls || hls.autoLevelEnabled || !l) return t('player.auto') + (l ? ' (' + tier(l) + 'p)' : '');
+      return tier(l) + 'p';
     }
 
     function speedLabel(s) { return s === 1 ? t('player.normal') : String(s).replace('.', ',') + '×'; }

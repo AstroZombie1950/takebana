@@ -52,11 +52,17 @@
   .tk-status__title { font-size: 32px; }
 }
 
-/* Кнопки под текстом статуса: подтверждение возраста, возврат в каталог. */
+/* Кнопки под текстом статуса: подтверждение возраста, возврат в каталог.
+ * Одной ширины — по самой длинной подписи (21.09): колонки 1fr в сетке,
+ * которую родитель ужимает по содержимому. На узком экране — столбиком. */
 .tk-status__acts {
   margin-top: 10px;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 12px;
-  justify-content: center;
+}
+
+@media (max-width: 599px) {
+  .tk-status__acts { grid-auto-flow: row; width: 100%; max-width: 320px; }
 }
