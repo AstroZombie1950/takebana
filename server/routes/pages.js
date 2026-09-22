@@ -3,6 +3,7 @@
 // API и эфиры живут в соседних роутерах.
 
 const express = require('express');
+const path = require('path');
 const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
@@ -14,11 +15,37 @@ const { requireAuth } = require('../middleware/auth');
 const { readVenueFilters } = require('../utils/venueFilters');
 const { audit, ACTIONS } = require('../utils/audit');
 const userView = require('../utils/userView');
+const netCheck = require('../utils/netCheck');
+const turn = require('../utils/turn');
 
 // «О нас» — бывший лендинг главной. Вошедшему шапка и панель — свои,
 // поэтому commonDataMiddleware.
 router.get('/about', commonDataMiddleware, (req, res) => {
   res.render('about');
+});
+
+// Проверка связи (utils/netCheck.js). Открыта и гостю: жалоба «не грузится»
+// может прийти до входа. Звонки проверяются только вошедшему — ключи
+// нашего TURN посторонним не раздаём.
+router.get('/check', commonDataMiddleware, (req, res) => {
+  // Служебная страница: в поиске ей делать нечего. Заголовок — в дополнение
+  // к мета-тегу шаблона, его видят и те роботы, что HTML не разбирают.
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  const userId = req.session && req.session.userId;
+  res.render('check', {
+    check: {
+      ...netCheck.targets(),
+      ice: userId && turn.configured() ? turn.iceServers(userId, 10 * 60)[1] : null,
+    },
+  });
+});
+
+// Калькулятор расходов для заказчика (views/calc.html): самостоятельная
+// страница без каркаса и без данных сервера — отдаём файл как есть.
+// Не для поиска: ссылка у заказчика.
+router.get('/calc', (req, res) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  res.sendFile(path.join(__dirname, '..', 'views', 'calc.html'));
 });
 
 router.get('/panel', async (req, res) => {

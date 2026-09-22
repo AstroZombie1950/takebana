@@ -218,6 +218,8 @@ const EN = {
     'Заведение': 'Establishment',
     'Категория': 'Category',
     'Ключ трансляции': 'Stream key',
+    'Вертикальная камера': 'Vertical camera',
+    'Звонки': 'Calls',
     'Комментарий': 'Comment',
     'Контент 18+': '18+ content',
     'Координаты': 'Coordinates',

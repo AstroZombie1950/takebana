@@ -66,3 +66,28 @@
 @media (max-width: 599px) {
   .tk-status__acts { grid-auto-flow: row; width: 100%; max-width: 320px; }
 }
+
+/* Проверка связи (/check): строка на каждый путь, справа — итог. */
+.tk-net {
+  width: 100%;
+  max-width: 480px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--tk-rule);
+  text-align: left;
+}
+
+.tk-net__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--tk-rule);
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+}
+
+.tk-net__state { flex: none; color: var(--tk-muted); }
+.tk-net__row[data-state="ok"] .tk-net__state { color: var(--tk-green); }
+.tk-net__row[data-state="bad"] .tk-net__state { color: var(--tk-accent); }

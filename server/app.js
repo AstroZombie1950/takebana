@@ -221,6 +221,8 @@ require('./utils/recording').sweep();
 require('./utils/galleryVideo').sweep();
 // Готовые записи без нескольких качеств — в очередь пережатия (utils/recordingHls.js).
 require('./utils/recordingHls').resume();
+// Файл замера для страницы /check — на диск и в хранилище CDN записей.
+require('./utils/netCheck').prepare();
 // Аккаунтам, заведённым до ников (18.09.2026), — ник из имени или почты.
 require('./utils/nickname').ensureAll(require('./models/User')).catch((e) => require('./utils/errorLog').server(e, 'nickname.ensureAll'));
 // Отрезки эфиров, оставшиеся открытыми от прошлого процесса, — закрыть,

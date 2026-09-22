@@ -31,6 +31,7 @@ const { rankPeers } = require('../../utils/recentPeers');
 const { audit } = require('../../utils/audit');
 const { view } = require('../../utils/messageView');
 const restriction = require('../../utils/restrict');
+const { tr, langOf } = require('../../utils/i18n');
 
 // Ограничение доступа закрывает и переписку (utils/restrict.js): 403
 // с объяснением, кто кого ограничил. true — ответ уже отправлен.
@@ -439,7 +440,10 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
       // заглушкой, а мы — только отсюда.
       mark('fail', { kind: info.kind, ext: info.ext, error: e.message, stage: 'encode' });
       const socket = io(req);
-      if (socket) socket.to(`user:${me}`).emit('message:failed', { ref, message: e.expose ? e.message : 'Не удалось обработать видео' });
+      // Ответ уже ушёл, и перевод JSON-ответов (utils/i18n.js) сюда не
+      // дотягивается — переводим сами, на язык отправителя.
+      const text = e.expose ? e.message : 'Не удалось обработать видео';
+      if (socket) socket.to(`user:${me}`).emit('message:failed', { ref, message: tr(langOf(req), text) });
     }
   );
 });

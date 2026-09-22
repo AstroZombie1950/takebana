@@ -197,6 +197,16 @@
           </div>
         </section>
 
+        <%# Проверка связи — отдельная страница (utils/netCheck.js): что именно
+            не открывается у провайдера человека. %>
+        <section class="tk-panel">
+          <p class="tk-panel__title" data-i18n="settings.netcheck"><%- t('settings.netcheck') %></p>
+          <div class="tk-set__form">
+            <p class="tk-note" data-i18n="settings.netcheckHint"><%- t('settings.netcheckHint') %></p>
+            <a href="/check" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="settings.netcheckBtn"><%- t('settings.netcheckBtn') %></a>
+          </div>
+        </section>
+
         <!-- Язык: общий переключатель public/tk-i18n.js, без перезагрузки -->
         <section class="tk-panel">
           <p class="tk-panel__title" data-i18n="settings.lang"><%- t('settings.lang') %></p>

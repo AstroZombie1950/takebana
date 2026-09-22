@@ -22,9 +22,10 @@ function configured() {
 // Серверы для RTCPeerConnection: STUN — для прямого соединения браузеров,
 // TURN — когда напрямую не выходит. Порядок адресов TURN — порядок
 // предпочтения: UDP, потом TCP, потом TLS.
-function iceServers(userId) {
+// ttl — короче для проверки связи (utils/netCheck.js): ключ живёт на странице.
+function iceServers(userId, ttl = TTL_S) {
   const host = process.env.TURN_HOST;
-  const username = Math.floor(Date.now() / 1000 + TTL_S) + ':' + userId;
+  const username = Math.floor(Date.now() / 1000 + ttl) + ':' + userId;
   const credential = createHmac('sha1', process.env.TURN_SECRET).update(username).digest('base64');
   return [
     { urls: `stun:${host}:3478` },

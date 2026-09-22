@@ -1,0 +1,51 @@
+<%#
+  Проверка связи: по отдельности сайт, CDN эфиров и записей, Daily и наш
+  TURN. Адреса и ключи — utils/netCheck.js и routes/pages.js, проверки
+  и отправка итога в журнал — public/tk-check.js.
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { titleKey: 'page.check.title' }) %>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/status.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-status">
+      <span class="tk-status__kicker" data-i18n="check.kicker"><%- t('check.kicker') %></span>
+      <h1 class="tk-status__title" data-i18n="check.heading"><%- t('check.heading') %></h1>
+      <p class="tk-status__text" data-i18n="check.text"><%- t('check.text') %></p>
+
+      <ul class="tk-net" id="netList">
+        <% [['site', 'check.site'], ['live', 'check.live'], ['vod', 'check.vod'], ['daily', 'check.daily'],
+            ['udp', 'check.turnUdp'], ['tcp', 'check.turnTcp'], ['tls', 'check.turnTls']].forEach(function (row) { %>
+        <li class="tk-net__row" data-check="<%= row[0] %>">
+          <span class="tk-net__name" data-i18n="<%= row[1] %>"><%- t(row[1]) %></span>
+          <span class="tk-net__state" data-i18n="check.wait"><%- t('check.wait') %></span>
+        </li>
+        <% }) %>
+      </ul>
+      <% if (!currentUser) { %>
+      <p class="tk-note" data-i18n="check.login"><%- t('check.login') %></p>
+      <% } %>
+      <p class="tk-note" id="netSent" hidden data-i18n="check.sent"><%- t('check.sent') %></p>
+
+      <div class="tk-status__acts">
+        <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="netAgain" disabled data-i18n="check.again"><%- t('check.again') %></button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script type="application/json" id="netData"><%- JSON.stringify(check).replace(/</g, '\\u003c') %></script>
+<script defer src="<%= asset('/tk-check.js') %>"></script>
+</body>
+</html>
