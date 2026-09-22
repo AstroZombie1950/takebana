@@ -87,16 +87,19 @@
 <% if (headDescription) { %>
 <meta name="description" content="<%= headDescription %>">
 <% } %>
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
 
 <%# Сайт на домашнем экране телефона. Манифест даёт Android иконку, имя
     и запуск без адресной строки и предлагает «Установить приложение»;
     apple-touch-icon и две meta — то же самое для «На экран Домой» на айфоне,
-    манифест Safari почти не читает. Значки — public/img/app (сделаны из
-    favicon.svg), сам запуск и поведение без сети — public/sw.js. %>
+    манифест Safari почти не читает. Значки — public/img/app (логотип целиком
+    из img/logo.svg; вкладка и поиск — один знак, favicon.svg и .ico). При
+    замене значков поднять ?v= здесь и в манифесте: nginx держит /img/
+    30 дней. Сам запуск и поведение без сети — public/sw.js. %>
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0A0A0A">
-<link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png">
+<link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png?v=2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Takebana">

@@ -17,12 +17,12 @@
 // Новая версия вступает в силу сразу (skipWaiting + claim): застрявший
 // старый worker — второй способ получить «не обновляется».
 
-const VERSION = 'tk-2';
+const VERSION = 'tk-3';
 const SHELL = 'tk-shell-' + VERSION;
 
 // Что можно держать в кэше: адрес либо несёт хеш содержимого, либо указывает
 // на файл, который под своим именем не меняется. Всё остальное — мимо.
-const CACHEABLE = /^\/(min|fonts|vendor)\/|^\/img\/app\/|^\/favicon\.svg$/;
+const CACHEABLE = /^\/(min|fonts|vendor)\/|^\/img\/app\/|^\/favicon\.(svg|ico)$/;
 
 const OFFLINE = '/offline.html';
 
@@ -72,7 +72,10 @@ self.addEventListener('fetch', (event) => {
 // уведомление обязаны всегда: подписка выдана с userVisibleOnly, и молчащий
 // пуш Chrome считает обманом — сначала покажет своё «сайт работает в фоне»,
 // а потом отберёт разрешение.
-const ICON = '/img/app/icon-192.png';
+// Значок в строке состояния Android берёт только силуэт — нужен знак на
+// прозрачном фоне, иначе квадрат иконки становится белой плашкой.
+const ICON = '/img/app/icon-192.png?v=2';
+const BADGE = '/img/app/badge-96.png';
 
 self.addEventListener('push', (event) => {
   let note = {};
@@ -81,7 +84,7 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(title, {
     body: note.body || '',
     icon: ICON,
-    badge: ICON,
+    badge: BADGE,
     // Метка по собеседнику: второе сообщение от того же человека заменяет
     // первое, а не копится стопкой из двадцати одинаковых.
     tag: note.tag || 'tk',
