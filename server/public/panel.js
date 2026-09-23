@@ -818,7 +818,11 @@ VIEWS.audit = {
 };
 
 // ── Ошибки ───────────────────────────────────────────────────────────────────
-const SCOPES = { server: 'сервер', client: 'браузер', media: 'медиа', external: 'внешние' };
+// check — не ошибки, а отчёты проверок связи и звука (routes/clientErrors.js).
+// В «Все ошибки» их намеренно нет, видны только по выбору «проверки»:
+// их шлёт исправная страница. В подписи со счётчиками они есть — иначе
+// о них негде было бы вспомнить.
+const SCOPES = { server: 'сервер', client: 'браузер', media: 'медиа', external: 'внешние', check: 'проверки' };
 
 // Раскрывашка карточки ошибки: стек, подробности, браузер. У отчёта о
 // звонке (CallDiag) стека нет — его суть в lastMeta.details, построчно.
@@ -838,7 +842,7 @@ VIEWS.errors = {
   csv: true,
   filters: [
     { name: 'q', type: 'search', placeholder: 'Текст или маршрут' },
-    { name: 'scope', options: [{ value: '', title: 'Везде' }].concat(
+    { name: 'scope', options: [{ value: '', title: 'Все ошибки' }].concat(
       Object.entries(SCOPES).map(([value, title]) => ({ value, title }))) },
     { name: 'resolved', options: [
       { value: '', title: 'Неразобранные' }, { value: '1', title: 'Разобранные' }, { value: 'all', title: 'Все' },

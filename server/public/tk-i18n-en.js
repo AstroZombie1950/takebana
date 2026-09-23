@@ -417,6 +417,7 @@
   "chats.play": "Play",
   "chats.mediaFailed": "Could not load — check your connection and try again",
   "chats.mediaRetry": "Trying again…",
+  "chats.mediaOwnPath": "Your provider blocks the file host — loading through our site instead",
   "chats.pause": "Pause",
   "chats.openImage": "Open photo",
   "chats.openVideo": "Watch video",
@@ -988,6 +989,7 @@
   "check.sound.none": "Nothing at all",
   "check.again": "Check again",
   "check.sent": "Done, we have the result. If something failed, write to us and mention the time of the check.",
+  "check.own": "Streams and recordings do not open through your provider. We switched them to a backup route through our own site. A little slower, but it works — reload the page.",
   "settings.netcheck": "Connection check",
   "settings.netcheckHint": "If streams or recordings do not load or calls do not connect, check what exactly your provider blocks.",
   "settings.netcheckBtn": "Check connection"

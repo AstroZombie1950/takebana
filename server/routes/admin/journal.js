@@ -100,11 +100,17 @@ router.delete('/audit', requireAdmin, async (req, res) => {
 });
 
 // ── Ошибки ───────────────────────────────────────────────────────────────────
+const ERROR_SCOPES = ['server', 'client', 'media', 'external'];
+
 async function loadErrors(req) {
   const p = paging(req);
   const filter = { ...period(req, 'lastAt') };
 
-  if (['server', 'client', 'media', 'external'].includes(req.query.scope)) filter.scope = req.query.scope;
+  // Проверки связи и звука (scope check) — не поломки, и в общем списке
+  // их быть не должно: иначе успешный отчёт лежит рядом с упавшим звонком
+  // и увеличивает счёт ошибок. Показываем их только по прямому выбору.
+  if (ERROR_SCOPES.includes(req.query.scope) || req.query.scope === 'check') filter.scope = req.query.scope;
+  else filter.scope = { $in: ERROR_SCOPES };
   // По умолчанию — неразобранные: разобранное уже читали.
   if (req.query.resolved === '1') filter.resolved = true;
   else if (req.query.resolved !== 'all') filter.resolved = false;

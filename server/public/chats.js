@@ -155,14 +155,29 @@
     return ' style="width: ' + w + 'px; aspect-ratio: ' + a.width + ' / ' + a.height + '"';
   }
 
+  // Адрес с учётом запасной дороги (TKMedia, server/utils/mediaFallback.js).
+  //
+  // Со страницами адреса приходят уже подменёнными, и здесь обычно нечего
+  // делать. Нужен он ровно на отрезок между «поняли, что CDN заблокирован»
+  // и первой перезагрузкой: в разметке ещё стоят адреса CDN, а открываться
+  // они у этого человека уже не будут. Без этого каждое голосовое на
+  // странице заново проходило бы обе неудачные попытки.
+  //
+  // Подменяется то, что становится источником: src картинки, звука, видео.
+  // Адреса в data-* остаются исходными — по ним сходятся играющая строка
+  // и сообщение с сервера, и подменять их значило бы рассогласовать их.
+  function src(url) {
+    return window.TKMedia && TKMedia.on() ? TKMedia.own(url) : url;
+  }
+
   function attachmentHtml(a) {
     if (a.kind === 'image') {
       return '<button type="button" class="tk-att tk-att--media" data-img="' + escapeHtml(a.url) + '" aria-label="' + escapeHtml(t('chats.openImage')) + '"' + frame(a) + '>' +
-        '<img src="' + escapeHtml(a.preview || a.url) + '" alt="" loading="lazy" decoding="async"></button>';
+        '<img src="' + escapeHtml(src(a.preview || a.url)) + '" alt="" loading="lazy" decoding="async"></button>';
     }
     if (a.kind === 'video') {
       return '<button type="button" class="tk-att tk-att--media" data-video="' + escapeHtml(a.url) + '" data-poster="' + escapeHtml(a.preview || '') + '" aria-label="' + escapeHtml(t('chats.openVideo')) + '"' + frame(a) + '>' +
-        (a.preview ? '<img src="' + escapeHtml(a.preview) + '" alt="" loading="lazy" decoding="async">' : '') +
+        (a.preview ? '<img src="' + escapeHtml(src(a.preview)) + '" alt="" loading="lazy" decoding="async">' : '') +
         '<span class="tk-att__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28">' + PLAY + '</svg></span>' +
         (a.duration ? '<span class="tk-att__len">' + clock(a.duration) + '</span>' : '') + '</button>';
     }
@@ -175,7 +190,7 @@
       // сжимался бы до 240 и заново «вырастал» на каждом новом сообщении.
       var live = roundPlayer && roundPlayer.url === a.url ? ' is-live' : '';
       return '<button type="button" class="tk-att tk-round' + live + '" data-round="' + escapeHtml(a.url) + '" data-duration="' + (a.duration || 0) + '" aria-label="' + escapeHtml(t('chats.play')) + '">' +
-        (a.preview ? '<img src="' + escapeHtml(a.preview) + '" alt="" loading="lazy" decoding="async">' : '') +
+        (a.preview ? '<img src="' + escapeHtml(src(a.preview)) + '" alt="" loading="lazy" decoding="async">' : '') +
         '<svg class="tk-round__ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48"></circle></svg>' +
         '<span class="tk-round__sign" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30">' + PLAY + '</svg></span>' +
         '<span class="tk-att__len">' + clock(a.duration) + '</span></button>';
@@ -1178,14 +1193,68 @@
     try { return new URL(url, location.href).host; } catch (e) { return '?'; }
   }
 
-  // true — отказ сетевой и попытка пошла: звать mediaFailed рано.
+  // Отказ сетевой, а не по содержимому файла. Код 2 — обрыв на полпути.
+  // Код 4 браузер ставит и тогда, когда до файла вовсе не дошёл: хост не
+  // открылся, не пришло ни байта, readyState остался 0 — судить о формате
+  // тут не по чему. Разбор журнала 23.09: с российского провайдера адрес
+  // Bunny не открывался вовсе, и приходило это сюда кодом 4 — повтор не
+  // шёл, а в журнале отказ читался как «битый формат голосового».
+  function netFail(el) {
+    var e = el.error;
+    if (!e) return false;
+    return e.code === 2 || (e.code === 4 && el.readyState === 0);
+  }
+
+  // Как назвать отказ в журнале — по тому же различению.
+  function mediaWhy(el) {
+    var e = el.error;
+    if (!e) return 'no-error';
+    if (e.code === 4 && el.readyState === 0) return 'не открылся';
+    return MEDIA_ERR[e.code] || e.code;
+  }
+
+  // Две попытки на сетевой отказ, и вторая — другой дорогой.
+  //
+  // Первая тем же адресом: на сотовой связи первый запрос к CDN срывается
+  // заметно чаще следующего, и пауза в 700 мс это чинит.
+  //
+  // Вторая — тот же файл через наш домен (TKMedia, мимо CDN). Так лечится
+  // заблокированный Bunny: у него второй запрос не сорвётся никогда,
+  // сколько ни повторяй, а наш домен с той же сети открывается.
+  //
+  // Запоминаем дорогу только когда она сработала. Это важно: у пропавшего
+  // файла отказ выглядит ровно так же — код 4, readyState 0, — и запомнить
+  // по самому отказу значило бы гнать через себя чужой трафик месяц из-за
+  // одного удалённого кружка. Получилось своим доменом там, где не вышло
+  // прямым, — вот это и есть блокировка, и только это.
   function mediaRetry(el, url) {
-    if (!url || !el.error || el.error.code !== 2 || mediaRetried[url]) return false;
-    mediaRetried[url] = 1;
+    if (!url || !netFail(el)) return false;
+    var step = mediaRetried[url] || 0;
+    var own = step === 1 && window.TKMedia && !TKMedia.on() && TKMedia.mine(url) && TKMedia.own(url);
+    if (step > 1 || (step === 1 && !own)) return false;
+    mediaRetried[url] = step + 1;
     toast(t('chats.mediaRetry'));
+    if (own) {
+      // Слушаем оба исхода и оба снимаем. Элемент звука на странице один
+      // на все голосовые: оставленный слушатель дождался бы следующего,
+      // ни в чём не виноватого файла — и запомнил бы дорогу по нему.
+      var okFn, errFn;
+      var done = function (worked) {
+        el.removeEventListener('loadeddata', okFn);
+        el.removeEventListener('error', errFn);
+        if (worked && TKMedia.remember()) toast(t('chats.mediaOwnPath'));
+      };
+      okFn = function () { done(true); };
+      errFn = function () { done(false); };
+      el.addEventListener('loadeddata', okFn);
+      el.addEventListener('error', errFn);
+    }
     setTimeout(function () {
-      if (el.currentSrc || el.src) { el.load(); el.play().catch(function () {}); }
-    }, 700);
+      if (own) el.src = own;
+      else if (!el.currentSrc && !el.src) return;
+      el.load();
+      el.play().catch(function () {});
+    }, own ? 0 : 700);
     return true;
   }
 
@@ -1196,12 +1265,13 @@
       var body = JSON.stringify({
         page: location.pathname,
         name: 'MediaError',
-        message: kind + ': ' + (e ? (MEDIA_ERR[e.code] || e.code) : 'no-error') + ' @ ' + hostOf(url),
+        message: kind + ': ' + mediaWhy(el) + ' @ ' + hostOf(url),
         details: [
           'kind=' + kind,
           'host=' + hostOf(url),
           'code=' + (e ? e.code : '-') + ' ' + (e && e.message ? e.message : ''),
           'networkState=' + el.networkState + ' readyState=' + el.readyState,
+          'попыток=' + (mediaRetried[url] || 0) + (window.TKMedia && TKMedia.on() ? ', своим доменом' : ''),
           'online=' + navigator.onLine,
           'ua=' + navigator.userAgent
         ]
@@ -1274,7 +1344,7 @@
     if (sound.el) { soundState(false); sound.el.style.setProperty('--p', 0); }
     sound.url = url;
     sound.el = el;
-    sound.audio.src = url;
+    sound.audio.src = src(url);
     // Отказ загрузки приходит отдельным событием error (см. выше): здесь
     // остаётся только запрет автозапуска — он не про файл и не про сеть.
     sound.audio.play().catch(function () { soundState(false); });
@@ -1359,10 +1429,10 @@
     if (hide) return closeSealed(hide.getAttribute('data-hide-sealed'));
     if (round) return playRound(round);
     if (img) {
-      $('lightboxImg').src = img.getAttribute('data-img');
+      $('lightboxImg').src = src(img.getAttribute('data-img'));
       box.classList.remove('hidden');
     } else if (vid) {
-      openVideo(vid.getAttribute('data-video'), vid.getAttribute('data-poster'));
+      openVideo(src(vid.getAttribute('data-video')), src(vid.getAttribute('data-poster')));
     } else if (aud) {
       if (e.target.closest('[data-play]')) playSound(aud);
       else if (e.target.closest('[data-seek]')) seekSound(aud, e);
@@ -1420,7 +1490,7 @@
     if (!sound.audio.paused) sound.audio.pause();
     roundPlayer.url = url;
     roundPlayer.el = el;
-    v.src = url;
+    v.src = src(url);
     el.appendChild(v);
     el.classList.add('is-live');
     v.play().catch(function () {});
@@ -1487,10 +1557,10 @@
         if (kind === 'image' || kind === 'video') {
           viewing = id;
           if (kind === 'image') {
-            $('lightboxImg').src = a.url;
+            $('lightboxImg').src = src(a.url);
             box.classList.remove('hidden');
           } else {
-            openVideo(a.url, a.preview);
+            openVideo(src(a.url), src(a.preview));
           }
           showOnceTimer(until);
           render();

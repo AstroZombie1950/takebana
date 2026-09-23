@@ -37,6 +37,10 @@
       <p class="tk-note" data-i18n="check.login"><%- t('check.login') %></p>
       <% } %>
       <p class="tk-note" id="netSent" hidden data-i18n="check.sent"><%- t('check.sent') %></p>
+      <%# Эфиры и записи не открылись, а сайт открылся: провайдер режет CDN.
+          Страница тут же включает запасной путь (public/tk-check.js,
+          server/utils/mediaFallback.js) и говорит об этом. %>
+      <p class="tk-note" id="netOwn" hidden data-i18n="check.own"><%- t('check.own') %></p>
 
       <div class="tk-status__acts">
         <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="netAgain" disabled data-i18n="check.again"><%- t('check.again') %></button>

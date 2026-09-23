@@ -28,19 +28,42 @@ const clientErrorLimiter = rateLimit({
 
 const cut = (v, n) => String(v == null ? '' : v).slice(0, n);
 
+// Робот поисковика, а не человек. Bingbot и его родня разбирают страницы
+// своим движком и присылают сюда отказы загрузки наших же файлов: чинить
+// в них нечего, увидеть их у людей мы не можем, а в списке они занимают
+// место наравне с настоящими поломками (журнал 21.09 — bingbot и наш CSS).
+// Ловим по двум приметам, которых у нынешних браузеров не бывает: адрес
+// робота прямо в подписи и старое «compatible;».
+const BOT_UA = /\+https?:\/\/|\bcompatible;|(bot|spider|crawler|slurp)\//i;
+
+// Вкладку закрыли или ушли со страницы, пока висел незавершённый промис:
+// браузер отклоняет его сам и сам же об этом рассказывает. Такое приходило
+// с /upload при закрытии страницы посреди загрузки — поломки здесь нет
+// ни нашей, ни браузера, а в журнале это выглядит ошибкой.
+const UNLOAD_NOISE = /browsing context is going away|page was (unloaded|discarded)/i;
+
+// Отчёты, а не ошибки: их шлёт исправно работающая страница. Проверка
+// связи и проверка звука — со страницы /check по нажатию человека, отчёт
+// о звуке — ещё и сам, через десять секунд каждого разговора. В списке
+// поломок они считались наравне с ними: «браузер: 11» — это девять ошибок
+// и два успешных отчёта. Вид записи check, свой пункт в фильтре панели.
+const CHECK_NAMES = /^(CallAudio|NetCheck)$/;
+
 router.post('/api/client-error', clientErrorLimiter, express.json({ limit: '16kb' }), (req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const message = cut(body.message, 500);
     // Старые вкладки ещё шлют «Script error.» — ошибку чужого скрипта без
     // подробностей (см. partials/tkHead.ejs). Не пишем и её.
     const opaque = /^Script error\.?$/.test(message) && !body.source;
+    const noise = UNLOAD_NOISE.test(message) || BOT_UA.test(req.get('user-agent') || '');
 
     // Пустое сообщение записывать нечего: так приходят ошибки загрузки
     // сторонних файлов, у которых браузер прячет подробности.
-    if (message && !opaque) {
+    if (message && !opaque && !noise) {
+        const name = cut(body.name, 100) || 'ClientError';
         record({
-            scope: 'client',
-            err: { name: cut(body.name, 100) || 'ClientError', message, stack: cut(body.stack, 4000) },
+            scope: CHECK_NAMES.test(name) ? 'check' : 'client',
+            err: { name, message, stack: cut(body.stack, 4000) },
             route: cut(body.page || req.get('referer'), 200),
             req,
             meta: {

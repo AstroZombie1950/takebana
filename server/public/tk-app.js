@@ -1150,7 +1150,9 @@ document.addEventListener('DOMContentLoaded', function(){
         return Promise.resolve(a);
       },
       // Пороги ухода на свой путь: вход в комнату у Daily обычно 2–4 с,
-      // дорожки собеседника — 1–2 с после его входа.
+      // дорожки собеседника — 1–2 с после его входа. Досиживать joinMs
+      // приходится не всегда: недоступный домен Daily виден раньше
+      // (reachMs в tk-daily.js), и тогда уходим по нему.
       joinMs: 10000,
       mediaMs: 5000,
       onStuck: (reason) => window.callSocket.emit('call:fallback', { callId, reason }),

@@ -265,6 +265,43 @@ expect "медиа ../../app.js"     "400|403|404" GET "/live/..%2F..%2Fapp.js"
 expect "медиа ../server.log"    "400|403|404" GET "/live/..%2Fserver.log"
 
 # ═════════════════════════════════════════════════════════════════════════════
+step "Запасная дорога к медиа"
+
+# /m/ отдаёт файлы Bunny нашим адресом — для тех, у кого CDN заблокирован
+# (server/utils/mediaFallback.js, блок /m/ в ops/nginx/takebana.conf).
+# Проверяем на файле, который для проверок и положен: utils/netCheck.js
+# кладёт /_check/probe.ts в обе зоны при старте.
+#
+# Проверка снаружи, поэтому она отвечает и на главный вопрос: доходит ли
+# до Bunny сам сервер. Не доходит — запасная дорога бессмысленна, и знать
+# об этом надо до того, как по ней пойдут люди.
+PROBE_LEN=$("${CURL[@]}" -o /dev/null -w '%{http_code} %{size_download}' "${BASE}/m/_check/probe.ts" 2>/dev/null || echo "000 0")
+PROBE_CODE="${PROBE_LEN%% *}"; PROBE_SIZE="${PROBE_LEN#* }"
+if [[ "$PROBE_CODE" == "200" && "$PROBE_SIZE" == "98304" ]]; then
+  pass "/m/ отдаёт файл Bunny ${c_dim}→ 98304 байта${c_off}"
+elif [[ "$PROBE_CODE" == "200" ]]; then
+  fail "/m/ отдал не тот объём" "ждали 98304 байта, получили $PROBE_SIZE"
+elif [[ "$PROBE_CODE" == "404" ]]; then
+  skip "/m/: пробного файла в зоне нет (хранилище Bunny не настроено?)"
+else
+  fail "/m/ не отдаёт файл Bunny" "код $PROBE_CODE — проверьте resolver и SNI в блоке /m/"
+fi
+
+# Перемотка по записи держится на Range: без него часовое видео можно было бы
+# только смотреть с начала. proxy_buffering off это и обеспечивает.
+RANGE_CODE=$(code GET "/m/_check/probe.ts" -H 'Range: bytes=0-99')
+if [[ "$RANGE_CODE" == "206" ]]; then
+  pass "/m/ пропускает Range ${c_dim}→ 206${c_off}"
+elif [[ "$RANGE_CODE" == "404" ]]; then
+  skip "/m/ Range: пробного файла нет"
+else
+  fail "/m/ не пропускает Range" "ждали 206, получили $RANGE_CODE — перемотка по записи не будет работать"
+fi
+
+# Выход за пределы зоны: /m/ — дорога к нашим файлам, а не открытый ретранслятор.
+expect "/m/ наружу по ../"       "400|403|404" GET "/m/..%2F..%2Fetc%2Fpasswd"
+
+# ═════════════════════════════════════════════════════════════════════════════
 step "Socket.IO"
 
 # transports: ['websocket'] — если nginx не пробрасывает Upgrade, соединения нет

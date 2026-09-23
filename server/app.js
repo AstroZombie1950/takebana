@@ -124,6 +124,9 @@ app.locals.googleOAuthConfigured = googleOAuthConfigured;
 app.locals.mailConfigured = require('./utils/mail').mailConfigured;
 // Откуда зритель берёт HLS: пусто — со своего домена, иначе — адрес CDN.
 app.locals.hlsBase = require('./utils/hls').hlsBase;
+// Адрес CDN записей и замена ему — браузеру: наткнувшись на недоступный
+// CDN, страница подменяет адрес сама, не дожидаясь перезагрузки.
+Object.assign(app.locals, require('./utils/mediaFallback').locals);
 // Публичный ключ VAPID для подписки на пуши (utils/push.js). Пусто — пуши
 // не настроены, и тумблера в настройках нет: нерабочий тумблер хуже
 // отсутствующего, как и кнопка Google без ключей.
@@ -149,6 +152,11 @@ app.use((req, res, next) => {
   res.locals.url = req.originalUrl;
   next();
 });
+// У кого не открывается CDN — тому адреса медиа подменяются на наши
+// (utils/mediaFallback.js). До маршрутов: подменять надо всё, что они
+// ответят. Без cookie не делает ничего, а cookie есть только у того,
+// кто уже наткнулся на заблокированный Bunny.
+app.use(require('./utils/mediaFallback').middleware);
 app.use(googleRouter);
 
 require('./db');

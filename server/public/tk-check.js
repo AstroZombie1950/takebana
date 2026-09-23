@@ -15,6 +15,7 @@
   var list = document.getElementById('netList');
   var again = document.getElementById('netAgain');
   var sent = document.getElementById('netSent');
+  var ownNote = document.getElementById('netOwn');
   var TIMEOUT = 10000;
 
   // Подписи для журнала панели — она русская, язык страницы тут ни при чём.
@@ -143,6 +144,26 @@
     }).catch(function () {});
   }
 
+  // Провайдер режет CDN — включаем запасной путь, не дожидаясь жалобы.
+  //
+  // Признак: наш сайт открылся, а CDN эфиров или записей — нет. Если не
+  // открылся и сайт, то сеть просто лежит, и через нас будет не лучше:
+  // подменять адреса в такой момент значило бы запомнить на месяц
+  // случайный обрыв.
+  //
+  // Дальше всё делает сервер (utils/mediaFallback.js): он видит cookie
+  // и отдаёт страницы с нашими адресами. Эта страница — исключение, она
+  // обязана и впредь проверять настоящий CDN.
+  function switchToOwn(results) {
+    var by = {};
+    results.forEach(function (x) { by[x.name] = !x.r.error; });
+    if (!by.site || (by.live !== false && by.vod !== false)) return false;
+    // Второй прогон подряд ничего не меняет, но сказать всё равно нужно:
+    // человек должен понимать, почему медиа теперь идёт другой дорогой.
+    if (window.TKMedia) TKMedia.remember();
+    return true;
+  }
+
   function run() {
     again.disabled = true;
     sent.hidden = true;
@@ -160,6 +181,7 @@
       return report(results);
     }).then(function () {
       sent.hidden = false;
+      ownNote.hidden = !switchToOwn(results);
       again.disabled = false;
     });
   }

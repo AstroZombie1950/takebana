@@ -70,7 +70,8 @@
   //   onMediaError(e) — камера или микрофон недоступны
   //   diag       — подпись для отчёта о несоединившемся звонке (см. ниже)
   //   onStuck(reason) — Daily не соединился: звонок уходит на свой сервер
-  //                (tk-app.js). Только вместе с diag; пороги — joinMs, mediaMs
+  //                (tk-app.js). Только вместе с diag; пороги — joinMs,
+  //                mediaMs и reachMs (ответ от домена Daily, см. probe)
   function connect(opts) {
     var call = null;
     var dying = Promise.resolve();
@@ -102,6 +103,9 @@
     var diag = opts.diag ? { t0: Date.now(), log: [], sent: {}, joined: false, remote: false, stuck: false, lost: null } : null;
     var JOIN_MS = opts.joinMs || 15000;
     var MEDIA_MS = opts.mediaMs || 15000;
+    // Сколько ждать ответа от самого домена Daily (см. probe ниже).
+    var REACH_MS = opts.reachMs || 4000;
+    var reached = false;
     // Собеседник в комнате, но сам ничего не шлёт (микрофон запрещён, окно
     // разрешения ещё открыто): это не сеть — ждём ещё, но не вечно.
     var MEDIA_ROUNDS = 3;
@@ -156,6 +160,38 @@
       if (!opts.onStuck || diag.stuck) return;
       diag.stuck = true;
       opts.onStuck(kind);
+    }
+
+    // Открывается ли домен Daily вообще — отдельным запросом и одновременно
+    // со входом, а не вместо него.
+    //
+    // Вход в комнату висит до JOIN_MS (у звонка это 10 с), и всё это время
+    // человек смотрит на «Подключаемся…». Но у недоступного домена ответ
+    // есть на первой же секунде: запрос не доходит, и ждать девять секунд
+    // сверх этого не за чем. В журнале 23.09 оба несоединившихся звонка
+    // выглядели одинаково — вход замирал на joining-meeting, и проверка
+    // связи с серверами Daily тоже молчала.
+    //
+    // Ответ нас не интересует, важно только, дошёл ли запрос: HEAD, без
+    // чтения ответа, любой код — значит домен открывается. Отказ на уровне
+    // сети, пока мы ещё не в комнате, — повод уйти на свой сервер сразу.
+    // Ложная тревога стоит недорого: свой путь работает у всех.
+    function probe(url) {
+      if (!diag || !opts.onStuck || reached) return;
+      var origin;
+      try { origin = new URL(url).origin + '/'; } catch (e) { return; }
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () { ctrl.abort(); }, REACH_MS);
+      fetch(origin, { method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: ctrl.signal }).then(function () {
+        clearTimeout(timer);
+        reached = true;
+        note('домен Daily открылся');
+      }, function () {
+        clearTimeout(timer);
+        if (closed || diag.joined || diag.stuck) return;
+        note('домен Daily не открылся за ' + sec(REACH_MS));
+        trouble('домен Daily не открылся за ' + sec(REACH_MS));
+      });
     }
 
     // Состояние наружу. Связь с Daily пропала после входа — ждём её
@@ -234,6 +270,8 @@
         if (closed) return;
         var Daily = r[0];
         var access = r[1];
+        // Рядом со входом, не после него: обе проверки идут одновременно.
+        probe(access.url);
         var props = {
           // Речь, а не музыка: браузерные эхоподавление, шумоподавление
           // и автоусиление остаются включены.

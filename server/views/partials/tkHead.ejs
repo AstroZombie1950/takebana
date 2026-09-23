@@ -67,6 +67,20 @@
     if (!url) return;
     var host;
     try { host = new URL(url, location.href).host; } catch (err) { host = '?'; }
+    // Картинка с нашего CDN не открылась — пробуем её же через свой домен
+    // (TKMedia, server/utils/mediaFallback.js). Здесь, а не в скриптах
+    // страниц, потому что битые картинки одинаковы везде: обложки записей,
+    // галерея профиля, кадры видео в переписке, плитки каталога. Одна
+    // попытка на картинку: получилось — значит CDN заблокирован, и дорога
+    // запоминается; не получилось — пойдёт в журнал вторым событием.
+    // Голосовые и кружки идут своим путём (public/chats.js): у них отказ
+    // приходит не сюда, а элементу, вместе с кодом ошибки.
+    if (tag === 'img' && !el.dataset.tkOwn && window.TKMedia && TKMedia.mine(url)) {
+      el.dataset.tkOwn = '1';
+      el.addEventListener('load', function () { TKMedia.remember(); }, { once: true });
+      el.src = TKMedia.own(url);
+      return;
+    }
     // По одному сообщению на хост: если отвалился CDN, битых картинок
     // на странице десятки, а поломка одна.
     if (hosts[tag + host]) return;

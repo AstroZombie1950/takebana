@@ -13,7 +13,12 @@ const ErrorLogSchema = new mongoose.Schema({
   fingerprint: { type: String, required: true, unique: true },
   // server — маршрут Express, client — браузер посетителя, media — RTMP,
   // ffmpeg и HLS, external — Daily, Bunny, почта, геокодер, база.
-  scope: { type: String, enum: ['server', 'client', 'media', 'external'], required: true },
+  // check — не ошибка вовсе, а отчёт исправной страницы: проверка связи
+  // и проверка звука (routes/clientErrors.js). Хранятся тут же, потому что
+  // группировка, отпечаток, счётчик и срок хранения нужны им те же самые,
+  // но в списке ошибок им не место — они туда попадали и считались наравне
+  // с поломками.
+  scope: { type: String, enum: ['server', 'client', 'media', 'external', 'check'], required: true },
   name: { type: String, default: '' },
   message: { type: String, default: '' },
   stack: { type: String, default: '' },
