@@ -147,6 +147,14 @@
           <button type="button" class="tk-chat__tool" id="callVideo" aria-label="<%= ta('calls.video') %>" data-i18n-aria="calls.video" title="<%= ta('calls.video') %>" data-i18n-title="calls.video">
             <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M3.5 6.5h11v11h-11zM14.5 10.5l6-3v9l-6-3z"></path></svg>
           </button>
+
+          <%# Записать собеседника или убрать из записной книжки, не уходя
+              из переписки (23.09). Какой из двух значков виден и что
+              написано в подсказке — решает chats.js по списку контактов. %>
+          <button type="button" class="tk-chat__tool" id="contactToggle" aria-label="<%= ta('contacts.add') %>" data-i18n-aria="contacts.add" title="<%= ta('contacts.add') %>" data-i18n-title="contacts.add">
+            <svg data-icon="add" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M9.5 11.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 19.5c0-3 2.9-5 6.5-5 .8 0 1.6.1 2.3.3M17.5 13.5v6M14.5 16.5h6"></path></svg>
+            <svg data-icon="remove" hidden viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M9.5 11.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 19.5c0-3 2.9-5 6.5-5 .8 0 1.6.1 2.3.3M14.5 16.5h6"></path></svg>
+          </button>
         </div>
 
         <%# Режим выбора: вместо шапки диалога — сколько выбрано и что с этим
@@ -277,7 +285,10 @@
 
 <%# Выбор ограничения: значения — utils/messageLimit.js (OPTIONS).
     Восемь строк подряд читались одним списком, хотя условия разной природы:
-    теперь «сколько раз» и «сколько времени» — два раздела с заголовками. %>
+    теперь «сколько раз» и «сколько времени» — два раздела с заголовками.
+    Внутри разделов не строки, а клетки (23.09): столбцом меню занимало
+    пол-экрана телефона. Просмотров три — ставим в ряд, времени четыре —
+    сеткой 2×2 (css/chats.css). %>
 <div class="tk-msgmenu tk-limitmenu" id="limitMenu" role="menu" hidden>
   <p class="tk-limitmenu__title" data-i18n="chats.limit.title"><%- t('chats.limit.title') %></p>
   <button type="button" role="menuitemradio" aria-checked="true" data-limit="" data-i18n="chats.limit.none"><%- t('chats.limit.none') %></button>
@@ -285,7 +296,7 @@
        { id: 'Count', title: 'chats.limit.group.count', opts: ['n1', 'n2', 'n3'] },
        { id: 'Time',  title: 'chats.limit.group.time',  opts: ['t10', 't60', 't600', 't3600'] }
      ].forEach(function (g) { %>
-  <div class="tk-limitmenu__sec" role="group" aria-labelledby="limitGrp<%= g.id %>">
+  <div class="tk-limitmenu__sec tk-limitmenu__sec--<%= g.id.toLowerCase() %>" role="group" aria-labelledby="limitGrp<%= g.id %>">
     <p class="tk-limitmenu__group" id="limitGrp<%= g.id %>" data-i18n="<%= g.title %>"><%- t(g.title) %></p>
     <% g.opts.forEach(function (v) { var key = 'chats.limit.' + v; %>
     <button type="button" role="menuitemradio" aria-checked="false" data-limit="<%= v %>" data-i18n="<%= key %>"><%- t(key) %></button>

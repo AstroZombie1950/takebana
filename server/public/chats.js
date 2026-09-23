@@ -15,6 +15,7 @@
   var feed = $('feed');
   var list = $('conversationsList');
   var input = $('messageInput');
+  var contactBtn = $('contactToggle');   // «В контакты» в шапке диалога
 
   var peer = null;          // { id, name, url, bg, initial }
   var messages = [];        // лента открытого диалога, от старых к новым
@@ -479,6 +480,8 @@
     // кнопки в шапке диалога незачем показывать.
     $('callAudio').hidden = !!who;
     $('callVideo').hidden = !!who;
+    // Записать в контакты такого человека сервер тоже не даст (restrict.js).
+    if (contactBtn) contactBtn.hidden = !!who || !peer;
     if (who) say(note, who === 'me' ? 'chats.blockedMe' : 'chats.blockedThem');
   }
 
@@ -680,6 +683,7 @@
     });
 
     $('peerName').textContent = peer.name;
+    paintContactBtn();
     // Аватар ведёт в профиль, как и имя рядом.
     $('chatAvatar').outerHTML = avatar('tk-chat__ava-big', peer,
       ' id="chatAvatar" href="/userPage/' + encodeURIComponent(peer.id) + '" aria-label="' + escapeHtml(peer.name) + '"', 'a');
@@ -711,6 +715,7 @@
     stopPicking();
     closeMenu();
     peer = null;
+    paintContactBtn();
     messages = [];
     calls = [];
     feed.innerHTML = '';
@@ -2019,6 +2024,7 @@
   }
 
   function renderContacts() {
+    paintContactBtn();
     if (!contactsReady) return;
     var q = contactSearch.value.trim().toLowerCase();
     var rows = q ? contacts.filter(function (c) { return c.name.toLowerCase().indexOf(q) !== -1; }) : contacts;
@@ -2531,6 +2537,31 @@
     $(type === 'audio' ? 'callAudio' : 'callVideo').addEventListener('click', function () {
       if (peer) callPeer(peer, type);
     });
+  });
+
+  // ── «В контакты» в шапке диалога ──────────────────────────────────────
+  // Одна кнопка на два действия: записанного собеседника она убирает,
+  // незаписанного — добавляет. Список контактов страница и так держит
+  // у себя (loadContacts при открытии), спрашивать сервер не нужно.
+  function paintContactBtn() {
+    if (!contactBtn) return;
+    contactBtn.hidden = !peer;
+    if (!peer) return;
+    var on = !!isContact(peer.id);
+    var key = on ? 'contacts.remove' : 'contacts.add';
+    contactBtn.setAttribute('aria-pressed', String(on));
+    contactBtn.setAttribute('data-i18n-aria', key);
+    contactBtn.setAttribute('data-i18n-title', key);
+    contactBtn.setAttribute('aria-label', t(key));
+    contactBtn.title = t(key);
+    contactBtn.querySelector('[data-icon="add"]').hidden = on;
+    contactBtn.querySelector('[data-icon="remove"]').hidden = !on;
+  }
+
+  if (contactBtn) contactBtn.addEventListener('click', function () {
+    if (!peer) return;
+    if (isContact(peer.id)) removeContact(peer);
+    else addContact(peer, 'chat');
   });
 
   // ── Меню человека ─────────────────────────────────────────────────────

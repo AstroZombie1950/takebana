@@ -148,19 +148,66 @@
     TKDaily.attach(localVideo, track);
     localVideo.hidden = !track;
     showHint(track ? null : 'stream.pausedHint');
+    watchCamera(track);
   }
 
   // Камера вертикальная — выход эфира собирается в кадр 720×1280
   // (utils/webLive.js). Верней всего — размер уже показанной картинки: он
   // учитывает поворот телефона. Нет его — настройки дорожки, затем экран.
-  function portrait(track) {
+  //
+  // Почему с ожиданием. Раньше размер спрашивали сразу после attach, и
+  // videoWidth в этот миг ещё ноль: между дорожкой и первым кадром проходит
+  // от десятых долей секунды до секунды. Настройки дорожки на iPhone
+  // отдают то, что запросил Daily (1280×720), а не то, что сняла камера, —
+  // и вертикальный эфир уезжал в кадр 1280×720 с чёрными полосами по бокам,
+  // знак садился на полосу, зритель во весь экран получал полосы со всех
+  // сторон (проверка 23.09). Ждём настоящий кадр — и только если его нет,
+  // спрашиваем дорожку и экран.
+  var FRAME_WAIT_MS = 2000;
+  var FRAME_POLL_MS = 100;
+
+  // Настоящий кадр — только из предпросмотра. Дорожка и экран ниже: к ним
+  // спускаемся, лишь когда кадра так и не дождались, — иначе настройки
+  // дорожки отвечали бы первыми и ждать было бы незачем.
+  function fromPreview() {
     var w = localVideo.videoWidth, h = localVideo.videoHeight;
-    if (!w && track && track.getSettings) {
-      var st = track.getSettings();
-      w = st.width; h = st.height;
-    }
-    if (w && h) return h > w;
-    return matchMedia('(pointer: coarse) and (orientation: portrait)').matches;
+    return w && h ? { w: w, h: h, from: 'preview' } : null;
+  }
+
+  function fromTrack(track) {
+    var st = track && track.getSettings ? track.getSettings() : null;
+    return st && st.width && st.height ? { w: st.width, h: st.height, from: 'track' } : null;
+  }
+
+  function fromScreen() {
+    return {
+      w: 0, h: 0, from: 'screen',
+      portrait: matchMedia('(pointer: coarse) and (orientation: portrait)').matches,
+    };
+  }
+
+  function frame(track) {
+    return new Promise(function (resolve) {
+      var timer = null, limit = null, done = false;
+
+      function finish(v) {
+        if (done) return;
+        done = true;
+        clearInterval(timer);
+        clearTimeout(limit);
+        localVideo.removeEventListener('loadedmetadata', tick);
+        resolve(v);
+      }
+      function tick() {
+        var v = fromPreview();
+        if (v) finish(v);
+      }
+
+      localVideo.addEventListener('loadedmetadata', tick);
+      timer = setInterval(tick, FRAME_POLL_MS);
+      limit = setTimeout(function () { finish(fromTrack(track) || fromScreen()); }, FRAME_WAIT_MS);
+      tick();
+    });
   }
 
   // Камера: «device:<id>» или, если браузер список не отдал (iOS),
@@ -200,18 +247,59 @@
     }
     navigator.wakeLock.request('screen').then(function (l) { wakeLock = l; }).catch(function () {});
   }
-  // Ушёл в другое приложение — камеру телефон гасит, звук идёт: зрителям
-  // вместо чёрного кадра заставка (tk-viewer.js). Уход — маяком: обычный
-  // запрос страница в фоне может не успеть отправить.
+  // Камера погасла — зрителям вместо чёрного кадра заставка (tk-viewer.js).
+  // Уход — маяком: обычный запрос страница в фоне может не успеть отправить.
+  //
+  // Смотрим на саму камеру, а не на видимость вкладки. Заставка нужна там,
+  // где телефон гасит камеру ушедшей в фон странице: дорожка при этом
+  // становится muted, звук продолжает идти. На компьютере фоновая вкладка
+  // камеру не гасит — картинка идёт как шла, и заставка «ведущий
+  // переключился на другое приложение» врала зрителю поверх живого видео
+  // (проверка 23.09, Safari на Mac). Дорожка знает правду про оба случая.
   var awayUrl = '/stream/away/' + streamId + '?on=';
-  document.addEventListener('visibilitychange', function () {
-    if (!streamer || !streamer.connected) return;
-    if (document.visibilityState === 'visible') {
-      holdScreen(true);
-      fetch(awayUrl + '0', { method: 'POST' }).catch(function () {});
-    } else {
-      navigator.sendBeacon(awayUrl + '1');
+  var awayOn = false;
+  var awayTrack = null;
+
+  function away(on) {
+    if (!streamer || !streamer.connected || on === awayOn) return;
+    awayOn = on;
+    if (on) navigator.sendBeacon(awayUrl + '1');
+    else fetch(awayUrl + '0', { method: 'POST' }).catch(function () {});
+  }
+  function cameraDark() { away(true); }
+  function cameraLit() { away(false); }
+
+  function watchCamera(track) {
+    if (awayTrack) {
+      awayTrack.removeEventListener('mute', cameraDark);
+      awayTrack.removeEventListener('ended', cameraDark);
+      awayTrack.removeEventListener('unmute', cameraLit);
     }
+    awayTrack = track || null;
+    // Пауза и завершение снимают отметку на сервере (routes/.../streams.js):
+    // держим свою в том же состоянии, иначе следующий эфир начался бы
+    // с «ведущий ушёл», которое уже некому снять.
+    if (!awayTrack) { awayOn = false; return; }
+    awayTrack.addEventListener('mute', cameraDark);
+    awayTrack.addEventListener('ended', cameraDark);
+    awayTrack.addEventListener('unmute', cameraLit);
+    away(awayTrack.muted === true);
+  }
+
+  // Телефон вдобавок отмечается по уходу вкладки в фон, как делал раньше:
+  // событие mute iOS шлёт в тот же миг, но страницу он в этот момент уже
+  // замораживает, и маяк надёжнее отправить, не дожидаясь события. На
+  // компьютере эта дорога закрыта — там фоновая вкладка камеру не гасит.
+  var phone = matchMedia('(pointer: coarse)').matches;
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') {
+      if (phone && awayTrack) away(true);
+      return;
+    }
+    holdScreen(true);
+    // Событие unmute после возвращения iOS шлёт не всегда — сверяемся сами.
+    away(!!(awayTrack && awayTrack.muted));
   });
 
   function Streamer() {
@@ -286,7 +374,16 @@
         ready = true;
         if (track) showLocal(track);
       })
-      .then(function () { return post('/set-active', { streamKey: streamKey, portrait: portrait(track) }); })
+      .then(function () { return frame(track); })
+      .then(function (f) {
+        // Размер кадра уходит вместе с ответом: в журнале панели видно,
+        // чем эфир решил свою ориентацию, — иначе разбирать нечем.
+        return post('/set-active', {
+          streamKey: streamKey,
+          portrait: f.portrait != null ? f.portrait : f.h > f.w,
+          frame: f.w && f.h ? f.w + 'x' + f.h + ' ' + f.from : f.from,
+        });
+      })
       .then(function () {
         self.connected = true;
         live(true);

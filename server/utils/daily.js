@@ -89,11 +89,18 @@ function startLiveStreaming(name, options) {
   return api('POST', `/rooms/${encodeURIComponent(name)}/live-streaming/start`, options);
 }
 
+// 404 — комнаты уже нет, 400 «does not have an active live stream» — выход
+// в ней уже погас: и то и другое значит, что останавливать нечего, а мы
+// именно этого и хотели. Второе приходит на каждой паузе эфира, который
+// Daily погасил раньше нас (обрыв RTMP, уход ведущего со страницы), —
+// в журнале панели это выглядело ошибкой внешнего сервиса (23.09).
 async function stopLiveStreaming(name) {
   try {
     await api('POST', `/rooms/${encodeURIComponent(name)}/live-streaming/stop`);
   } catch (err) {
-    if (err.status !== 404) throw err;
+    const gone = err.status === 404 ||
+      (err.status === 400 && /does not have an active live stream/i.test(err.message));
+    if (!gone) throw err;
   }
 }
 

@@ -840,6 +840,17 @@ document.addEventListener('DOMContentLoaded', function(){
       remoteVideo: $(short + 'RemoteVideo'),
       localVideo: $(short + 'LocalVideo'),
       remoteAudio: $(short + 'RemoteAudio'),
+      // Кнопки разговора и переписка в окне (23.09).
+      card: stage.closest('.tk-modal__card'),
+      tools: $(prefix + 'Tools'),
+      micBtn: $(prefix + 'MicBtn'),
+      camBtn: $(prefix + 'CamBtn'),
+      spkBtn: $(prefix + 'SpeakerBtn'),
+      chatBtn: $(prefix + 'ChatBtn'),
+      chat: $(prefix + 'Chat'),
+      chatFeed: $(prefix + 'ChatFeed'),
+      chatForm: $(prefix + 'ChatForm'),
+      chatInput: $(prefix + 'ChatInput'),
     };
   }
   const OUT = side('outgoing', 'out');
@@ -879,6 +890,17 @@ document.addEventListener('DOMContentLoaded', function(){
     s.group = false;
     s.video = false;
     s.remoteOn = false;
+    // Кнопки разговора: до соединения их нет, и каждый звонок начинается
+    // с включённого микрофона, включённой камеры и громкой связи.
+    s.tools.hidden = true;
+    s.chatBtn.hidden = false;
+    s.micOn = true;
+    s.camOn = true;
+    s.loud = true;
+    s.chatLoaded = false;
+    s.chatBusy = false;
+    s.chatFeed.innerHTML = '';
+    showChat(s, false);
   }
 
   // Видео в разговоре: своя камера (s.video) и картинка собеседника. Сцена
@@ -890,6 +912,9 @@ document.addEventListener('DOMContentLoaded', function(){
     // даже когда камеры у всех выключены.
     s.stage.classList.toggle('hidden', !(s.group || s.video || s.remoteOn));
     tkText(s.voice, s.video ? 'call.voiceOnly' : 'call.videoOn');
+    // Своя камера выключается кнопкой только тогда, когда она вообще идёт:
+    // в голосовом разговоре выключать нечего.
+    s.camBtn.hidden = !s.video;
   }
 
   // Окно переходит в разговор: «Отменить» и «Принять» становятся «Завершить»,
@@ -902,6 +927,13 @@ document.addEventListener('DOMContentLoaded', function(){
     // и из голосового.
     s.add.classList.remove('hidden');
     s.actions.classList.add('tk-call__actions--pair');
+    // Ряд кнопок разговора: микрофон всегда, камера — при видео (paintVideo),
+    // динамик — только там, где браузер даёт им управлять.
+    s.tools.hidden = false;
+    s.spkBtn.hidden = !canRoute(s);
+    paintTool(s.micBtn, !s.micOn, 'call.micOn', 'call.micOff');
+    paintTool(s.camBtn, !s.camOn, 'call.camOn', 'call.camOff');
+    paintTool(s.spkBtn, s.loud, 'call.speakerOff', 'call.speakerOn');
     paintVideo(s);
     if (s === OUT) {
       tkText(outCancel, 'call.end');
@@ -1009,6 +1041,10 @@ document.addEventListener('DOMContentLoaded', function(){
         if (bag.audio) show(userId, bag.audio, true);
       });
       s.add.classList.remove('hidden');
+      // Переписки на несколько человек в проекте нет: в групповом разговоре
+      // кнопки чата не показываем, открытую ленту закрываем.
+      s.chatBtn.hidden = true;
+      showChat(s, false);
     }
 
     window.callGroupJoin = ({ peer, roster, offerer, ice }) => {
@@ -1057,8 +1093,12 @@ document.addEventListener('DOMContentLoaded', function(){
       const sound = window._call && window._call.sound ? window._call.sound() : null;
       const mic = window._call && window._call.mic ? window._call.mic() : null;
       const el = group ? s.grid.querySelector('.tk-call__tile:not([data-user="me"]) audio') : s.remoteAudio;
+      // «Звука нет» — только когда есть чем мерить и мера нулевая. Без
+      // чисел это был ложный сигнал: на пути Daily их не было вовсе, и
+      // журнал панели копил «звука нет» на разговорах, где звук был.
+      const verdict = !sound ? 'нечем измерить' : sound.energy > 0 ? 'звук доходит' : 'звука нет';
       window.TKAudio.outputs().then((list) => window.TKAudio.send(
-        'Звук в звонке (' + when + '): ' + (sound && sound.energy > 0 ? 'звук доходит' : 'звука нет'),
+        'Звук в звонке (' + when + '): ' + verdict,
         [
           'когда: ' + when + ', тип звонка: ' + (isVideo ? 'с видео' : 'голосом') +
             ', путь: ' + (first.engine === 'own' ? 'свой сервер' : 'Daily') +
@@ -1289,6 +1329,175 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
+
+  // ── Кнопки разговора и переписка в окне ───────────────────────────────
+  //
+  // Микрофон и своя камера гаснут, не разрывая соединения. Это не «Только
+  // голос» рядом: та кнопка гасит видео в обе стороны ради канала, эти —
+  // только своё. Динамик — про айфон: разговор там идёт громкой связью,
+  // и переключить его на разговорный динамик у уха было нечем (жалоба
+  // заказчика, 23.09). Переписка — та же, что на /chatsPage, но текстом:
+  // скрепка, голосовые и кружки остаются на странице переписки.
+
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+
+  // Подпись кнопки — про действие, а не про состояние: микрофон включён —
+  // на кнопке «Выключить микрофон». Нажатое состояние отдельно, в aria.
+  function paintTool(btn, on, keyOn, keyOff) {
+    const key = on ? keyOn : keyOff;
+    btn.setAttribute('aria-pressed', String(on));
+    btn.setAttribute('data-i18n-aria', key);
+    btn.setAttribute('data-i18n-title', key);
+    btn.setAttribute('aria-label', t(key));
+    btn.title = t(key);
+  }
+
+  // Есть ли чем управлять выводом звука. На компьютере это ни к чему:
+  // там динамик один и выбирает его система.
+  function canRoute(s) {
+    return coarse && !!(navigator.audioSession || s.remoteAudio.setSinkId);
+  }
+
+  // Куда вести звук разговора. Айфон решает это по типу звуковой сессии:
+  // 'play-and-record' — разговорный динамик у уха, 'playback' — громкая
+  // связь. Часть сборок Safari сессию не отдаёт, поэтому следом пробуем
+  // выбрать устройство вывода по имени: на телефоне заказчика браузер
+  // показывал их оба — «Speaker, Receiver» (отчёт CallAudio 23.09).
+  function routeAudio(s, loud) {
+    try {
+      if (navigator.audioSession) navigator.audioSession.type = loud ? 'playback' : 'play-and-record';
+    } catch (e) {}
+    const el = s.remoteAudio;
+    if (!el || !el.setSinkId || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    navigator.mediaDevices.enumerateDevices().then((list) => {
+      const outs = list.filter((d) => d.kind === 'audiooutput');
+      const ear = outs.find((d) => /receiver|earpiece/i.test(d.label || ''));
+      const loudspeaker = outs.find((d) => /speaker/i.test(d.label || '')) || outs[0];
+      const pick = loud ? loudspeaker : ear;
+      if (pick) el.setSinkId(pick.deviceId).catch(() => {});
+    }).catch(() => {});
+  }
+
+  // ── Переписка ──
+  // Лента — последняя страница истории (/getMessages), новое приходит
+  // событием сокета, которое tk-app и так раздаёт документу. Вложения и
+  // исчезающие показываем строкой-заменой: открывать их здесь нечем.
+  function chatBubble(m) {
+    const mine = String(m.sender) === String(TK.userId);
+    let text = m.content || '';
+    if (m.limit) text = t('call.chatSealed');
+    else if (!text && (m.attachments || []).length) text = t('call.chatAttachment');
+    const at = new Date(m.sentAt);
+    const time = String(at.getHours()).padStart(2, '0') + ':' + String(at.getMinutes()).padStart(2, '0');
+    return '<div class="tk-callchat__msg' + (mine ? ' tk-callchat__msg--mine' : '') + '">' +
+      '<span>' + escapeHtml(text) + '</span><i>' + time + '</i></div>';
+  }
+
+  function chatEmpty(s) {
+    s.chatFeed.innerHTML = '<p class="tk-callchat__empty">' + escapeHtml(t('call.chatEmpty')) + '</p>';
+  }
+
+  function addChatMessage(s, m) {
+    const empty = s.chatFeed.querySelector('.tk-callchat__empty');
+    if (empty) empty.remove();
+    s.chatFeed.insertAdjacentHTML('beforeend', chatBubble(m));
+    s.chatFeed.scrollTop = s.chatFeed.scrollHeight;
+  }
+
+  // Прочитано: человек читает сообщение в звонке — значок в шапке должен
+  // погаснуть так же, как от страницы переписки. Точное число даёт сервер.
+  function markChatRead(s) {
+    fetch('/messages/read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ peerId: s.peerId }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (window.tkChatBadge && typeof d.unreadMessages === 'number') window.tkChatBadge({ messages: d.unreadMessages });
+      })
+      .catch(() => {});
+  }
+
+  function loadChat(s) {
+    if (s.chatLoaded || !s.peerId) return;
+    s.chatLoaded = true;
+    fetch('/getMessages?recipientId=' + encodeURIComponent(s.peerId))
+      // 404 — переписки ещё не было: это не ошибка, а пустая лента.
+      .then((r) => (r.status === 404 ? { messages: [] } : r.json()))
+      .then((d) => {
+        const list = d.messages || [];
+        if (!list.length) return chatEmpty(s);
+        s.chatFeed.innerHTML = list.map(chatBubble).join('');
+        s.chatFeed.scrollTop = s.chatFeed.scrollHeight;
+        markChatRead(s);
+      })
+      .catch(() => { s.chatLoaded = false; chatEmpty(s); });
+  }
+
+  function sendChat(s) {
+    const content = s.chatInput.value.trim();
+    if (!content || s.chatBusy || !s.peerId) return;
+    s.chatBusy = true;
+    const post = (url, body) => fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const send = () => post('/sendMessage', { recipientId: s.peerId, content });
+    send()
+      // Первое сообщение этому человеку: диалога ещё нет, заводим и шлём снова.
+      .then((r) => (r.status === 404 ? post('/start-conversation', { recipientId: s.peerId }).then(send) : r))
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then((m) => {
+        s.chatInput.value = '';
+        addChatMessage(s, m);
+      })
+      .catch(() => toast(t('call.chatFailed'), 'error'))
+      .then(() => { s.chatBusy = false; });
+  }
+
+  function showChat(s, on) {
+    s.chat.hidden = !on;
+    if (s.card) s.card.classList.toggle('has-chat', on);
+    paintTool(s.chatBtn, on, 'call.chatHide', 'call.chatShow');
+    if (!on) return;
+    loadChat(s);
+    // На телефоне клавиатуру не поднимаем сами: она закрыла бы собеседника.
+    if (!coarse) s.chatInput.focus();
+  }
+
+  [OUT, IN].forEach((s) => {
+    s.micBtn.addEventListener('click', () => {
+      s.micOn = !s.micOn;
+      if (window._call && window._call.setMic) window._call.setMic(s.micOn);
+      paintTool(s.micBtn, !s.micOn, 'call.micOn', 'call.micOff');
+    });
+    s.camBtn.addEventListener('click', () => {
+      s.camOn = !s.camOn;
+      if (window._call && window._call.setCamera) window._call.setCamera(s.camOn);
+      paintTool(s.camBtn, !s.camOn, 'call.camOn', 'call.camOff');
+    });
+    s.spkBtn.addEventListener('click', () => {
+      s.loud = !s.loud;
+      routeAudio(s, s.loud);
+      paintTool(s.spkBtn, s.loud, 'call.speakerOff', 'call.speakerOn');
+    });
+    s.chatBtn.addEventListener('click', () => showChat(s, s.chat.hidden));
+    s.chatForm.addEventListener('submit', (e) => { e.preventDefault(); sendChat(s); });
+  });
+
+  // Пришло сообщение от того, с кем разговариваем, — в открытую ленту.
+  document.addEventListener('tk:message:new', (e) => {
+    const d = e.detail || {};
+    if (!d.message || !d.peer) return;
+    [OUT, IN].forEach((s) => {
+      if (s.chat.hidden || String(s.peerId || '') !== String(d.peer.id)) return;
+      addChatMessage(s, d.message);
+      if (String(d.message.sender) !== String(TK.userId)) markChatRead(s);
+    });
+  });
+
   window.showOutgoingCall = function(opts){
     const displayName = opts && opts.displayName || t('call.user');
     const callType = opts && opts.callType || 'video';
@@ -1297,6 +1506,7 @@ document.addEventListener('DOMContentLoaded', function(){
     tkText(OUT.status, 'call.connecting');
     renderAvatar(outAvatar, opts && opts.avatarUrl || '', displayName);
     resetSide(OUT);
+    OUT.peerId = opts && opts.userId ? String(opts.userId) : '';
     OUT.actions.classList.remove('tk-call__actions--pair');
     tkText(outCancel, 'call.cancel');
     outCancel.classList.remove('tk-btn--mute');
@@ -1330,6 +1540,7 @@ document.addEventListener('DOMContentLoaded', function(){
     }
     renderAvatar(inAvatar, opts && opts.avatarUrl || '', displayName);
     resetSide(IN);
+    IN.peerId = opts && opts.userId ? String(opts.userId) : '';
     tkText(IN.status, 'call.ringing');
     IN.actions.classList.add('tk-call__actions--pair');
     inAccept.disabled = false;

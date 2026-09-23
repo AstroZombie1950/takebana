@@ -7,9 +7,14 @@
 //
 // А сработать лишний раз есть от чего: эфир с OBS оживает при каждом
 // переподключении вещателя, и пауза гасит и зажигает его снова. Поэтому
-// отметка о рассылке живёт в самом эфире (Stream.liveNotifiedAt), а не
-// в памяти процесса: перезапуск сервера не должен давать подписчикам
-// второе «эфир начался».
+// отметка о рассылке живёт в базе, а не в памяти процесса: перезапуск
+// сервера не должен давать подписчикам второе «эфир начался».
+//
+// Отметка стоит на авторе (User.liveNotifiedAt), а не на эфире. В эфире она
+// и стояла до 23.09 — и не работала там, где это важнее всего: завершение
+// эфира удаляет Stream целиком (routes/streaming/streams.js), поэтому
+// ведущий, закончивший и начавший заново, рассылал подписчикам второе
+// «в эфире» через минуту. Автор переживает любое число эфиров.
 //
 // Кому не шлём:
 //   — самому автору;
@@ -19,7 +24,6 @@
 //   — на устройства, где пуши про эфиры выключены (это решает utils/push.js).
 
 const Notification = require('../models/Notification');
-const Stream = require('../models/Stream');
 const Subscription = require('../models/Subscription');
 const User = require('../models/User');
 const errorLog = require('./errorLog');
@@ -38,16 +42,14 @@ async function started(io, stream) {
 
   // Отметку ставим условием запроса, а не после проверки: два потока (OBS
   // и кнопка на сайте) могут прийти в одну секунду, и тогда рассылка уйдёт
-  // дважды. Запись переживёт это только один раз.
+  // дважды. Запись переживёт это только один раз. Тем же запросом берём имя
+  // автора — отдельный findById здесь был лишним обращением к базе.
   const since = new Date(Date.now() - AGAIN_MS);
-  const claimed = await Stream.findOneAndUpdate(
-    { _id: stream._id, $or: [{ liveNotifiedAt: null }, { liveNotifiedAt: { $lt: since } }] },
+  const author = await User.findOneAndUpdate(
+    { _id: stream.userId, $or: [{ liveNotifiedAt: null }, { liveNotifiedAt: { $lt: since } }] },
     { $set: { liveNotifiedAt: new Date() } },
-    { new: false }
+    { new: false, projection: 'nickname login email' }
   ).lean();
-  if (!claimed) return { sent: 0, notified: 0 };
-
-  const author = await User.findById(stream.userId).select('nickname login email').lean();
   if (!author) return { sent: 0, notified: 0 };
   const name = userView.displayName(author);
 

@@ -1126,7 +1126,7 @@
 .tk-limitmenu { width: 270px; }
 .tk-limitmenu__title {
   margin: 0;
-  padding: 10px 14px 6px;
+  padding: 9px 14px 5px;
   font-family: Oswald, sans-serif;
   font-size: 12px;
   letter-spacing: .12em;
@@ -1154,6 +1154,43 @@
 
 .tk-limitmenu__sec button { padding-block: 8px; }
 
+/* Внутри разделов — клетки, а не строки. Восемь строк подряд занимали
+ * на телефоне пол-экрана (правка 23.09): просмотров три, они встают в ряд,
+ * времени четыре — сеткой 2×2. Метка выбранного здесь не точкой, а рамкой:
+ * в клетке с коротким «1 час» точка сбоку смотрелась случайной. */
+.tk-limitmenu__sec--count,
+.tk-limitmenu__sec--time {
+  display: grid;
+  gap: 5px;
+  padding: 0 10px 9px;
+}
+
+.tk-limitmenu__sec--count { grid-template-columns: repeat(3, 1fr); }
+.tk-limitmenu__sec--time { grid-template-columns: repeat(2, 1fr); }
+
+.tk-limitmenu__sec--count .tk-limitmenu__group,
+.tk-limitmenu__sec--time .tk-limitmenu__group {
+  grid-column: 1 / -1;
+  padding: 8px 6px 0;
+}
+
+.tk-limitmenu__sec--count button,
+.tk-limitmenu__sec--time button {
+  padding: 8px 4px;
+  text-align: center;
+  border: 1px solid var(--tk-rule);
+  font-size: 13px;
+}
+
+.tk-limitmenu__sec--count button::before,
+.tk-limitmenu__sec--time button::before { display: none; }
+
+.tk-limitmenu__sec--count [aria-checked="true"],
+.tk-limitmenu__sec--time [aria-checked="true"] {
+  border-color: var(--tk-accent);
+  background: rgba(227, 66, 52, .12);
+}
+
 /* Метка выбранного стоит у всех строк, у невыбранных — пустая: иначе
  * подписи прыгали бы вбок при переключении. */
 .tk-limitmenu button::before {
@@ -1171,7 +1208,7 @@
 
 .tk-limitmenu__hint {
   margin: 0;
-  padding: 8px 14px 12px;
+  padding: 8px 14px 10px;
   border-top: 1px solid var(--tk-rule);
   font-size: 12px;
   line-height: 1.4;
@@ -1262,6 +1299,11 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   .tk-chat__compose .tk-chat__tool { width: 32px; }
   .tk-chat__media { gap: 4px; }
   .tk-chat__compose .tk-field { padding: 12px; }
+  /* Гнездо микрофона и стрелки отодвинуто от поля: четырёх точек зазора
+   * на узком экране не видно вовсе, стрелка упиралась в рамку поля
+   * (проверка 23.09). Отступ снаружи гнезда — ширина самой кнопки не
+   * меняется, поле отдаёт эти точки из своей доли. */
+  .tk-chat__acts { margin-left: 5px; }
   .tk-rec { gap: 8px; }
 
   /* Запись кружка: подписи не влезали в ширину — остаются значки. */

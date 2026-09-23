@@ -1254,10 +1254,141 @@ body.tk-app {
 .tk-call__stage { margin: 14px 0; }
 .tk-call__stage:not(.hidden) { flex: 1; min-height: 0; }
 
+/* Кнопки разговора: микрофон, своя камера, динамик, переписка (23.09).
+ * Значками в ряд — подписями семь действий в окно не помещались. */
+.tk-call__tools {
+  margin-top: auto;
+  padding-top: 18px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.tk-call__tools[hidden] { display: none; }
+
+.tk-call__tool {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(10, 10, 10, .72);
+  border: 1px solid var(--tk-rule);
+  color: var(--tk-beige);
+  cursor: pointer;
+}
+
+.tk-call__tool:hover { color: var(--tk-paper); border-color: var(--tk-beige); }
+.tk-call__tool[hidden] { display: none; }
+
+/* Нажато — значит выключено (микрофон, камера) или открыто (переписка,
+ * громкая связь): и то и другое состояние, о котором стоит помнить. */
+.tk-call__tool[aria-pressed="true"] {
+  color: var(--tk-paper);
+  border-color: var(--tk-accent);
+  background: rgba(227, 66, 52, .22);
+}
+
+/* Ряд кнопок забрал отступ сверху себе — «Завершить» встаёт сразу под ним. */
+.tk-call__tools:not([hidden]) + .tk-call__actions { margin-top: 0; padding-top: 12px; }
+
 .tk-call__actions {
   margin-top: auto;
   padding-top: 18px;
 }
+
+/* ── Переписка внутри разговора ── */
+/* На компьютере — столбец справа: места хватает, и картинка остаётся
+ * на виду. Окно при этом становится шире (карточка — сетка в две
+ * колонки, шапка тянется на обе). */
+.tk-callchat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--tk-rule);
+}
+
+.tk-callchat[hidden] { display: none; }
+
+.tk-modal__card--call.has-chat {
+  max-width: 1040px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-rows: auto minmax(0, 1fr);
+  /* Высоту окно обычно берёт от картинки; в голосовом звонке картинки нет,
+   * и открытая переписка получила бы полоску в три строки. */
+  height: min(760px, calc(100dvh - 48px - var(--tk-safe-t) - var(--tk-safe-b)));
+}
+
+.tk-modal__card--call.has-chat .tk-modal__head { grid-column: 1 / -1; }
+
+.tk-callchat__feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tk-callchat__empty {
+  margin: auto;
+  font-size: 13px;
+  color: var(--tk-muted);
+  text-align: center;
+}
+
+.tk-callchat__msg {
+  max-width: 86%;
+  align-self: flex-start;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, .06);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--tk-beige);
+  overflow-wrap: anywhere;
+}
+
+.tk-callchat__msg--mine {
+  align-self: flex-end;
+  background: rgba(227, 66, 52, .16);
+  color: var(--tk-paper);
+}
+
+.tk-callchat__msg i {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-style: normal;
+  color: var(--tk-muted);
+}
+
+.tk-callchat__form {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--tk-rule);
+}
+
+.tk-callchat__form .tk-field { flex: 1; min-width: 0; padding: 10px 12px; }
+
+.tk-callchat__send {
+  width: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  cursor: pointer;
+}
+
+.tk-callchat__send:hover { background: var(--tk-paper); }
 
 .tk-call__actions--pair {
   display: grid;
@@ -1637,6 +1768,55 @@ body.tk-app {
 
   /* Своя картинка — над кнопками, а не под ними. */
   .pip-local { bottom: calc(96px + var(--tk-safe-b)); right: 12px; }
+
+  /* Кнопки разговора (23.09) — полосой над «Завершить», поверх картинки.
+   * Своя картинка поднимается ещё выше, иначе легла бы прямо на них. */
+  .tk-modal__card--call { position: relative; }
+
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__tools,
+  .tk-modal__card--call.has-chat .tk-call__tools {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: calc(74px + var(--tk-safe-b));
+    z-index: 3;
+    margin: 0;
+    padding: 0;
+  }
+
+  .tk-modal__card--call:has(.tk-call__tools:not([hidden])) .pip-local {
+    bottom: calc(146px + var(--tk-safe-b));
+  }
+
+  /* Переписка на телефоне — снизу, как и просили: шторкой над кнопками,
+   * картинка собеседника остаётся видна над ней. Столбца справа тут быть
+   * не может — окно во весь экран шириной с телефон. */
+  .tk-modal__card--call.has-chat {
+    max-width: none;
+    display: flex;
+  }
+
+  .tk-modal__card--call.has-chat .tk-call__actions {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: calc(24px + var(--tk-safe-b));
+    z-index: 3;
+    margin: 0;
+    padding: 0;
+  }
+
+  .tk-callchat {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(126px + var(--tk-safe-b));
+    z-index: 2;
+    height: 46%;
+    border-left: 0;
+    border-top: 1px solid var(--tk-rule);
+    background: var(--tk-ink);
+  }
 }
 
 /* Телефон боком: кнопки звонка не растягиваем на всю длинную сторону —

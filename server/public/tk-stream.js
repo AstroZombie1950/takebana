@@ -190,8 +190,11 @@
     b.title = t(key);
   }
 
-  // Чат поверх картинки во весь экран — на телефоне по кнопке: картинка
-  // должна быть видна целиком, а чат закрывал бы и её, и кнопки плеера.
+  // Чат во весь экран — по кнопке. На телефоне он лежит поверх картинки,
+  // поэтому там начинаем с закрытого; на компьютере это столбец справа,
+  // и начинаем с открытого, как было до появления кнопки (23.09).
+  var narrow = window.matchMedia('(max-width: 1023px)');
+
   function markChat(on) {
     stage.classList.toggle('chat-open', on);
     chatButtons.forEach(function (b) { label(b, on, 'stream.chatHide', 'stream.chatShow'); });
@@ -200,7 +203,7 @@
 
   function markFull(on) {
     stage.classList.toggle('is-full', on);
-    if (!on) markChat(false);
+    markChat(on && !narrow.matches);
     document.documentElement.classList.toggle('tk-stage-open', on);
     fsButtons.forEach(function (b) { label(b, on, 'stream.exitFullscreen', 'stream.fullscreen'); });
     toNewest();

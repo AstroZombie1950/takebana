@@ -224,14 +224,54 @@
       setTimeout(function () { if (!closed && !diag.joined) trouble('за ' + sec(JOIN_MS) + ' не вошли в комнату'); }, JOIN_MS);
     }
 
+    // ── Слышно ли собеседника ──
+    // У Daily своей статистики соединения нам не видно, и отчёт о звуке
+    // (public/tk-audio.js) на этом пути всегда писал «звука нет» — пять
+    // таких записей в журнале панели за один вечер проверок 23.09, притом
+    // что звук был. Daily умеет говорить уровень входящего звука сам;
+    // копим его: любой уровень выше нуля значит, что звук дошёл и
+    // декодировался, а дальше дело в маршруте вывода на устройстве.
+    var heard = null;
+    function level(map) {
+      var top = 0;
+      Object.keys(map || {}).forEach(function (id) {
+        var v = Number(map[id]);
+        if (v > top) top = v;
+      });
+      var was = heard ? heard.energy : 0;
+      // grew — это «сколько звука прямо сейчас» в той же мерке, что у своего
+      // пути (public/tk-peer.js): там это прирост энергии за три секунды,
+      // и полный голос — сотые доли. Полоска уровня в окне звонка считает
+      // ширину по ней, поэтому уровень Daily (0…1) приводим к той же мерке,
+      // иначе полоска стояла бы упёртой в край при любом шорохе.
+      heard = { level: top, energy: was + top, grew: top * 0.02, route: 'Daily' };
+      emit('onAudio', heard);
+    }
+
+    // Микрофон — свою дорожку отдаёт сам Daily; отчёту нужны её настройки.
+    function mic() {
+      if (!call) return null;
+      var local = (call.participants() || {}).local;
+      var track = local && local.tracks && local.tracks.audio;
+      return (track && (track.persistentTrack || track.track)) || null;
+    }
+
     function subscribe(c, sessionId) {
       c.updateParticipant(sessionId, {
         setSubscribedTracks: { audio: true, video: !voiceOnly, screenVideo: false }
       });
     }
 
+    // Своя камера выключена кнопкой в окне звонка — это не то же, что
+    // «Только голос»: там видео гаснет в обе стороны ради канала, здесь
+    // гаснет только своё. Флаг учитывается везде, где решается судьба
+    // камеры, иначе «Только голос» туда-обратно включал бы её заново.
+    var camOff = false;
+
+    function wantCamera() { return !!opts.video && !voiceOnly && !camOff; }
+
     function applyVoiceOnly(c) {
-      if (opts.send) c.setLocalVideo(!!opts.video && !voiceOnly);
+      if (opts.send) c.setLocalVideo(wantCamera());
       if (!manual) {
         manual = true;
         c.setSubscribeToTracksAutomatically(false);
@@ -307,6 +347,7 @@
         }));
         c.on('participant-left', mine(peers));
         c.on('network-quality-change', mine(function (e) { emit('onNetwork', netState(e)); }));
+        c.on('remote-participants-audio-level', mine(function (e) { level(e && e.participantsAudioLevel); }));
         // Камеры или микрофона нет, либо доступ запрещён: во встречу Daily
         // всё равно пускает, но без картинки — сказать об этом должен сайт.
         c.on('camera-error', mine(function (e) { emit('onMediaError', e); }));
@@ -328,6 +369,10 @@
           // Событие о сети Daily шлёт только при смене оценки: при хорошей
           // сети с первой секунды его не будет вовсе. Начальную берём сами.
           c.getNetworkStats().then(mine(function (s) { emit('onNetwork', netState(s)); })).catch(noop);
+          // Уровень звука собеседника — раз в полсекунды. Для картинки
+          // уровня в окне звонка этого хватает, а нагрузки на кадр нет:
+          // считает сам Daily, мы только читаем число.
+          try { c.startRemoteParticipantsAudioLevelObserver(500); } catch (e) {}
         }).catch(function (e) {
           // Тот же сбой Daily шлёт и событием error: оно уже сняло объект
           // и назначило повтор. Второй повтор поверх первого создавал второй
@@ -343,6 +388,15 @@
 
     return {
       get call() { return call; },
+      // Те же имена, что у своего пути (public/tk-peer.js): окно звонка
+      // и отчёт о звуке не должны знать, каким путём идёт разговор.
+      sound: function () { return heard; },
+      mic: mic,
+      setMic: function (on) { if (call) call.setLocalAudio(!!on); },
+      setCamera: function (on) {
+        camOff = !on;
+        if (call && call.meetingState() === 'joined-meeting') call.setLocalVideo(wantCamera());
+      },
       // Застрял ли Daily у этой стороны (onStuck уже вызван).
       get stuck() { return !!(diag && diag.stuck); },
       // Видео в звонке. Выключено — только голос: своя камера гаснет, чужое

@@ -223,6 +223,7 @@ const EN = {
     'Категория': 'Category',
     'Ключ трансляции': 'Stream key',
     'Вертикальная камера': 'Vertical camera',
+    'Кадр': 'Frame',
     'Звонки': 'Calls',
     'Комментарий': 'Comment',
     'Контент 18+': '18+ content',

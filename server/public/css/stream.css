@@ -177,7 +177,7 @@
 }
 
 .tk-live__fs:hover { color: var(--tk-paper); border-color: var(--tk-beige); }
-/* Кнопка чата — только во весь экран на телефоне, левее кнопки экрана. */
+/* Кнопка чата — только во весь экран, левее кнопки экрана. */
 .tk-live__chatbtn { display: none; right: 58px; }
 .tk-live__chatbtn[aria-pressed="true"] { color: var(--tk-paper); border-color: var(--tk-accent); }
 .tk-live__fs-off,
@@ -637,6 +637,16 @@ html.tk-stage-open { overflow: hidden; }
 
 .is-full .tk-live__chat-head { display: none; }
 
+/* Чат во весь экран убирается кнопкой — и на компьютере тоже (23.09).
+ * Раньше кнопка была только на телефоне, а на компьютере столбец чата
+ * висел всегда: картинке оставалось 360 пикселей меньше, и деть их было
+ * некуда. Разница между устройствами осталась в том, с чего начинаем:
+ * на компьютере чат открыт (место есть), на телефоне закрыт — там он
+ * лежит поверх картинки (tk-stream.js, markFull). */
+.is-full .tk-live__chatbtn { display: flex; }
+.is-full:not(.chat-open) .tk-live__chat { display: none; }
+.tk-live__grid.is-full:not(.chat-open) { grid-template-columns: minmax(0, 1fr); }
+
 /* ── Телефон и планшет ────────────────────────────────────────────────── */
 @media (max-width: 1023px) {
   /* Шапка сайта на эфире не нужна: картинке и чату важен каждый пиксель.
@@ -751,8 +761,6 @@ html.tk-stage-open { overflow: hidden; }
   }
 
   .is-full .tk-live__fs { top: calc(10px + var(--tk-safe-t)); }
-  .is-full .tk-live__chatbtn { display: flex; }
-  .is-full:not(.chat-open) .tk-live__chat { display: none; }
 
   /* Метки — столбиком в левом углу: справа кнопки экрана и чата. */
   .is-full .tk-live__badges {

@@ -88,15 +88,20 @@
     }).catch(function () { return ['устройства вывода: не спросить']; });
   }
 
-  // Статистика входящего звука, как её отдаёт соединение (tk-peer.js).
+  // Статистика входящего звука: со своего пути её отдаёт соединение
+  // (tk-peer.js), с пути Daily — наблюдатель уровня (tk-daily.js). Полей
+  // у них разное число, поэтому печатаем то, что есть: пустое «пакетов 0,
+  // потеряно 0» в отчёте о звонке через Daily только путало.
   function heard(stats) {
-    if (!stats) return ['звук собеседника: статистики нет (разговор через Daily)'];
+    if (!stats) return ['звук собеседника: нечем измерить'];
+    var parts = [];
+    if (stats.energy != null) parts.push('энергия ' + stats.energy.toFixed(4));
+    if (stats.level != null) parts.push('уровень ' + stats.level.toFixed(3));
+    if (stats.packets != null) parts.push('пакетов ' + stats.packets);
+    if (stats.lost != null) parts.push('потеряно ' + stats.lost);
+    if (stats.jitter != null) parts.push('дрожание ' + stats.jitter.toFixed(3));
     return [
-      'звук собеседника: энергия ' + (stats.energy != null ? stats.energy.toFixed(4) : '?') +
-        ', уровень ' + (stats.level != null ? stats.level.toFixed(3) : '?') +
-        ', пакетов ' + (stats.packets || 0) +
-        ', потеряно ' + (stats.lost || 0) +
-        ', дрожание ' + (stats.jitter != null ? stats.jitter.toFixed(3) : '?'),
+      'звук собеседника: ' + (parts.length ? parts.join(', ') : 'нет чисел'),
       'путь: ' + (stats.route || '?'),
     ];
   }

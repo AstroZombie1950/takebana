@@ -32,12 +32,24 @@
       return function () { subs = subs.filter(function (x) { return x !== fn; }); };
     };
 
+    // Микрофон и камеру можно выключить кнопкой в окне звонка, не разрывая
+    // соединения: дорожка остаётся, но молчит (mic) или шлёт чёрный кадр
+    // (camera). Выбор запоминается: камера могла ещё не подняться к моменту
+    // нажатия, и тогда он применится к ней при захвате.
+    self.off = { mic: false, camera: false };
+    self.setEnabled = function (kind, on) {
+      self.off[kind] = !on;
+      var track = kind === 'mic' ? self.mic : self.camera;
+      if (track) track.enabled = !!on;
+    };
+
     self.startMic = function (onError) {
       if (self.mic || self.micAsked) return;
       self.micAsked = true;
       navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
         if (self.closed) { s.getTracks().forEach(function (t) { t.stop(); }); return; }
         self.mic = s.getAudioTracks()[0];
+        self.mic.enabled = !self.off.mic;
         tell();
       }).catch(function (e) { if (onError) onError(e); });
     };
@@ -50,6 +62,7 @@
         var track = s.getVideoTracks()[0];
         if (self.closed || self.voiceOnly) { track.stop(); return; }
         self.camera = track;
+        self.camera.enabled = !self.off.camera;
         tell();
       }).catch(function (e) {
         starting = false;
@@ -451,6 +464,11 @@
       // Для отчёта о звуке (public/tk-audio.js): что пришло по сети и как.
       sound: function () { return heard; },
       mic: function () { return own.mic; },
+      // Свой микрофон и своя камера — кнопками в окне звонка. Это не то же,
+      // что «Только голос» ниже: там гаснет видео в обе стороны ради канала,
+      // здесь — только своё, собеседника по-прежнему видно и слышно.
+      setMic: function (on) { own.setEnabled('mic', on); },
+      setCamera: function (on) { own.setEnabled('camera', on); },
       // Как у Daily: выключено — только голос, своя камера гаснет и чужое
       // видео не принимается (собеседник перестаёт его слать).
       setVideo: function (on) {
@@ -564,6 +582,8 @@
           .sort(function (a, b) { return b.energy - a.energy; })[0] || null;
       },
       mic: function () { return own.mic; },
+      setMic: function (on) { own.setEnabled('mic', on); },
+      setCamera: function (on) { own.setEnabled('camera', on); },
       // Сигнал от участника — его же соединению.
       signal: function (from, data) { if (links[from]) links[from].signal(data); },
       setVideo: function (on) {

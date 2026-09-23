@@ -144,6 +144,10 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
 router.post('/set-active', requireAuth, requireNotBanned, validate({
   streamKey: { type: 'key', required: true, label: 'Ключ трансляции' },
   portrait: { type: 'bool', label: 'Вертикальная камера' },
+  // Чем пульт решил ориентацию: «720x1280 preview», «1280x720 track»,
+  // «screen». Ни на что не влияет, но без этой строки разбирать жалобу
+  // на полосы в кадре нечем — ровно это случилось 23.09.
+  frame: { type: 'string', max: 40, label: 'Кадр' },
 }), async (req, res) => {
   const { streamKey } = req.body;
 
@@ -192,7 +196,7 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
   // Отрезок эфира в журнале: сам Stream после завершения удаляется, и без
   // этой записи «сколько человек отвещал» посчитать было бы не из чего.
   await streamLog.open(stream);
-  audit(req, 'stream.live', { targetType: 'stream', target: stream, meta: { source: stream.streamProvider === 'obs' ? 'obs' : 'web' } });
+  audit(req, 'stream.live', { targetType: 'stream', target: stream, meta: { source: stream.streamProvider === 'obs' ? 'obs' : 'web', portrait: !!stream.portrait, frame: req.body.frame || '' } });
 
   // notify viewers (e.g. WEB stream started -> reconnect)
   try {
