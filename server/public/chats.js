@@ -1,5 +1,5 @@
-/* Переписка: вкладки «Сообщения» и «Звонки», лента со звонками между
- * сообщениями, отправка, вложения и голосовые, пересылка, удаление,
+/* Переписка: вкладки «Сообщения», «Звонки» и «Контакты», лента со звонками
+ * между сообщениями, отправка, вложения и голосовые, пересылка, удаление,
  * статусы «доставлено» и «прочитано».
  *
  * Новое приходит сокетом: tk-app.js пересылает события сервера в document
@@ -355,6 +355,9 @@
       : out && c.status === 'missed' ? 'calls.noAnswer'
       : '';
     var parts = [t((out ? 'calls.out.' : 'calls.in.') + c.type)];
+    // Разговор был групповым — сколько всего народу в нём побывало
+    // (models/Call.js, participants).
+    if (c.group) parts.push(t('calls.group', { n: c.people || 3 }));
     if (outcome) parts.push(t(outcome));
     if (c.duration) parts.push(Math.floor(c.duration / 60) + ':' + String(c.duration % 60).padStart(2, '0'));
     return { out: out, missed: missed, text: parts.join(' · ') };
@@ -457,6 +460,10 @@
     if (who && rec) cancelVoice();
     form.hidden = !!who;
     note.hidden = !who;
+    // Ограничение закрывает и звонки, в обе стороны (utils/restrict.js):
+    // кнопки в шапке диалога незачем показывать.
+    $('callAudio').hidden = !!who;
+    $('callVideo').hidden = !!who;
     if (who) say(note, who === 'me' ? 'chats.blockedMe' : 'chats.blockedThem');
   }
 
@@ -584,7 +591,8 @@
 
   list.addEventListener('click', function (e) {
     var el = e.target.closest('.tk-dialog');
-    if (el) select(el);
+    // Клик, которым кончилось удержание: им открыли меню строки, а не диалог.
+    if (el && !longPressed) select(el);
   });
 
   // ── Недавние ──────────────────────────────────────────────────────────
@@ -1848,17 +1856,25 @@
 
   function setTab(name) {
     var onCalls = name === 'calls';
-    $('tabMessages').setAttribute('aria-selected', String(!onCalls));
+    var onContacts = name === 'contacts';
+    $('tabMessages').setAttribute('aria-selected', String(!onCalls && !onContacts));
     $('tabCalls').setAttribute('aria-selected', String(onCalls));
-    list.hidden = onCalls;
+    $('tabContacts').setAttribute('aria-selected', String(onContacts));
+    list.hidden = onCalls || onContacts;
     callsList.hidden = !onCalls;
-    // Лента недавних — часть списка диалогов: на журнале звонков ей не место.
-    recentBox.hidden = onCalls || !recentRow.children.length;
+    contactsPane.hidden = !onContacts;
+    // Лента недавних — часть списка диалогов: на других вкладках ей не место.
+    recentBox.hidden = onCalls || onContacts || !recentRow.children.length;
     var q = new URLSearchParams(location.search);
-    if (onCalls) q.set('tab', 'calls'); else q.delete('tab');
+    if (onCalls) q.set('tab', 'calls');
+    else if (onContacts) q.set('tab', 'contacts');
+    else q.delete('tab');
     var qs = q.toString();
     history.replaceState(null, '', '/chatsPage' + (qs ? '?' + qs : ''));
     if (onCalls && journalStale) loadJournal();
+    // Подсказки «кого записать первым» считаются по всей переписке —
+    // просим их только на открытой вкладке.
+    if (onContacts) loadContacts(true);
   }
 
   document.querySelector('.tk-chat__tabs').addEventListener('click', function (e) {
@@ -1867,6 +1883,159 @@
     e.preventDefault();
     setTab(tab.getAttribute('data-tab'));
   });
+
+
+  // ── Контакты ──────────────────────────────────────────────────────────
+  // Личная записная книжка (models/Contact.js, routes/contacts.js): список
+  // односторонний и пополняется только руками (решение 23.09). Лента
+  // «недавние» над диалогами — другое: там «кто под рукой сейчас», здесь —
+  // «кого я записал».
+  //
+  // Список нужен не только своей вкладке: по нему меню человека решает,
+  // показывать «В контакты» или «Убрать из контактов», — поэтому он
+  // загружается при открытии страницы, а подсказки (их считают по всей
+  // переписке) просятся отдельно, только когда вкладку открыли.
+  var contactsPane = $('contactsPane');
+  var contactsList = $('contactsList');
+  var contactSearch = $('contactSearch');
+  var contacts = [];        // записанные, в том же виде, что строки диалогов
+  var suggest = [];         // с кем общаемся чаще всего — для пустой вкладки
+  var contactsReady = false;
+
+  function isContact(id) {
+    return contacts.find(function (c) { return c.id === String(id); }) || null;
+  }
+
+  // Человек с сервера ({ id, displayName, avatarStyle, … }) — в тот же вид,
+  // что отдаёт peerOf: одна отрисовка на диалоги, контакты и подсказки.
+  function asPeer(u) {
+    var a = u.avatarStyle || {};
+    return {
+      id: String(u.id), name: u.displayName,
+      url: a.url || '', bg: a.gradient || '', initial: a.initial || '',
+      favorite: !!u.favorite, online: !!u.isOnline
+    };
+  }
+
+  // Избранные сверху, дальше по алфавиту — так же, как сортирует сервер.
+  function sortContacts() {
+    contacts.sort(function (a, b) {
+      if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
+      return a.name.localeCompare(b.name, [uiLang(), 'ru', 'en'], { sensitivity: 'base' });
+    });
+  }
+
+  var STAR = '<svg class="tk-contact__star" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"></path></svg>';
+
+  function contactRow(c, asSuggest) {
+    var acts = asSuggest
+      ? '<button type="button" class="tk-contact__add" data-add="' + escapeHtml(c.id) + '">' + escapeHtml(t('contacts.add')) + '</button>'
+      : ['audio', 'video'].map(function (type) {
+          var key = type === 'audio' ? 'calls.audio' : 'calls.video';
+          return '<button type="button" class="tk-contact__btn" data-call="' + type + '" aria-label="' + escapeHtml(t(key)) + '" title="' + escapeHtml(t(key)) + '">' +
+            '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true">' +
+            (type === 'audio' ? PHONE : CAMERA) + '</svg></button>';
+        }).join('');
+
+    return '<div class="tk-contact" data-id="' + escapeHtml(c.id) + '" data-name="' + escapeHtml(c.name) + '"' +
+      ' data-ava-url="' + escapeHtml(c.url) + '" data-ava-bg="' + escapeHtml(c.bg) + '" data-ava-initial="' + escapeHtml(c.initial) + '"' +
+      ' data-presence-user="' + escapeHtml(c.id) + '">' +
+      '<button type="button" class="tk-contact__main" data-open>' +
+        avatar('tk-contact__ava', c, ' data-slot="ava"') +
+        '<span class="tk-contact__body">' +
+          '<span class="tk-contact__name">' + (c.favorite ? STAR : '') + escapeHtml(c.name) + '</span>' +
+        '</span>' +
+      '</button>' + acts + '</div>';
+  }
+
+  function renderContacts() {
+    if (!contactsReady) return;
+    var q = contactSearch.value.trim().toLowerCase();
+    var rows = q ? contacts.filter(function (c) { return c.name.toLowerCase().indexOf(q) !== -1; }) : contacts;
+    var html;
+    if (rows.length) {
+      html = rows.map(function (c) { return contactRow(c, false); }).join('');
+    } else if (q) {
+      html = '<p class="tk-note tk-chat__empty-list">' + escapeHtml(t('contacts.nothing')) + '</p>';
+    } else {
+      // Пустая вкладка не пустая: подсказываем, кого записать первым.
+      html = '<p class="tk-note tk-chat__empty-list">' + escapeHtml(t('contacts.empty')) + '</p>';
+      if (suggest.length) {
+        html += '<p class="tk-contacts__hint">' + escapeHtml(t('contacts.suggest')) + '</p>' +
+          suggest.map(function (c) { return contactRow(c, true); }).join('');
+      }
+    }
+    contactsList.innerHTML = html;
+    // Точки присутствия ставит tk-app.js по data-presence-user; начальное
+    // состояние знает сервер и прислал вместе со списком.
+    contactsList.querySelectorAll('.tk-contact').forEach(function (el) {
+      var c = (isContact(el.getAttribute('data-id')) || suggest.find(function (s) { return s.id === el.getAttribute('data-id'); })) || {};
+      el.querySelector('[data-slot="ava"]').insertAdjacentHTML('beforeend',
+        '<span class="presence-dot ' + (c.online ? 'presence-online' : 'presence-offline') + '"></span>');
+    });
+  }
+
+  function loadContacts(withSuggest) {
+    return fetch('/api/contacts' + (withSuggest ? '?suggest=1' : ''))
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (data) {
+        contacts = (data.contacts || []).map(asPeer);
+        suggest = (data.suggest || []).map(asPeer);
+        contactsReady = true;
+        sortContacts();
+        renderContacts();
+        if (window.subscribePresence) {
+          window.subscribePresence(contacts.concat(suggest).map(function (c) { return c.id; }));
+        }
+      })
+      .catch(function (e) { console.error('contacts:', e); });
+  }
+
+  function addContact(p, source) {
+    post('/api/contacts/add', { peerId: p.id, source: source || 'profile' })
+      .then(function (r) {
+        var c = asPeer(r.contact);
+        if (!isContact(c.id)) contacts.push(c);
+        suggest = suggest.filter(function (s) { return s.id !== c.id; });
+        sortContacts();
+        renderContacts();
+        toast(t('contacts.added', { name: c.name }), 'ok');
+      })
+      .catch(function (e) { toast(t('contacts.addFailed') + ': ' + e.message, 'error'); });
+  }
+
+  function removeContact(p) {
+    confirmDialog(t('contacts.removeQ', { name: p.name }), { okText: t('contacts.remove') }).then(function (yes) {
+      if (!yes) return;
+      return post('/api/contacts/remove', { peerId: p.id }).then(function () {
+        contacts = contacts.filter(function (c) { return c.id !== p.id; });
+        renderContacts();
+      });
+    }).catch(function (e) { toast(t('contacts.addFailed') + ': ' + e.message, 'error'); });
+  }
+
+  function setFavorite(p, on) {
+    post('/api/contacts/favorite', { peerId: p.id, on: on })
+      .then(function () {
+        var c = isContact(p.id);
+        if (c) c.favorite = on;
+        sortContacts();
+        renderContacts();
+      })
+      .catch(function (e) { toast(t('contacts.addFailed') + ': ' + e.message, 'error'); });
+  }
+
+  contactsList.addEventListener('click', function (e) {
+    var row = e.target.closest('.tk-contact');
+    if (!row || longPressed) return;
+    var p = peerOf(row);
+    var call = e.target.closest('[data-call]');
+    if (call) return callPeer(p, call.getAttribute('data-call'));
+    if (e.target.closest('[data-add]')) return addContact(p, 'recent');
+    openPeer({ id: p.id, displayName: p.name, avatarStyle: { url: p.url, gradient: p.bg, initial: p.initial } });
+  });
+
+  contactSearch.addEventListener('input', renderContacts);
 
   // ── Журнал звонков ────────────────────────────────────────────────────
   // Открыли — пропущенные увидены: сервер гасит их у себя, здесь гаснут
@@ -1939,17 +2108,8 @@
         if (!yes) return;
         return post('/api/calls/delete', { ids: [gone.id] }).then(afterCallsDeleted.bind(null, [gone.id]));
       }).catch(function (err) { toast(t('calls.deleteFailed') + ': ' + err.message, 'error'); });
-    } else if (call && window.showOutgoingCall) {
-      var c = journal[Number(call.getAttribute('data-row'))];
-      var type = call.getAttribute('data-call');
-      window.showOutgoingCall({
-        userId: c.peer.id,
-        displayName: c.peer.displayName,
-        avatarUrl: (c.peer.avatarStyle || {}).url || '',
-        callType: type
-      });
-      if (type === 'audio') window.startAudioCall(c.peer.id);
-      else window.startVideoCall(c.peer.id);
+    } else if (call) {
+      callPeer(journalPeer(journal[Number(call.getAttribute('data-row'))]), call.getAttribute('data-call'));
     } else if (open) {
       openPeer(journal[Number(open.getAttribute('data-open'))].peer);
     }
@@ -2019,12 +2179,19 @@
     var target = el.querySelector('.tk-msg__bubble') || el;
     var r = target.getBoundingClientRect();
     var w = menu.offsetWidth;
-    var h = menu.offsetHeight;
-    var left = el.classList.contains('tk-msg--out') ? r.right - w : el.classList.contains('tk-callnote') ? r.left + (r.width - w) / 2 : r.left;
-    var top = r.bottom + 6 + h > innerHeight - safe('b') ? r.top - h - 6 : r.bottom + 6;
-    menu.style.left = Math.max(8 + safe('l'), Math.min(left, innerWidth - safe('r') - w - 8)) + 'px';
-    menu.style.top = Math.max(8 + safe('t'), Math.min(top, innerHeight - safe('b') - h - 8)) + 'px';
+    placeMenu(menu, r, el.classList.contains('tk-msg--out') ? r.right - w : el.classList.contains('tk-callnote') ? r.left + (r.width - w) / 2 : r.left);
     menu.querySelector('button:not([hidden])').focus();
+  }
+
+  // Меню кладём под целью, а если там не помещается — над ней, и не даём
+  // заехать под системные панели (--tk-safe-*). Одна кладка на два меню:
+  // сообщения в ленте и строки диалога в списке.
+  function placeMenu(el, r, left) {
+    var w = el.offsetWidth;
+    var h = el.offsetHeight;
+    var top = r.bottom + 6 + h > innerHeight - safe('b') ? r.top - h - 6 : r.bottom + 6;
+    el.style.left = Math.max(8 + safe('l'), Math.min(left, innerWidth - safe('r') - w - 8)) + 'px';
+    el.style.top = Math.max(8 + safe('t'), Math.min(top, innerHeight - safe('b') - h - 8)) + 'px';
   }
 
   function closeMenu() {
@@ -2268,9 +2435,8 @@
     if (window.tkChatBadge) window.tkChatBadge({ calls: r.missed || 0 });
   }
 
-  $('deleteChat').addEventListener('click', function () {
-    if (!peer) return;
-    var p = peer;
+  // p — как отдаёт peerOf: { id, name, url, … }.
+  function deleteConversation(p) {
     chooseDialog(t('chats.deleteChatQ', { name: p.name }), [
       { value: 'me', text: t('chats.deleteForMe'), danger: false },
       { value: 'all', text: t('chats.deleteChatForAll') }
@@ -2278,8 +2444,123 @@
       if (!v) return;
       return post('/conversations/delete', { peerId: p.id, forAll: v === 'all' });
     }).catch(function (e) { toast(t('chats.deleteFailed') + ': ' + e.message, 'error'); });
+  }
+
+  // ── Звонок собеседнику ────────────────────────────────────────────────
+  // Одно место на три вызова: кнопки в шапке диалога, строка журнала
+  // и меню строки диалога. Окна звонка — общие для всего кабинета
+  // (public/tk-app.js), здесь только заявка.
+  function callPeer(p, type) {
+    if (!p || !window.showOutgoingCall) return;
+    window.showOutgoingCall({ userId: p.id, displayName: p.name, avatarUrl: p.url || '', callType: type });
+    if (type === 'audio') window.startAudioCall(p.id);
+    else window.startVideoCall(p.id);
+  }
+
+  ['audio', 'video'].forEach(function (type) {
+    $(type === 'audio' ? 'callAudio' : 'callVideo').addEventListener('click', function () {
+      if (peer) callPeer(peer, type);
+    });
   });
 
+  // ── Меню человека ─────────────────────────────────────────────────────
+  // Одно меню на три списка: строка диалога, строка контакта, строка журнала
+  // звонков. Открывается правым кликом, на телефоне — удержанием. Пункты,
+  // уместные не везде, помечены data-in (разметка chatsPage.ejs): удалить
+  // переписку можно только из списка диалогов, избранное — только в контактах.
+  //
+  // «Пожаловаться» дальше ведёт общее окно жалобы (public/report.js): ему
+  // хватает data-report на кнопке, id и имя подставляем перед показом.
+  var peerMenu = $('peerMenu');
+  var menuPeer = null;      // { p, where } — над кем открыто и в каком списке
+
+  function closePeerMenu() {
+    if (peerMenu.hidden) return;
+    peerMenu.hidden = true;
+    menuPeer = null;
+  }
+
+  function openPeerMenu(el, where, x, y) {
+    closeMenu();
+    closePeerMenu();
+    var p = peerOf(el);
+    menuPeer = { p: p, where: where };
+    var known = isContact(p.id);
+    var fav = known && known.favorite;
+    peerMenu.querySelectorAll('[data-act]').forEach(function (b) {
+      var where0 = b.getAttribute('data-in');
+      var act = b.getAttribute('data-act');
+      b.hidden = (where0 && where0.split(',').indexOf(where) === -1)
+        || (act === 'contactAdd' && !!known)
+        || (act === 'contactRemove' && !known)
+        || (act === 'favorite' && !!fav)
+        || (act === 'unfavorite' && !fav);
+    });
+    var report = peerMenu.querySelector('[data-act="report"]');
+    report.setAttribute('data-report-id', p.id);
+    report.setAttribute('data-report-name', p.name);
+    peerMenu.hidden = false;
+    placeMenu(peerMenu, { top: y, bottom: y }, x);
+    peerMenu.querySelector('button:not([hidden])').focus();
+  }
+
+  peerMenu.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-act]');
+    if (!btn || !menuPeer) return;
+    var p = menuPeer.p;
+    var act = btn.getAttribute('data-act');
+    closePeerMenu();
+    if (act === 'delete') deleteConversation(p);
+    else if (act === 'call') callPeer(p, 'audio');
+    else if (act === 'video') callPeer(p, 'video');
+    else if (act === 'write') openPeer({ id: p.id, displayName: p.name, avatarStyle: { url: p.url, gradient: p.bg, initial: p.initial } });
+    else if (act === 'contactAdd') addContact(p, 'chat');
+    else if (act === 'contactRemove') removeContact(p);
+    else if (act === 'favorite' || act === 'unfavorite') setFavorite(p, act === 'favorite');
+    // «Пожаловаться» дальше ведёт report.js — по data-report на самой кнопке.
+  });
+
+  // Правый клик и удержание — одинаково для всех трёх списков.
+  function menuOn(box, where, rowClass) {
+    var from = null;
+    box.addEventListener('contextmenu', function (e) {
+      var el = e.target.closest(rowClass);
+      if (!el) return;
+      e.preventDefault();
+      if (longPressed) return;   // Android после удержания шлёт ещё и contextmenu
+      openPeerMenu(el, where, e.clientX, e.clientY);
+    });
+    box.addEventListener('touchstart', function (e) {
+      var el = e.target.closest(rowClass);
+      if (!el || e.touches.length > 1) return;
+      from = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      clearTimeout(pressTimer);
+      pressTimer = setTimeout(function () {
+        longPressed = true;
+        if (navigator.vibrate) navigator.vibrate(12);
+        openPeerMenu(el, where, from.x, from.y);
+      }, 450);
+    }, { passive: true });
+    box.addEventListener('touchmove', function (e) {
+      if (!from) return;
+      var dx = e.touches[0].clientX - from.x, dy = e.touches[0].clientY - from.y;
+      if (dx * dx + dy * dy > 100) { clearTimeout(pressTimer); from = null; }
+    }, { passive: true });
+    ['touchend', 'touchcancel'].forEach(function (name) {
+      box.addEventListener(name, function () { clearTimeout(pressTimer); from = null; });
+    });
+    box.addEventListener('scroll', closePeerMenu);
+  }
+
+  menuOn(list, 'dialog', '.tk-dialog');
+  menuOn(contactsList, 'contact', '.tk-contact');
+  menuOn(callsList, 'call', '.tk-callrow');
+
+  document.addEventListener('click', function (e) {
+    if (longPressed) return;
+    if (!peerMenu.hidden && !peerMenu.contains(e.target)) closePeerMenu();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closePeerMenu(); });
   // ── Пересылка ─────────────────────────────────────────────────────────
   var fwd = $('forwardModal');
   var fwdList = $('forwardList');
@@ -2395,6 +2676,7 @@
   document.addEventListener('tk:lang', function () {
     refreshTimes();
     renderJournal();
+    renderContacts();
     if (!peer) return;
     var fromBottom = feed.scrollHeight - feed.scrollTop;
     render();
@@ -2410,6 +2692,10 @@
   // или вкладку звонков.
   var params = new URLSearchParams(location.search);
   var target = params.get('peer') && dialogEl(params.get('peer'));
+  var onContactsTab = params.get('tab') === 'contacts';
+  // Контакты нужны не только своей вкладке: по ним меню человека решает,
+  // предлагать «В контакты» или «Убрать из контактов».
+  loadContacts(onContactsTab);
   if (target) select(target);
   else if (params.get('tab') === 'calls') loadJournal();
 })();

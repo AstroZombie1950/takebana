@@ -166,4 +166,97 @@
 
   again.addEventListener('click', run);
   run();
+
+  // ── Проверка звука ────────────────────────────────────────────────────
+  // Звонок в одиночку не проверишь — нужен второй человек, поэтому проверки
+  // звука до сих пор и не было, а жалоба «слышно только по громкой связи»
+  // висит с сентября. Здесь телефон вводится ровно в то состояние, в каком
+  // он бывает в разговоре: микрофон захвачен и не отпускается, пока играет
+  // запись, и играет она через такой же <audio playsinline>, как в звонке.
+  //
+  // Человек отвечает одной из четырёх кнопок, ответ уходит в журнал вместе
+  // с полным отчётом об устройстве — дальше его читаем мы.
+  var soundStart = document.getElementById('soundStart');
+  var soundState = document.getElementById('soundState');
+  var soundBack = document.getElementById('soundBack');
+  var answers = document.getElementById('soundAnswers');
+  var REC_MS = 5000;
+  var mic = null;
+  var micTrack = null;
+
+  var ANSWERS = {
+    ok: 'слышно нормально',
+    quiet: 'слышно тихо',
+    ear: 'слышно только у уха',
+    none: 'не слышно',
+  };
+
+  function stopMic() {
+    if (!mic) return;
+    mic.getTracks().forEach(function (t) { t.stop(); });
+    mic = null;
+  }
+
+  function fail(key, e) {
+    tkText(soundState, key);
+    soundStart.disabled = false;
+    stopMic();
+    if (e) console.error('проверка звука:', e);
+  }
+
+  soundStart.addEventListener('click', function () {
+    if (!window.MediaRecorder || !navigator.mediaDevices) return fail('check.sound.unsupported');
+    soundStart.disabled = true;
+    answers.hidden = true;
+    tkText(soundState, 'check.sound.asking');
+
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      mic = stream;
+      micTrack = stream.getAudioTracks()[0];
+      var rec = new MediaRecorder(stream);
+      var parts = [];
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) parts.push(e.data); };
+      rec.onstop = function () {
+        // Микрофон нарочно остаётся захваченным: именно в этом состоянии
+        // телефон и решает, в какой динамик вести звук в звонке.
+        tkText(soundState, 'check.sound.playing');
+        soundBack.src = URL.createObjectURL(new Blob(parts, { type: rec.mimeType || 'audio/webm' }));
+        soundBack.play().then(function () {
+          answers.hidden = false;
+        }).catch(function (e) {
+          answers.hidden = false;
+          fail('check.sound.blocked', e);
+        });
+      };
+      rec.start();
+      tkText(soundState, 'check.sound.recording');
+      setTimeout(function () { if (rec.state !== 'inactive') rec.stop(); }, REC_MS);
+    }).catch(function (e) { fail('check.sound.denied', e); });
+  });
+
+  answers.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-answer]');
+    if (!btn) return;
+    var answer = btn.getAttribute('data-answer');
+    answers.hidden = true;
+    tkText(soundState, 'check.sound.sending');
+    var report = window.TKAudio;
+    var finish = function () {
+      stopMic();
+      soundStart.disabled = false;
+      tkText(soundState, 'check.sound.thanks');
+    };
+    if (!report) return finish();
+    report.outputs().then(function (list) {
+      return report.send('Проверка звука: ' + (ANSWERS[answer] || answer),
+        ['ответ: ' + (ANSWERS[answer] || answer)]
+          .concat(report.element(soundBack, 'элемент звука'))
+          .concat(report.track(micTrack, 'микрофон'))
+          .concat(report.device())
+          .concat(list));
+    }).then(finish, finish);
+  });
+
+  // Ушли со страницы, не ответив, — микрофон отпускаем.
+  window.addEventListener('pagehide', stopMic);
 })();

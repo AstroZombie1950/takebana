@@ -10,6 +10,7 @@ const Recording = require('../../models/Recording');
 const GalleryVideo = require('../../models/GalleryVideo');
 const Stream = require('../../models/Stream');
 const Subscription = require('../../models/Subscription');
+const Contact = require('../../models/Contact');
 const { SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
 const { commonDataMiddleware, getActiveStreamsCount } = require('./shared');
 const authors = require('../../utils/authors');
@@ -180,12 +181,15 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
   const isSelf = String(userId) === String(currentUserId);
   // Ограничение доступа (utils/restrict.js) — в обе стороны: закрыл ли
   // хозяин страницы канал от меня и закрыл ли я свой от него.
-  const [restricted, iRestricted] = currentUserId && !isSelf
+  // inContacts — записан ли он у меня в книжке (models/Contact.js): от этого
+  // зависит пункт меню «В контакты» или «Убрать из контактов».
+  const [restricted, iRestricted, inContacts] = currentUserId && !isSelf
     ? await Promise.all([
       restriction.isRestricted(userId, currentUserId),
       restriction.isRestricted(currentUserId, userId),
+      Contact.exists({ owner: currentUserId, peer: userId }).then(Boolean),
     ])
-    : [false, false];
+    : [false, false, false];
   const recordings = restricted ? [] : await Recording.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
     .sort({ createdAt: -1 })
     .select('title status duration thumb isAdult createdAt views')
@@ -204,6 +208,7 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
     videos,
     restricted,
     iRestricted,
+    inContacts,
     user: {
       displayName,
       avatarStyle,

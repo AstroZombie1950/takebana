@@ -53,6 +53,10 @@ const EN = {
     'Вы ограничили доступ этому человеку — сначала верните его': 'You have restricted this person \u2014 restore their access first',
     'Автор ограничил вам доступ — написать и позвонить нельзя': 'The author has restricted your access \u2014 you cannot message or call them',
 
+    // Контакты (routes/contacts.js)
+    'Себя в контакты добавить нельзя': 'You cannot add yourself to contacts',
+    'Контакт не найден': 'Contact not found',
+
     // Пуш-уведомления (routes/push.js)
     'Пуш-уведомления не настроены': 'Push notifications are not set up',
     'Негодная подписка': 'Invalid subscription',
@@ -242,6 +246,8 @@ const EN = {
     'Решение': 'Decision',
     'Роль': 'Role',
     'Собеседник': 'Recipient',
+    'Откуда': 'Source',
+    'Избранное': 'Favourite',
     'Сообщение': 'Message',
     'Старый пароль': 'Old password',
     'Статус': 'Status',

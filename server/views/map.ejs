@@ -276,6 +276,10 @@ window.TKCityCenter = <%- JSON.stringify(catalog.CITY_CENTER) %>;</script>
 <script defer src="<%= asset('/vendor/pmtiles-4.5.0.js') %>"></script>
 <script defer src="<%= asset('/tk-map.js') %>"></script>
 <script defer src="<%= asset('/tk-point.js') %>"></script>
+<%# Камера заведения: свой приём (WHIP/WHEP) или комната Daily — движок
+    называет сервер в ответе (routes/venueLive.js). Оба скрипта маленькие,
+    и какой понадобится, заранее неизвестно. %>
+<script defer src="<%= asset('/tk-whip.js') %>"></script>
 <script defer src="<%= asset('/tk-venues.js') %>"></script>
 </body>
 </html>

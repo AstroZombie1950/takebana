@@ -152,6 +152,34 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  // ── Контакты ────────────────────────────────────────────────────────────
+  // Записная книжка (models/Contact.js): пункт в меню «⋯» переключает
+  // «В контакты» ↔ «Убрать из контактов». Связь односторонняя, собеседнику
+  // ничего не уходит, поэтому и подтверждения при добавлении нет.
+  var contactButton = document.getElementById('contactButton');
+  if (contactButton) {
+    contactButton.addEventListener('click', function () {
+      var on = !contactButton.getAttribute('data-on');
+      var ask = on ? Promise.resolve(true)
+        : confirmDialog(pt('contacts.removeQ', { name: P.displayName }), { okText: pt('contacts.remove') });
+      ask.then(function (yes) {
+        if (!yes) return;
+        return fetch(on ? '/api/contacts/add' : '/api/contacts/remove', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(on ? { peerId: P.userId, source: 'profile' } : { peerId: P.userId })
+        }).then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (data) {
+            if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+            contactButton.setAttribute('data-on', on ? '1' : '');
+            window.tkText(contactButton.querySelector('[data-i18n]'), on ? 'contacts.remove' : 'contacts.add');
+            if (on) toast(pt('contacts.added', { name: P.displayName }), 'ok');
+          });
+        });
+      }).catch(function (e) { toast(e.message, 'error'); });
+    });
+  }
+
   // ── Звонки ──────────────────────────────────────────────────────────────
   function call(type) {
     if (!window.showOutgoingCall) return;

@@ -1,8 +1,9 @@
 <%#
-  Переписка (/chatsPage): слева две вкладки — диалоги и журнал звонков,
-  справа открытый диалог, где звонки стоят в ленте между сообщениями. Пока
-  диалог не выбран, правая часть пустая. Маршрут — routes/streaming/messages.js,
-  журнал — routes/calls.js, поведение — public/chats.js.
+  Переписка (/chatsPage): слева три вкладки — диалоги, журнал звонков
+  и контакты, справа открытый диалог, где звонки стоят в ленте между
+  сообщениями. Пока диалог не выбран, правая часть пустая. Маршрут —
+  routes/streaming/messages.js, журнал — routes/calls.js, контакты —
+  routes/contacts.js, поведение — public/chats.js.
 %>
 <% var missed = typeof missedCalls !== 'undefined' ? missedCalls : 0; %>
 <!DOCTYPE html>
@@ -23,7 +24,7 @@
   <main class="tk-app-main">
     <div class="tk-chat" id="chat">
 
-      <!-- Списки: диалоги и звонки. Вкладки — ссылки: без скрипта тоже работают. -->
+      <!-- Списки: диалоги, звонки и контакты. Вкладки — ссылки: без скрипта тоже работают. -->
       <section class="tk-chat__list">
         <div class="tk-chat__tabs" role="tablist">
           <a href="/chatsPage" class="tk-chat__tab" role="tab" id="tabMessages" data-tab="messages" aria-controls="conversationsList" aria-selected="<%= tab === 'messages' %>">
@@ -32,6 +33,9 @@
           <a href="/chatsPage?tab=calls" class="tk-chat__tab" role="tab" id="tabCalls" data-tab="calls" aria-controls="callsList" aria-selected="<%= tab === 'calls' %>">
             <span data-i18n="calls.title"><%- t('calls.title') %></span>
             <span class="tk-chat__badge<%= missed ? '' : ' hidden' %>" data-missed-calls><%= missed %></span>
+          </a>
+          <a href="/chatsPage?tab=contacts" class="tk-chat__tab" role="tab" id="tabContacts" data-tab="contacts" aria-controls="contactsList" aria-selected="<%= tab === 'contacts' %>">
+            <span data-i18n="contacts.title"><%- t('contacts.title') %></span>
           </a>
         </div>
 
@@ -62,6 +66,16 @@
             </button>
             <% }); %>
           </div>
+        </div>
+
+        <%# Контакты — личная записная книжка (models/Contact.js). Список
+            и подсказки собирает chats.js из /api/contacts при открытии вкладки.
+            Поле поиска отсеивает уже загруженные строки, никуда не ходя. %>
+        <div class="tk-contacts" id="contactsPane" role="tabpanel" aria-labelledby="tabContacts"<% if (tab !== 'contacts') { %> hidden<% } %>>
+          <div class="tk-contacts__search">
+            <input type="search" id="contactSearch" class="tk-field" placeholder="<%= ta('contacts.search') %>" data-i18n-placeholder="contacts.search" autocomplete="off">
+          </div>
+          <div class="tk-chat__scroll" id="contactsList"></div>
         </div>
 
         <%# Журнал звонков собирает chats.js из /api/calls: при открытии вкладки. %>
@@ -124,8 +138,14 @@
             </div>
           </div>
 
-          <button type="button" class="tk-chat__tool" id="deleteChat" aria-label="<%= ta('chats.deleteChat') %>" data-i18n-aria="chats.deleteChat" title="<%= ta('chats.deleteChat') %>" data-i18n-title="chats.deleteChat">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>
+          <%# Звонок и видеозвонок прямо из переписки. Корзинка отсюда убрана
+              (23.09): удаление переписки — в меню её строки в списке слева,
+              правым кликом или удержанием. %>
+          <button type="button" class="tk-chat__tool" id="callAudio" aria-label="<%= ta('calls.audio') %>" data-i18n-aria="calls.audio" title="<%= ta('calls.audio') %>" data-i18n-title="calls.audio">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M6.5 3.5h3l1.5 4-2 1.5a12 12 0 006 6l1.5-2 4 1.5v3c0 1.1-.9 2-2 2A15.5 15.5 0 014.5 5.5c0-1.1.9-2 2-2z"></path></svg>
+          </button>
+          <button type="button" class="tk-chat__tool" id="callVideo" aria-label="<%= ta('calls.video') %>" data-i18n-aria="calls.video" title="<%= ta('calls.video') %>" data-i18n-title="calls.video">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M3.5 6.5h11v11h-11zM14.5 10.5l6-3v9l-6-3z"></path></svg>
           </button>
         </div>
 
@@ -211,6 +231,24 @@
   <button type="button" role="menuitem" data-act="copy" data-for="message" data-i18n="chats.copy"><%- t('chats.copy') %></button>
   <button type="button" role="menuitem" data-act="select" data-i18n="chats.select"><%- t('chats.select') %></button>
   <button type="button" role="menuitem" data-act="delete" class="tk-msgmenu__danger" data-i18n="chats.delete"><%- t('chats.delete') %></button>
+</div>
+
+<%# Действия со строкой диалога в списке слева: правый клик, на телефоне —
+    удержание. Кнопка жалобы несёт data-report — её открывает report.js,
+    ему же chats.js подставляет id и имя собеседника. %>
+<%# Меню человека: строка диалога, строка контакта, строка журнала звонков.
+    data-in перечисляет, где пункт уместен: «удалить переписку» — только
+    в списке диалогов, избранное — только в контактах. Прячет их chats.js. %>
+<div class="tk-msgmenu" id="peerMenu" role="menu" hidden>
+  <button type="button" role="menuitem" data-act="call" data-i18n="calls.audio"><%- t('calls.audio') %></button>
+  <button type="button" role="menuitem" data-act="video" data-i18n="calls.video"><%- t('calls.video') %></button>
+  <button type="button" role="menuitem" data-act="write" data-in="contact,call" data-i18n="contacts.write"><%- t('contacts.write') %></button>
+  <button type="button" role="menuitem" data-act="favorite" data-in="contact" data-i18n="contacts.favorite"><%- t('contacts.favorite') %></button>
+  <button type="button" role="menuitem" data-act="unfavorite" data-in="contact" data-i18n="contacts.unfavorite"><%- t('contacts.unfavorite') %></button>
+  <button type="button" role="menuitem" data-act="contactAdd" data-i18n="contacts.add"><%- t('contacts.add') %></button>
+  <button type="button" role="menuitem" data-act="contactRemove" data-i18n="contacts.remove"><%- t('contacts.remove') %></button>
+  <button type="button" role="menuitem" data-act="report" data-report="user" data-report-id="" data-i18n="common.report"><%- t('common.report') %></button>
+  <button type="button" role="menuitem" data-act="delete" data-in="dialog" class="tk-msgmenu__danger" data-i18n="chats.deleteChat"><%- t('chats.deleteChat') %></button>
 </div>
 
 <!-- Пересылка -->

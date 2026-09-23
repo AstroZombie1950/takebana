@@ -691,7 +691,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     window.startAudioCall = (calleeId) => startCall(calleeId, 'audio');
     window.startVideoCall = (calleeId) => startCall(calleeId, 'video');
 
-    socket.on('incoming_call', ({ callId, type, from }) => {
+    socket.on('incoming_call', ({ callId, type, from, group, peers }) => {
       if (!from) return;
       // Уже разговариваем: второй звонок получает «отклонено», а не окно
       // поверх идущего разговора.
@@ -702,6 +702,10 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
         displayName: from.displayName,
         avatarUrl: from.avatarUrl,
         callType: type,
+        // Приглашение в идущий разговор: показываем, кто там уже есть, —
+        // до того, как человек возьмёт трубку.
+        group: group === true,
+        peers: peers || [],
         onAccept: () => { window.currentCallId = callId; socket.emit('call:accept', { callId, own: ownPath() }); },
         onDecline: () => socket.emit('call:decline', { callId })
       });
@@ -720,8 +724,25 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     socket.on('call:switch', (access) => {
       if (access.callId === window.currentCallId && window._call) window.switchCallToOwn(access);
     });
-    socket.on('call:signal', ({ callId, data }) => {
-      if (callId === window.currentCallId && window._call && window._call.signal) window._call.signal(data);
+    socket.on('call:signal', ({ callId, from, data }) => {
+      if (callId === window.currentCallId && window._call && window._call.signal) window._call.signal(from, data);
+    });
+
+    // ── Групповой разговор ──
+    // Вошёл третий или четвёртый: сцена переходит на сетку плиток, а сетка
+    // соединений (tk-peer.js, room) получает ещё одно соединение.
+    socket.on('call:peer:join', (data) => {
+      if (data.callId === window.currentCallId && window.callGroupJoin) window.callGroupJoin(data);
+    });
+    socket.on('call:peer:left', ({ callId, userId }) => {
+      if (callId === window.currentCallId && window.callGroupLeft) window.callGroupLeft(userId);
+    });
+    socket.on('call:invite:declined', ({ userId, timeout }) => {
+      const name = (window.tkCallNames && window.tkCallNames[userId]) || t('call.user');
+      toast(t(timeout ? 'call.inviteNoAnswer' : 'call.inviteDeclined', { name }), 'error');
+    });
+    socket.on('call:invite:failed', ({ reason }) => {
+      toast(t('call.inviteFailed.' + reason) || t('call.inviteFailed.unavailable'), 'error');
     });
 
     // Повторный вход после обрыва: свежий токен у сервера, пока звонок жив.
@@ -801,14 +822,21 @@ document.addEventListener('DOMContentLoaded', function(){
 
   function side(prefix, short) {
     const voice = $(prefix + 'VoiceBtn');
+    const stage = $(prefix + 'Videos');
     return {
       status: $(prefix + 'Status'),
       beacon: $(prefix + 'Status').previousElementSibling,
       timer: $(prefix + 'Timer'),
       net: $(prefix + 'Net'),
-      stage: $(prefix + 'Videos'),
+      level: $(prefix + 'Level'),
+      stage,
       voice,
+      add: $(prefix + 'AddBtn'),
       actions: voice.parentElement,
+      // Разговор на двоих — картинка в картинке, на троих и четверых —
+      // сетка плиток. Обе живут в одной сцене, видна всегда одна.
+      pip: stage.querySelector('.pip-call-container'),
+      grid: $(prefix + 'Grid'),
       remoteVideo: $(short + 'RemoteVideo'),
       localVideo: $(short + 'LocalVideo'),
       remoteAudio: $(short + 'RemoteAudio'),
@@ -840,8 +868,15 @@ document.addEventListener('DOMContentLoaded', function(){
     s.timer.textContent = '00:00';
     s.timer.classList.add('hidden');
     s.net.classList.add('hidden');
+    s.level.classList.add('hidden');
     s.stage.classList.add('hidden');
     s.voice.classList.add('hidden');
+    s.add.classList.add('hidden');
+    // Сетка — только у группового разговора: к новому звонку её нет.
+    s.grid.hidden = true;
+    s.grid.innerHTML = '';
+    s.pip.hidden = false;
+    s.group = false;
     s.video = false;
     s.remoteOn = false;
   }
@@ -851,7 +886,9 @@ document.addEventListener('DOMContentLoaded', function(){
   // камеру — его видно и без своей. Кнопка рядом с «Завершить» переключает
   // свою: «Только голос» ↔ «Включить видео».
   function paintVideo(s) {
-    s.stage.classList.toggle('hidden', !(s.video || s.remoteOn));
+    // В групповом разговоре сцена нужна всегда: плитки показывают, кто в нём,
+    // даже когда камеры у всех выключены.
+    s.stage.classList.toggle('hidden', !(s.group || s.video || s.remoteOn));
     tkText(s.voice, s.video ? 'call.voiceOnly' : 'call.videoOn');
   }
 
@@ -861,6 +898,9 @@ document.addEventListener('DOMContentLoaded', function(){
     s.video = isVideo;
     s.stage.classList.add('tk-call__stage--empty', 'tk-call__stage--nolocal');
     s.voice.classList.remove('hidden');
+    // Позвать третьего можно из любого идущего разговора — и из видео,
+    // и из голосового.
+    s.add.classList.remove('hidden');
     s.actions.classList.add('tk-call__actions--pair');
     paintVideo(s);
     if (s === OUT) {
@@ -888,6 +928,42 @@ document.addEventListener('DOMContentLoaded', function(){
     }, 1000);
   }
 
+  // ── Сетка группового разговора ──
+  // По плитке на участника, до четырёх (потолок — sockets/index.js,
+  // GROUP_MAX). Нет картинки — на плитке буква и имя: в разговоре голосом
+  // сетка тоже нужна, чтобы видеть, кто в нём.
+  function tileOf(s, userId, card) {
+    let box = s.grid.querySelector('[data-user="' + CSS.escape(String(userId)) + '"]');
+    if (box) return box;
+    box = document.createElement('div');
+    // Пока картинки нет — буква и имя; видео появится, класс уйдёт.
+    box.className = 'tk-call__tile is-dark';
+    box.setAttribute('data-user', userId);
+    const name = (card && card.displayName) || '';
+    box.innerHTML =
+      '<video autoplay playsinline' + (userId === 'me' ? ' muted' : '') + '></video>' +
+      '<audio autoplay playsinline></audio>' +
+      '<span class="tk-call__tile-ava">' + escapeHtml((name || '?').charAt(0).toUpperCase()) + '</span>' +
+      '<span class="tk-wm" aria-hidden="true"></span>' +
+      '<span class="tk-call__tile-name">' + escapeHtml(userId === 'me' ? t('call.you') : name) + '</span>';
+    s.grid.appendChild(box);
+    countTiles(s);
+    return box;
+  }
+
+  function countTiles(s) {
+    s.grid.setAttribute('data-n', String(s.grid.children.length));
+  }
+
+  function dropTile(s, userId) {
+    const box = s.grid.querySelector('[data-user="' + CSS.escape(String(userId)) + '"]');
+    if (!box) return;
+    TKDaily.attach(box.querySelector('video'), null);
+    TKDaily.attach(box.querySelector('audio'), null);
+    box.remove();
+    countTiles(s);
+  }
+
   window.startCallMedia = function (callId, type, first) {
     const s = incoming.classList.contains('hidden') ? OUT : IN;
     const isVideo = type === 'video';
@@ -896,6 +972,66 @@ document.addEventListener('DOMContentLoaded', function(){
     let peers = 0;
     let hadPeer = false;
     let started = false;
+    // Разговор стал групповым: сцена переходит на сетку и обратно уже
+    // не возвращается — даже когда останутся двое, плитки понятнее.
+    let group = false;
+    const cards = new Map();    // userId → { displayName, avatarUrl }
+    const tracks = new Map();   // userId → { video, audio } — что уже пришло
+
+    function remember(userId, track, on) {
+      const bag = tracks.get(userId) || {};
+      bag[track.kind] = on ? track : null;
+      tracks.set(userId, bag);
+    }
+
+    function show(userId, track, on) {
+      const box = tileOf(s, userId, cards.get(userId));
+      const el = box.querySelector(track.kind === 'video' ? 'video' : 'audio');
+      TKDaily.attach(el, on && track);
+      if (track.kind === 'video') box.classList.toggle('is-dark', !on);
+    }
+
+    // Переход на сетку: своя плитка, плитки участников и всё, что уже
+    // пришло, — на свои места. Картинка в картинке уходит.
+    function goGroup() {
+      if (group) return;
+      group = true;
+      s.group = true;
+      // Плитки участников подписываются по составу; свою подписываем «Вы».
+      cards.forEach((card, id) => tileOf(s, id, card));
+      [s.remoteVideo, s.localVideo, s.remoteAudio].forEach((el) => TKDaily.attach(el, null));
+      s.pip.hidden = true;
+      s.grid.hidden = false;
+      s.stage.classList.remove('hidden');
+      tileOf(s, 'me');
+      tracks.forEach((bag, userId) => {
+        if (bag.video) show(userId, bag.video, true);
+        if (bag.audio) show(userId, bag.audio, true);
+      });
+      s.add.classList.remove('hidden');
+    }
+
+    window.callGroupJoin = ({ peer, roster, offerer, ice }) => {
+      // Состав целиком: подписать плитку собеседника, с которым говорили
+      // вдвоём, иначе нечем — его имя жило только в шапке окна. Себя из
+      // состава выбрасываем: своя плитка одна и подписана «Вы».
+      (roster || []).forEach((card) => {
+        if (String(card.userId) !== String(TK.userId)) cards.set(String(card.userId), card);
+      });
+      cards.set(String(peer.userId), peer);
+      goGroup();
+      tileOf(s, String(peer.userId), peer);
+      window._call.add({ userId: String(peer.userId), offerer, ice });
+      toast(t('call.joined', { name: peer.displayName }), 'ok');
+    };
+
+    window.callGroupLeft = (userId) => {
+      if (!group) return;
+      cards.delete(String(userId));
+      tracks.delete(String(userId));
+      dropTile(s, String(userId));
+      if (window._call.drop) window._call.drop(String(userId));
+    };
 
     function paint() {
       setBeacon(s, state !== 'reconnecting');
@@ -905,6 +1041,38 @@ document.addEventListener('DOMContentLoaded', function(){
       else tkText(s.status, hadPeer ? 'call.peerReconnecting' : 'call.waitingPeer');
     }
 
+    // Сколько нас в разговоре — окну приглашения: вдвоём свободных мест два,
+    // сетка плиток считает себя сама.
+    window.tkCallSize = () => (group ? s.grid.children.length : 2);
+
+    // ── Отчёт о звуке ──
+    // Жалоба «слышно только по громкой связи» живёт с сентября, а данных
+    // с устройства нет. Теперь каждый звонок рассказывает о себе сам:
+    // через десять секунд после соединения и при завершении
+    // (public/tk-audio.js, журнал панели, вид CallAudio).
+    let reported = 0;
+    function reportAudio(when) {
+      if (!window.TKAudio || reported > 2) return;
+      reported++;
+      const sound = window._call && window._call.sound ? window._call.sound() : null;
+      const mic = window._call && window._call.mic ? window._call.mic() : null;
+      const el = group ? s.grid.querySelector('.tk-call__tile:not([data-user="me"]) audio') : s.remoteAudio;
+      window.TKAudio.outputs().then((list) => window.TKAudio.send(
+        'Звук в звонке (' + when + '): ' + (sound && sound.energy > 0 ? 'звук доходит' : 'звука нет'),
+        [
+          'когда: ' + when + ', тип звонка: ' + (isVideo ? 'с видео' : 'голосом') +
+            ', путь: ' + (first.engine === 'own' ? 'свой сервер' : 'Daily') +
+            ', участников: ' + (group ? s.grid.children.length : 2),
+        ]
+          .concat(window.TKAudio.heard(sound))
+          .concat(window.TKAudio.element(el, 'элемент звука'))
+          .concat(window.TKAudio.track(mic, 'свой микрофон'))
+          .concat(window.TKAudio.device())
+          .concat(list)
+      ));
+    }
+    window.tkCallReport = reportAudio;
+
     // До входа в комнату, то есть до захвата микрофона (tk-notify.js).
     if (window.TKNotify) window.TKNotify.talking(true);
     goLive(s, isVideo);
@@ -913,6 +1081,11 @@ document.addEventListener('DOMContentLoaded', function(){
     // сообщают о дорожках, собеседнике, состоянии и сети одинаково.
     const view = {
       onTrack: (track, p, on) => {
+        // Кто прислал: своя дорожка — «me», чужая — участник (у Daily и
+        // разговора на двоих он один, имени у него здесь нет).
+        const who = p.local ? 'me' : String(p.userId || 'peer');
+        remember(who, track, on);
+        if (group) return show(who, track, on);
         if (track.kind === 'video') {
           TKDaily.attach(p.local ? s.localVideo : s.remoteVideo, on && track);
           s.stage.classList.toggle(p.local ? 'tk-call__stage--nolocal' : 'tk-call__stage--empty', !on);
@@ -935,10 +1108,27 @@ document.addEventListener('DOMContentLoaded', function(){
         // Свой объект звонка пересоздаётся, и о пропаже дорожек старый уже не
         // сообщает: без этого сцена оставалась чёрной, а в углу — пустая рамка.
         if (st === 'reconnecting') s.stage.classList.add('tk-call__stage--empty', 'tk-call__stage--nolocal');
-        if (st === 'live' && !started) { started = true; startTimer(s); }
+        if (st === 'live' && !started) {
+          started = true;
+          startTimer(s);
+          // Десять секунд — чтобы дорожки успели пойти, а человек успел
+          // услышать (или не услышать) первое слово.
+          setTimeout(() => { if (window._call) reportAudio('через 10 секунд'); }, 10000);
+        }
         paint();
       },
       onMediaError: () => toast(t('call.mediaDenied'), 'error'),
+      // Полоска уровня: сколько звука пришло за последний срез. Сам звук
+      // мы измерить не можем (WebAudio в звонке запрещён), а вот сколько
+      // его декодировалось — видно из статистики соединения.
+      onAudio: (sound) => {
+        s.level.classList.remove('hidden');
+        const grew = sound.grew || 0;
+        // Энергия за три секунды разговора вслух — сотые доли; берём
+        // корень, иначе полоска дёргалась бы между нулём и краем.
+        s.level.firstElementChild.style.width = Math.min(100, Math.round(Math.sqrt(grew / 0.02) * 100)) + '%';
+        s.level.dataset.sound = grew > 0.0001 ? 'yes' : 'no';
+      },
       onNetwork: (n) => {
         s.net.dataset.net = n;
         const level = t('call.net.' + n) || n;
@@ -966,13 +1156,25 @@ document.addEventListener('DOMContentLoaded', function(){
       onStuck: (reason) => window.callSocket.emit('call:fallback', { callId, reason }),
     }, view));
 
-    const viaOwn = (access) => TKPeer.connect(Object.assign({
-      video: s.video,
-      diag,
-      ice: access.ice,
-      offerer: access.offerer,
-      signal: (data) => window.callSocket.emit('call:signal', { callId, data }),
-    }, view));
+    // Свой путь — всегда комната (public/tk-peer.js): на двоих в ней одно
+    // соединение, в группе — по соединению на участника. Одна дорога на оба
+    // случая: разговор становится групповым посреди звонка, и переключать
+    // движок в этот момент было бы негде.
+    const viaOwn = (access) => {
+      (access.cards || []).forEach((card) => {
+        if (String(card.userId) !== String(TK.userId)) cards.set(String(card.userId), card);
+      });
+      if (access.group) goGroup();
+      (access.peers || []).forEach((peer) => { if (cards.has(String(peer.userId))) tileOf(s, String(peer.userId), cards.get(String(peer.userId))); });
+      return TKPeer.room(Object.assign({
+        video: s.video,
+        diag,
+        ice: access.ice,
+        peers: access.peers || [],
+        signal: (data, to) => window.callSocket.emit('call:signal', { callId, to, data }),
+        onPeerLeft: (userId) => dropTile(s, userId),
+      }, view));
+    };
 
     window._call = first.engine === 'own' ? viaOwn(first) : viaDaily();
 
@@ -1071,6 +1273,10 @@ document.addEventListener('DOMContentLoaded', function(){
   window.addEventListener('resize', () => [OUT, IN].forEach((s) => s.localVideo.removeAttribute('style')));
 
   function stopMedia() {
+    // Отчёт снимается до закрытия соединения: после него статистики не будет.
+    if (window.tkCallReport) { window.tkCallReport('в конце разговора'); window.tkCallReport = null; }
+    closeInvite();
+    window.tkCallSize = null;
     if (window._call) { window._call.leave(); window._call = null; }
     if (window.TKNotify) window.TKNotify.talking(false);
     clearInterval(window._callTick);
@@ -1111,7 +1317,15 @@ document.addEventListener('DOMContentLoaded', function(){
     const onAccept = opts && opts.onAccept;
     const onDecline = opts && opts.onDecline;
     inName.textContent = displayName;
-    tkText(inType, callType === 'audio' ? 'call.incomingAudio' : 'call.incomingVideo');
+    // Зовут в идущий разговор — человек должен видеть, кто там уже есть,
+    // до того как возьмёт трубку.
+    if (opts && opts.group) {
+      const names = (opts.peers || []).map((p) => p.displayName).filter(Boolean).join(', ');
+      inType.removeAttribute('data-i18n');
+      inType.textContent = t('call.incomingGroup', { names });
+    } else {
+      tkText(inType, callType === 'audio' ? 'call.incomingAudio' : 'call.incomingVideo');
+    }
     renderAvatar(inAvatar, opts && opts.avatarUrl || '', displayName);
     resetSide(IN);
     tkText(IN.status, 'call.ringing');
@@ -1155,6 +1369,81 @@ document.addEventListener('DOMContentLoaded', function(){
     window.hideOutgoingCall();
     return true;
   };
+
+  // ── Позвать в разговор ──
+  // Кандидаты — свои контакты (routes/contacts.js), кого в них нет — поиском
+  // по сайту. Потолок — четверо (sockets/index.js, GROUP_MAX): сколько мест
+  // осталось, окно говорит сразу, а отказы и «не берёт трубку» приходят
+  // с сервера и показываются как уведомления.
+  const GROUP_MAX = 4;
+  const invite = $('callInviteModal');
+  const inviteList = $('callInviteList');
+  const inviteSearch = $('callInviteSearch');
+  const inviteFree = $('callInviteFree');
+  window.tkCallNames = {};
+  let inviteTimer = null;
+
+  function inviteRows(people) {
+    if (!people.length) {
+      inviteList.innerHTML = '<p class="tk-note tk-note--center">' + escapeHtml(t('chats.forwardEmpty')) + '</p>';
+      return;
+    }
+    inviteList.innerHTML = people.map((p) => {
+      window.tkCallNames[p.id] = p.name;
+      return '<button type="button" class="tk-invite__row" data-invite="' + escapeHtml(p.id) + '">' +
+        '<span class="tk-invite__ava"' + (p.url ? '' : ' style="background:' + escapeHtml(p.bg || '') + '"') + '>' +
+        (p.url ? '<img src="' + escapeHtml(p.url) + '" alt="">' : escapeHtml(p.initial || '?')) + '</span>' +
+        '<span class="tk-invite__name">' + escapeHtml(p.name) + '</span></button>';
+    }).join('');
+  }
+
+  const asInvitee = (u) => {
+    const a = u.avatarStyle || {};
+    return { id: String(u.id || u._id), name: u.displayName, url: a.url || '', bg: a.gradient || '', initial: a.initial || '' };
+  };
+
+  function openInvite() {
+    const free = GROUP_MAX - (window.tkCallSize ? window.tkCallSize() : 2);
+    inviteFree.textContent = free > 0 ? t('call.addFree', { n: free }) : t('call.addFull');
+    inviteSearch.value = '';
+    inviteList.innerHTML = '';
+    invite.classList.remove('hidden');
+    if (free <= 0) return;
+    inviteSearch.focus();
+    fetch('/api/contacts')
+      .then((r) => r.json())
+      .then((data) => inviteRows((data.contacts || []).map(asInvitee)))
+      .catch(() => inviteRows([]));
+  }
+
+  function closeInvite() { invite.classList.add('hidden'); }
+
+  [OUT, IN].forEach((s) => s.add.addEventListener('click', openInvite));
+  $('callInviteClose').addEventListener('click', closeInvite);
+  invite.addEventListener('click', (e) => { if (e.target === invite) closeInvite(); });
+
+  inviteSearch.addEventListener('input', () => {
+    clearTimeout(inviteTimer);
+    const q = inviteSearch.value.trim();
+    if (q.length < 2) return;
+    inviteTimer = setTimeout(() => {
+      fetch('/api/search?type=people&limit=8&q=' + encodeURIComponent(q))
+        .then((r) => r.json())
+        .then((found) => {
+          if (inviteSearch.value.trim() !== q) return;
+          inviteRows((found.people || []).map(asInvitee));
+        })
+        .catch(() => {});
+    }, 300);
+  });
+
+  inviteList.addEventListener('click', (e) => {
+    const row = e.target.closest('[data-invite]');
+    if (!row || !window.currentCallId || !window.callSocket) return;
+    window.callSocket.emit('call:invite', { callId: window.currentCallId, userId: row.getAttribute('data-invite') });
+    toast(t('call.inviteSent', { name: window.tkCallNames[row.getAttribute('data-invite')] || '' }), 'ok');
+    closeInvite();
+  });
 
   // Крестик и нижняя кнопка исходящего окна: до ответа — отмена, в разговоре —
   // завершение. Раньше крестик во время разговора прятал окно, а звонок

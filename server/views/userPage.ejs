@@ -44,6 +44,13 @@
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M5 21V4h9l.6 2H20v9h-6l-.6-2H5"></path></svg>
               <span data-i18n="user.reportUser"><%- t('user.reportUser') %></span>
             </button>
+            <%# Записная книжка (models/Contact.js): связь односторонняя,
+                собеседник о ней не узнаёт. %>
+            <% var cKey = inContacts ? 'contacts.remove' : 'contacts.add'; %>
+            <button type="button" role="menuitem" id="contactButton" data-on="<%= inContacts ? '1' : '' %>">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M10 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3.5 20c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5M17 6.5v5M19.5 9h-5"></path></svg>
+              <span data-i18n="<%= cKey %>"><%- t(cKey) %></span>
+            </button>
             <% var rKey = iRestricted ? 'user.unrestrict' : 'user.restrict'; %>
             <button type="button" role="menuitem" class="is-danger" id="restrictButton" data-on="<%= iRestricted ? '1' : '' %>">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M6 6l12 12"></path></svg>

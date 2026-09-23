@@ -13,6 +13,8 @@ const daily = require('../utils/daily');
 const callLog = require('../utils/callLog');
 const errorLog = require('../utils/errorLog');
 const turn = require('../utils/turn');
+const userView = require('../utils/userView');
+const restriction = require('../utils/restrict');
 const { LIVE_ROOM } = require('../utils/liveSignal');
 
 // Список подписок приходит от клиента, поэтому и формат, и длина проверяются.
@@ -40,13 +42,26 @@ const PRESENCE_GRACE_MS = 60000;
 // единицы килобайт; больше — не сигнал.
 const SIGNAL_MAX = 32000;
 
+// Потолок группового звонка (решение заказчика 23.09.2026). Разговор идёт
+// сеткой: каждый держит соединение с каждым, и на четверых это три
+// исходящих потока — предел мобильного канала. Больше — только через SFU,
+// это отдельная работа.
+const GROUP_MAX = 4;
+
+// Сколько ждём ответа приглашённого в идущий разговор — как и обычного
+// звонка (routes/calls.js).
+const INVITE_MS = 30000;
+
 // Возвращает общие хранилища, чтобы app.js положил их в app.set(...):
 // маршрут /api/calls/create достаёт их оттуда.
 function registerSockets(io) {
   const userConnections = new Map(); // userId -> count
   const userRooms = new Map(); // userId -> Set(socketIds)
   const pendingCalls = new Map(); // callId -> {callerId, calleeId, type, createdAt}
-  const activeCalls = new Map(); // callId -> {callerId, calleeId, type, engine: 'daily'|'own', roomName, startedAt}
+  // callId -> {callerId, calleeId, type, engine: 'daily'|'own', roomName,
+  //            startedAt, members: Map(userId -> {joinedAt}),
+  //            invited: Map(userId -> время приглашения)}
+  const activeCalls = new Map();
   const offlineTimers = new Map(); // userId -> таймер отсрочки офлайна
   const presenceWrites = new Map(); // userId -> последняя запись присутствия в очереди
 
@@ -86,18 +101,47 @@ function registerSockets(io) {
     return n;
   }
 
-  const bothSides = (call) => io.to(`user:${call.callerId}`).to(`user:${call.calleeId}`);
-  const isParty = (call, userId) => !!call && (userId === call.callerId || userId === call.calleeId);
+  // Разговор — это участники, а не пара: у идущего звонка есть members
+  // (userId → когда вошёл), и на двоих в нём просто две записи. Поля
+  // callerId и calleeId остаются: по ним пишется журнал и работает Daily,
+  // который в группах не участвует.
+  const everyone = (call) => {
+    let to = io;
+    for (const id of call.members.keys()) to = to.to(`user:${id}`);
+    return to;
+  };
+  const isParty = (call, userId) => !!call && (call.members
+    ? call.members.has(userId)
+    : userId === call.callerId || userId === call.calleeId);
+
+  // Карточка человека для окна звонка: имя и аватар. Плиткам сетки нужно
+  // подписывать, кто на них, а по одному userId этого не скажешь.
+  async function peerCard(userId) {
+    const user = await User.findById(userId).select('nickname login email avatar').lean();
+    if (!user) return { userId: String(userId), displayName: '' };
+    return { userId: String(userId), displayName: userView.displayName(user), avatarUrl: user.avatar || null };
+  }
 
   // Звонок через свой сервер (public/tk-peer.js): браузеры соединяются между
-  // собой, сокет только передаёт сигналы. Каждому — свои ключи TURN;
-  // предложение соединения делает звонящий, отвечает собеседник.
+  // собой, сокет только передаёт сигналы. Каждому — свои ключи TURN.
+  //
+  // Кто кому делает предложение: тот, кто вошёл в разговор раньше. На двоих
+  // это звонящий, в группе — все, кто уже разговаривал, навстречу новичку.
+  // Правило одно на всех, поэтому гонок «оба предложили» не бывает.
+  function ownAccess(call, userId) {
+    const mine = call.members.get(userId);
+    const peers = [];
+    for (const [id, m] of call.members) {
+      if (id === userId) continue;
+      peers.push({ userId: id, offerer: m.joinedAt > mine.joinedAt });
+    }
+    return { type: call.type, engine: 'own', group: call.members.size > 2, ice: turn.iceServers(userId), peers };
+  }
+
   function goOwn(callId, call, event) {
     call.engine = 'own';
-    for (const userId of [call.callerId, call.calleeId]) {
-      io.to(`user:${userId}`).emit(event, {
-        callId, type: call.type, engine: 'own', ice: turn.iceServers(userId), offerer: userId === call.callerId,
-      });
+    for (const userId of call.members.keys()) {
+      io.to(`user:${userId}`).emit(event, { callId, ...ownAccess(call, userId) });
     }
   }
 
@@ -110,15 +154,65 @@ function registerSockets(io) {
     callLog.ended(io, callId, event === 'call:failed' ? 'failed' : 'canceled');
     pendingCalls.delete(callId);
     activeCalls.delete(callId);
-    bothSides(call).emit(event, { callId });
+    if (call.members) everyone(call).emit(event, { callId });
+    else io.to(`user:${call.callerId}`).to(`user:${call.calleeId}`).emit(event, { callId });
+    // Приглашённый, который не успел ответить, тоже гасит своё окно.
+    if (call.invited) for (const id of call.invited.keys()) io.to(`user:${id}`).emit('call:canceled', { callId });
     if (call.roomName) {
       daily.deleteRoom(call.roomName).catch((e) => errorLog.external(e, 'daily.deleteRoom', { call: callId }));
     }
   }
 
+  // Человек вышел из разговора. Вдвоём это конец звонка, втроём и больше —
+  // остальные продолжают, у них просто гаснет его плитка.
+  function leaveCall(callId, userId) {
+    const call = activeCalls.get(callId);
+    if (!call || !call.members.has(userId)) return;
+    if (call.members.size <= 2) return finishCall(callId);
+    call.members.delete(userId);
+    callLog.left(callId, userId);
+    everyone(call).emit('call:peer:left', { callId, userId });
+    io.to(`user:${userId}`).emit('call:ended', { callId });
+  }
+
+  // Приглашённый взял трубку: он входит в разговор последним, поэтому
+  // предложения соединения делают ему остальные, а он только отвечает.
+  async function joinGroup(socket, callId, call) {
+    const userId = socket.data.userId;
+    call.invited.delete(userId);
+    if (call.members.size >= GROUP_MAX) return socket.emit('call:failed', { callId });
+    call.members.set(userId, { joinedAt: Date.now() });
+    callLog.joined(callId, userId);
+
+    const cards = new Map();
+    for (const id of call.members.keys()) cards.set(id, await peerCard(id));
+    if (!activeCalls.has(callId)) return; // разговор кончился, пока собирали карточки
+
+    // Новичку — весь состав разом, остальным — только он.
+    socket.emit('call:accepted', {
+      callId,
+      ...ownAccess(call, userId),
+      cards: [...cards.values()].filter((c) => c.userId !== userId),
+    });
+    // roster — весь состав: у двоих, что говорили до этого, имени друг
+    // друга на плитке иначе не взять, они знали его только из окна звонка.
+    const roster = [...cards.values()];
+    for (const id of call.members.keys()) {
+      if (id === userId) continue;
+      io.to(`user:${id}`).emit('call:peer:join', {
+        callId, peer: cards.get(userId), roster, offerer: true, ice: turn.iceServers(id),
+      });
+    }
+    // Остальные вкладки вошедшего перестают звонить.
+    socket.to(`user:${userId}`).emit('call:canceled', { callId });
+  }
+
   function finishCallsOf(userId) {
     for (const [id, c] of pendingCalls) if (isParty(c, userId)) finishCall(id);
-    for (const [id, c] of activeCalls) if (isParty(c, userId)) finishCall(id);
+    for (const [id, c] of activeCalls) {
+      if (!isParty(c, userId)) continue;
+      if (c.members.size > 2) leaveCall(id, userId); else finishCall(id);
+    }
   }
 
   // Человек вышел на связь: всё, что ему написали, пока его не было, дошло.
@@ -283,6 +377,11 @@ function registerSockets(io) {
     // own — браузер принявшего помнит, что Daily у него не соединялся.
     // Хоть у одного из двоих так — звонок сразу идёт через свой сервер.
     socket.on('call:accept', async ({ callId, own } = {}) => {
+      // Приглашение в идущий разговор: звонок уже активен, человек в нём
+      // числится приглашённым (call:invite ниже).
+      const running = activeCalls.get(callId);
+      if (running && running.invited && running.invited.has(socket.data.userId)) return joinGroup(socket, callId, running);
+
       const call = pendingCalls.get(callId);
       if (!call || call.calleeId !== socket.data.userId) return;
       pendingCalls.delete(callId);
@@ -291,7 +390,16 @@ function registerSockets(io) {
       // В активные — до запроса к Daily, чтобы отмена или обрыв во время
       // создания комнаты нашли звонок и завершили его.
       const roomName = `call_${callId}`;
-      const active = { ...call, engine: ownPath ? 'own' : 'daily', roomName: ownPath ? null : roomName, startedAt: Date.now() };
+      const now = Date.now();
+      const active = {
+        ...call,
+        engine: ownPath ? 'own' : 'daily',
+        roomName: ownPath ? null : roomName,
+        startedAt: now,
+        // Звонящий вошёл первым — он и делает предложение соединения.
+        members: new Map([[call.callerId, { joinedAt: now }], [call.calleeId, { joinedAt: now + 1 }]]),
+        invited: new Map(),
+      };
       activeCalls.set(callId, active);
       callLog.answered(callId, active.engine);
 
@@ -323,6 +431,17 @@ function registerSockets(io) {
     });
 
     socket.on('call:decline', ({ callId } = {}) => {
+      // Отказ от приглашения в идущий разговор: сам разговор продолжается,
+      // пригласившему — только строка «не берёт трубку».
+      const running = activeCalls.get(callId);
+      if (running && running.invited && running.invited.has(socket.data.userId)) {
+        const by = running.invited.get(socket.data.userId).by;
+        running.invited.delete(socket.data.userId);
+        io.to(`user:${by}`).emit('call:invite:declined', { callId, userId: socket.data.userId });
+        socket.to(`user:${socket.data.userId}`).emit('call:canceled', { callId });
+        return;
+      }
+
       const call = pendingCalls.get(callId);
       if (!call || call.calleeId !== socket.data.userId) return;
       pendingCalls.delete(callId);
@@ -339,8 +458,59 @@ function registerSockets(io) {
       io.to(`user:${call.calleeId}`).emit('call:canceled', { callId });
     });
 
+    // «Завершить» у себя: вдвоём это конец звонка, в группе — уход одного.
     socket.on('call:end', ({ callId } = {}) => {
-      if (isParty(pendingCalls.get(callId) || activeCalls.get(callId), socket.data.userId)) finishCall(callId);
+      const userId = socket.data.userId;
+      const active = activeCalls.get(callId);
+      if (active && active.members.size > 2 && active.members.has(userId)) return leaveCall(callId, userId);
+      if (isParty(pendingCalls.get(callId) || active, userId)) finishCall(callId);
+    });
+
+    // ── Групповой звонок ──
+    // Позвать можно из идущего разговора, до четверых вместе с собой.
+    // Приглашает любой участник, но приглашённый видит, кто уже говорит,
+    // до того как взять трубку: «меня втащили к незнакомым» не бывает.
+    //
+    // Daily в группах не участвует: разговор сначала переходит на свой путь
+    // (сетка на нашем TURN), и только потом входит третий.
+    socket.on('call:invite', async ({ callId, userId: guestId } = {}) => {
+      const me = socket.data.userId;
+      const call = activeCalls.get(callId);
+      if (!call || !call.members.has(me)) return;
+      if (typeof guestId !== 'string' || !OBJECT_ID.test(guestId)) return;
+      const no = (reason) => socket.emit('call:invite:failed', { callId, reason });
+      if (!turn.configured()) return no('unavailable');
+      if (call.members.has(guestId) || call.invited.has(guestId)) return;
+      if (call.members.size + call.invited.size >= GROUP_MAX) return no('full');
+
+      // Ограничение доступа (utils/restrict.js) — с каждым, кто уже в
+      // разговоре, и в обе стороны: затащить человека к тому, кто его
+      // ограничил, нельзя.
+      for (const id of call.members.keys()) {
+        if (await restriction.between(id, guestId)) return no('restricted');
+      }
+      if (!activeCalls.has(callId) || !call.members.has(me)) return; // разговор кончился, пока спрашивали базу
+
+      if (call.engine === 'daily') {
+        const room = call.roomName;
+        call.roomName = null;
+        callLog.switched(callId, 'групповой звонок');
+        goOwn(callId, call, 'call:switch');
+        if (room) daily.deleteRoom(room).catch((e) => errorLog.external(e, 'daily.deleteRoom', { call: callId }));
+      }
+
+      call.invited.set(guestId, { by: me, at: Date.now() });
+      const [from, ...inside] = await Promise.all([peerCard(me), ...[...call.members.keys()].map(peerCard)]);
+      io.to(`user:${guestId}`).emit('incoming_call', { callId, type: call.type, group: true, from, peers: inside });
+      socket.emit('call:invite:sent', { callId, userId: guestId });
+
+      setTimeout(() => {
+        const live = activeCalls.get(callId);
+        if (!live || !live.invited.has(guestId)) return;
+        live.invited.delete(guestId);
+        io.to(`user:${guestId}`).emit('call:canceled', { callId });
+        io.to(`user:${me}`).emit('call:invite:declined', { callId, userId: guestId, timeout: true });
+      }, INVITE_MS).unref();
     });
 
     // Повторный вход после обрыва: Daily выкинул участника, а звонок жив.
@@ -372,15 +542,21 @@ function registerSockets(io) {
       if (room) daily.deleteRoom(room).catch((e) => errorLog.external(e, 'daily.deleteRoom', { call: callId }));
     });
 
-    // Сигналы своего пути — собеседнику как есть. Сервер их не разбирает:
-    // проверяет только, что шлёт участник звонка, идущего этим путём.
-    socket.on('call:signal', ({ callId, data } = {}) => {
+    // Сигналы своего пути — адресату как есть. Сервер их не разбирает:
+    // проверяет только, что шлёт участник звонка, идущего этим путём, и что
+    // адресат — тоже участник. В разговоре на двоих адресата можно не
+    // называть: он один.
+    socket.on('call:signal', ({ callId, to, data } = {}) => {
       const call = activeCalls.get(callId);
       const userId = socket.data.userId;
       if (!isParty(call, userId) || call.engine !== 'own' || !data || typeof data !== 'object') return;
       if (JSON.stringify(data).length > SIGNAL_MAX) return;
-      const other = userId === call.callerId ? call.calleeId : call.callerId;
-      io.to(`user:${other}`).emit('call:signal', { callId, data });
+      let target = typeof to === 'string' && OBJECT_ID.test(to) ? to : null;
+      if (!target && call.members.size === 2) {
+        for (const id of call.members.keys()) if (id !== userId) target = id;
+      }
+      if (!target || !call.members.has(target)) return;
+      io.to(`user:${target}`).emit('call:signal', { callId, from: userId, data });
     });
   });
 

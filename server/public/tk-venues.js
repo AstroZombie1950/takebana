@@ -360,11 +360,18 @@
   }
   onClose.set(liveModal, stopWatching);
 
+  // Движок называет сервер: whip/whep — свой приём (MediaMTX), daily —
+  // прежняя комната. Браузеру решать нечего, он идёт, куда сказали.
+  const access = (url) => api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+
+  function lost() {
+    closeModal(liveModal);
+    toast(t('venues.noCamera'));
+  }
+
   function watch(id, name) {
     if (needLogin()) return;
     stopWatching();
-    const media = new MediaStream();
-    liveVideo.srcObject = media;
     // Название заведения — не словарная строка, поэтому ключ снимаем;
     // без названия остаётся «Трансляция» из словаря.
     if (name) {
@@ -374,20 +381,43 @@
       tkText($('venueLiveTitle'), 'venues.live');
     }
     openModal(liveModal);
-    watching = TKDaily.connect({
-      send: false,
-      access: () => TKDaily.requestAccess('/api/venues/' + id + '/watch'),
-      onTrack: (track, p, on) => {
-        if (p.local) return;
-        if (on) media.addTrack(track); else media.removeTrack(track);
-        liveVideo.srcObject = media;
-        liveVideo.play().catch(() => {});
-      },
-      onState: (s) => {
-        if (s !== 'ended') return;
-        closeModal(liveModal);
-        toast(t('venues.noCamera'));
-      },
+
+    access('/api/venues/' + id + '/watch').then((first) => {
+      if (first.engine === 'whep') {
+        watching = TKWhip.view(first.url, {
+          onStream: (stream) => {
+            liveVideo.srcObject = stream;
+            liveVideo.play().catch(() => {});
+          },
+          onState: (s) => { if (s === 'ended') lost(); },
+          onError: () => lost(),
+        });
+        return;
+      }
+
+      // Комната Daily: первый токен уже получен, повторный вход просит новый.
+      const media = new MediaStream();
+      liveVideo.srcObject = media;
+      let firstAccess = first;
+      watching = TKDaily.connect({
+        send: false,
+        access: () => {
+          if (!firstAccess) return TKDaily.requestAccess('/api/venues/' + id + '/watch');
+          const a = firstAccess;
+          firstAccess = null;
+          return Promise.resolve(a);
+        },
+        onTrack: (track, p, on) => {
+          if (p.local) return;
+          if (on) media.addTrack(track); else media.removeTrack(track);
+          liveVideo.srcObject = media;
+          liveVideo.play().catch(() => {});
+        },
+        onState: (s) => { if (s === 'ended') lost(); },
+      });
+    }).catch((e) => {
+      closeModal(liveModal);
+      toast(e.message || t('venues.noCamera'), 'error');
     });
   }
   $('venueWatch').addEventListener('click', function () { watch(this.dataset.id, this.dataset.name); });
@@ -395,8 +425,10 @@
   // ── Кабинет владельца: камера и настройки ──
   const mineModal = $('myVenuesModal');
   const mineList = $('myVenuesList');
-  const live = {};      // id заведения → сессия Daily, пока камера включена
+  const live = {};      // id заведения → показ, пока камера включена
   const starting = {};  // id → подключаемся
+  const viewers = {};   // id → сколько человек сейчас смотрит (свой приём)
+  let viewersTimer = null;
   let mine = [];
 
   function loadMine() {
@@ -409,7 +441,10 @@
       const on = !!live[v._id];
       const busy = !!starting[v._id];
       const approved = v.status === true;
-      const state = on ? ['is-live', t('venues.onAir')]
+      const watching = on && typeof viewers[v._id] === 'number'
+        ? t('venues.onAir') + ' · ' + t('venues.watching', { n: viewers[v._id] })
+        : t('venues.onAir');
+      const state = on ? ['is-live', watching]
         : approved ? ['', t('venues.offlineState')]
         : ['is-pending', t('venues.pending')];
       return `
@@ -438,7 +473,20 @@
     if (live[id] || starting[id]) return;
     starting[id] = true;
     renderMine();
-    TKDaily.requestAccess('/api/venues/' + id + '/live').then((first) => {
+    access('/api/venues/' + id + '/live').then((first) => {
+      // Свой приём: одно соединение с нашим сервером, зрителей раздаёт он.
+      if (first.engine === 'whip') {
+        live[id] = TKWhip.publish(first.url, {
+          onMediaError: () => toast(t('venues.mediaDenied'), 'error'),
+          onError: () => { toast(t('venues.liveLost'), 'error'); stopLive(id); },
+          onState: (s) => {
+            if (s === 'live') { delete starting[id]; renderMine(); loadVenues(); countViewers(id); }
+            if (s === 'ended' && live[id]) { toast(t('venues.liveLost'), 'error'); stopLive(id); }
+          },
+        });
+        return;
+      }
+
       let firstAccess = first;
       live[id] = TKDaily.connect({
         send: true,
@@ -467,10 +515,30 @@
     });
   }
 
+  // Сколько человек смотрит камеру — спрашиваем у своего приёмника
+  // (MediaMTX знает своих читателей). У комнаты Daily такого счётчика нет:
+  // сервер отвечает viewers: null, и строка просто не показывает число.
+  function countViewers(id) {
+    if (!live[id]) return;
+    api('/api/venues/' + id + '/viewers')
+      .then((r) => {
+        if (!live[id]) return;
+        viewers[id] = typeof r.viewers === 'number' ? r.viewers : null;
+        renderMine();
+      })
+      .catch(() => {});
+    clearTimeout(viewersTimer);
+    viewersTimer = setTimeout(() => {
+      Object.keys(live).forEach(countViewers);
+    }, 15000);
+  }
+
   function stopLive(id) {
     const session = live[id];
     delete live[id];
     delete starting[id];
+    delete viewers[id];
+    if (!Object.keys(live).length) clearTimeout(viewersTimer);
     if (session) session.leave();
     renderMine();
     fetch('/api/venues/' + id + '/live', { method: 'DELETE' }).catch(() => {}).then(loadVenues);

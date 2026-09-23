@@ -91,3 +91,50 @@
 .tk-net__state { flex: none; color: var(--tk-muted); }
 .tk-net__row[data-state="ok"] .tk-net__state { color: var(--tk-green); }
 .tk-net__row[data-state="bad"] .tk-net__state { color: var(--tk-accent); }
+
+/* Проверка звука (/check): человек проверяет её один, без второго телефона,
+ * поэтому блок отделён от проверки связи чертой и читается сверху вниз —
+ * объяснение, кнопка, состояние, четыре ответа. */
+.tk-sound {
+  width: 100%;
+  max-width: 480px;
+  margin: 34px 0 0;
+  padding-top: 26px;
+  border-top: 1px solid var(--tk-rule);
+  text-align: left;
+}
+
+.tk-sound__title {
+  margin: 0 0 8px;
+  font-family: Oswald, sans-serif;
+  font-size: 19px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+.tk-sound__state {
+  margin: 12px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  color: var(--tk-muted);
+}
+
+.tk-sound audio { display: none; }
+
+.tk-sound__answers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.tk-sound__answers[hidden] { display: none; }
+
+.tk-sound__q {
+  flex-basis: 100%;
+  margin: 0;
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  color: var(--tk-paper);
+}

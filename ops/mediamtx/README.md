@@ -1,0 +1,129 @@
+# Свой приём видео: MediaMTX
+
+Камера заведения перестала быть комнатой Daily и стала потоком: заведение
+вещает один раз по WHIP, зрителей обслуживает наш сервер по WHEP. Платим
+только за трафик.
+
+Счёт по нашему калькулятору (`server/views/calc.html`, сценарий 20 заведений
+по 6 часов в день, в среднем 20 зрителей):
+
+| Как раздаём | В месяц |
+|---|---|
+| Комната Daily (как было до 23.09) | $18 144 |
+| Поток, но камера идёт через мост Daily | $4 968 |
+| **Поток, свой приём** | **$864** |
+
+Мост через выход RTMP Daily стоит $1,14 в час **независимо от числа
+зрителей** — на старте он дороже того, что было. Поэтому принимаем сами.
+
+Перекодирования нет: MediaMTX перекладывает то, что прислал браузер,
+в WHEP как есть. Ограничение ffmpeg 4.4 на сервере к этому пути
+не относится — ffmpeg здесь не участвует вовсе.
+
+## Установка
+
+```bash
+# Версия — та же, что проверена локально 23.09.2026.
+V=1.21.1
+cd /tmp
+curl -fsSL -o mediamtx.tar.gz \
+  https://github.com/bluenviron/mediamtx/releases/download/v${V}/mediamtx_v${V}_linux_amd64.tar.gz
+tar xzf mediamtx.tar.gz mediamtx
+sudo install -o root -g root -m 0755 mediamtx /usr/local/bin/mediamtx
+
+sudo mkdir -p /etc/mediamtx
+sudo cp /srv/takebana/ops/mediamtx/mediamtx.yml /etc/mediamtx/mediamtx.yml
+```
+
+В `/etc/mediamtx/mediamtx.yml` дописать публичный адрес сервера — браузеру
+нужно знать, куда слать медиа:
+
+```yaml
+webrtcAdditionalHosts: ['<внешний IP сервера>']
+```
+
+## Запуск
+
+`/etc/systemd/system/mediamtx.service`:
+
+```ini
+[Unit]
+Description=MediaMTX (камеры заведений)
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/mediamtx /etc/mediamtx/mediamtx.yml
+Restart=always
+RestartSec=3
+User=takebana
+Group=takebana
+# Приёмник не должен съедать машину у приложения: камеры важны,
+# но сайт важнее.
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now mediamtx
+sudo systemctl status mediamtx --no-pager
+```
+
+## Порты
+
+| Куда | Что | Открывать наружу |
+|---|---|---|
+| 8889/tcp | сигнализация WHIP и WHEP | нет, только петля — наружу её выводит nginx на `/mtx/` |
+| 8189/udp | сами звук и видео (ICE) | **да** |
+| 9997/tcp | API: идёт ли камера, сколько смотрят | нет, только петля |
+
+```bash
+sudo ufw allow 8189/udp comment 'mediamtx ICE'
+```
+
+## Приложение
+
+В `server/.env`:
+
+```
+MTX_PUBLIC=https://takebana.com/mtx
+MTX_API=http://127.0.0.1:9997
+```
+
+Обе переменные вместе включают свой приём. Убрать их — и камеры сейчас же
+возвращаются на комнаты Daily: движок выбирается на каждый запрос
+(`server/routes/venueLive.js`), перезапуск приложения не нужен, идущие
+показы просто закончатся. Это и есть откат.
+
+## Проверка
+
+```bash
+# Из server/, на Node 24:
+set -a && . ./.env && set +a && node ../temp/probe-venue-whip-0923.mjs
+```
+
+Зонд заводит своё заведение, вещает из браузера, смотрит вторым браузером,
+проверяет счётчик зрителей, права (чужой ключ не пускают) и выключение.
+
+Руками:
+
+```bash
+curl -s http://127.0.0.1:9997/v3/paths/list | jq
+journalctl -u mediamtx -n 50 --no-pager
+```
+
+## Что дальше
+
+**HLS для многолюдных камер.** Пока зрителей мало, WHEP дешевле некуда:
+задержка меньше секунды, платим только за свой трафик (16 ТБ в месяц
+по тарифу Hostinger — около 13 тысяч зрительских часов). Когда перестанет
+хватать, включаем в конфиге `hls: yes` и отдаём плейлисты через Bunny:
+задержка станет 10–15 секунд, зато трафик уйдёт на CDN.
+
+Одно «но»: HLS требует H.264, а браузер по своему выбору шлёт VP8.
+Навязать H.264 через `setCodecPreferences` мы пробовали 23.09 — браузер
+соглашался в согласовании и не мог закодировать, поток приходил вообще
+без видео. Поэтому ветку HLS включаем отдельно и с проверкой на живых
+устройствах.

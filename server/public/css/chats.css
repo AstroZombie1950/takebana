@@ -322,7 +322,7 @@
 
 .tk-chat__peer-wrap { flex: 1; min-width: 0; cursor: pointer; }
 
-/* Кнопка в шапке диалога: удалить переписку. */
+/* Кнопки в шапке диалога: позвонить и видеозвонок. */
 .tk-chat__tool {
   display: flex;
   align-items: center;
@@ -339,6 +339,7 @@
 }
 
 .tk-chat__tool:hover { color: var(--tk-accent); border-color: var(--tk-rule); }
+.tk-chat__tool[hidden] { display: none; }
 
 .tk-chat__peer {
   display: flex;
@@ -1390,6 +1391,134 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   background: rgba(227, 66, 52, .12);
 }
 
+/* ── Контакты ──
+ * Вкладка с личной записной книжкой: поле поиска сверху, дальше строки —
+ * аватар и имя одной кнопкой (открыть переписку), справа звонок и видео.
+ * Остальное — избранное, удаление, жалоба — в меню строки (правый клик,
+ * на телефоне удержание), чтобы строка не превращалась в панель кнопок. */
+.tk-contacts {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tk-contacts[hidden] { display: none; }
+
+.tk-contacts__search {
+  flex: none;
+  padding: 10px 20px;
+  border-bottom: 1px solid rgba(144, 113, 99, .25);
+}
+
+.tk-contacts__search .tk-field { width: 100%; }
+
+.tk-contacts__hint {
+  margin: 0;
+  padding: 14px 20px 6px;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--tk-muted);
+}
+
+.tk-contact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 16px;
+  border-bottom: 1px solid rgba(144, 113, 99, .25);
+  transition: background-color .18s ease;
+}
+
+.tk-contact:hover { background: rgba(227, 66, 52, .08); }
+
+.tk-contact__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 6px 11px 20px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.tk-contact__ava {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(144, 113, 99, .35);
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-contact__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-contact__body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.tk-contact__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-contact__star { flex: none; color: var(--tk-accent); }
+
+.tk-contact__btn {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--tk-rule);
+  padding: 0;
+  cursor: pointer;
+  color: var(--tk-beige);
+  transition: border-color .18s ease, color .18s ease, background-color .18s ease;
+}
+
+.tk-contact__btn:hover,
+.tk-contact__btn:focus-visible,
+.tk-contact__add:hover,
+.tk-contact__add:focus-visible {
+  border-color: var(--tk-accent);
+  color: var(--tk-paper);
+  background: rgba(227, 66, 52, .12);
+}
+
+/* Подсказка «добавить» — словом, а не значком: она объясняет, что произойдёт. */
+.tk-contact__add {
+  flex: none;
+  padding: 7px 12px;
+  background: none;
+  border: 1px solid var(--tk-rule);
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: var(--tk-beige);
+  transition: border-color .18s ease, color .18s ease, background-color .18s ease;
+}
+
 /* ── Выделение ──
  * Как в Telegram: в режиме выбора слева у каждого сообщения кружок,
  * отмеченная строка подсвечена во всю ширину акцентным цветом. Та же
@@ -1608,7 +1737,14 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   .tk-dialog { padding: 10px 16px; }
   .tk-callrow { padding-right: 12px; }
   .tk-callrow__main { padding-left: 16px; }
-  .tk-chat__head { padding: 10px 16px; }
+  .tk-contact { padding-right: 12px; }
+  .tk-contact__main { padding-left: 16px; }
+  .tk-contacts__search { padding: 10px 16px; }
+  .tk-contacts__hint { padding-left: 16px; padding-right: 16px; }
+  /* Две кнопки звонка вместо одной корзинки: на узком экране им нужна
+     ширина, поэтому зазоры и сами кнопки чуть меньше. */
+  .tk-chat__head { padding: 10px 16px; gap: 8px; }
+  .tk-chat__head .tk-chat__tool { width: 32px; height: 32px; }
   .tk-chat__feed { --feed-x: 16px; padding: 10px 0; }
   .tk-chat__compose { padding: 12px 16px calc(12px + var(--tk-safe-b)); }
   .tk-msg > .tk-msg__bubble,

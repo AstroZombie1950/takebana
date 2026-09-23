@@ -8,6 +8,7 @@
 // в ленте диалога (public/chats.js). Кончившийся звонок уходит обоим
 // сокетом — call:logged, — чтобы появиться там без перезагрузки.
 
+const mongoose = require('mongoose');
 const Call = require('../models/Call');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
@@ -35,6 +36,21 @@ function created(callId, { callerId, calleeId, type }) {
 
 function answered(callId, path) {
   return after(callId, () => Call.updateOne({ callId, status: 'ringing' }, { $set: { status: 'answered', answeredAt: new Date(), path } }));
+}
+
+// Третий и четвёртый в разговоре: вошёл и вышел. Пара caller/callee
+// не трогается — журнал и расходы считаются по ней.
+function joined(callId, userId) {
+  return after(callId, () => Call.updateOne({ callId }, {
+    $set: { group: true },
+    $push: { participants: { user: userId, joinedAt: new Date() } },
+  }));
+}
+
+function left(callId, userId) {
+  return after(callId, () => Call.updateOne({ callId }, { $set: { 'participants.$[p].leftAt': new Date() } }, {
+    arrayFilters: [{ 'p.user': new mongoose.Types.ObjectId(String(userId)), 'p.leftAt': null }],
+  }));
 }
 
 // Разговор ушёл с Daily на свой сервер.
@@ -106,6 +122,8 @@ function view(c) {
     type: c.type,
     status: c.status,
     startedAt: c.startedAt,
+    // Сколько всего народу было в разговоре: пара плюс приглашённые.
+    ...(c.group ? { group: true, people: 2 + (c.participants || []).length } : {}),
     duration: c.answeredAt && c.endedAt ? Math.round((c.endedAt - c.answeredAt) / 1000) : 0,
   };
 }
@@ -170,4 +188,4 @@ async function removeAll(me) {
   return ids;
 }
 
-module.exports = { created, answered, switched, ended, missedCount, journal, between, remove, removeAll, MISSED };
+module.exports = { created, answered, switched, ended, joined, left, missedCount, journal, between, remove, removeAll, MISSED };

@@ -50,6 +50,10 @@
         <span class="tk-call__beacon tk-call__beacon--ok"></span>
         <span id="outgoingStatus"></span>
         <span class="tk-call__net hidden" id="outgoingNet" role="img" aria-label="<%= ta('call.network') %>" data-i18n-aria="call.network"><i></i><i></i><i></i></span>
+        <%# Уровень звука собеседника — из статистики соединения, без
+            WebAudio (public/tk-audio.js). Полоска шевелится, а не слышно —
+            значит дело в телефоне, а не в сайте. %>
+        <span class="tk-call__level hidden" id="outgoingLevel" role="img" aria-label="<%= ta('call.level') %>" data-i18n-aria="call.level"><i></i></span>
       </p>
       <p class="tk-call__timer"><span id="outgoingTimer" class="hidden">00:00</span></p>
 
@@ -59,12 +63,17 @@
           <video id="outLocalVideo" class="pip-local" autoplay playsinline muted></video>
           <span class="tk-wm" aria-hidden="true"></span>
         </div>
+        <%# Групповой разговор: сетка плиток вместо «собеседник и я в углу».
+            Плитки собирает tk-app.js, по плитке на участника, до четырёх. %>
+        <div class="tk-call__grid" id="outgoingGrid" hidden></div>
       </div>
 
       <audio id="outRemoteAudio" autoplay playsinline></audio>
 
       <div class="tk-call__actions">
         <button type="button" id="outgoingVoiceBtn" class="tk-btn tk-btn--outline tk-btn--sm hidden"></button>
+        <%# «Добавить» — позвать третьего и четвёртого в идущий разговор. %>
+        <button type="button" id="outgoingAddBtn" class="tk-btn tk-btn--outline tk-btn--sm hidden" data-i18n="call.add"><%- t('call.add') %></button>
         <button type="button" id="outgoingCancelBtn" class="tk-btn tk-btn--danger tk-btn--sm tk-btn--block"></button>
       </div>
     </div>
@@ -92,6 +101,10 @@
         <span class="tk-call__beacon tk-call__beacon--ring"></span>
         <span id="incomingStatus"></span>
         <span class="tk-call__net hidden" id="incomingNet" role="img" aria-label="<%= ta('call.network') %>" data-i18n-aria="call.network"><i></i><i></i><i></i></span>
+        <%# Уровень звука собеседника — из статистики соединения, без
+            WebAudio (public/tk-audio.js). Полоска шевелится, а не слышно —
+            значит дело в телефоне, а не в сайте. %>
+        <span class="tk-call__level hidden" id="incomingLevel" role="img" aria-label="<%= ta('call.level') %>" data-i18n-aria="call.level"><i></i></span>
       </p>
       <p class="tk-call__timer"><span id="incomingTimer" class="hidden">00:00</span></p>
 
@@ -101,15 +114,38 @@
           <video id="inLocalVideo" class="pip-local" autoplay playsinline muted></video>
           <span class="tk-wm" aria-hidden="true"></span>
         </div>
+        <%# Групповой разговор: сетка плиток вместо «собеседник и я в углу».
+            Плитки собирает tk-app.js, по плитке на участника, до четырёх. %>
+        <div class="tk-call__grid" id="incomingGrid" hidden></div>
       </div>
 
       <audio id="inRemoteAudio" autoplay playsinline></audio>
 
       <div class="tk-call__actions tk-call__actions--pair">
         <button type="button" id="incomingVoiceBtn" class="tk-btn tk-btn--outline tk-btn--sm hidden"></button>
+        <button type="button" id="incomingAddBtn" class="tk-btn tk-btn--outline tk-btn--sm hidden" data-i18n="call.add"><%- t('call.add') %></button>
         <button type="button" id="incomingDeclineBtn" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="call.decline"><%- t('call.decline') %></button>
         <button type="button" id="incomingAcceptBtn" class="tk-btn tk-btn--ok tk-btn--sm"></button>
       </div>
+    </div>
+  </div>
+</div>
+
+<%# Кого позвать в идущий разговор: свои контакты (routes/contacts.js),
+    а кого в них нет — поиском по сайту. Четверо — потолок сетки
+    (sockets/index.js, GROUP_MAX), поэтому свободные места считаются. %>
+<div class="tk-modal hidden" id="callInviteModal">
+  <div class="tk-modal__card">
+    <div class="tk-modal__head">
+      <h3 class="tk-modal__title" data-i18n="call.addTitle"><%- t('call.addTitle') %></h3>
+      <button type="button" class="tk-modal__close" id="callInviteClose" aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+    </div>
+    <div class="tk-modal__body">
+      <p class="tk-note" id="callInviteFree"></p>
+      <input type="text" class="tk-field" id="callInviteSearch" placeholder="<%= ta('call.addSearch') %>" data-i18n-placeholder="call.addSearch" autocomplete="off">
+      <div class="tk-invite__list" id="callInviteList"></div>
     </div>
   </div>
 </div>
@@ -153,4 +189,5 @@
   </div>
 </div>
 
+<script defer src="<%= asset('/tk-audio.js') %>"></script>
 <script defer src="<%= asset('/report.js') %>"></script>

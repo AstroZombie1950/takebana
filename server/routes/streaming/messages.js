@@ -242,8 +242,10 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
   }
   const recent = order.map((id) => known.get(id)).filter(Boolean);
 
-  // Вкладка «Звонки» открывается и адресом: из уведомления о пропущенном.
-  res.render('chatsPage', { conversations: list, recent, timeAgo, tab: req.query.tab === 'calls' ? 'calls' : 'messages' });
+  // Вкладки «Звонки» и «Контакты» открываются и адресом: из уведомления
+  // о пропущенном и из ссылок «в контакты» на других страницах.
+  const tabs = ['calls', 'contacts'];
+  res.render('chatsPage', { conversations: list, recent, timeAgo, tab: tabs.includes(req.query.tab) ? req.query.tab : 'messages' });
 });
 
 

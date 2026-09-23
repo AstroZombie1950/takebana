@@ -27,6 +27,15 @@ const callSchema = new Schema({
   // посреди звонка. fallback — почему перешли, со слов браузера.
   path: { type: String, enum: ['daily', 'own'], default: 'daily' },
   fallback: { type: String, default: null },
+  // Групповой разговор (до четырёх, решение 23.09): к паре caller/callee
+  // добавляются приглашённые. Старые поля остаются как были — по ним
+  // считается журнал и расходы, — а participants заполняется только здесь.
+  group: { type: Boolean, default: false },
+  participants: [{
+    user: { type: Schema.Types.ObjectId, ref: 'User' },
+    joinedAt: { type: Date, default: Date.now },
+    leftAt: { type: Date, default: null },
+  }],
   // Кто убрал звонок из своего журнала и ленты переписки. Только «у себя»:
   // запись общая на двоих, и по ней же панель считает разговоры и расходы
   // на Daily — поэтому сам документ не стирается никогда.
