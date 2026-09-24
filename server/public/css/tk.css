@@ -768,3 +768,43 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   .tk-footer__col { gap: 2px; }
 }
 
+
+/* ── Уведомление о cookie ───────────────────────────────────
+ * Плашка внизу при первом визите (partials/metrics.ejs), одна кнопка.
+ * Ниже модальных окон — поверх них её не нажать и она не нужна.
+ */
+.tk-consent {
+  position:fixed;
+  z-index:900;
+  left:calc(16px + var(--tk-safe-l));
+  right:calc(16px + var(--tk-safe-r));
+  bottom:calc(16px + var(--tk-safe-b));
+  max-width:720px;
+  margin:0 auto;
+  display:flex;
+  align-items:center;
+  gap:20px;
+  padding:16px 20px;
+  background:var(--tk-ink);
+  color:var(--tk-paper);
+  border:1px solid var(--tk-rule);
+  box-shadow:0 16px 40px rgba(0, 0, 0, .45);
+}
+
+.tk-consent__text {
+  margin:0;
+  flex:1;
+  font-size:14px;
+  line-height:1.5;
+}
+
+.tk-consent__btns {
+  display:flex;
+  gap:10px;
+  flex-shrink:0;
+}
+
+@media (max-width:600px) {
+  .tk-consent { flex-direction:column; align-items:stretch; gap:14px; }
+  .tk-consent__btns > * { flex:1; }
+}

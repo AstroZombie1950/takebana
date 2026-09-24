@@ -9,6 +9,8 @@ const router = express.Router();
 const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const Stream = require('../../models/Stream');
+const StreamSession = require('../../models/StreamSession');
+const Recording = require('../../models/Recording');
 const Subscription = require('../../models/Subscription');
 const User = require('../../models/User');
 const catalog = require('../../config/catalog');
@@ -17,6 +19,7 @@ const { requireAuth } = require('../../middleware/auth');
 const recording = require('../../utils/recording');
 const { randomUUID } = require('crypto');
 const userView = require('../../utils/userView');
+const { profileUrl } = require('../../utils/profileUrl');
 const { buildObsStreamKey, getSignExpiry } = require('../../utils/rtmpAuth');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -31,6 +34,7 @@ async function loadStream(streamId) {
   const displayName = userView.displayName(author);
   const user = {
     _id: author._id,
+    url: profileUrl(author),
     displayName,
     avatarStyle: userView.avatarStyle(author, displayName),
   };
@@ -77,9 +81,31 @@ router.get('/studio', requireAuth, commonDataMiddleware, async (req, res) => {
 
 // Гость смотрит эфир и читает чат; писать, подписаться и пожаловаться —
 // после входа (streamInfo.ejs, streamChat.ejs).
+// Эфира по ссылке больше нет. У каждого эфира своя ссылка: завершение
+// удаляет документ Stream, следующий эфир получает новый. След остаётся
+// в StreamSession — по нему видно, чей это был эфир и сохранили ли запись.
+// Запись готова — 301 на неё: ссылку пересылали, пока эфир шёл, и она
+// продолжает вести к тому же. Склеивается — «скоро появится»; записи нет —
+// 410, эфир ушёл насовсем. Оба — со ссылкой на страницу автора.
+async function ended(req, res) {
+  const id = req.params.streamId;
+  const sessions = OBJECT_ID.test(id)
+    ? await StreamSession.find({ stream: id }).sort({ startedAt: -1 }).select('user recording').lean()
+    : [];
+  if (!sessions.length) return res.status(404).render('streamNotFound');
+  const withRec = sessions.find((s) => s.recording);
+  const rec = withRec && await Recording.findById(withRec.recording).select('status').lean();
+  if (rec && rec.status === 'ready') return res.redirect(301, `/recording/${rec._id}`);
+  const author = await User.findById(sessions[0].user).select('nickname login email banned').lean();
+  res.status(rec && rec.status === 'processing' ? 404 : 410).render('streamNotFound', {
+    authorUrl: author && !author.banned ? profileUrl(author) : '',
+    processing: !!rec && rec.status === 'processing',
+  });
+}
+
 router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
   const page = await loadStream(req.params.streamId);
-  if (!page) return res.status(404).render('streamNotFound');
+  if (!page) return ended(req, res);
 
   const isStreamer = String(page.user._id) === String(req.session.userId);
   const blocked = await restriction.isRestricted(page.user._id, req.session.userId);

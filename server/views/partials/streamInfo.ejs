@@ -16,12 +16,12 @@
 
   <div class="tk-live__more-body" id="infoMore">
     <div class="tk-live__author">
-      <a href="/userPage/<%= user._id %>" class="tk-live__avatar"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
+      <a href="<%= user.url %>" class="tk-live__avatar"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
         <% if (user.avatarStyle.url) { %><img src="<%= user.avatarStyle.url %>" alt=""><% } else { %><%= user.avatarStyle.initial %><% } %>
       </a>
 
       <div class="tk-live__author-body">
-        <a href="/userPage/<%= user._id %>" class="tk-live__author-name"><%= user.displayName %></a>
+        <a href="<%= user.url %>" class="tk-live__author-name"><%= user.displayName %></a>
         <% if (isStreamer) { %>
           <span class="tk-live__role streamer-badge" data-i18n="stream.host"><%- t('stream.host') %></span>
         <% } %>

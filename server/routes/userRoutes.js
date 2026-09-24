@@ -130,6 +130,8 @@ router.post('/update-profile', validate({
   const was = { login: user.login, nickname: user.nickname };
   user.login = login;
   if (changed) {
+    // Старый адрес /@ник остаётся рабочим — ссылки на профиль уже разошлись.
+    if (user.nickname) user.formerNicknames = [...(user.formerNicknames || []).filter((n) => n !== user.nickname && n !== nick), user.nickname].slice(-10);
     user.nickname = nick;
     user.nicknameChangedAt = new Date();
   }

@@ -24,7 +24,7 @@
     { key: 'authors',       href: '/authors',                 i18n: 'authors.h1',        noteI18n: 'authors.sideNote' }
   ];
   var myPage = guest ? '' : '/userPage/' + currentUser._id;
-  var venues = { href: '/main', i18n: 'app.venues', icon: '<path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle>' };
+  var venues = { href: '/map', i18n: 'app.venues', icon: '<path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle>' };
   var about = { href: '/about', i18n: 'nav.whatIs', icon: '<circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5v.01"></path>' };
   // «Что такое Takebana» в шапке — только у гостя; вошедшему — здесь, всегда.
   var links = [venues, about];
@@ -54,7 +54,7 @@
   <% } %>
 
   <%# Заявка заведения подсвечивает «Карту». %>
-  <% var parentOf = { '/company-register': '/main' }; %>
+  <% var parentOf = { '/company-register': '/map' }; %>
   <% links.forEach(function (item) { %>
   <a href="<%= item.href %>" class="tk-aside__item<%= (parentOf[here] || here) === item.href ? ' tk-aside__item--on' : '' %>">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><%- item.icon %></svg>

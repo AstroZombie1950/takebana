@@ -3,12 +3,13 @@
   в профиле (userPage.ejs) и страницу галереи (gallery.ejs). Фото открывается
   окном просмотра, готовое видео — своей страницей /video/:id. Крестик
   владельца и ролики в работе обслуживает public/gallery.js.
-  Параметры: item, n — номер плитки для подписи, isSelf.
+  Параметры: item, n — номер плитки для подписи, owner — имя хозяина
+  для alt фото (поиск по картинкам), isSelf.
 %>
 <% if (item.type === 'photo') { %>
 <div class="tk-shots__item">
   <button type="button" class="tk-shot" aria-label="<%= ta('user.photoN', { n: n }) %>" data-i18n-aria="user.photoN" data-i18n-vars='{"n": <%= n %>}'>
-    <img src="<%= item.url %>" alt="" loading="lazy" decoding="async" data-photo-url="<%= item.url %>">
+    <img src="<%= item.url %>" alt="<%= ta('user.photoOf', { name: owner, n: n }) %>" loading="lazy" decoding="async" data-photo-url="<%= item.url %>">
   </button>
   <% if (isSelf) { %>
   <button type="button" class="tk-thumb__del" data-name="<%= item.url.split('/').pop() %>" aria-label="<%= ta('common.delete') %>" data-i18n-aria="common.delete">
@@ -20,7 +21,7 @@
 <div class="tk-shots__item<%= v.status !== 'ready' ? ' is-' + v.status : '' %>" data-video-id="<%= v._id %>">
   <% if (v.status === 'ready') { %>
   <a class="tk-shot tk-shot--video" href="/video/<%= v._id %>"<% if (v.title) { %> aria-label="<%= v.title %>"<% } else { %> aria-label="<%= ta('user.videoPlay') %>" data-i18n-aria="user.videoPlay"<% } %>>
-    <% if (v.thumb && v.thumb.url) { %><img src="<%= v.thumb.url %>" alt="" loading="lazy" decoding="async"><% } %>
+    <% if (v.thumb && v.thumb.url) { %><img src="<%= v.thumb.url %>" alt="<%= v.title %>" loading="lazy" decoding="async"><% } %>
     <span class="tk-shot__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5.5v13L20 12z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
     <span class="tk-shot__len"><%= clock(v.duration) %></span>
   </a>

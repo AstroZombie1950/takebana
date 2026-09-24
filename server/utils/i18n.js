@@ -303,10 +303,31 @@ const EN = {
     'допустимо только: {values}': 'allowed values: {values}',
 };
 
-// Язык запроса. Без cookie — русский, как и сайт.
+// Язык запроса: выбор человека — cookie `lang`; без неё — по языку браузера
+// (docs/seo/DECISIONS.md, 24.09): русский, если русский у него первым,
+// иначе английский. Аудитория международная, английский — основной, и робот
+// поиска, который приходит без cookie и чаще всего без Accept-Language,
+// видит английскую версию. Первый же ответ браузер запоминает в cookie
+// (public/tk-i18n.js), дальше язык не прыгает.
+//
+// SITE_LANG=ru|en — без cookie всегда этот язык, без угадывания. Нужен
+// зондам: безголовый Chrome шлёт en-US, а ждут они русский (temp/run-probes.sh).
+const SITE_LANG = /^(ru|en)$/.test(process.env.SITE_LANG || '') ? process.env.SITE_LANG : '';
+
+function browserLang(header) {
+    let best = null, bestQ = -1;
+    for (const part of String(header || '').split(',')) {
+        const [tag, ...params] = part.trim().toLowerCase().split(';');
+        const q = params.reduce((v, p) => (/^\s*q=/.test(p) ? parseFloat(p.split('=')[1]) : v), 1);
+        if (tag && tag !== '*' && q > bestQ) { best = tag; bestQ = q; }
+    }
+    return best && best.split('-')[0] === 'ru' ? 'ru' : 'en';
+}
+
 function langOf(req) {
     const m = /(?:^|;\s*)lang=(en|ru)(?:;|$)/.exec(req.headers.cookie || '');
-    return m ? m[1] : 'ru';
+    if (m) return m[1];
+    return SITE_LANG || browserLang(req.headers['accept-language']);
 }
 
 // tr('en', 'не короче {min} символов', { min: 6 }) → 'at least 6 characters'
@@ -386,6 +407,7 @@ function pageLocals(req, res, next) {
     const render = res.render;
     res.render = function renderVaryingByLang(...args) {
         this.vary('Cookie');
+        this.vary('Accept-Language');
         return render.apply(this, args);
     };
     next();

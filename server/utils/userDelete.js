@@ -19,6 +19,7 @@ const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
 const galleryVideo = require('./galleryVideo');
 const galleryPhotos = require('./galleryPhotos');
+const storage = require('./storage');
 const attachments = require('./attachments');
 const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
@@ -131,6 +132,7 @@ async function removeUser(user, io) {
   ]);
 
   unlinkUpload(user.avatar, 'avatars');
+  if (user.ogCard && user.ogCard.key) await storage.remove(user.ogCard.key).catch(() => {});
   // Фото галереи — из Bunny и из папки на сервере (загруженные до переезда).
   await galleryPhotos.removeAll(idStr, user.gallery);
 

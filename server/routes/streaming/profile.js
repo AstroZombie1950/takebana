@@ -23,6 +23,7 @@ const { authLimiter } = require('../../middleware/rateLimit');
 const { validate } = require('../../middleware/validate');
 const { removeUser } = require('../../utils/userDelete');
 const userView = require('../../utils/userView');
+const ogImage = require('../../utils/ogImage');
 const { audit } = require('../../utils/audit');
 const nickname = require('../../utils/nickname');
 const { mailConfigured } = require('../../utils/mail');
@@ -99,6 +100,7 @@ router.post('/profile/avatar', requireAuth, uploadAvatar.single('avatar'), async
   user.avatar = `/uploads/avatars/${name}`;
   await user.save();
   removeAvatarFile(old);
+  ogImage.refresh(user); // карточка для мессенджеров — в фоне
 
   audit(req, 'profile.avatar', { targetType: 'user', target: user });
   res.json({ success: true, url: user.avatar, avatar: avatarOf(user) });
@@ -113,6 +115,7 @@ router.delete('/profile/avatar', requireAuth, async (req, res) => {
   user.avatar = null;
   await user.save();
   removeAvatarFile(old);
+  ogImage.refresh(user); // без аватара карточка не нужна — уберётся из облака
 
   audit(req, 'profile.avatar.delete', { targetType: 'user', target: user });
   res.json({ success: true, avatar: avatarOf(user) });

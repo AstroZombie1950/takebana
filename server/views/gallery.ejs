@@ -1,12 +1,12 @@
 <%#
-  Вся галерея человека: /userPage/:id/gallery?page=N. Фото и видео одной
+  Вся галерея человека: /@ник/gallery?page=N. Фото и видео одной
   лентой, новые сверху (utils/gallery.js), по странице — маршрут в
   routes/streaming/catalog.js. Плитка — partials/galleryTile.ejs, вид —
   css/gallery.css, поведение (крестик владельца, ролики в работе, просмотр
   фото) — public/gallery.js, общий с профилем.
 %>
 <%
-  var base = '/userPage/' + owner._id;
+  var base = owner.url;
   var pageHref = function (p) { return base + '/gallery' + (p > 1 ? '?page=' + p : ''); };
   // Номера вокруг текущей, первая и последняя всегда; пропуски — «…».
   var nums = [];
@@ -18,7 +18,10 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { titleKey: 'page.gallery.title', titleVars: { name: owner.displayName } }) %>
+<%# Каждая страница листалки — canonical на себя. До gallery.PREVIEW штук
+    галерея целиком повторяет блок профиля — вне индекса (indexable). %>
+<%- include('partials/tkHead', { titleKey: 'page.gallery.title', titleVars: { name: owner.displayName }, seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow',
+         jsonld: ld.crumbs([['Takebana', '/'], [owner.displayName, owner.url], [ta('user.gallery'), pageHref(1)]]) } }) %>
 <% if (page > 1) { %><link rel="prev" href="<%= pageHref(page - 1) %>"><% } %>
 <% if (page < pages) { %><link rel="next" href="<%= pageHref(page + 1) %>"><% } %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
@@ -60,7 +63,7 @@
       </section>
       <% } else { %>
       <div class="tk-shots tk-shots--wide" id="galleryShots">
-        <% shots.forEach(function (item, i) { %><%- include('partials/galleryTile', { item: item, n: offset + i + 1, isSelf: isSelf }) %><% }); %>
+        <% shots.forEach(function (item, i) { %><%- include('partials/galleryTile', { item: item, n: offset + i + 1, owner: owner.displayName, isSelf: isSelf }) %><% }); %>
       </div>
       <p class="tk-note tk-note--center" id="galleryEmpty" data-i18n="user.galleryEmpty"<% if (shots.length) { %> hidden<% } %>><%- t('user.galleryEmpty') %></p>
 

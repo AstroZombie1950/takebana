@@ -18,11 +18,20 @@
   // Видео без названия подписываем датой — ни одно не остаётся безымянным.
   var untitled = function (item) { return ta('video.untitled', { date: date(item.createdAt, { day: 'numeric', month: 'long', year: 'numeric' }) }); };
   var title = rec.title || untitled(rec);
+  // В <title> и поиске безымянное подписано ещё и автором: «Видео от 21
+  // сентября» у сотни роликов — сотня одинаковых заголовков в выдаче.
+  var headTitle = rec.title || ta('video.untitledBy', { name: author.displayName, date: date(rec.createdAt, { day: 'numeric', month: 'long', year: 'numeric' }) });
+  var jsonld = [
+    ld.video({ path: base, title: headTitle, description: rec.description, thumb: rec.thumb && rec.thumb.url,
+               src: src, seconds: rec.duration, date: at, views: rec.views,
+               author: { url: author.url, name: author.displayName } }),
+    ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [headTitle, base]]),
+  ].filter(Boolean);
 %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { title: title + ' — Takebana', description: (rec.description || '').slice(0, 160) }) %>
+<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: (rec.description || '').slice(0, 160), seo: { path: base, type: 'video.other', image: rec.thumb && rec.thumb.url, imageAlt: headTitle, robots: rec.userId.banned ? 'noindex, follow' : '', jsonld: jsonld } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/player.css') %>">
@@ -59,11 +68,11 @@
 
         <div class="tk-watch__bar">
           <div class="tk-live__author tk-watch__author">
-            <a href="/userPage/<%= author._id %>" class="tk-live__avatar"<% if (!author.avatarStyle.url) { %> data-bg="<%= author.avatarStyle.gradient %>"<% } %>>
+            <a href="<%= author.url %>" class="tk-live__avatar"<% if (!author.avatarStyle.url) { %> data-bg="<%= author.avatarStyle.gradient %>"<% } %>>
               <% if (author.avatarStyle.url) { %><img src="<%= author.avatarStyle.url %>" alt=""><% } else { %><%= author.avatarStyle.initial %><% } %>
             </a>
             <div class="tk-live__author-body">
-              <a href="/userPage/<%= author._id %>" class="tk-live__author-name"><%= author.displayName %></a>
+              <a href="<%= author.url %>" class="tk-live__author-name"><%= author.displayName %></a>
             </div>
           </div>
 
@@ -157,7 +166,7 @@
 
       <% if (related.length) { %>
       <aside class="tk-watch__side" aria-labelledby="relatedTitle">
-        <p class="tk-kicker tk-watch__side-title" id="relatedTitle" data-i18n="rec.related"><%- t('rec.related') %></p>
+        <h2 class="tk-kicker tk-watch__side-title" id="relatedTitle" data-i18n="rec.related"><%- t('rec.related') %></h2>
         <ul class="tk-watch__related">
           <% related.forEach(function (r) { var rv = plural(r.views || 0, 'rec.views'); %>
           <li>

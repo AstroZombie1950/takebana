@@ -100,12 +100,27 @@ router.get('/company-register', requireAuth, commonDataMiddleware, (req, res) =>
 // Карта заведений — в каркасе кабинета, поэтому commonDataMiddleware:
 // шапке и левой панели нужны профиль, подписки и уведомления. Гость карту
 // смотрит, камеру и оценку — после входа (tk-venues.js).
-router.get('/main', commonDataMiddleware, async (req, res) => {
-  res.render('map', {
-    catalog,
-    filters: readVenueFilters(req.query),
-    hasEstablishments: !!req.session.userId && !!(await Establishments.exists({ owner: req.session.userId })),
-  });
+//
+// Список заведений сервер отдаёт сразу в разметке — с фильтрами из адреса,
+// в том виде, что рисует и скрипт: без него поиск видел пустую карту
+// (docs/seo/DECISIONS.md). Скрипт потом сужает список до видимой области.
+router.get('/map', commonDataMiddleware, async (req, res) => {
+  const filters = readVenueFilters(req.query);
+  const where = { status: true };
+  if (filters.city) where.city = filters.city;
+  if (filters.types.length) where.type = { $in: filters.types };
+  if (filters.live) where.online = true;
+  const [venues, hasEstablishments] = await Promise.all([
+    Establishments.find(where).select('name type city online photos').sort({ online: -1, name: 1 }).limit(500).lean(),
+    !!req.session.userId && Establishments.exists({ owner: req.session.userId }).then(Boolean),
+  ]);
+  res.render('map', { catalog, filters, venues, hasEstablishments });
+});
+
+// Прежний адрес карты — им делились ссылками на заведения (?venue=).
+router.get('/main', (req, res) => {
+  const qs = req.originalUrl.indexOf('?');
+  res.redirect(301, '/map' + (qs === -1 ? '' : req.originalUrl.slice(qs)));
 });
 
 

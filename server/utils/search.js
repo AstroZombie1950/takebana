@@ -12,6 +12,7 @@ const Recording = require('../models/Recording');
 const Establishments = require('../models/Establishments');
 const Subscription = require('../models/Subscription');
 const userView = require('./userView');
+const { profileUrl } = require('./profileUrl');
 
 const TYPES = ['people', 'streams', 'recordings', 'venues'];
 
@@ -50,7 +51,7 @@ function authorOf(doc) {
   const user = doc.userId;
   if (!user) return null; // автора удалили — карточка без него бессмысленна
   const displayName = userView.displayName(user);
-  return { _id: user._id, displayName, avatarStyle: userView.avatarStyle(user, displayName) };
+  return { _id: user._id, url: profileUrl(user), displayName, avatarStyle: userView.avatarStyle(user, displayName) };
 }
 
 // Сколько подходящих смотрим, прежде чем выбрать лучшие. Раньше выборка
@@ -104,6 +105,7 @@ async function peopleCards(users) {
     const displayName = userView.displayName(user);
     return {
       _id: user._id,
+      url: profileUrl(user),
       displayName,
       avatarStyle: userView.avatarStyle(user, displayName),
       followersCount: byId.get(String(user._id)) || 0,
@@ -136,8 +138,15 @@ async function findRecordings(rx, limit) {
     .sort({ createdAt: -1 })
     .limit(limit)
     .populate('userId', 'nickname login email avatar')
-    .select('title duration thumb isAdult createdAt recordedAt userId')
+    .select(RECORDING_CARD)
     .lean();
+  return recordingCards(recordings);
+}
+
+// Карточки записей (partials/recCard.ejs) — поиск и разделы каталога.
+// recordings — с полями RECORDING_CARD и userId, раскрытым populate.
+const RECORDING_CARD = 'title duration thumb isAdult createdAt recordedAt userId';
+function recordingCards(recordings) {
   return recordings.filter((r) => r.userId).map((r) => ({
     _id: r._id,
     title: r.title,
@@ -202,4 +211,4 @@ async function counts(rawQuery) {
   return { people, streams, recordings, venues, total: people + streams + recordings + venues };
 }
 
-module.exports = { search, counts, normalize, peopleCards, TYPES, MIN_QUERY };
+module.exports = { search, counts, normalize, peopleCards, recordingCards, RECORDING_CARD, TYPES, MIN_QUERY };

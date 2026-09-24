@@ -87,11 +87,12 @@ if (mailConfigured) {
     res.json({ message: 'Письмо со ссылкой отправлено на новую почту' });
   });
 
-  // Токен в адресе: страница не кэшируется, Referer наружу не уходит
-  // (helmet: Referrer-Policy: no-referrer). Вход не нужен — ссылку часто
-  // открывают на телефоне, где человек не вошёл.
+  // Токен в адресе: страница не кэшируется, Referer не уходит никуда
+  // (сайту в целом разрешён strict-origin-when-cross-origin, app.js), Метрики
+  // на ней нет (emailConfirm.ejs). Вход не нужен — ссылку часто открывают
+  // на телефоне, где человек не вошёл.
   router.get('/confirm-email/:token', async (req, res) => {
-    res.set('Cache-Control', 'no-store');
+    res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
     const user = TOKEN.test(req.params.token) ? await User.findOne({
       'emailChange.tokenHash': hashToken(req.params.token),
       'emailChange.expiresAt': { $gt: new Date() },
@@ -145,8 +146,9 @@ if (mailConfigured) {
     res.json({ message: 'Письмо со ссылкой отправлено' });
   });
 
+  // Токен в адресе — как у /confirm-email выше.
   router.get('/verify-email/:token', async (req, res) => {
-    res.set('Cache-Control', 'no-store');
+    res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
     const user = TOKEN.test(req.params.token) ? await User.findOne({
       'emailVerify.tokenHash': hashToken(req.params.token),
       'emailVerify.expiresAt': { $gt: new Date() },

@@ -1,0 +1,13 @@
+<%#
+  Карточка записи эфира — поиск и разделы каталога. rec — из
+  recordingCards (utils/search.js). Стили — css/profile.css (.tk-recard).
+%>
+<a href="/recording/<%= rec._id %>" class="tk-recard">
+  <span class="tk-recard__thumb">
+    <% if (rec.thumb) { %><img src="<%= rec.thumb %>" alt="" loading="lazy"><% } %>
+    <% if (rec.duration) { %><span class="tk-recard__len"><%= clock(rec.duration) %></span><% } %>
+    <% if (rec.isAdult) { %><span class="tk-recard__adult">18+</span><% } %>
+  </span>
+  <span class="tk-recard__title"><%= rec.title %></span>
+  <span class="tk-recard__date"><%= rec.author.displayName %> · <%= date(rec.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></span>
+</a>

@@ -12,33 +12,19 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
+<%# Главная и разделы — в индексе (docs/seo/DECISIONS.md): у раздела свой
+    вводный текст, описание, блок «о разделе» внизу и записи под эфирами,
+    поэтому и без эфиров страница не пустая. Фильтры (?sub=, ?city=)
+    в canonical не попадают — у всех комбинаций один адрес раздела. %>
 <% if (category === 'popular') { %>
-<%# «Популярное» — главная сайта: её адрес и пересылают, отсюда карточка
-    для соцсетей и мессенджеров. %>
-<%- include('partials/tkHead', { titleKey: 'page.home.title', descriptionKey: 'page.home.description' }) %>
-<link rel="canonical" href="https://takebana.com/">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Takebana">
-<meta property="og:title" content="Takebana — платформа прямых эфиров для бизнеса">
-<meta property="og:description" content="Производители, заведения, блогеры и эксперты выходят в прямой эфир, чтобы продавать, вдохновлять и отвечать на вопросы без посредников.">
-<meta property="og:url" content="https://takebana.com/">
-<meta property="og:image" content="https://takebana.com/img/og-cover.jpg">
-<meta property="og:image:type" content="image/jpeg">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Takebana">
-<meta property="og:locale" content="ru_RU">
-<meta property="og:locale:alternate" content="en_US">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Takebana — платформа прямых эфиров для бизнеса">
-<meta name="twitter:description" content="Производители, заведения, блогеры и эксперты выходят в прямой эфир, чтобы продавать, вдохновлять и отвечать на вопросы без посредников.">
-<meta name="twitter:image" content="https://takebana.com/img/og-cover.jpg">
-<meta name="twitter:image:alt" content="Takebana">
+<%- include('partials/tkHead', { titleKey: 'page.home.title', descriptionKey: 'page.home.description', seo: { path: '/', jsonld: ld.site() } }) %>
 <% } else { %>
-<%- include('partials/tkHead', { titleKey: 'page.' + category + '.title' }) %>
+<%- include('partials/tkHead', { titleKey: 'page.' + category + '.title', descriptionKey: 'page.' + category + '.description', seo: { path: '/streaming/' + category } }) %>
 <% } %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/catalog.css') %>">
+<%# Карточки записей (.tk-recard) — как в поиске, стили там же. %>
+<link rel="stylesheet" href="<%= asset('/css/profile.css') %>">
 </head>
 <body class="tk-app">
 
@@ -68,13 +54,15 @@
       <!-- Шапка страницы -->
       <div class="tk-cat__hero">
         <div>
-          <p class="tk-kicker">Live Streaming Platform</p>
+          <p class="tk-kicker" data-i18n="catalog.kicker"><%- t('catalog.kicker') %></p>
 
           <%# Заголовок — только название раздела: ключ словаря на самом h1,
               а не на подзаголовке, иначе после applyLang он печатался дважды. %>
           <h1 class="tk-cat__h1" data-i18n="<%= page.i18n %>"><%- t(page.i18n) %></h1>
 
-          <p class="tk-cat__lede" data-i18n="catalog.lede"><%- t('catalog.lede') %></p>
+          <%# У раздела свой вводный текст, у главной — общий. %>
+          <% var ledeKey = category === 'popular' ? 'catalog.lede' : 'cat.' + category + 'Lede'; %>
+          <p class="tk-cat__lede" data-i18n="<%= ledeKey %>"><%- t(ledeKey) %></p>
 
           <div class="tk-cat__stats">
             <span class="tk-stat">
@@ -95,11 +83,11 @@
             как и кнопки «Показать ещё»: за остальными — страница /authors. %>
         <% if (users.length) { %>
         <section>
-          <p class="tk-kicker" data-i18n="authors.kicker"><%- t('authors.kicker') %></p>
+          <h2 class="tk-kicker" data-i18n="authors.kicker"><%- t('authors.kicker') %></h2>
 
           <div class="tk-rec__list">
             <% users.forEach(function (user) { %>
-            <a href="<%= user.stream ? '/stream/' + user.stream._id : '/userPage/' + user._id %>" class="tk-rec__item" data-presence-user="<%= user._id %>">
+            <a href="<%= user.stream ? '/stream/' + user.stream._id : user.url %>" class="tk-rec__item" data-presence-user="<%= user._id %>">
               <div class="tk-rec__ava"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
                 <% if (user.avatarStyle.url) { %>
                   <img src="<%= user.avatarStyle.url %>" alt="" loading="lazy">
@@ -140,7 +128,7 @@
 
       <!-- Категории контента -->
       <section class="tk-cat__sec">
-        <p class="tk-kicker" data-i18n="catalog.categories"><%- t('catalog.categories') %></p>
+        <h2 class="tk-kicker" data-i18n="catalog.categories"><%- t('catalog.categories') %></h2>
 
         <%# На «Популярном» рамок три и каждая узкая: подкатегории в них
             встают колонками (tk-groups--multi), иначе получается ворох.
@@ -201,6 +189,24 @@
       </section>
 
       </form>
+
+      <% if (recordings.length) { %>
+      <!-- Записи: есть и тогда, когда в эфире никого -->
+      <section class="tk-cat__sec">
+        <h2 class="tk-cat__h2" data-i18n="catalog.recordings"><%- t('catalog.recordings') %></h2>
+        <div class="tk-recs">
+          <% recordings.forEach(function (rec) { %><%- include('partials/recCard', { rec: rec }) %><% }); %>
+        </div>
+      </section>
+      <% } %>
+
+      <% if (category !== 'popular') { %>
+      <!-- О разделе: для человека, который пришёл из поиска -->
+      <section class="tk-cat__sec tk-cat__about">
+        <h2 class="tk-kicker" data-i18n="cat.<%= category %>AboutTitle"><%- t('cat.' + category + 'AboutTitle') %></h2>
+        <div data-i18n="cat.<%= category %>About"><%- t('cat.' + category + 'About') %></div>
+      </section>
+      <% } %>
 
     </div>
   </main>

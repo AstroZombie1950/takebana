@@ -1,8 +1,8 @@
-<p class="tk-prose__lead">In force since 17 September 2026. First edition.</p>
+<p class="tk-prose__lead">In force since 24 September 2026. Second edition: visit analytics added.</p>
 
-<h3>1. Why there is no consent banner</h3>
-<p>A “please accept cookies” banner is needed when a site sets analytics, advertising and tracking files. We set none of those: no analytics, no advertising pixels, no cross-site tracking. What remains are the files the site cannot work without, and those need no consent by law. This page is enough.</p>
-<p>If analytics ever appear, we will add a choice banner and rewrite this page.</p>
+<h3>1. Analytics and your consent</h3>
+<p>Most of our files are needed for the site to work. Besides them, the site uses the Yandex Metrica visit counter, which shows us which pages people need. By using the site you agree that the counter runs and sets its files. A notice at the bottom of the page says so on your first visit.</p>
+<p>We have no advertising pixels and no cross-site tracking. Session recording (Webvisor) is switched off in Metrica: what you type on the site, including in messages, never reaches Metrica.</p>
 
 <h3>2. The cookies we set</h3>
 <table>
@@ -12,22 +12,36 @@
 <tr><td><code>lang</code></td><td>Interface language, so the page arrives in the right language.</td><td>1 year</td></tr>
 <tr><td><code>tz</code></td><td>Time zone, so stream and message times are shown as your own.</td><td>1 year</td></tr>
 <tr><td><code>tk_intro</code></td><td>Remembers that you closed the catalogue’s intro screen.</td><td>1 year</td></tr>
+<tr><td><code>tk_consent</code></td><td>Remembers that you closed the cookie notice.</td><td>1 year</td></tr>
 </tbody>
 </table>
 <p>All of them are ours: they are set by takebana.com itself and go nowhere else.</p>
 
-<h3>3. What stays in your browser</h3>
+<h3>3. Analytics files</h3>
+<p>Yandex Metrica sets its own files. The main ones:</p>
+<table>
+<thead><tr><th>Name</th><th>Purpose</th><th>Lifetime</th></tr></thead>
+<tbody>
+<tr><td><code>_ym_uid</code></td><td>Tells one visitor from another, so you are not counted twice.</td><td>1 year</td></tr>
+<tr><td><code>_ym_d</code></td><td>Date of the first visit.</td><td>1 year</td></tr>
+<tr><td><code>_ym_isad</code></td><td>Whether the browser has an ad blocker, for accurate counting.</td><td>2 days</td></tr>
+</tbody>
+</table>
+<p>Besides these, Metrica may set short-lived technical files whose names start with <code>_ym</code>, and Yandex files on its own domains. Metrica collects which pages were opened, where you came from, how long you stayed and where you clicked, as well as device type, browser and approximate location by IP address. We see the reports in anonymised form. How Yandex handles this data is in its <a href="https://yandex.com/legal/confidential/" rel="noopener">privacy policy</a>.</p>
+
+<h3>4. What stays in your browser</h3>
 <p>Besides cookies, the site keeps two entries in browser storage (localStorage). They are never sent to the server and stay on your device:</p>
 <ul>
 <li><code>tk_camera</code> — which camera and microphone you chose last time;</li>
 <li><code>tk_lang</code> — an earlier language choice left over from older versions of the site.</li>
 </ul>
 
-<h3>4. Third-party files</h3>
+<h3>5. Third-party files</h3>
 <p>During a call, a browser stream or a venue camera, the Daily video service connects, and stream and recording video is delivered by the Bunny network. These services may set their own technical files needed for the connection and for video delivery. There are no advertising or tracking files among them. If you sign in with Google, Google sets files on its own sign-in page.</p>
 
-<h3>5. How to refuse</h3>
-<p>Cookies can be deleted or blocked in your browser settings. Note that without <code>connect.sid</code> sign-in will not hold and your account pages become unreachable, and without the others the site will forget your language, your time zone and the closed intro screen every time.</p>
+<h3>6. How to refuse</h3>
+<p>Analytics — with an ad and tracker blocker or <a href="https://yandex.com/support/metrica/general/opt-out.html" rel="noopener">Yandex’s Metrica opt-out extension</a>. This does not affect how the site works.</p>
+<p>Other cookies can be deleted or blocked in your browser settings. Note that without <code>connect.sid</code> sign-in will not hold and your account pages become unreachable, and without the others the site will forget your language, your time zone and the closed intro screen every time.</p>
 
-<h3>6. Questions</h3>
+<h3>7. Questions</h3>
 <p>Write to <a href="mailto:private@takebana.com">private@takebana.com</a>. What we do with the rest of your data is in the <a href="/privacy">privacy policy</a>.</p>

@@ -16,7 +16,8 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { titleKey: 'page.authors.title', descriptionKey: 'page.authors.description' }) %>
+<%# В индексе, когда есть хоть одна группа; пустая — нет. %>
+<%- include('partials/tkHead', { titleKey: 'page.authors.title', descriptionKey: 'page.authors.description', seo: { path: '/authors', robots: blocks.length ? '' : 'noindex, follow' } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/catalog.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/search.css') %>">

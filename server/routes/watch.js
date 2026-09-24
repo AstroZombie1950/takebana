@@ -30,6 +30,7 @@ const recording = require('../utils/recording');
 const galleryVideo = require('../utils/galleryVideo');
 const recommend = require('../utils/recommend');
 const userView = require('../utils/userView');
+const { profileUrl } = require('../utils/profileUrl');
 const { audit } = require('../utils/audit');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -150,7 +151,7 @@ function mount(kind) {
   // у эфира: подтверждение возраста хранится в аккаунте, гостя гейт зовёт войти.
   router.get(path, commonDataMiddleware, async (req, res) => {
     const item = OBJECT_ID.test(req.params.id)
-      ? await K.Model.findById(req.params.id).populate('userId', 'nickname login email avatar').lean()
+      ? await K.Model.findById(req.params.id).populate('userId', 'nickname login email avatar banned').lean()
       : null;
     const me = req.session.userId;
     const isOwner = !!item && !!item.userId && String(item.userId._id) === String(me);
@@ -192,7 +193,7 @@ function mount(kind) {
       moreComments: comments.length > COMMENTS_PAGE,
       related,
       limits: { title: TITLE_MAX, description: DESCRIPTION_MAX, comment: COMMENT_MAX },
-      author: { _id: item.userId._id, displayName, avatarStyle: userView.avatarStyle(item.userId, displayName) },
+      author: { _id: item.userId._id, url: profileUrl(item.userId), displayName, avatarStyle: userView.avatarStyle(item.userId, displayName) },
     });
   });
 

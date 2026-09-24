@@ -138,3 +138,57 @@
   font-size: 15px;
   color: var(--tk-paper);
 }
+
+/* ── Страница ошибки (views/error.ejs) ──
+ * Код ответа — крупно, контуром киноварью: знак страницы, а не текст,
+ * поэтому aria-hidden, а для чтения — надзаголовок «Ошибка 404». */
+.tk-status--error { gap: 16px; }
+/* .tk-btn задаёт display, и атрибут hidden без этого не прячет «Назад». */
+.tk-status__acts [hidden] { display: none; }
+
+.tk-status__code {
+  margin: 0 0 -8px;
+  font-size: clamp(120px, 22vw, 240px);
+  line-height: .8;
+  font-weight: 900;
+  letter-spacing: -.05em;
+  color: transparent;
+  -webkit-text-stroke: 2px var(--tk-accent);
+  user-select: none;
+}
+
+.tk-status__ref {
+  margin: 0;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .08em;
+  color: var(--tk-muted);
+}
+
+.tk-status__search {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  max-width: 480px;
+  margin-top: 8px;
+}
+
+.tk-status__search .tk-field { flex: 1; min-width: 0; }
+
+.tk-status__links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 22px;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.tk-status__links a { color: var(--tk-beige); text-decoration: none; }
+.tk-status__links a:hover, .tk-status__links a:focus-visible { color: var(--tk-paper); }
+
+@media (max-width: 599px) {
+  .tk-status__search { flex-direction: column; }
+}

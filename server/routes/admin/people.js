@@ -297,7 +297,7 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
   if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Пользователь не найден' });
   if (req.params.id === String(req.session.userId)) return res.status(400).json({ message: 'Себя удалить нельзя' });
 
-  const user = await User.findById(req.params.id).select('nickname login email role avatar').lean();
+  const user = await User.findById(req.params.id).select('nickname login email role avatar ogCard').lean();
   if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
   if (user.role === 'admin') return res.status(403).json({ message: 'Администратора удалить нельзя — сначала смените роль' });
 

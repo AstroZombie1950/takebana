@@ -21,7 +21,6 @@
 <html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { titleKey: query ? 'page.search.query' : 'page.search.title', titleVars: query ? { q: query } : undefined }) %>
-<meta name="robots" content="noindex">
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/catalog.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/profile.css') %>">
@@ -130,24 +129,14 @@
 
         <% } else if (group.key === 'recordings') { %>
         <div class="tk-recs">
-          <% group.items.forEach(function (rec) { %>
-          <a href="/recording/<%= rec._id %>" class="tk-recard">
-            <span class="tk-recard__thumb">
-              <% if (rec.thumb) { %><img src="<%= rec.thumb %>" alt="" loading="lazy"><% } %>
-              <% if (rec.duration) { %><span class="tk-recard__len"><%= clock(rec.duration) %></span><% } %>
-              <% if (rec.isAdult) { %><span class="tk-recard__adult">18+</span><% } %>
-            </span>
-            <span class="tk-recard__title"><%= rec.title %></span>
-            <span class="tk-recard__date"><%= rec.author.displayName %> · <%= date(rec.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></span>
-          </a>
-          <% }); %>
+          <% group.items.forEach(function (rec) { %><%- include('partials/recCard', { rec: rec }) %><% }); %>
         </div>
 
         <% } else { %>
         <%# Заведение живёт на карте: ссылка открывает её и сразу карточку. %>
         <div class="tk-places">
           <% group.items.forEach(function (venue) { %>
-          <a href="/main?venue=<%= venue._id %>" class="tk-place">
+          <a href="/map?venue=<%= venue._id %>" class="tk-place">
             <span class="tk-place__shot">
               <% if (venue.photo) { %><img src="<%= venue.photo %>" alt="" loading="lazy">
               <% } else { %><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square" aria-hidden="true"><path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg><% } %>

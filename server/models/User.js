@@ -11,6 +11,13 @@ const UserSchema = new mongoose.Schema({
   // в нижнем регистре; правила и выдача — utils/nickname.js.
   nickname: String,
   nicknameChangedAt: { type: Date, default: null },
+  // Прежние ники, новые в конце: /@старый уводит 301 на нынешний адрес
+  // (routes/streaming/catalog.js). Пока ник не занял кто-то другой — тогда
+  // адрес его. Хранятся последние 10.
+  formerNicknames: { type: [String], default: undefined },
+  // Картинка карточки профиля для мессенджеров в облаке (utils/ogImage.js):
+  // адрес, ключ в хранилище и версия — имя файла аватара, из которого собрана.
+  ogCard: { url: String, key: String, v: String },
   // В нижнем регистре и без пробелов по краям — и при записи, и в фильтрах
   // запросов (mongoose применяет lowercase и к ним). Старые адреса перевёл
   // jobs/lowercaseEmails.js.
@@ -159,5 +166,6 @@ UserSchema.index({ 'emailVerify.tokenHash': 1 }, { partialFilterExpression: { 'e
 // Ник уникален. Частичный индекс, а не sparse: пустая строка тоже «нет ника»,
 // и таких до выдачи при запуске может быть несколько.
 UserSchema.index({ nickname: 1 }, { unique: true, partialFilterExpression: { nickname: { $type: 'string', $gt: '' } } });
+UserSchema.index({ formerNicknames: 1 }, { sparse: true });
 
 module.exports = mongoose.model('User', UserSchema);

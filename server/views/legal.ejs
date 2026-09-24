@@ -10,8 +10,8 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { titleKey: 'page.' + doc + '.title', descriptionKey: 'page.' + doc + '.description' }) %>
-<link rel="canonical" href="https://takebana.com/<%= doc %>">
+<%# Документы в поиске не нужны, но ссылки из них — пусть робот ходит. %>
+<%- include('partials/tkHead', { titleKey: 'page.' + doc + '.title', descriptionKey: 'page.' + doc + '.description', robots: 'noindex, follow' }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/prose.css') %>">
 </head>

@@ -85,7 +85,7 @@
 
   function applyFilters() {
     const p = filterParams();
-    history.replaceState(null, '', '/main' + (p.toString() ? '?' + p : ''));
+    history.replaceState(null, '', '/map' + (p.toString() ? '?' + p : ''));
     reset.hidden = !p.toString();
     loadVenues();
   }
@@ -125,7 +125,7 @@
       tip.style.left = at.x + 'px';
       tip.style.top = at.y + 'px';
     });
-    // Ссылка на конкретное заведение — /main?venue=<id>: так на карту ведут
+    // Ссылка на конкретное заведение — /map?venue=<id>: так на карту ведут
     // результаты поиска по сайту. Тогда карта летит к нему, а не к посетителю.
     const wanted = /^[a-f\d]{24}$/i.test(venueParam) ? venueParam : '';
     if (wanted) {

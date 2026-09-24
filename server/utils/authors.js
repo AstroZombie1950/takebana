@@ -11,6 +11,7 @@ const Stream = require('../models/Stream');
 const Recording = require('../models/Recording');
 const Subscription = require('../models/Subscription');
 const userView = require('../utils/userView');
+const { profileUrl } = require('./profileUrl');
 
 // Сколько человек в группе на странице авторов. Постраничной подгрузки нет:
 // авторов пока десятки. Витрина просит своё число (три строки в колонке).
@@ -25,6 +26,7 @@ function view(user, extra = {}) {
   const displayName = userView.displayName(user);
   return {
     _id: user._id,
+    url: profileUrl(user),
     displayName,
     avatarStyle: userView.avatarStyle(user, displayName),
     isOnline: !!user.isOnline,

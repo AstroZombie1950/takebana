@@ -33,6 +33,10 @@ app.use(helmet({
     // плеер и картинки забираются со стороннего домена, изоляция их ломает
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: { policy: 'cross-origin' },
+    // По умолчанию helmet ставит no-referrer: тогда аналитика видит переходы
+    // внутри сайта и от нас к партнёрам как прямые заходы. Это значение —
+    // браузерное по умолчанию: наружу уходит только домен, без пути.
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 }));
 
 // Проверка живости для деплоя, pm2 и внешнего мониторинга.
@@ -120,6 +124,15 @@ app.use('/live', express.static(HLS_ROOT, {
 // Подложка карты заведений — плитки, шрифты, значки (ops/basemap/fetch.sh).
 // На проде, как и /live, её отдаёт nginx; здесь — для локального запуска.
 app.use('/basemap', express.static(path.join(__dirname, 'media', 'basemap'), { index: false, maxAge: '1d' }));
+// /About, /about/ → /about: у страницы один адрес (middleware/canonicalPath.js).
+// До сессий — редиректу они не нужны.
+app.use(require('./middleware/canonicalPath'));
+// Админка и её API — не для поиска, даже если ссылка на них где-то утечёт.
+// Заголовок видят и роботы, которые HTML не разбирают.
+app.use(['/panel', '/api/admin'], (req, res, next) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  next();
+});
 app.use(sessionMiddleware);
 app.use(keepAlive);
 
@@ -142,6 +155,12 @@ app.locals.vapidPublic = require('./utils/push').publicKey;
 app.locals.clock = require('./utils/recording').clock;
 // Категории и города: форма эфира живёт в шапке каждой страницы кабинета.
 app.locals.catalog = require('./config/catalog');
+// Полный адрес страницы и картинки — canonical и OG в partials/tkHead.ejs.
+app.locals.siteUrl = require('./utils/site').siteUrl;
+// Яндекс Метрика (partials/metrics.ejs). Пустой номер — счётчика нет.
+app.locals.metrika = { id: /^\d+$/.test(process.env.METRIKA_ID || '') ? process.env.METRIKA_ID : '' };
+// Микроразметка для поиска — seo.jsonld в шаблонах (utils/jsonld.js).
+app.locals.ld = require('./utils/jsonld');
 // Стили с версией по содержимому: после выкладки браузер не держит старые (utils/assets.js).
 app.locals.asset = require('./utils/assets').asset;
 // Гость по умолчанию. Шапка и левая панель (header.ejs, leftBar.ejs) есть и на
@@ -203,6 +222,9 @@ app.use('/fonts', express.static(path.join(__dirname, 'public', 'fonts'), {
 }));
 
 app.use(express.static(path.join(__dirname, 'public'), {
+    // Папка без косой на конце — не редирект на «папку/», а мимо, к маршрутам:
+    // /map — страница карты, а public/map — стили подложки (tk-map.js).
+    redirect: false,
     // Сжатые копии в /min/ несут хеш в имени, исходники — в ?v=
     // (utils/assets.js): при правке файла меняется сам адрес, поэтому
     // кэшировать можно навсегда. Без версии — ETag и перепроверка. На проде
@@ -244,6 +266,8 @@ app.use(require('./routes/calls'));
 app.use(require('./routes/contacts'));
 app.use(require('./routes/watch'));
 app.use(require('./routes/pages'));
+// robots.txt и карта сайта (docs/seo/).
+app.use(require('./routes/seo'));
 app.use(require('./routes/streamStatus'));
 
 // Обработчик ошибок — последним, после всех маршрутов: он ловит то, что

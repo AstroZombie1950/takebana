@@ -7,9 +7,8 @@
   Шапка и панель — общие с сайтом, панель выезжает по бургеру (tk-app--wide):
   вёрстка лендинга рассчитана на всю ширину окна.
 %>
-<%- include('partials/tkHead', { titleKey: 'page.about.title', descriptionKey: 'page.about.description' }) %>
+<%- include('partials/tkHead', { titleKey: 'page.about.title', descriptionKey: 'page.about.description', seo: { path: '/about' } }) %>
 
-<link rel="canonical" href="https://takebana.com/about">
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/about.css') %>">
 </head>

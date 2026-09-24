@@ -306,8 +306,9 @@
 /* Рубрика секции тянется, число и кнопка — справа. Было инлайном в разметке.
  * У галереи рубрика — ссылка на всю галерею. */
 .tk-prof__gal-title { margin: 0; flex: 1; }
-a.tk-prof__gal-title { text-decoration: none; }
-a.tk-prof__gal-title:hover { color: var(--tk-paper); }
+/* «Галерея» — h2 со ссылкой внутри: рубрикой оформлена сама ссылка. */
+.tk-prof__gal-title a { text-decoration: none; }
+.tk-prof__gal-title a:hover { color: var(--tk-paper); }
 
 /* «Все» и «Добавить фото или видео» — под снимками, по центру блока. */
 .tk-prof__gal-add {

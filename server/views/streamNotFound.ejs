@@ -1,11 +1,13 @@
 <%# Эфир или запись не найдены: завершён, удалён или адрес неверный.
-    restricted — автор закрыл свой канал от этого человека (utils/restrict.js). %>
+    restricted — автор закрыл свой канал от этого человека (utils/restrict.js).
+    authorUrl — чей был эфир (routes/streaming/streamPages.js, ended),
+    processing — запись эфира ещё склеивается. %>
 <% var k = typeof restricted !== 'undefined' && restricted ? 'restricted' : 'ended'; %>
+<% var authorUrl = locals.authorUrl || ''; var textKey = locals.processing ? 'ended.textSoon' : k + '.text'; %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { titleKey: k === 'restricted' ? 'restricted.title' : 'page.ended.title' }) %>
-<meta name="robots" content="noindex">
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/status.css') %>">
 </head>
@@ -20,9 +22,10 @@
     <div class="tk-status">
       <span class="tk-status__kicker" data-i18n="<%= k %>.kicker"><%- t(k + '.kicker') %></span>
       <h1 class="tk-status__title" data-i18n="<%= k %>.title"><%- t(k + '.title') %></h1>
-      <p class="tk-status__text" data-i18n="<%= k %>.text"><%- t(k + '.text') %></p>
+      <p class="tk-status__text" data-i18n="<%= textKey %>"><%- t(textKey) %></p>
 
       <div class="tk-status__acts">
+        <% if (authorUrl) { %><a href="<%= authorUrl %>" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="ended.author"><%- t('ended.author') %></a><% } %>
         <a href="/" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="age.back"><%- t('age.back') %></a>
       </div>
     </div>

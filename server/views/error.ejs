@@ -1,13 +1,18 @@
-<%# Ошибка на стороне сервера. Страница намеренно простая: она показывается
-    именно тогда, когда что-то сломалось, и не должна зависеть ни от данных
-    кабинета, ни от скриптов. missing — та же страница для «такого адреса нет»
-    (middleware/errors.js, notFound). %>
-<% var k = typeof missing !== 'undefined' && missing ? 'missing' : 'fail'; %>
+<%# Страница ошибки приложения: 403, 404, прочие 4xx и 500 (middleware/errors.js).
+    Намеренно простая: показывается как раз тогда, когда что-то сломалось,
+    и не зависит ни от данных кабинета, ни от скриптов страниц. Когда лежит
+    само приложение, nginx отдаёт свою — public/errors/50x.html.
+
+    status — код ответа; k — ключ текстов по нему. code — отпечаток той же
+    ошибки, что записана в журнале: по нему её находят в панели. %>
+<%
+  var st = typeof status !== 'undefined' && status ? status : 500;
+  var k = st === 404 ? 'missing' : st === 403 ? 'forbidden' : st >= 500 ? 'fail' : 'bad';
+%>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.' + k + '.title' }) %>
-<meta name="robots" content="noindex">
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/status.css') %>">
 </head>
@@ -19,20 +24,47 @@
   <%- include('partials/leftBar') %>
 
   <main class="tk-app-main">
-    <div class="tk-status">
-      <span class="tk-status__kicker" data-i18n="<%= k %>.kicker"><%- t(k + '.kicker') %></span>
+    <div class="tk-status tk-status--error">
+      <p class="tk-status__code" aria-hidden="true"><%= st %></p>
+      <span class="tk-status__kicker" data-i18n="error.kicker" data-i18n-vars='{"code": <%= st %>}'><%- t('error.kicker', { code: st }) %></span>
       <h1 class="tk-status__title" data-i18n="<%= k %>.title"><%- t(k + '.title') %></h1>
       <p class="tk-status__text" data-i18n="<%= k %>.text"><%- t(k + '.text') %></p>
 
-      <%# Отпечаток той же ошибки, что записана в журнале: по нему её
-          находят в панели, не переспрашивая, что именно человек делал. %>
-      <% if (code) { %><p class="tk-status__text"><small>#<%= code %></small></p><% } %>
+      <% if (typeof code !== 'undefined' && code) { %><p class="tk-status__ref">#<%= code %></p><% } %>
+
+      <% if (k === 'missing') { %>
+      <%# Потерявшемуся — куда пойти дальше: поиск и разделы. %>
+      <form class="tk-status__search" action="/search" method="get" role="search">
+        <input class="tk-field" type="search" name="q" minlength="2" required
+               placeholder="<%= ta('error.searchPh') %>" data-i18n-placeholder="error.searchPh" aria-label="<%= ta('error.searchPh') %>" data-i18n-aria="error.searchPh">
+        <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="search.submit"><%- t('search.submit') %></button>
+      </form>
+      <nav class="tk-status__links" aria-label="<%= ta('error.sections') %>" data-i18n-aria="error.sections">
+        <a href="/" data-i18n="cat.popular"><%- t('cat.popular') %></a>
+        <% Object.keys(catalog.CATEGORIES).forEach(function (c) { var cat = catalog.CATEGORIES[c]; %>
+        <a href="/streaming/<%= c %>" data-i18n="<%= cat.i18n %>"><%= ta(cat.i18n, cat.name) %></a>
+        <% }); %>
+        <a href="/authors" data-i18n="error.authors"><%- t('error.authors') %></a>
+      </nav>
+      <% } %>
 
       <div class="tk-status__acts">
-        <a href="/" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="age.back"><%- t('age.back') %></a>
+        <% if (k === 'fail') { %>
+        <a href="" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="error.reload"><%- t('error.reload') %></a>
+        <% } %>
+        <a href="/" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="error.home"><%- t('error.home') %></a>
+        <%# «Назад» — только если есть куда: пришли по ссылке с нашего же сайта. %>
+        <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" data-back hidden data-i18n="error.back"><%- t('error.back') %></button>
       </div>
     </div>
   </main>
 </div>
+<script>
+(function () {
+  var b = document.querySelector('[data-back]');
+  try { if (document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1) b.hidden = false; } catch (e) {}
+  b.addEventListener('click', function () { history.back(); });
+})();
+</script>
 </body>
 </html>

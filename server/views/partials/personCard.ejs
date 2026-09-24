@@ -7,7 +7,7 @@
           у авторов ещё stream (идёт эфир) или recordings (сколько записей).
   href — куда ведёт карточка; по умолчанию на страницу человека.
 %>
-<a href="<%= typeof href !== 'undefined' && href ? href : '/userPage/' + person._id %>" class="tk-person" data-presence-user="<%= person._id %>">
+<a href="<%= typeof href !== 'undefined' && href ? href : person.url %>" class="tk-person" data-presence-user="<%= person._id %>">
   <span class="tk-person__ava"<% if (!person.avatarStyle.url) { %> data-bg="<%= person.avatarStyle.gradient %>"<% } %>>
     <% if (person.avatarStyle.url) { %><img src="<%= person.avatarStyle.url %>" alt="" loading="lazy" decoding="async"><% } else { %><%= person.avatarStyle.initial %><% } %>
     <span class="presence-dot <%= person.isOnline ? 'presence-online' : 'presence-offline' %>"></span>

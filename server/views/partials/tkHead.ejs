@@ -6,6 +6,19 @@
   var headTitleVars = typeof titleVars !== 'undefined' ? titleVars : undefined;
   var headDescription = typeof descriptionKey !== 'undefined' ? ta(descriptionKey)
                       : typeof description !== 'undefined' ? description : '';
+
+  // Поиск и карточки ссылок (docs/seo/). Страница, которую берём в индекс
+  // или которой делятся, передаёт seo: { path, robots, type, image,
+  // imageAlt }. path — адрес без меток и фильтров, из него canonical
+  // и og:url; image — путь или полный адрес картинки, по умолчанию общая
+  // обложка. Без seo страница закрыта от индекса: новая служебная страница
+  // не утечёт в поиск, пока её не добавят в таблицу решений. robots —
+  // своё правило поверх: «noindex, follow» у разделов без содержимого,
+  // «noindex, nofollow» у служебных. jsonld — объект или список для
+  // микроразметки (utils/jsonld.js), выводится только у страниц в индексе.
+  var seo = locals.seo;
+  var headRobots = locals.robots || (seo ? seo.robots : 'noindex');
+  var headTitle = typeof titleKey !== 'undefined' ? ta(titleKey, headTitleVars) : title;
 %>
 <meta charset="utf-8">
 <%# viewport-fit=cover — страница раскладывается во весь экран, включая чёлку
@@ -96,10 +109,38 @@
 <% if (typeof titleKey !== 'undefined') { %>
 <title data-i18n="<%= titleKey %>"<% if (headTitleVars) { %> data-i18n-vars="<%= JSON.stringify(headTitleVars) %>"<% } %>><%= ta(titleKey, headTitleVars) %></title>
 <% } else { %>
-<title><%= title %></title>
+<title><%= headTitle %></title>
 <% } %>
 <% if (headDescription) { %>
 <meta name="description" content="<%= headDescription %>">
+<% } %>
+<% if (headRobots) { %>
+<meta name="robots" content="<%= headRobots %>">
+<% } %>
+<% if (seo) { %>
+<%# canonical — только у страниц в индексе: рядом с noindex он противоречив. %>
+<%# Картинка — как есть: своя или с CDN (решение 24.09 — диск сервера маленький,
+    облако большое). Размер знаем у общей обложки и у карточки профиля (imageStd). %>
+<% var seoUrl = siteUrl(seo.path), seoImage = siteUrl(seo.image || '/img/og-cover.jpg'), seoImageAlt = seo.imageAlt || headTitle; %>
+<% var seoImageStd = !seo.image || seo.imageStd; %>
+<% if (!headRobots) { %><link rel="canonical" href="<%= seoUrl %>"><% } %>
+<meta property="og:type" content="<%= seo.type || 'website' %>">
+<meta property="og:site_name" content="Takebana">
+<meta property="og:title" content="<%= headTitle %>">
+<% if (headDescription) { %><meta property="og:description" content="<%= headDescription %>"><% } %>
+<meta property="og:url" content="<%= seoUrl %>">
+<meta property="og:image" content="<%= seoImage %>">
+<% if (seoImageStd) { %>
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<% } %>
+<meta property="og:image:alt" content="<%= seoImageAlt %>">
+<meta property="og:locale" content="<%= lang === 'en' ? 'en_US' : 'ru_RU' %>">
+<meta name="twitter:card" content="summary_large_image">
+<% if (seo.jsonld && !headRobots) { %>
+<script type="application/ld+json"><%- JSON.stringify(seo.jsonld).replace(/</g, '\\u003c') %></script>
+<% } %>
 <% } %>
 <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
@@ -139,3 +180,6 @@
 <% } %>
 
 <link rel="stylesheet" href="<%= asset('/css/tk.css') %>">
+
+<%# Метрика и подтверждение прав в поисковиках; админка передаёт metrics: false. %>
+<% if (locals.metrics !== false) { %><%- include('metrics') %><% } %>

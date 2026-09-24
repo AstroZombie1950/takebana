@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!--
+  Страница, когда приложение не отвечает: перезапуск при выкладке, падение,
+  перегрузка. Отдаёт её nginx на 502, 503 и 504 (ops/nginx/takebana.conf,
+  error_page) — поэтому всё внутри: стили, тексты, скрипт. От приложения
+  ничего, кроме /healthz, который оно и так отвечает первым.
+
+  Язык — из cookie lang, как у сайта, без неё — по языку браузера. Раз
+  в 10 секунд спрашивает /healthz и, как только сайт ответил, перезагружает
+  страницу: человек возвращается туда, куда шёл, сам.
+-->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Takebana</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+@font-face { font-family: Oswald; src: url(/fonts/oswald-latin.woff2) format('woff2'); font-weight: 200 700; unicode-range: U+0000-00FF; }
+@font-face { font-family: Oswald; src: url(/fonts/oswald-cyrillic.woff2) format('woff2'); font-weight: 200 700; unicode-range: U+0400-04FF; }
+@font-face { font-family: 'Golos Text'; src: url(/fonts/golos-text-latin.woff2) format('woff2'); font-weight: 400 900; unicode-range: U+0000-00FF; }
+@font-face { font-family: 'Golos Text'; src: url(/fonts/golos-text-cyrillic.woff2) format('woff2'); font-weight: 400 900; unicode-range: U+0400-04FF; }
+html, body { margin: 0; min-height: 100%; background: #0A0A0A; color: #F5F1EA; font-family: 'Golos Text', Helvetica, sans-serif; }
+body {
+  min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px; text-align: center;
+  padding: calc(40px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) calc(40px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
+}
+.logo { width: 118px; height: 60px; margin-bottom: 24px; }
+.kicker { font-family: Oswald, sans-serif; font-size: 12px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; color: #679267; }
+h1 { margin: 0; font-size: clamp(32px, 6vw, 52px); line-height: .95; letter-spacing: -.035em; font-weight: 900; text-transform: uppercase; }
+p { margin: 0; max-width: 46ch; font-family: Oswald, sans-serif; font-size: 17px; line-height: 1.6; color: #C9C2B7; }
+.wait { display: inline-flex; align-items: center; gap: 10px; font-family: Oswald, sans-serif; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: #8A827C; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #E34234; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+a.btn { margin-top: 10px; display: inline-block; padding: 12px 20px; border: 1px solid #F5F1EA; color: #F5F1EA; text-decoration: none; font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+a.btn:hover, a.btn:focus-visible { background: #F5F1EA; color: #0A0A0A; }
+</style>
+</head>
+<body>
+<img class="logo" src="/img/logo.svg" alt="Takebana">
+<span class="kicker" data-t="kicker">Технические работы</span>
+<h1 data-t="title">Сайт скоро вернётся</h1>
+<p data-t="text">Мы обновляем Takebana или разбираемся с неполадкой. Обычно это занимает минуту-другую. Страница обновится сама, как только всё заработает.</p>
+<span class="wait"><span class="dot" aria-hidden="true"></span><span data-t="wait">Проверяем…</span></span>
+<a class="btn" href="" data-t="reload">Обновить сейчас</a>
+<script>
+(function () {
+  var EN = {
+    kicker: 'Maintenance',
+    title: 'Back in a moment',
+    text: 'We are updating Takebana or fixing a problem. It usually takes a minute or two. This page will reload by itself as soon as everything works again.',
+    wait: 'Checking…',
+    reload: 'Reload now'
+  };
+  var m = /(?:^|;\s*)lang=(ru|en)/.exec(document.cookie);
+  var lang = m ? m[1] : (/^ru\b/i.test(navigator.language || '') ? 'ru' : 'en');
+  if (lang === 'en') {
+    document.documentElement.lang = 'en';
+    document.querySelectorAll('[data-t]').forEach(function (el) { el.textContent = EN[el.getAttribute('data-t')]; });
+  }
+  setInterval(function () {
+    fetch('/healthz', { cache: 'no-store' }).then(function (r) { if (r.ok) location.reload(); }).catch(function () {});
+  }, 10000);
+})();
+</script>
+</body>
+</html>

@@ -12,7 +12,8 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { titleKey: 'page.map.title' }) %>
+<%# В индексе, когда есть что показать: список заведений — в разметке. %>
+<%- include('partials/tkHead', { titleKey: 'page.map.title', descriptionKey: 'page.map.description', seo: { path: '/map', robots: venues.length ? '' : 'noindex, follow' } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="/vendor/maplibre-gl-6.9.0/maplibre-gl.css">
 <link rel="stylesheet" href="<%= asset('/css/tk-map.css') %>">
@@ -44,7 +45,7 @@
         <div class="tk-venues__found hidden" id="venueFound"></div>
       </div>
 
-      <form class="tk-venues__filters" id="venueFilters" action="/main" method="get">
+      <form class="tk-venues__filters" id="venueFilters" action="/map" method="get">
         <label class="tk-venues__ctl">
           <span class="tk-form__label" data-i18n="venues.city"><%- t('venues.city') %></span>
           <select name="city" class="tk-field tk-select">
@@ -73,16 +74,32 @@
         <div class="tk-venues__foot">
           <%# Нужна только без скрипта: со скриптом фильтр применяется сразу. %>
           <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="common.show"><%- t('common.show') %></button>
-          <a href="/main" class="tk-venues__reset" data-reset<%= anyFilter ? '' : ' hidden' %> data-i18n="common.resetFilters"><%- t('common.resetFilters') %></a>
+          <a href="/map" class="tk-venues__reset" data-reset<%= anyFilter ? '' : ' hidden' %> data-i18n="common.resetFilters"><%- t('common.resetFilters') %></a>
         </div>
       </form>
 
       <div class="tk-venues__list-head">
         <span class="tk-form__label" data-i18n="venues.onMap"><%- t('venues.onMap') %></span>
-        <span class="tk-venues__count" id="venueCount"></span>
+        <span class="tk-venues__count" id="venueCount"><%= venues.length || '' %></span>
       </div>
-      <ul class="tk-venues__list" id="venueList"></ul>
-      <p class="tk-note tk-note--center" id="venueEmpty" hidden data-i18n="venues.emptyHere"><%- t('venues.emptyHere') %></p>
+      <%# Сразу — все подходящие под фильтры, ссылками (работают и без скрипта:
+          ?venue= открывает карточку). tk-venues.js заменит список видимыми
+          на карте — теми же строками, но кнопками. %>
+      <ul class="tk-venues__list" id="venueList">
+        <% venues.forEach(function (v) { var city = catalog.CITIES.find(function (c) { return c.code === v.city; }); %>
+        <li>
+          <a href="/map?venue=<%= v._id %>" class="tk-vrow<%= v.online ? ' is-live' : '' %>">
+            <span class="tk-vrow__pic"><% if (v.photos && v.photos[0]) { %><img src="<%= v.photos[0] %>" alt="" loading="lazy"><% } else { %><%= (String(v.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase() %><% } %></span>
+            <span class="tk-vrow__body">
+              <span class="tk-vrow__name"><%= v.name %></span>
+              <span class="tk-vrow__meta"><%= [v.type ? ta('venue.' + v.type, catalog.VENUE_TYPE_NAME[v.type] || '') : '', city ? ta(city.i18n, city.name) : ''].filter(Boolean).join(' · ') %></span>
+            </span>
+            <% if (v.online) { %><span class="tk-vrow__live"><i class="tk-venues__dot"></i><%- t('venues.onAir') %></span><% } %>
+          </a>
+        </li>
+        <% }); %>
+      </ul>
+      <p class="tk-note tk-note--center" id="venueEmpty"<%= venues.length ? ' hidden' : '' %> data-i18n="venues.emptyHere"><%- t('venues.emptyHere') %></p>
 
       <div class="tk-venues__owner">
         <% if (hasEstablishments) { %>

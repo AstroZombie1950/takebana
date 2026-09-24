@@ -58,6 +58,8 @@ const StreamSessionSchema = new mongoose.Schema({
 StreamSessionSchema.index({ user: 1, startedAt: -1 });
 // Общий журнал эфиров в панели
 StreamSessionSchema.index({ startedAt: -1 });
+// Ссылка на закончившийся эфир: куда её увести (routes/streaming/streamPages.js)
+StreamSessionSchema.index({ stream: 1 }, { partialFilterExpression: { stream: { $type: 'objectId' } } });
 // Открытая сессия по ключу: её ищут закрытие и сэмплер, строк единицы
 StreamSessionSchema.index({ streamKey: 1, endedAt: 1 }, { partialFilterExpression: { endedAt: null } });
 

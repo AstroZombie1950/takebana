@@ -1,0 +1,50 @@
+<%#
+  Яндекс Метрика (docs/seo/). Права в Вебмастере подтверждены файлом
+  public/yandex_80b052bf060e4036.html, в Search Console — там же, у Google. Подключается из tkHead.ejs на всех страницах, кроме админки
+  и страниц с токеном в адресе (сброс пароля, подтверждение почты).
+  Без METRIKA_ID в .env не выводит ничего — локально и в зондах тишина.
+
+  Счётчик работает сразу (решение 24.09): внизу уведомление «пользуясь
+  сайтом, вы соглашаетесь с политикой cookie» с одной кнопкой; нажал —
+  cookie tk_consent на год, уведомление больше не показывается. Вебвизор
+  выключен: на сайте переписка, а он записывает всё, что человек набирает.
+%>
+<% if (metrika.id) { %>
+<script>
+(function () {
+  var ID = <%= metrika.id %>;
+  var TEXT = <%- JSON.stringify({ text: t('consent.text'), ok: ta('consent.ok'), aria: ta('consent.aria') }).replace(/</g, '\\u003c') %>;
+
+  window.ym = window.ym || function () { (ym.a = ym.a || []).push(arguments); };
+  ym.l = +new Date();
+  var s = document.createElement('script');
+  s.async = true;
+  s.src = 'https://mc.yandex.ru/metrika/tag.js?id=' + ID;
+  document.head.appendChild(s);
+  // Параметры — из кода счётчика в кабинете Метрики; webvisor: false — явно.
+  ym(ID, 'init', { ssr: true, webvisor: false, clickmap: true, ecommerce: 'dataLayer', referrer: document.referrer,
+                   url: location.href, accurateTrackBounce: true, trackLinks: true });
+
+  if (/(?:^|;\s*)tk_consent=/.test(document.cookie)) return;
+
+  function bar() {
+    var el = document.createElement('div');
+    el.className = 'tk-consent';
+    el.setAttribute('role', 'region');
+    el.setAttribute('aria-label', TEXT.aria);
+    el.setAttribute('data-i18n-aria', 'consent.aria');
+    el.innerHTML = '<p class="tk-consent__text" data-i18n="consent.text"></p>'
+      + '<div class="tk-consent__btns"><button type="button" class="tk-btn tk-btn--sm tk-btn--ghost" data-i18n="consent.ok"></button></div>';
+    el.querySelector('p').innerHTML = TEXT.text;
+    var ok = el.querySelector('button');
+    ok.textContent = TEXT.ok;
+    ok.addEventListener('click', function () {
+      document.cookie = 'tk_consent=ok; path=/; max-age=31536000; samesite=lax';
+      el.remove();
+    });
+    document.body.appendChild(el);
+  }
+  if (document.body) bar(); else document.addEventListener('DOMContentLoaded', bar);
+})();
+</script>
+<% } %>

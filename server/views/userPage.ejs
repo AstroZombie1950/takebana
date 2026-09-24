@@ -2,7 +2,8 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName } }) %>
+<%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName }, seo: { path: user.url, type: 'profile', robots: indexable ? '' : 'noindex, follow', image: ogImage, imageStd: !!ogImage, imageAlt: user.displayName,
+         jsonld: ld.profile({ url: user.url, name: user.displayName, image: user.avatarStyle.url, followers: user.followersCount }) } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/profile.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/gallery.css') %>">
@@ -171,7 +172,7 @@
       <% } else { %>
       <!-- Идёт ли эфир -->
       <section class="tk-panel--prof">
-        <p class="tk-kicker" data-i18n="user.stream"><%- t('user.stream') %></p>
+        <h2 class="tk-kicker" data-i18n="user.stream"><%- t('user.stream') %></h2>
 
         <% if (user.isStreaming && user.activeStreamId) { %>
         <div class="tk-prof__live">
@@ -189,7 +190,7 @@
       <!-- Записи эфиров: автор видит и те, что ещё сохраняются -->
       <section class="tk-prof__gal" id="recordings">
         <div class="tk-prof__gal-head">
-          <p class="tk-kicker tk-prof__gal-title" data-i18n="rec.title"><%- t('rec.title') %></p>
+          <h2 class="tk-kicker tk-prof__gal-title" data-i18n="rec.title"><%- t('rec.title') %></h2>
           <span class="tk-note"><%= recordings.length %></span>
         </div>
 
@@ -224,16 +225,16 @@
       </section>
 
       <!-- Фото и видео: начало ленты (utils/gallery.js), целиком — на
-           /userPage/:id/gallery. Плитка — partials/galleryTile.ejs,
+           /@ник/gallery. Плитка — partials/galleryTile.ejs,
            поведение — public/gallery.js. -->
       <section class="tk-prof__gal" id="gallery"<% if (isSelf) { %> data-own<% } %>>
         <div class="tk-prof__gal-head">
-          <a href="/userPage/<%= user._id %>/gallery" class="tk-kicker tk-prof__gal-title" data-i18n="user.gallery"><%- t('user.gallery') %></a>
+          <h2 class="tk-prof__gal-title"><a href="<%= user.url %>/gallery" class="tk-kicker" data-i18n="user.gallery"><%- t('user.gallery') %></a></h2>
           <span class="tk-note" id="galleryCount"><%= shotsCount %></span>
         </div>
 
         <div class="tk-shots" id="galleryShots">
-          <% shots.forEach(function (item, i) { %><%- include('partials/galleryTile', { item: item, n: i + 1, isSelf: isSelf }) %><% }); %>
+          <% shots.forEach(function (item, i) { %><%- include('partials/galleryTile', { item: item, n: i + 1, owner: user.displayName, isSelf: isSelf }) %><% }); %>
         </div>
         <p class="tk-note tk-note--center" id="galleryEmpty" data-i18n="user.galleryEmpty"<% if (shots.length) { %> hidden<% } %>><%- t('user.galleryEmpty') %></p>
 
@@ -243,7 +244,7 @@
         <% if (shotsMore || isSelf) { %>
         <div class="tk-prof__gal-add">
           <% if (shotsMore) { %>
-          <a href="/userPage/<%= user._id %>/gallery" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.all" data-i18n-vars='<%= JSON.stringify({ n: shotsCount }) %>'><%- t('gallery.all', { n: shotsCount }) %></a>
+          <a href="<%= user.url %>/gallery" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.all" data-i18n-vars='<%= JSON.stringify({ n: shotsCount }) %>'><%- t('gallery.all', { n: shotsCount }) %></a>
           <% } %>
           <% if (isSelf) { %>
           <a href="/upload" class="tk-btn tk-btn--outline tk-btn--xs" id="galleryAdd" data-i18n="user.galleryAdd"><%- t('user.galleryAdd') %></a>

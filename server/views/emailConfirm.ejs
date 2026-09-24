@@ -6,8 +6,8 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { titleKey: 'page.emailConfirm.title' }) %>
-<meta name="robots" content="noindex">
+<%# Токен в адресе — Метрика отправила бы его Яндексу вместе с адресом страницы. %>
+<%- include('partials/tkHead', { titleKey: 'page.emailConfirm.title', metrics: false }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/auth.css') %>">
 </head>

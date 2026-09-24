@@ -11,7 +11,9 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { title: stream.title + ' — Takebana' }) %>
+<%# Эфир живёт часы — в индекс не берём, но ссылку на него пересылают:
+    карточка с обложкой нужна. %>
+<%- include('partials/tkHead', { title: stream.title + ' — Takebana', seo: { path: '/stream/' + stream._id, robots: 'noindex, follow', image: stream.thumbnail, imageAlt: stream.title } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
 <% if (playable) { %><link rel="stylesheet" href="<%= asset('/css/player.css') %>"><% } %>

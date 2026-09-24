@@ -17,6 +17,10 @@ const authors = require('../../utils/authors');
 const userView = require('../../utils/userView');
 const restriction = require('../../utils/restrict');
 const gallery = require('../../utils/gallery');
+const search = require('../../utils/search');
+const nickname = require('../../utils/nickname');
+const { profileUrl } = require('../../utils/profileUrl');
+const ogImage = require('../../utils/ogImage');
 
 // Вкладки каталога. popular — все категории разом, остальные совпадают
 // с кодами категорий в config/catalog.js.
@@ -85,16 +89,31 @@ async function findStreams(category, filters) {
   });
 }
 
+// Записи под эфирами — то, что есть на странице, даже когда никто не в эфире
+// (docs/seo/DECISIONS.md). Самые просматриваемые готовые, без 18+ и без
+// забаненных авторов; на главной — из всех разделов.
+const RECORDINGS = 8;
+async function findRecordings(category) {
+  const recordings = await Recording.find({ status: 'ready', isAdult: { $ne: true }, ...(category === 'popular' ? {} : { category }) })
+    .sort({ views: -1, createdAt: -1 })
+    .limit(RECORDINGS * 2) // запас на забаненных
+    .populate('userId', 'nickname login email avatar banned')
+    .select(search.RECORDING_CARD)
+    .lean();
+  return search.recordingCards(recordings.filter((r) => r.userId && !r.userId.banned).slice(0, RECORDINGS));
+}
+
 async function renderCatalog(req, res, category) {
   const page = PAGES[category];
   const filters = readFilters(category, req.query);
 
   // Запросы параллельно (ускоряет F5)
-  const [users, totalStreamsCount, streams] = await Promise.all([
+  const [users, totalStreamsCount, streams, recordings] = await Promise.all([
     // Трое в колонку «Авторы»; кто это — utils/authors.js, остальные на /authors.
     authors.featured(3),
     getActiveStreamsCount(),
     findStreams(category, filters),
+    findRecordings(category),
   ]);
 
   res.render('streamingMain', {
@@ -105,6 +124,7 @@ async function renderCatalog(req, res, category) {
     base: baseUrl(category),
     users,
     streams,
+    recordings,
     totalStreamsCount,
     showIntro: !req.session.userId && !introClosed(req),
   });
@@ -119,7 +139,9 @@ router.get(['/streaming', '/streaming/popular'], (req, res) => {
 });
 
 router.get('/streaming/:category', commonDataMiddleware, (req, res) => {
-  if (!PAGES[req.params.category]) return res.redirect('/');
+  // Раздела нет — «не найдено»: переход на главную поисковик счёл бы
+  // мягкой 404, а человек не понял бы, куда делся его адрес.
+  if (!PAGES[req.params.category]) return notFound(req, res);
   return renderCatalog(req, res, req.params.category);
 });
 
@@ -141,15 +163,37 @@ router.get('/streaming/:category/grid', async (req, res) => {
 });
 
 
-router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
-  const userId = req.params.id; // ID пользователя, чей профиль просматривается
-  // Кривой адрес — страница «не найдено», а не 500 в журнале ошибок.
-  if (!/^[a-f\d]{24}$/i.test(userId)) return notFound(req, res);
-  const currentUserId = req.session.userId; // ID текущего пользователя из сессии
+// Профиль живёт по адресу /@ник (utils/profileUrl.js). Прежний адрес
+// /userPage/<id> и прежний ник уводят сюда 301 — ссылки, разошедшиеся
+// до смены, продолжают работать.
+//
+// Человек по нику: нынешний — он; прежний — 301 на тот же вид страницы
+// (профиль или галерея, с ?page=) по нынешнему нику; иначе «не найдено».
+// canonicalPath уже привёл ник к нижнему регистру.
+async function byNick(req, res, select) {
+  const nick = req.params.nick;
+  if (!nickname.RULE.test(nick)) { notFound(req, res); return null; }
+  const user = await User.findOne({ nickname: nick }).select(select);
+  if (user) return user;
+  const now = await User.findOne({ formerNicknames: nick }).sort({ nicknameChangedAt: -1 }).select('nickname').lean();
+  if (now && now.nickname) res.redirect(301, req.originalUrl.replace('/@' + nick, '/@' + now.nickname));
+  else notFound(req, res);
+  return null;
+}
 
-  // Получаем данные пользователя, чей профиль просматривается
-  const user = await User.findById(userId);
-  if (!user) return notFound(req, res);
+router.get(['/userPage/:id', '/userPage/:id/gallery'], commonDataMiddleware, async (req, res) => {
+  const user = /^[a-f\d]{24}$/i.test(req.params.id) ? await User.findById(req.params.id).select('nickname').lean() : null;
+  // Без ника — «не найдено», а не 301 на самого себя.
+  if (!user || !user.nickname) return notFound(req, res);
+  const qs = req.originalUrl.indexOf('?');
+  res.redirect(301, profileUrl(user) + (req.path.endsWith('/gallery') ? '/gallery' : '') + (qs === -1 ? '' : req.originalUrl.slice(qs)));
+});
+
+router.get('/@:nick', commonDataMiddleware, async (req, res) => {
+  const currentUserId = req.session.userId; // ID текущего пользователя из сессии
+  const user = await byNick(req, res);
+  if (!user) return;
+  const userId = String(user._id);
 
   const displayName = userView.displayName(user);
   const avatarStyle = userView.avatarStyle(user, displayName);
@@ -192,13 +236,22 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
     .select('title status duration thumb isAdult createdAt views')
     .lean();
   // Фото и видео одной лентой (utils/gallery.js): в профиле — начало,
-  // целиком — на /userPage/:id/gallery. Владельцу видны и ролики в работе.
+  // целиком — на /@ник/gallery. Владельцу видны и ролики в работе.
   const shots = restricted ? { list: [], count: 0 } : await gallery.feed(user, isSelf);
 
   res.locals.pageOwner = { id: String(userId), scope: 'profile', access: restricted ? 'them' : iRestricted ? 'me' : '' };
 
+  // В поиск — только профиль, где есть что смотреть: запись, фото, видео
+  // или идущий эфир. Пустых («зарегистрировался и ушёл») тысячи одинаковых,
+  // забаненный из выдачи выпадает (docs/seo/DECISIONS.md).
+  const indexable = !user.banned
+    && (!!activeStream || shots.count > 0 || recordings.some((r) => r.status === 'ready'));
+
   // Передача данных в шаблон
   res.render('userPage', {
+    indexable,
+    // Карточка для мессенджеров с CDN или null — общая обложка (utils/ogImage.js).
+    ogImage: ogImage.forProfile(user),
     recordings,
     shots: shots.list.slice(0, gallery.PREVIEW),
     shotsMore: shots.list.length > gallery.PREVIEW,
@@ -210,6 +263,7 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
       displayName,
       avatarStyle,
       _id: user._id,
+      url: profileUrl(user),
       followersCount,
       followingCount,
       isSubscribed, // Передаем статус подписки
@@ -224,11 +278,10 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
 });
 // Вся галерея человека: фото и видео одной лентой, новые сверху, по
 // gallery.PAGE на страницу (?page=N). Ограничение доступа — как у профиля.
-router.get('/userPage/:id/gallery', commonDataMiddleware, async (req, res) => {
-  const userId = req.params.id;
-  if (!/^[a-f\d]{24}$/i.test(userId)) return notFound(req, res);
-  const user = await User.findById(userId).select('nickname login email avatar gallery').lean();
-  if (!user) return notFound(req, res);
+router.get('/@:nick/gallery', commonDataMiddleware, async (req, res) => {
+  const user = await byNick(req, res, 'nickname login email avatar gallery banned');
+  if (!user) return;
+  const userId = String(user._id);
 
   const me = req.session.userId;
   const isSelf = String(userId) === String(me);
@@ -236,12 +289,22 @@ router.get('/userPage/:id/gallery', commonDataMiddleware, async (req, res) => {
   res.locals.pageOwner = { id: String(userId), scope: 'profile', access: restricted ? 'them' : '' };
 
   const shots = restricted ? { list: [], count: 0 } : await gallery.feed(user, isSelf);
-  const pg = gallery.page(shots.list, parseInt(req.query.page, 10));
+  // У каждой страницы листалки один адрес: ?page=1 — это сама галерея,
+  // номер за пределами или не число — «не найдено», а не последняя
+  // страница под чужим адресом.
+  const asked = req.query.page;
+  const pg = gallery.page(shots.list, parseInt(asked, 10));
+  if (asked !== undefined) {
+    if (asked === '1') return res.redirect(301, `${profileUrl(user)}/gallery`);
+    if (asked !== String(pg.page) || pg.page === 1) return notFound(req, res);
+  }
   const displayName = userView.displayName(user);
   res.render('gallery', {
-    owner: { _id: user._id, displayName },
+    owner: { _id: user._id, displayName, url: profileUrl(user) },
     isSelf,
     restricted,
+    // Не больше gallery.PREVIEW — всё уже есть в профиле, страница-дубль.
+    indexable: !user.banned && shots.count > gallery.PREVIEW,
     shots: pg.items,
     count: shots.count,
     page: pg.page,

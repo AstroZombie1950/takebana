@@ -59,7 +59,7 @@ function errorHandler(err, req, res, next) {
 
     // Страница ошибки сама рендерится шаблоном, и он тоже может упасть —
     // например, когда сломан как раз движок представлений. Тогда простой текст.
-    res.status(status).render('error', { code }, (renderErr, html) => {
+    res.status(status).render('error', { code, status }, (renderErr, html) => {
         if (renderErr) return res.type('text/plain').send('Ошибка сервера' + (code ? ' #' + code : ''));
         res.send(html);
     });
@@ -72,7 +72,7 @@ function errorHandler(err, req, res, next) {
 // «такого нет» надо ответить страницей.
 function notFound(req, res) {
     if (wantsJson(req)) return res.status(404).json({ message: 'Не найдено' });
-    res.status(404).render('error', { code: '', missing: true });
+    res.status(404).render('error', { code: '', status: 404 });
 }
 
 // Остановка процесса: pm2 при деплое шлёт SIGINT, systemd — SIGTERM.

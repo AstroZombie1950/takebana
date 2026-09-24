@@ -101,11 +101,12 @@ if (mailConfigured) {
     sendResetLetter(req.body.email, langOf(req)).catch((err) => errorLog.external(err, 'mail.passwordReset'));
   });
 
-  // Токен в адресе: страница не кэшируется, а Referer наружу не уходит —
-  // helmet ставит Referrer-Policy: no-referrer.
+  // Токен в адресе: страница не кэшируется, Referer не уходит никуда —
+  // сайту в целом разрешён strict-origin-when-cross-origin (app.js), здесь
+  // строже. Метрики на странице нет (resetPassword.ejs).
   router.get('/reset-password/:token', async (req, res) => {
     const user = await findByToken(req.params.token);
-    res.set('Cache-Control', 'no-store').render('resetPassword', { valid: Boolean(user) });
+    res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }).render('resetPassword', { valid: Boolean(user) });
   });
 
   router.post('/reset-password', authLimiter, validate({

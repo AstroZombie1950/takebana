@@ -12,18 +12,13 @@
 const PROD = process.env.START_SERVER === 'prod' || process.env.NODE_ENV === 'production';
 const API_KEY = process.env.RESEND_API_KEY || '';
 const FROM = process.env.MAIL_FROM || '';
-const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
+// Адрес в письме — из PUBLIC_URL, не из заголовка Host (utils/site.js).
+const { PUBLIC_URL, siteUrl } = require('./site');
 
-// Адрес в письме берётся из настройки, а не из заголовка Host запроса:
-// иначе подставной Host превращает письмо со ссылкой в ссылку на чужой сайт.
 const mailConfigured = PROD ? Boolean(API_KEY && FROM && PUBLIC_URL) : true;
 
 if (PROD && !mailConfigured) {
   console.warn('Почта не настроена: нет RESEND_API_KEY / MAIL_FROM / PUBLIC_URL. Восстановление пароля отключено.');
-}
-
-function siteUrl(path) {
-  return (PUBLIC_URL || `http://127.0.0.1:${process.env.PORT || 3000}`) + path;
 }
 
 async function sendMail({ to, subject, text, html }) {

@@ -221,6 +221,19 @@
 /* ── Секции ── */
 .tk-cat__sec { padding-top: 48px; }
 
+/* Записи под эфирами: заголовок без подписи — сетке нужен свой отступ. */
+.tk-cat__h2 + .tk-recs { margin-top: 20px; }
+
+/* «О разделе» внизу — текст для пришедшего из поиска, тише основного. */
+.tk-cat__about p {
+  margin: 0 0 14px;
+  max-width: 720px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--tk-beige);
+  text-wrap: pretty;
+}
+
 .tk-cat__h2 {
   margin: 0 0 6px;
   font-size: 30px;

@@ -2,8 +2,7 @@
 <html lang="ru">
 <head>
 <%# Панель осознанно только на русском, переключателя языка в ней нет. %>
-<%- include('partials/tkHead', { title: title }) %>
-<meta name="robots" content="noindex">
+<%- include('partials/tkHead', { title: title, metrics: false }) %>
 <link rel="stylesheet" href="<%= asset('/css/admin.css') %>">
 <%# escapeHtml обязателен: таблицы собираются строками и уходят в innerHTML,
     а значения полей вводят посетители — от названия заведения до текста
