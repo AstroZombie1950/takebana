@@ -56,7 +56,7 @@ router.post('/stream/away/:streamId', requireAuth, requireOwner(Stream, { param:
   const stream = await Stream.findOneAndUpdate(
     { _id: req.params.streamId, isActive: true, hostAway: { $ne: away } },
     { hostAway: away, updatedAt: Date.now() },
-    { new: true }
+    { returnDocument: 'after' }
   );
   if (stream) {
     const io = req.app.get('io');
@@ -140,6 +140,26 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
 });
 
 
+// Новый ключ трансляции. Подпись ключа живёт 30 дней (utils/rtmpAuth.js),
+// и до 24.09.2026 отозвать её было нечем, кроме смены общего секрета для
+// всех: утёкший ключ или ключ забаненного оставался рабочим. Новый ключ —
+// новый путь приёма, и старая подпись к нему не подходит.
+//
+// Только пока эфира нет или он черновик: куски записи, журнал эфира и
+// плейлист зрителей привязаны к ключу, и смена посреди эфира их бы потеряла.
+router.post('/stream-key/rotate', requireAuth, requireNotBanned, async (req, res) => {
+  const userId = req.session.userId;
+  const stream = await Stream.findOne({ userId }).select('firstLiveAt isActive').lean();
+  if (stream && (stream.firstLiveAt || stream.isActive)) {
+    return res.status(409).json({ message: 'Ключ меняется, когда эфира нет: сначала завершите его' });
+  }
+  const streamKey = uuidv4();
+  await User.updateOne({ _id: userId }, { streamKey });
+  if (stream) await Stream.updateOne({ _id: stream._id }, { streamKey });
+  audit(req, 'stream.key.rotate', { targetType: 'user', targetId: userId });
+  res.json({ ok: true });
+});
+
 // Роут для активации стрима (isActive: true)
 router.post('/set-active', requireAuth, requireNotBanned, validate({
   streamKey: { type: 'key', required: true, label: 'Ключ трансляции' },
@@ -159,9 +179,14 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
   // подписка на комнату сокета), поэтому без него любой вошедший мог
   // включать и гасить чужой эфир. Чужой стрим просто не найдётся — 404.
   const current = await Stream.findOne({ streamKey, userId: req.session.userId })
-    .select('streamKey streamType dailyRoomName portrait').lean();
+    .select('streamKey streamType dailyRoomName portrait stoppedByModeration').lean();
   if (!current) {
     return res.status(404).json({ message: 'Стрим не найден' });
+  }
+  // Погашенный модератором эфир владелец обратно не поднимает: OBS-эфир
+  // всплывал на витрине «идущим» без картинки (приём его не пустит).
+  if (current.stoppedByModeration) {
+    return res.status(403).json({ message: 'Эфир остановлен модерацией' });
   }
 
   // Веб-эфир зрители смотрят в HLS: до отметки «в эфире» комната должна
@@ -184,9 +209,9 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
   // В эфире с этой секунды; первый выход запоминается навсегда (firstLiveAt).
   const now = new Date();
   const stream = await Stream.findOneAndUpdate(
-    { streamKey, userId: req.session.userId },
+    { streamKey, userId: req.session.userId, stoppedByModeration: { $ne: true } },
     [{ $set: { isActive: true, hostAway: false, startedAt: now, updatedAt: now, firstLiveAt: { $ifNull: ['$firstLiveAt', now] }, portrait: { $ifNull: ['$portrait', portrait] } } }],
-    { new: true }
+    { returnDocument: 'after', updatePipeline: true }
   );
 
   if (!stream) {
@@ -246,7 +271,7 @@ router.post('/set-inactive', requireAuth, validate({
       hostAway: false,
       startedAt: null // Сбрасываем время начала при деактивации
     },
-    { new: true } // Возвращаем обновлённый документ
+    { returnDocument: 'after' } // Возвращаем обновлённый документ
   );
 
   if (!stream) {
@@ -272,6 +297,8 @@ router.post('/set-inactive', requireAuth, validate({
         streamProvider: stream.streamProvider,
         isActive: false
       });
+      // Витрина, /authors и левая панель — как при выходе в эфир.
+      liveSignal.changed(io, stream.userId, false);
     }
   } catch (_) {}
 

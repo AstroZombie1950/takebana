@@ -19,7 +19,8 @@ const callLog = require('../utils/callLog');
 // Без проверки любой желающий мог опрашивать присутствие произвольных
 // идентификаторов и снимать, кто когда в сети.
 router.get('/api/presence', requireAuthApi, async (req, res) => {
-  const ids = (req.query.ids || '')
+  // Повтор ключа (?ids=a&ids=b) даёт массив, а у массива нет split — было 500.
+  const ids = (typeof req.query.ids === 'string' ? req.query.ids : '')
     .split(',')
     .map(s => s.trim())
     // Список приходит из адреса: негодный идентификатор ронял весь запрос

@@ -46,6 +46,9 @@ router.post('/subscribe', validate({
   if (!subscriberId) {
     return res.status(401).json({ message: 'Необходимо войти в систему для подписки' });
   }
+  if (String(userId) === String(subscriberId)) {
+    return res.status(400).json({ message: 'На себя подписаться нельзя' });
+  }
 
   // Проверка, существует ли уже такая подписка
   const existingSubscription = await Subscription.findOne({ subscriberId, subscribedToId: userId });
@@ -150,14 +153,15 @@ router.post('/restrict', requireAuthApi, validate({
 // сверху, по LIST_PAGE на страницу. Карточки — те же, что в поиске
 // (utils/search.js, partials/personCard.ejs).
 const { commonDataMiddleware } = require('./shared');
+const { notFound } = require('../../middleware/errors');
 const { peopleCards } = require('../../utils/search');
 const LIST_PAGE = 48;
 
 router.get(['/userPage/:id/followers', '/userPage/:id/following'], commonDataMiddleware, async (req, res) => {
   const { id } = req.params;
-  if (!/^[a-f\d]{24}$/i.test(id)) return res.status(404).send('Пользователь не найден');
+  if (!/^[a-f\d]{24}$/i.test(id)) return notFound(req, res);
   const owner = await User.findById(id).select('nickname login email avatar').lean();
-  if (!owner) return res.status(404).send('Пользователь не найден');
+  if (!owner) return notFound(req, res);
 
   const list = req.path.endsWith('/following') ? 'following' : 'followers';
   // В одной коллекции обе стороны: подписчики — те, кто подписан на него,

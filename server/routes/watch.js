@@ -126,9 +126,16 @@ function mount(kind) {
       res.status(404).json({ message: K.notFound });
       return null;
     }
+    // Ограниченному закрыта страница — закрыты и комментарии, оценки,
+    // просмотры: иначе комментарий под роликом оставался каналом травли,
+    // и автору ещё и приходило о нём уведомление.
+    const me = req.session.userId;
+    if (await restriction.isRestricted(item.userId, me)) {
+      res.status(403).json({ message: 'Автор ограничил вам доступ к своему каналу' });
+      return null;
+    }
     // 18+ (бывает только у записи) — тот же гейт, что у страницы: автору
     // и подтвердившим возраст.
-    const me = req.session.userId;
     if (item.isAdult && String(item.userId) !== String(me)) {
       const u = me ? await User.findById(me).select('adultConfirmedAt').lean() : null;
       if (!u || !u.adultConfirmedAt) {
@@ -233,7 +240,7 @@ function mount(kind) {
     if (value === -1) inc.dislikes++;
 
     const after = inc.likes || inc.dislikes
-      ? await K.Model.findOneAndUpdate({ _id: item._id }, { $inc: inc }, { new: true }).select('likes dislikes userId').lean()
+      ? await K.Model.findOneAndUpdate({ _id: item._id }, { $inc: inc }, { returnDocument: 'after' }).select('likes dislikes userId').lean()
       : await K.Model.findById(item._id).select('likes dislikes userId').lean();
     const isOwner = String(after.userId) === String(me);
     res.json({

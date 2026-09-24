@@ -61,6 +61,10 @@ async function put(file, key, contentType) {
         headers: { AccessKey: bunny.key, 'Content-Type': contentType, 'Content-Length': String(size) },
         body: fs.createReadStream(file),
         duplex: 'half',
+        // Без предела зависшее соединение держало задание очереди пережатия
+        // вечно — и вставала вся обработка видео. Минута плюс секунда на
+        // мегабайт: час видео (~1 ГБ) — до 18 минут, этого хватает с запасом.
+        signal: AbortSignal.timeout(60000 + Math.ceil(size / 1048576) * 1000),
       });
       await checked(res, 'PUT');
     } catch (e) {
@@ -105,7 +109,7 @@ async function purge(key) {
 async function remove(key) {
   if (!key) return;
   if (driver === 'bunny') {
-    await checked(await fetch(objectUrl(key), { method: 'DELETE', headers: { AccessKey: bunny.key } }), 'DELETE');
+    await checked(await fetch(objectUrl(key), { method: 'DELETE', headers: { AccessKey: bunny.key }, signal: AbortSignal.timeout(15000) }), 'DELETE');
     await purge(key);
   } else if (driver === 'local') {
     await fs.promises.rm(path.join(LOCAL_ROOT, key), { force: true });

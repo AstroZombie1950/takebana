@@ -118,22 +118,27 @@ router.delete('/profile/avatar', requireAuth, async (req, res) => {
   res.json({ success: true, avatar: avatarOf(user) });
 });
 
-// Загрузка фотографий в галерею (до 100 суммарно).
+// Загрузка фотографий в галерею (до 100 суммарно, за раз — до PHOTOS_PER_REQUEST).
+// Файлы multer держит в памяти, поэтому сколько принять, решается до него:
+// раньше до 100 файлов по 10 МБ читались целиком и только потом упирались
+// в лимит «100 фото». Больше остатка multer не примет — 400.
 // requireAuth перед multer — см. комментарий у /profile/avatar.
-router.post('/profile/gallery', requireAuth, uploadGallery.array('photos', 100), async (req, res) => {
-  if (!req.session || !req.session.userId) {
-    return res.status(401).json({ success: false, message: 'Необходима авторизация' });
-  }
+const PHOTOS_MAX = 100;
+const PHOTOS_PER_REQUEST = 20;
+router.post('/profile/gallery', requireAuth, async (req, res, next) => {
+  const user = await User.findById(req.session.userId).select('gallery').lean();
+  if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+  const left = PHOTOS_MAX - (Array.isArray(user.gallery) ? user.gallery.length : 0);
+  if (left <= 0) return res.status(400).json({ success: false, message: 'Лимит 100 фото уже достигнут' });
+  uploadGallery.array('photos', Math.min(left, PHOTOS_PER_REQUEST))(req, res, next);
+}, async (req, res) => {
   const user = await User.findById(req.session.userId);
   if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
 
-  const existing = Array.isArray(user.gallery) ? user.gallery.length : 0;
-  const incoming = (req.files || []).length;
-  if (existing >= 100) return res.status(400).json({ success: false, message: 'Лимит 100 фото уже достигнут' });
-  if (existing + incoming > 100) {
-    // Обрезаем до допустимого
-    req.files = req.files.slice(0, 100 - existing);
-  }
+  // Параллельная загрузка могла занять место, пока шёл этот запрос.
+  const left = PHOTOS_MAX - (Array.isArray(user.gallery) ? user.gallery.length : 0);
+  if (left <= 0) return res.status(400).json({ success: false, message: 'Лимит 100 фото уже достигнут' });
+  req.files = (req.files || []).slice(0, left);
 
   // Сжатие и выгрузка в Bunny — utils/galleryPhotos.js.
   let urls;

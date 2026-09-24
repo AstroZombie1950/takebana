@@ -17,6 +17,7 @@ const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const fs = require('fs');
 const sharp = require('sharp');
+const { USER_PIXELS } = require('../../utils/watermark');
 const GalleryVideo = require('../../models/GalleryVideo');
 const galleryVideo = require('../../utils/galleryVideo');
 const { requireAuth, requireAuthApi, requireNotBanned } = require('../../middleware/auth');
@@ -141,7 +142,7 @@ router.put('/upload/video/:id', requireAuthApi, async (req, res) => {
   const saved = await GalleryVideo.findOneAndUpdate(
     { _id: id, status: 'uploading', 'upload.received': received },
     { $set: { 'upload.received': now, ...(done ? { status: 'draft' } : {}) } },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
   if (!saved) return res.status(409).json({ success: false, received });
   if (done) {
@@ -170,7 +171,7 @@ router.post('/upload/video/:id/edit', requireAuthApi, validate({
   const v = await GalleryVideo.findOneAndUpdate(
     { _id: OBJECT_ID.test(req.params.id) ? req.params.id : null, userId: req.session.userId, status: { $in: ['uploading', 'draft'] } },
     { $set: { 'edit.start': start, 'edit.end': end, 'edit.mute': mute, 'edit.coverAt': coverAt, publish, title, description } },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
   if (!v) return res.status(404).json({ success: false, message: 'Видео не найдено' });
   const started = publish ? await galleryVideo.publishIfReady(v._id) : null;
@@ -184,7 +185,7 @@ router.post('/upload/video/:id/cover', requireAuthApi, uploadGallery.single('cov
   if (!v) return res.status(404).json({ success: false, message: 'Видео не найдено' });
   if (!req.file) return res.status(400).json({ success: false, message: 'Файл не передан' });
   try {
-    await sharp(req.file.buffer).metadata();
+    await sharp(req.file.buffer, { limitInputPixels: USER_PIXELS }).metadata();
   } catch (e) {
     return res.status(400).json({ success: false, message: 'Не удалось обработать изображение' });
   }

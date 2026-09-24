@@ -11,7 +11,10 @@ const UserSchema = new mongoose.Schema({
   // в нижнем регистре; правила и выдача — utils/nickname.js.
   nickname: String,
   nicknameChangedAt: { type: Date, default: null },
-  email: String,
+  // В нижнем регистре и без пробелов по краям — и при записи, и в фильтрах
+  // запросов (mongoose применяет lowercase и к ним). Старые адреса перевёл
+  // jobs/lowercaseEmails.js.
+  email: { type: String, lowercase: true, trim: true },
   password: String,
   provider: String,
   // Модератор заведён рядом с администратором сразу: точный набор его прав

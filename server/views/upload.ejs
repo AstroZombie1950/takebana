@@ -119,7 +119,7 @@
 
 <script>
   window.TK_UPLOAD = {
-    drafts: <%- JSON.stringify(drafts) %>,
+    drafts: <%- JSON.stringify(drafts).replace(/</g, '\\u003c') %>,
     maxSeconds: <%- JSON.stringify(maxSeconds) %>,
     videoEnabled: <%- JSON.stringify(videoEnabled) %>
   };

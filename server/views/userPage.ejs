@@ -263,8 +263,8 @@
 <script>
   window.TK_PROFILE = {
     userId: <%- JSON.stringify(String(user._id)) %>,
-    displayName: <%- JSON.stringify(user.displayName) %>,
-    avatarUrl: <%- JSON.stringify(user.avatarStyle.url || '') %>
+    displayName: <%- JSON.stringify(user.displayName).replace(/</g, '\\u003c') %>,
+    avatarUrl: <%- JSON.stringify(user.avatarStyle.url || '').replace(/</g, '\\u003c') %>
   };
 </script>
 <script defer src="<%= asset('/gallery.js') %>"></script>

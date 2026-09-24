@@ -81,7 +81,8 @@
         <%# Журнал звонков собирает chats.js из /api/calls: при открытии вкладки. %>
         <div class="tk-chat__scroll" id="callsList" role="tabpanel" aria-labelledby="tabCalls"<% if (tab !== 'calls') { %> hidden<% } %>></div>
 
-        <div class="tk-chat__scroll" id="conversationsList" role="tabpanel" aria-labelledby="tabMessages"<% if (tab !== 'messages') { %> hidden<% } %>>
+        <%# data-before — есть ещё диалоги, догружаются прокруткой (chats.js). %>
+        <div class="tk-chat__scroll" id="conversationsList" role="tabpanel" aria-labelledby="tabMessages" data-before="<%= dialogsBefore %>"<% if (tab !== 'messages') { %> hidden<% } %>>
           <% conversations.forEach(function (c) { var p = c.interlocutor; %>
           <button
             type="button"

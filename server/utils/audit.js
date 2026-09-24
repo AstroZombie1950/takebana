@@ -48,6 +48,7 @@ const ACTIONS = {
   'stream.pause': 'Пауза эфира',
   'stream.end': 'Завершение эфира',
   'stream.thumbnail': 'Обложка эфира',
+  'stream.key.rotate': 'Новый ключ трансляции',
   'stream.rtmp.start': 'OBS начал вещание',
   'stream.rtmp.end': 'OBS закончил вещание',
   'stream.rtmp.reject': 'Вещание отклонено',

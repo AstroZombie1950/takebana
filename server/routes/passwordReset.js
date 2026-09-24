@@ -22,6 +22,7 @@ const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const { authLimiter, resetLimiter } = require('../middleware/rateLimit');
 const { validate } = require('../middleware/validate');
+const { signIn } = require('../middleware/auth');
 const User = require('../models/User');
 const { PASSWORD_PROVIDER, PASSWORD_MIN, PASSWORD_MAX, hashPassword } = require('../utils/password');
 const { mailConfigured, siteUrl, sendMail } = require('../utils/mail');
@@ -124,11 +125,7 @@ if (mailConfigured) {
     // Сессии хранит connect-mongodb-session в коллекции mySessions (config/session.js).
     await mongoose.connection.collection('mySessions').deleteMany({ 'session.userId': user._id.toString() });
 
-    // Новая сессия, а не запись в прежнюю: идентификатор, известный до входа,
-    // после входа не должен ничего значить.
-    await new Promise((resolve, reject) => req.session.regenerate((err) => (err ? reject(err) : resolve())));
-    req.session.userId = user._id.toString();
-    req.session.login = user.login || 'anon';
+    await signIn(req, user);
     audit(req, 'auth.password.reset.done', { actor: user });
     res.json({ message: 'Пароль изменён', redirectUrl: '/' });
   });

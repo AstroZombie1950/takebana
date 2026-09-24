@@ -70,7 +70,7 @@ async function subscribe(userId, sub, { ua = '', lang = 'ru', preview, live } = 
   return PushSubscription.findOneAndUpdate(
     { endpoint: sub.endpoint },
     { $set: set, $setOnInsert: { createdAt: new Date() } },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   ).lean();
 }
 
@@ -84,7 +84,7 @@ function setPrefs(userId, endpoint, patch) {
   if (typeof patch.preview === 'boolean') set.preview = patch.preview;
   if (typeof patch.live === 'boolean') set.live = patch.live;
   if (!Object.keys(set).length) return null;
-  return PushSubscription.findOneAndUpdate({ endpoint, user: userId }, { $set: set }, { new: true }).lean();
+  return PushSubscription.findOneAndUpdate({ endpoint, user: userId }, { $set: set }, { returnDocument: 'after' }).lean();
 }
 
 // Есть ли у человека хоть одна открытая вкладка. Комнаты user:<id> ведут

@@ -45,10 +45,13 @@ const ownVenue = requireOwner(Establishments, { param: 'id', field: 'owner' });
 // Он спрашивает нас на каждое подключение: кого пускать вещать и кого
 // смотреть. Вопрос приходит с петли (authHTTPAddress в ops/mediamtx/),
 // поэтому и отвечаем только петле: снаружи этот адрес не нужен никому.
+// Одной петли мало: за nginx с 127.0.0.1 приходит всё. Запрос через nginx
+// узнаём по X-Forwarded-For — MediaMTX ходит напрямую и его не ставит.
+// Снаружи адрес закрыт и в самом nginx (ops/nginx/takebana.conf).
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 router.post('/api/mtx/auth', express.json({ limit: '4kb' }), (req, res) => {
-  if (!LOOPBACK.has(req.socket.remoteAddress)) return res.status(401).end();
+  if (!LOOPBACK.has(req.socket.remoteAddress) || req.headers['x-forwarded-for']) return res.status(401).end();
   const { path, action, query } = req.body || {};
   if (typeof path !== 'string' || typeof action !== 'string') return res.status(401).end();
   // Разрешение — одноразовый ключ, выданный маршрутами ниже.

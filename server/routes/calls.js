@@ -3,6 +3,7 @@
 // вкладка на странице переписки, пишет и читает его utils/callLog.js.
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
@@ -16,12 +17,24 @@ const restriction = require('../utils/restrict');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
 const { randomUUID: uuidv4 } = require('crypto');
 
+// Десять звонков в минуту с человека. Каждый будит телефон собеседника
+// пушем «пропущенный», и без предела это был способ травли, от которого
+// спасало только «ограничить доступ».
+const callLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  keyGenerator: (req) => String(req.session.userId),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Слишком много звонков. Подождите минуту.' },
+});
+
 // ===== Call API (create outgoing call) =====
 // requireAuthApi отвечает тем же 401 { error: 'unauthorized' }, что стояло
 // внутри обработчика, но до схемы: анониму незачем узнавать имена полей.
 // Звонок — это передача своего голоса, поэтому ограничение аккаунта
 // действует и здесь, как на переписке и эфире.
-router.post('/api/calls/create', requireAuthApi, requireNotBanned, validate({
+router.post('/api/calls/create', requireAuthApi, requireNotBanned, callLimiter, validate({
   calleeId: { type: 'objectId', required: true, label: 'Собеседник' },
   // Ровно то, что шлёт шапка (views/partials/header.ejs): аудио или видео.
   type: { type: 'string', required: true, values: ['audio', 'video'], label: 'Тип звонка' },
@@ -34,26 +47,26 @@ router.post('/api/calls/create', requireAuthApi, requireNotBanned, validate({
   // Ограничение доступа закрывает и звонки — в обе стороны (utils/restrict.js).
   const barred = await restriction.between(callerId, calleeId);
   if (barred) return res.status(403).json({ success: false, restricted: barred, message: restriction.BLOCKED[barred] });
+  const [caller, callee] = await Promise.all([
+    User.findById(callerId).select('nickname login email avatar').lean(),
+    User.exists({ _id: calleeId }),
+  ]);
+  if (!callee) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
   const callId = uuidv4();
   // Общие хранилища кладёт app.js после запуска сокетов.
   const io = req.app.get('io');
   const pendingCalls = req.app.get('pendingCalls');
-  console.log('[call] create', callId, { callerId, calleeId, type, hasIO: !!io, hasStore: !!pendingCalls });
   if (pendingCalls) {
     pendingCalls.set(callId, { callerId, calleeId: String(calleeId), type, own: own === true, createdAt: Date.now() });
   }
   callLog.created(callId, { callerId, calleeId, type });
-  // user info
-  const caller = await User.findById(callerId).lean();
   const displayName = caller ? userView.displayName(caller) : '';
   const avatarUrl = caller?.avatar || null;
   // notify callee via socket room
   if (io) {
-    console.log('[call] notify callee room', `user:${calleeId}`);
     io.to(`user:${calleeId}`).emit('incoming_call', { callId, type, from: { userId: callerId, displayName, avatarUrl } });
     setTimeout(() => {
       if (pendingCalls && pendingCalls.has(callId)) {
-        console.log('[call] timeout', callId);
         io.to(`user:${callerId}`).emit('call:timeout', { callId });
         io.to(`user:${calleeId}`).emit('call:timeout', { callId });
         pendingCalls.delete(callId);
@@ -76,7 +89,8 @@ router.get('/calls', (req, res) => res.redirect('/chatsPage?tab=calls'));
 router.get('/api/calls', requireAuthApi, async (req, res) => {
   const me = String(req.session.userId);
   const calls = await callLog.journal(me);
-  const unread = await Notification.countDocuments({ recipient: me, isRead: false });
+  // Как у колокольчика (/api/badge): уведомления о сообщениях не в счёт.
+  const unread = await Notification.countDocuments({ recipient: me, isRead: false, type: { $ne: 'message' } });
   res.json({ calls, unread });
 });
 

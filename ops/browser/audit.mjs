@@ -40,7 +40,9 @@ const PUBLIC = [
   ['авторы', '/authors'],
   ['вход', '/login'],
   ['регистрация', '/register'],
+  ['восстановление пароля', '/forgot-password'],
   ['о проекте', '/about'],
+  ['проверка связи', '/check'],
   ['условия', '/terms'],
   ['конфиденциальность', '/privacy'],
   ['cookie', '/cookies'],
@@ -51,7 +53,10 @@ const PRIVATE = [
   ['карта вошедшему', '/main'],
   ['переписка', '/chatsPage'],
   ['журнал звонков', '/chatsPage?tab=calls'],
+  ['контакты', '/chatsPage?tab=contacts'],
   ['настройки профиля', '/settings'],
+  ['загрузка в галерею', '/upload'],
+  ['студия', '/studio'],
 ];
 
 const findings = [];

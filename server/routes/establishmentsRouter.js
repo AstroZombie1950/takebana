@@ -238,7 +238,7 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
         photos: uploadedPhotos.concat(newPhotoNames.map(name => `/uploads/establishments/${name}`)).slice(0, 6)
     };
 
-    const updatedEstablishment = await Establishments.findByIdAndUpdate(req.params.id, establishment, { new: true });
+    const updatedEstablishment = await Establishments.findByIdAndUpdate(req.params.id, establishment, { returnDocument: 'after' });
     audit(req, 'venue.update', { targetType: 'venue', target: updatedEstablishment, meta: { fields: Object.keys(establishment) } });
     res.json(updatedEstablishment);
 }));
@@ -289,7 +289,7 @@ router.post('/rateEstablishment', requireAuth, validate({
     const userRating = await Rating.findOneAndUpdate(
         { user: req.session.userId, establishment: establishmentId },
         { $set: { rating } },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
     );
     audit(req, 'venue.rate', { targetType: 'venue', targetId: establishmentId, meta: { rating } });
     res.json({ rating: userRating.rating });

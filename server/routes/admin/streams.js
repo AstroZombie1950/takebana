@@ -71,7 +71,8 @@ async function loadStreams(req) {
 
   const q = needle(req.query.q);
   if (q) filter.title = q;
-  if (req.query.user) filter.user = req.query.user;
+  // Только id нужной формы: строка запроса уходит в фильтр как есть.
+  if (typeof req.query.user === 'string' && /^[a-f\d]{24}$/i.test(req.query.user)) filter.user = req.query.user;
   if (['web', 'obs'].includes(req.query.source)) filter.source = req.query.source;
   if (['owner', 'moderation', 'cleanup', 'restart'].includes(req.query.endedBy)) filter.endedBy = req.query.endedBy;
   // Отрезки короче минуты — это чаще всего оборвавшееся подключение, а не эфир.
@@ -147,7 +148,7 @@ async function loadRecordings(req) {
   const q = needle(req.query.q);
   if (q) filter.title = q;
   if (['processing', 'ready', 'failed'].includes(req.query.status)) filter.status = req.query.status;
-  if (req.query.user) filter.userId = req.query.user;
+  if (typeof req.query.user === 'string' && /^[a-f\d]{24}$/i.test(req.query.user)) filter.userId = req.query.user;
   if (req.query.adult === '1') filter.isAdult = true;
 
   const [recordings, total, totals] = await Promise.all([

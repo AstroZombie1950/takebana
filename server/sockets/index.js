@@ -19,6 +19,8 @@ const { LIVE_ROOM } = require('../utils/liveSignal');
 
 // Список подписок приходит от клиента, поэтому и формат, и длина проверяются.
 const OBJECT_ID = /^[a-f\d]{24}$/i;
+// Ключ трансляции — как в middleware/validate.js.
+const STREAM_KEY = /^[\w-]{1,128}$/;
 const PRESENCE_SUBSCRIBE_LIMIT = 200;
 
 // Сколько ждать возвращения человека, прежде чем считать обрыв сокета концом
@@ -88,17 +90,41 @@ function registerSockets(io) {
     .then(() => { for (const userId of userConnections.keys()) syncPresence(userId); })
     .catch((e) => errorLog.server(e, 'socket.presenceReset'));
 
-  // Зрители эфира — все сокеты в его комнате, кроме вкладок самого ведущего.
-  // Раньше ведущий считал и себя: «1 зритель», когда не смотрит никто.
+  // Зрители эфира — люди в его комнате, а не сокеты: вошедший считается
+  // один раз, сколько бы вкладок ни открыл; вкладки самого ведущего не
+  // считаются вовсе. Гостя узнать не по чему, кроме адреса, — с одного
+  // адреса считаем не больше GUESTS_PER_ADDRESS: сотня сокетов из скрипта
+  // больше не поднимает эфир на витрине (сортировка по viewers), а бар
+  // с десятком телефонов за одним роутером всё ещё считается.
+  const GUESTS_PER_ADDRESS = 10;
   function viewersIn(roomName, streamKey) {
     const room = io.sockets.adapter.rooms.get(roomName);
     if (!room) return 0;
-    let n = 0;
+    const users = new Set();
+    const guests = new Map();
     for (const id of room) {
       const s = io.sockets.sockets.get(id);
-      if (s && s.data.ownStreamKey !== streamKey) n++;
+      if (!s || s.data.ownStreamKey === streamKey) continue;
+      if (s.data.userId) users.add(s.data.userId);
+      else guests.set(s.data.ip, Math.min((guests.get(s.data.ip) || 0) + 1, GUESTS_PER_ADDRESS));
     }
+    let n = users.size;
+    for (const k of guests.values()) n += k;
     return n;
+  }
+
+  // Счётчик уходит всей комнате, и слать его на каждый вход и выход нельзя:
+  // тысяча входов на эфир с тысячей зрителей — миллион сообщений. Не чаще
+  // раза в COUNT_MS на комнату, с последним числом.
+  const COUNT_MS = 2000;
+  const countTimers = new Map();
+  function announceViewers(streamKey) {
+    if (countTimers.has(streamKey)) return;
+    countTimers.set(streamKey, setTimeout(() => {
+      countTimers.delete(streamKey);
+      const roomName = `stream:${streamKey}`;
+      io.to(roomName).emit('viewers-count-updated', { streamKey, count: viewersIn(roomName, streamKey) });
+    }, COUNT_MS).unref());
   }
 
   // Разговор — это участники, а не пара: у идущего звонка есть members
@@ -232,7 +258,11 @@ function registerSockets(io) {
   }
 
   io.on('connection', (socket) => {
-    console.log('[socket] connected id=', socket.id, 'userId=', socket.data.userId);
+    // Адрес — для счёта гостей-зрителей (viewersIn). За nginx настоящий —
+    // последний в X-Forwarded-For: его дописал сам nginx, а начало цепочки
+    // присылает клиент и подделывает как угодно.
+    const forwarded = String(socket.handshake.headers['x-forwarded-for'] || '').split(',').pop().trim();
+    socket.data.ip = forwarded || socket.handshake.address;
 
     // Presence connect (только для аутентифицированных)
     try {
@@ -242,7 +272,6 @@ function registerSockets(io) {
         const set = userRooms.get(userId) || new Set();
         set.add(socket.id);
         userRooms.set(userId, set);
-        console.log('[socket] join room', `user:${userId}`, 'size=', set.size);
         const count = (userConnections.get(userId) || 0) + 1;
         userConnections.set(userId, count);
         if (count === 1) {
@@ -298,46 +327,39 @@ function registerSockets(io) {
     let currentStreamKey = null;
 
     // Вход в комнату эфира: чат, счётчик зрителей, смена типа эфира.
-    // Ключ приходит от клиента — только строка: объект ушёл бы в запрос
-    // к базе оператором Mongo.
+    // Ключ приходит от клиента — только строка формата ключа и только
+    // существующего эфира: раньше годилась любая строка любой длины, и один
+    // сокет вступал в тысячи мусорных комнат. Комната у сокета одна —
+    // прежняя покидается.
     socket.on('join-stream-room', async (streamKey, callback) => {
-      if (typeof streamKey !== 'string' || !streamKey || streamKey === 'undefined' || streamKey === 'null') {
-        console.warn('[socket] join-stream-room с негодным streamKey:', streamKey);
-        if (callback) callback({ error: 'Invalid streamKey' });
-        return;
+      const done = typeof callback === 'function' ? callback : () => {};
+      if (typeof streamKey !== 'string' || !STREAM_KEY.test(streamKey)) {
+        return done({ error: 'Invalid streamKey' });
+      }
+      try {
+        if (!(await Stream.exists({ streamKey }))) return done({ error: 'Unknown stream' });
+        // Ключ эфира — ключ пользователя: вкладку ведущего узнаём по нему.
+        socket.data.ownStreamKey = socket.data.userId && await User.exists({ _id: socket.data.userId, streamKey })
+          ? streamKey : null;
+      } catch (e) {
+        errorLog.server(e, 'socket.joinStream');
+        return done({ error: 'Server error' });
       }
 
+      if (currentStreamKey && currentStreamKey !== streamKey) {
+        socket.leave(`stream:${currentStreamKey}`);
+        announceViewers(currentStreamKey);
+      }
       currentStreamKey = streamKey;
       const roomName = `stream:${streamKey}`;
-
-      // Ключ эфира — ключ пользователя: вкладку ведущего узнаём по нему.
-      try {
-        if (socket.data.userId && await User.exists({ _id: socket.data.userId, streamKey })) {
-          socket.data.ownStreamKey = streamKey;
-        }
-      } catch (e) {
-        errorLog.server(e, 'socket.ownerCheck');
-      }
-
       socket.join(roomName);
-      const count = viewersIn(roomName, streamKey);
-      io.to(roomName).emit('viewers-count-updated', { streamKey, count });
-      if (callback) callback({ success: true, count });
+      announceViewers(streamKey);
+      done({ success: true, count: viewersIn(roomName, streamKey) });
     });
 
     socket.on('disconnect', async () => {
-      // Если был в комнате стрима, обновляем счет
-      if (currentStreamKey) {
-        const roomName = `stream:${currentStreamKey}`;
-
-        // Небольшая задержка чтобы socket точно покинул комнату
-        setTimeout(() => {
-          io.to(roomName).emit('viewers-count-updated', {
-            streamKey: currentStreamKey,
-            count: viewersIn(roomName, currentStreamKey),
-          });
-        }, 50);
-      }
+      // Сокет уже вышел из комнат — счётчик пересчитается без него.
+      if (currentStreamKey) announceViewers(currentStreamKey);
 
       try {
         const userId = socket.data.userId;

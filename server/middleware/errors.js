@@ -47,7 +47,7 @@ function errorHandler(err, req, res, next) {
     // и без него он не поймёт, что именно не так с его файлом.
     // Тексты multer — английские и технические («File too large»), поэтому
     // свои: переводит их общий словарь сообщений (utils/i18n.js).
-    const MULTER = { LIMIT_FILE_SIZE: 'Файл слишком большой' };
+    const MULTER = { LIMIT_FILE_SIZE: 'Файл слишком большой', LIMIT_UNEXPECTED_FILE: 'Слишком много файлов за раз' };
     const message = status >= 500 ? 'Ошибка сервера'
         : fromMulter ? (MULTER[err.code] || 'Ошибка загрузки файла')
         : err.expose ? String(err.message)
@@ -63,6 +63,16 @@ function errorHandler(err, req, res, next) {
         if (renderErr) return res.type('text/plain').send('Ошибка сервера' + (code ? ' #' + code : ''));
         res.send(html);
     });
+}
+
+// Адреса, которого нет, — страница в оформлении сайта и на языке
+// интерфейса. Раньше отвечал сам Express голым «Cannot GET /…» по-английски,
+// а профиль, подписчики и галерея несуществующего человека — строкой текста.
+// Ставится после всех маршрутов (app.js), зовут его и маршруты, которым
+// «такого нет» надо ответить страницей.
+function notFound(req, res) {
+    if (wantsJson(req)) return res.status(404).json({ message: 'Не найдено' });
+    res.status(404).render('error', { code: '', missing: true });
 }
 
 // Остановка процесса: pm2 при деплое шлёт SIGINT, systemd — SIGTERM.
@@ -84,4 +94,4 @@ function installShutdown() {
     }
 }
 
-module.exports = { errorHandler, installShutdown };
+module.exports = { errorHandler, notFound, installShutdown };

@@ -50,7 +50,7 @@ window.TKPanel = <%- JSON.stringify({
   me: me,
   catalog: { cities: catalog.CITIES, types: catalog.VENUE_TYPES, categories: catalog.CATEGORIES },
   actions: actions
-}) %>;
+}).replace(/</g, '\\u003c') %>;
 </script>
 <script defer src="<%= asset('/panel.js') %>"></script>
 </body>

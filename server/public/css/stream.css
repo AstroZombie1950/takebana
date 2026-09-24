@@ -265,6 +265,10 @@
   color: var(--tk-muted);
 }
 
+.tk-live__rotate {
+  margin-top: 8px;
+}
+
 /* ── Шапка эфира ──────────────────────────────────────────────────────── */
 .tk-live__info {
   padding: 16px 18px 18px;
@@ -437,6 +441,23 @@
 }
 
 .tk-live__send-ico { display: none; }
+
+/* Медленный режим: у ведущего — выбор паузы, у зрителя — подсказка. */
+.tk-live__slow {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 16px;
+  border-top: 1px solid var(--tk-rule);
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+.tk-live__slow[hidden] { display: none; }
+.tk-live__slow-pick { width: auto; padding: 4px 8px; font-size: 12px; }
 
 /* Гостю вместо поля — кнопка входа во всю ширину полосы. */
 .tk-live__chat-guest > .tk-btn { flex: 1; }
@@ -713,6 +734,8 @@ html.tk-stage-open { overflow: hidden; }
   }
 
   .tk-live__chat-head { display: none; }
+
+  .tk-live__slow { order: -2; padding: 6px 12px; border-top: 0; border-bottom: 1px solid var(--tk-rule); }
 
   .input__messeng-box {
     order: -1;

@@ -30,7 +30,10 @@ const { stamp } = require('./watermark');
 const storage = require('./storage');
 const errorLog = require('./errorLog');
 const { TRANSLIT } = require('./nickname');
-const { FFMPEG, run, probe, encode, schedule } = require('./videoEncode');
+const { FFMPEG, run, probe, containerOf, input, encode, schedule } = require('./videoEncode');
+// Формат звука для ffprobe — явно, по проверенному расширению (videoEncode.js,
+// containerOf: файл от человека ffmpeg не угадывает).
+const AUDIO_FORMAT = { mp3: 'mp3', m4a: 'mov', ogg: 'ogg', wav: 'wav' };
 const Message = require('../models/Message');
 
 const MB = 1024 * 1024;
@@ -247,7 +250,7 @@ async function storeVideo(info, base, dir) {
 }
 
 async function storeAudio(info, base) {
-  const p = await probe(info.path);
+  const p = await probe(info.path, { format: AUDIO_FORMAT[info.ext] });
   if (!p || !p.audio || p.video) throw bad('В файле нет звука');
   const [file] = await putAll([[info.path, `${base}/${safeBase(info.name)}.${info.ext}`, info.mime]]);
   return { key: file.key, url: file.url, duration: Math.round(p.duration) };
@@ -258,7 +261,9 @@ async function storeAudio(info, base) {
 async function storeVoice(info, base, dir) {
   const out = path.join(dir, 'voice.m4a');
   try {
-    await run(FFMPEG, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-i', info.path,
+    const format = await containerOf(info.path);
+    if (!format) throw new Error('не WebM и не MP4');
+    await run(FFMPEG, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', ...input(info.path, format),
       '-vn', '-ac', '1', '-c:a', 'aac', '-b:a', '48k', '-movflags', '+faststart', out]);
   } catch (e) {
     throw Object.assign(bad('Голосовое не распознано'), { cause: e });

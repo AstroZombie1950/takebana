@@ -67,7 +67,7 @@ async function finished(io, callId, outcome) {
       endedAt: new Date(),
       status: { $cond: [{ $eq: ['$status', 'ringing'] }, outcome, { $cond: [{ $eq: [outcome, 'failed'] }, 'failed', '$status'] }] },
     } }],
-    { new: true }
+    { returnDocument: 'after', updatePipeline: true }
   ).lean();
   if (!call) return;
 

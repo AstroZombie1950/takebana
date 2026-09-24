@@ -585,6 +585,15 @@
   }
 
   function addDialog(p) {
+    var el = dialogNode(p);
+    list.prepend(el);
+    $('conversationsEmpty').classList.add('hidden');
+    if (window.subscribePresence) window.subscribePresence([p.id]);
+    return el;
+  }
+
+  // Строка диалога — та же, что рисует сервер (chatsPage.ejs).
+  function dialogNode(p) {
     var el = document.createElement('button');
     el.type = 'button';
     el.className = 'tk-dialog';
@@ -601,11 +610,55 @@
         '<span class="presence-dot presence-offline"></span></span><span class="tk-dialog__when"></span></span>' +
         '<span class="tk-dialog__bottom"><span class="tk-dialog__last"></span><span class="tk-dialog__unread hidden">0</span></span>' +
       '</span>';
-    list.prepend(el);
-    $('conversationsEmpty').classList.add('hidden');
-    if (window.subscribePresence) window.subscribePresence([p.id]);
     return el;
   }
+
+  // Подпись последнего сообщения из ответа /api/dialogs — как в chatsPage.ejs.
+  function lastHtml(l) {
+    if (!l) return '<span data-i18n="chats.empty">' + escapeHtml(t('chats.empty')) + '</span>';
+    var you = l.mine ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : '';
+    var k = l.expired ? 'chats.gone' : l.limited ? 'chats.sealed.' + (l.kind || 'text') : '';
+    if (k) return you + '<span data-i18n="' + k + '">' + escapeHtml(t(k)) + '</span>';
+    var label = l.kind ? '<span data-i18n="chats.att.' + l.kind + '">' + escapeHtml(t('chats.att.' + l.kind)) + '</span>' : '';
+    return you + label + (label && l.content ? ' · ' : '') + escapeHtml(l.content || '');
+  }
+
+  // Догрузка списка: сервер отдаёт диалоги по 30 (routes/streaming/messages.js),
+  // следующая страница — когда до конца списка осталось меньше экрана.
+  // Диалог, который уже есть (пришло сообщение, открыли по ссылке), не дублируется.
+  var dialogsBefore = list.getAttribute('data-before') || '';
+  var dialogsLoading = false;
+  function moreDialogs() {
+    if (!dialogsBefore || dialogsLoading || list.scrollTop + list.clientHeight < list.scrollHeight - list.clientHeight) return;
+    dialogsLoading = true;
+    fetch('/api/dialogs?before=' + encodeURIComponent(dialogsBefore), { headers: { Accept: 'application/json' } })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) {
+        var ids = [];
+        d.dialogs.forEach(function (c) {
+          var p = c.interlocutor;
+          if (dialogEl(p.id)) return;
+          var el = dialogNode(p);
+          el.querySelector('.presence-dot').className = 'presence-dot ' + (p.isOnline ? 'presence-online' : 'presence-offline');
+          el.querySelector('.tk-dialog__last').innerHTML = lastHtml(c.last);
+          var when = el.querySelector('.tk-dialog__when');
+          when.setAttribute('data-time', c.lastActivity);
+          when.textContent = timeAgo(c.lastActivity);
+          var badge = el.querySelector('.tk-dialog__unread');
+          badge.textContent = String(c.unread);
+          badge.classList.toggle('hidden', !c.unread);
+          list.insertBefore(el, $('conversationsEmpty'));
+          ids.push(p.id);
+        });
+        if (ids.length && window.subscribePresence) window.subscribePresence(ids);
+        dialogsBefore = d.before || '';
+        dialogsLoading = false;
+        moreDialogs();
+      })
+      .catch(function (e) { dialogsLoading = false; console.error('[chats] список не догрузился:', e); });
+  }
+  list.addEventListener('scroll', moreDialogs, { passive: true });
+  moreDialogs();
 
   list.addEventListener('click', function (e) {
     var el = e.target.closest('.tk-dialog');
@@ -2444,19 +2497,18 @@
       .catch(function () {});
   }
 
-  // Удаление выбранного одним окном. Своё сообщение можно убрать у всех,
-  // чужое и звонок — только у себя (сервер следит за этим сам). Если в
-  // выбранном есть и то и другое, в вопросе сказано, что уйдёт только у вас.
+  // Удаление выбранного одним окном. Сообщение — своё и собеседника —
+  // можно убрать у всех, как в Telegram; звонок — только у себя: запись
+  // о нём общая. Если выбраны и сообщения, и звонки, в вопросе об этом сказано.
   function removeItems(keys) {
     var msgs = pickedMessages(keys);
     var callIds = keys.filter(function (k) { return k[0] === 'c'; }).map(function (k) { return k.slice(2); });
-    var mine = msgs.filter(function (m) { return m.sender === ME; }).length;
     var n = msgs.length + callIds.length;
     if (!n) return;
 
     var q = n > 1 ? t('chats.deleteManyQ', { n: n }) : msgs.length ? t('chats.deleteMsgQ') : t('chats.deleteCallQ');
-    if (mine && mine < n) q += ' ' + t('chats.deleteMixedNote');
-    var choices = mine
+    if (msgs.length && callIds.length) q += ' ' + t('chats.deleteMixedNote');
+    var choices = msgs.length
       ? [{ value: 'me', text: t('chats.deleteForMe'), danger: false }, { value: 'all', text: t('chats.deleteForAll') }]
       : [{ value: 'me', text: t('chats.delete') }];
 

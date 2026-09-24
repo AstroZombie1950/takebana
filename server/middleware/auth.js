@@ -168,6 +168,15 @@ function requireNotBanned(req, res, next) {
         .catch(next);
 }
 
+// Вход в аккаунт: пароль, регистрация, Google, ссылка сброса пароля.
+// Новая сессия, а не запись в прежнюю: идентификатор, известный до входа
+// (его могли подсунуть — фиксация сессии), после входа ничего не значит.
+async function signIn(req, user) {
+    await new Promise((resolve, reject) => req.session.regenerate((err) => (err ? reject(err) : resolve())));
+    req.session.userId = user._id.toString();
+    req.session.login = user.login || 'anon';
+}
+
 // Оборачивает async-обработчик, чтобы ошибка внутри уходила в обработчик ошибок
 // Express, а не оставляла запрос висеть навсегда: Express 4 сам отклонённые
 // промисы не ловит.
@@ -177,4 +186,4 @@ function wrap(handler) {
     };
 }
 
-module.exports = { safeNext, loginUrl, requireAuth, requireAuthApi, requireOwner, canModerate, requireModerator, requireAdmin, requireNotBanned, wrap };
+module.exports = { safeNext, loginUrl, requireAuth, requireAuthApi, requireOwner, canModerate, requireModerator, requireAdmin, requireNotBanned, signIn, wrap };

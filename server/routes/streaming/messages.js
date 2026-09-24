@@ -7,6 +7,7 @@
 // Раньше открытый диалог опрашивал сервер раз в три секунды.
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
@@ -58,6 +59,20 @@ function findConversation(a, b) {
   return Conversation.findOne({
     $or: [{ userOne: a, userTwo: b }, { userOne: b, userTwo: a }],
   });
+}
+
+// Диалог двоих — найти или завести. Заводится одной операцией по ключу
+// пары (models/Conversation.js): при гонке второй запрос получает тот же
+// диалог, а не свой.
+async function openConversation(a, b) {
+  const found = await findConversation(a, b);
+  if (found) return found;
+  const pair = [String(a), String(b)].sort().join(':');
+  return Conversation.findOneAndUpdate(
+    { pair },
+    { $setOnInsert: { userOne: a, userTwo: b, pair } },
+    { upsert: true, returnDocument: 'after' }
+  );
 }
 
 // Сколько у человека непрочитанных после удаления — всего и в диалогах
@@ -175,31 +190,45 @@ async function deliver(req, { conversation, sender, recipient, content = '', att
   return out;
 }
 
-router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => {  const me = new ObjectId(String(res.locals.currentUser._id));
-
+// Список переписок — страницами по DIALOGS_PAGE, от свежих к старым по
+// lastUpdated (его двигает каждое новое сообщение, deliver). before —
+// lastUpdated последнего уже показанного. Раньше список отдавался целиком:
+// у человека с сотнями диалогов — сотни строк и запросов на каждое открытие.
+const DIALOGS_PAGE = 30;
+async function dialogPage(me, before) {
   const conversations = await Conversation.find({
     $or: [{ userOne: me }, { userTwo: me }],
     hiddenFor: { $ne: me },
+    ...(before ? { lastUpdated: { $lt: before } } : {}),
   })
+    .sort({ lastUpdated: -1 })
+    .limit(DIALOGS_PAGE + 1)
     .populate('userOne userTwo', 'nickname login email avatar isOnline lastSeen')
     .lean();
+  const more = conversations.length > DIALOGS_PAGE;
+  if (more) conversations.pop();
 
   const ids = conversations.map((c) => c._id);
-
-  // Последнее видимое мне сообщение и число непрочитанных — по каждому диалогу
-  // одним запросом, а не по запросу на диалог.
-  const [lastRows, unreadRows] = await Promise.all([
-    Message.aggregate([
-      { $match: { conversationId: { $in: ids }, deletedFor: { $ne: me } } },
-      { $sort: { sentAt: -1 } },
-      { $group: { _id: '$conversationId', last: { $first: '$$ROOT' } } },
-    ]),
+  // Последнее сообщение диалога хранится в нём самом (deliver). Перебирать
+  // все сообщения всех диалогов, как раньше, незачем: у активного человека
+  // это секунды на каждое открытие страницы. Своё «последнее» ищем только
+  // там, где хранимое удалено или удалено у меня, — по индексу, по одному.
+  const [stored, unreadRows] = await Promise.all([
+    Message.find({ _id: { $in: conversations.map((c) => c.lastMessage).filter(Boolean) } }).lean(),
     Message.aggregate([
       { $match: { conversationId: { $in: ids }, recipient: me, readAt: null, deletedFor: { $ne: me } } },
       { $group: { _id: '$conversationId', n: { $sum: 1 } } },
     ]),
   ]);
-  const lastBy = new Map(lastRows.map((r) => [String(r._id), r.last]));
+  const visible = new Map(stored
+    .filter((m) => !(m.deletedFor || []).some((id) => String(id) === String(me)))
+    .map((m) => [String(m.conversationId), m]));
+  const lastRows = await Promise.all(conversations.map(async (c) => ({
+    _id: c._id,
+    last: visible.get(String(c._id)) || await Message.findOne({ conversationId: c._id, deletedFor: { $ne: me } })
+      .sort({ sentAt: -1 }).lean(),
+  })));
+  const lastBy = new Map(lastRows.filter((r) => r.last).map((r) => [String(r._id), r.last]));
   const unreadBy = new Map(unreadRows.map((r) => [String(r._id), r.n]));
 
   const list = conversations
@@ -225,13 +254,26 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
         unread: unreadBy.get(String(c._id)) || 0,
         lastActivity: last ? last.sentAt : c.createdAt,
       };
-    })
-    .sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
+    });
+
+  return { list, more, before: more ? conversations[conversations.length - 1].lastUpdated : null };
+}
+
+router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => {
+  const me = new ObjectId(String(res.locals.currentUser._id));
+  const { list, before } = await dialogPage(me, null);
 
   // Лента «Недавние» над списком диалогов: с кем чаще и ближе к сегодняшнему
   // дню общались — письмами и звонками (utils/recentPeers.js). Звонить можно
   // и тому, с кем переписки нет, — таких собеседников догружаем отдельно.
-  const order = await rankPeers(me, conversations);
+  // «Недавние» смотрят на два месяца назад (utils/recentPeers.js) — им
+  // нужны диалоги этого срока, а не вся первая страница списка.
+  const recentConversations = await Conversation.find({
+    $or: [{ userOne: me }, { userTwo: me }],
+    hiddenFor: { $ne: me },
+    lastUpdated: { $gte: new Date(Date.now() - 60 * 24 * 3600 * 1000) },
+  }).select('userOne userTwo').lean();
+  const order = await rankPeers(me, recentConversations);
   const known = new Map(list.map((c) => [String(c.interlocutor.id), c.interlocutor]));
   const unknown = order.filter((id) => !known.has(id));
   if (unknown.length) {
@@ -245,9 +287,17 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
   // Вкладки «Звонки» и «Контакты» открываются и адресом: из уведомления
   // о пропущенном и из ссылок «в контакты» на других страницах.
   const tabs = ['calls', 'contacts'];
-  res.render('chatsPage', { conversations: list, recent, timeAgo, tab: tabs.includes(req.query.tab) ? req.query.tab : 'messages' });
+  res.render('chatsPage', { conversations: list, dialogsBefore: before ? before.toISOString() : '', recent, timeAgo, tab: tabs.includes(req.query.tab) ? req.query.tab : 'messages' });
 });
 
+
+// Следующая страница списка переписок — прокрутка до конца (public/chats.js).
+router.get('/api/dialogs', requireAuthApi, async (req, res) => {
+  const before = typeof req.query.before === 'string' ? new Date(req.query.before) : null;
+  if (!before || isNaN(before)) return res.status(400).json({ message: 'Неверный запрос' });
+  const page = await dialogPage(new ObjectId(String(req.session.userId)), before);
+  res.json({ dialogs: page.list, before: page.before });
+});
 
 router.post('/start-conversation', requireAuthApi, requireNotBanned, validate({
   recipientId: { type: 'objectId', required: true, label: 'Собеседник' },
@@ -259,10 +309,13 @@ router.post('/start-conversation', requireAuthApi, requireNotBanned, validate({
   }
   if (await refuseRestricted(res, me, recipientId)) return;
 
-  let conversation = await findConversation(me, recipientId);
-  if (!conversation) {
-    conversation = await Conversation.create({ userOne: me, userTwo: recipientId });
-  } else if (conversation.hiddenFor.some((id) => String(id) === String(me))) {
+  // Диалог с тем, кого нет, заводился: аккаунт удалён или id выдуман.
+  if (!(await User.exists({ _id: recipientId }))) {
+    return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+  }
+
+  const conversation = await openConversation(me, recipientId);
+  if (conversation.hiddenFor.some((id) => String(id) === String(me))) {
     // Написать тому, с кем переписку удалили, — значит вернуть диалог в список.
     conversation.hiddenFor.pull(me);
     await conversation.save();
@@ -310,7 +363,18 @@ router.get('/getMessages', requireAuthApi, async (req, res) => {
 });
 
 
-router.post('/sendMessage', requireAuthApi, requireNotBanned, validate({
+// Тридцать сообщений в минуту с человека: переписке хватает, а скрипт,
+// забрасывающий собеседника, упирается сразу.
+const sendLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  keyGenerator: (req) => String(req.session.userId),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Слишком много сообщений. Подождите минуту.' },
+});
+
+router.post('/sendMessage', requireAuthApi, requireNotBanned, sendLimiter, validate({
   recipientId: { type: 'objectId', required: true, label: 'Собеседник' },
   content: { type: 'string', required: true, min: 1, max: 5000, label: 'Сообщение' },
   limit: { type: 'string', default: '', max: 8, label: 'Ограничение' },
@@ -511,8 +575,7 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
 
   const sent = [];
   for (const recipient of recipients) {
-    let conversation = await findConversation(me, recipient._id);
-    if (!conversation) conversation = await Conversation.create({ userOne: me, userTwo: recipient._id });
+    const conversation = await openConversation(me, recipient._id);
     // Пуш — один на всю пересылку, с последним сообщением пачки.
     if (comment) sent.push(await deliver(req, { conversation, sender, recipient, content: comment, silent: batch.length > 0 }));
     for (let i = 0; i < batch.length; i++) {
@@ -581,7 +644,8 @@ router.post('/messages/read', requireAuthApi, validate({
     const now = new Date();
     const result = await Message.updateMany(
       { conversationId: conversation._id, recipient: me, readAt: null },
-      [{ $set: { readAt: now, deliveredAt: { $ifNull: ['$deliveredAt', now] } } }]
+      [{ $set: { readAt: now, deliveredAt: { $ifNull: ['$deliveredAt', now] } } }],
+      { updatePipeline: true }
     );
     if (result.modifiedCount && io(req)) {
       io(req).to(`user:${peerId}`).emit('message:read', { readerId: String(me), at: now });
@@ -597,8 +661,9 @@ router.post('/messages/read', requireAuthApi, validate({
 });
 
 
-// Удаление сообщений. «У всех» — только своих: документ стирается, и у
-// собеседника сообщение пропадает сразу. «У меня» — остаётся у собеседника;
+// Удаление сообщений — как в Telegram (решение 24.09.2026): «у всех» можно
+// любое сообщение переписки, своё и собеседника, — документ стирается,
+// и у второго оно пропадает сразу. «У меня» — остаётся у собеседника;
 // когда удалили оба, стирается совсем.
 router.post('/messages/delete', requireAuthApi, validate({
   ids: { type: 'array', required: true, max: 100, of: { type: 'objectId' }, label: 'Сообщения' },
@@ -607,33 +672,32 @@ router.post('/messages/delete', requireAuthApi, validate({
   const me = String(req.session.userId);
   const { ids, forAll } = req.body;
 
-  const messages = await Message.find({ _id: { $in: ids }, $or: [{ sender: me }, { recipient: me }] })
+  // Только то, что я вижу: удалённое у себя больше не моё, чтобы стирать
+  // его у собеседника (в Telegram его тоже уже не достать).
+  const messages = await Message.find({ _id: { $in: ids }, $or: [{ sender: me }, { recipient: me }], deletedFor: { $ne: me } })
     .select('sender recipient')
     .lean();
-  const mine = forAll ? messages.filter((m) => String(m.sender) === me) : [];
-  const mineIds = new Set(mine.map((m) => String(m._id)));
-  const rest = messages.filter((m) => !mineIds.has(String(m._id)));
+  if (!messages.length) return res.json({ success: true, deleted: 0 });
+  const found = messages.map((m) => m._id);
+  const peerOf = (m) => (String(m.sender) === me ? String(m.recipient) : String(m.sender));
+  // Собеседники, чьи входящие мне могли быть непрочитанными.
+  const senders = [...new Set(messages.filter((m) => String(m.recipient) === me).map((m) => String(m.sender)))];
 
-  if (mine.length) {
-    await attachments.deleteMessages({ _id: { $in: [...mineIds] } });
-    const peers = new Set(mine.map((m) => String(m.recipient)));
+  if (forAll) {
+    await attachments.deleteMessages({ _id: { $in: found } });
     if (io(req)) {
-      const ids = [...mineIds];
-      io(req).to(`user:${me}`).emit('message:deleted', { ids });
+      const out = found.map(String);
+      io(req).to(`user:${me}`).emit('message:deleted', { ids: out, ...(await unreadAfter(me, senders)) });
       // У собеседника могли пропасть его непрочитанные.
-      for (const p of peers) {
-        io(req).to(`user:${p}`).emit('message:deleted', { ids, ...(await unreadAfter(p, [me])) });
+      for (const p of new Set(messages.map(peerOf))) {
+        io(req).to(`user:${p}`).emit('message:deleted', { ids: out, ...(await unreadAfter(p, [me])) });
       }
     }
-  }
-
-  if (rest.length) {
-    const restIds = rest.map((m) => m._id);
-    await Message.updateMany({ _id: { $in: restIds } }, { $addToSet: { deletedFor: me } });
-    await attachments.deleteMessages({ _id: { $in: restIds }, 'deletedFor.1': { $exists: true } });
+  } else {
+    await Message.updateMany({ _id: { $in: found } }, { $addToSet: { deletedFor: me } });
+    await attachments.deleteMessages({ _id: { $in: found }, 'deletedFor.1': { $exists: true } });
     if (io(req)) {
-      const senders = [...new Set(rest.filter((m) => String(m.recipient) === me).map((m) => String(m.sender)))];
-      io(req).to(`user:${me}`).emit('message:deleted', { ids: restIds.map(String), ...(await unreadAfter(me, senders)) });
+      io(req).to(`user:${me}`).emit('message:deleted', { ids: found.map(String), ...(await unreadAfter(me, senders)) });
     }
   }
 

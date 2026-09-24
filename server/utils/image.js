@@ -11,7 +11,7 @@
 // sharp метаданные не переносит, если явно не попросить — это то, что нужно.
 
 const sharp = require('sharp');
-const { stamp } = require('./watermark');
+const { stamp, USER_PIXELS } = require('./watermark');
 const fsp = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
@@ -55,11 +55,11 @@ async function saveImage(buffer, preset, dir) {
     if (p.watermark) {
       // stamp вписывает, а не кадрирует: обложку 16:9 сперва режем по кадру.
       const src = p.fit === 'cover'
-        ? await sharp(buffer).rotate().resize({ width: p.width, height: p.height, fit: 'cover', withoutEnlargement: true }).png().toBuffer()
+        ? await sharp(buffer, { limitInputPixels: USER_PIXELS }).rotate().resize({ width: p.width, height: p.height, fit: 'cover', withoutEnlargement: true }).png().toBuffer()
         : buffer;
       data = (await stamp(src, p, p.quality)).data;
     }
-    else data = await sharp(buffer)
+    else data = await sharp(buffer, { limitInputPixels: USER_PIXELS })
       // По EXIF: снимок с телефона иначе ложится набок. Только до resize —
       // после поворота размеры меняются местами.
       .rotate()

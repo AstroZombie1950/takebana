@@ -1,11 +1,25 @@
 <%# Чат эфира — общий у пульта ведущего и страницы зрителя; сообщения ведёт
     /tk-stream.js. На широком экране — колонка справа, поле ввода внизу,
     новые сообщения снизу. На телефоне и планшете — под картинкой: поле ввода
-    сверху, новые сообщения сразу под ним (stream.css, tk-stream.js). %>
+    сверху, новые сообщения сразу под ним (stream.css, tk-stream.js).
+    host — пульт ведущего: вместо подсказки о медленном режиме выбор паузы. %>
+<% var slow = (typeof stream !== 'undefined' && stream && stream.slowMode) || 0; %>
 <aside class="tk-live__chat chat__box" aria-labelledby="chatTitle">
   <h2 class="tk-live__chat-head" id="chatTitle" data-i18n="chat.title"><%- t('chat.title') %></h2>
 
   <div class="messeg-box" aria-live="polite"></div>
+
+  <%# Медленный режим: зритель пишет не чаще раза в N секунд (streamChat.js). %>
+  <% if (typeof host !== 'undefined' && host) { %>
+  <label class="tk-live__slow">
+    <span data-i18n="chat.slowMode"><%- t('chat.slowMode') %></span>
+    <select class="tk-field tk-live__slow-pick" id="chatSlowPick">
+      <% [0, 10, 30, 60].forEach(function (n) { %><option value="<%= n %>"<%= n === slow ? ' selected' : '' %> data-i18n="chat.slow<%= n %>"><%- t('chat.slow' + n) %></option><% }); %>
+    </select>
+  </label>
+  <% } else { %>
+  <p class="tk-live__slow" id="chatSlow"<% if (!slow) { %> hidden<% } %>><span data-i18n="chat.slowOn" data-i18n-vars='<%= JSON.stringify({ n: slow }) %>'><%- t('chat.slowOn', { n: slow }) %></span></p>
+  <% } %>
 
   <% if (currentUser) { %>
   <form class="input__messeng-box" id="chatForm">

@@ -14,6 +14,7 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const User = require('../models/User');
 const { audit } = require('../utils/audit');
+const { signIn } = require('../middleware/auth');
 
 // Учётке из Google пароль не нужен: вход по паролю ищет по provider: '' и такую
 // запись не найдёт никогда. Но поле в схеме есть, и раньше в него клали id
@@ -94,9 +95,7 @@ router.get('/auth/google/callback',
       return res.status(400).json({ message: 'Пользователь не найден' });
     }
 
-    // Установить сессию пользователя
-    req.session.userId = user._id.toString();
-    req.session.login = user.login || 'anon'; // Если login не существует, используйте 'anon'
+    await signIn(req, user);
 
     audit(req, 'auth.google', { actor: user });
 

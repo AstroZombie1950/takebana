@@ -82,7 +82,7 @@ async function open(id, me) {
     }
     const end = new Date(now.getTime() + lim.seconds * 1000);
     set = { 'limit.openedAt': now, 'limit.grantUntil': end, 'limit.expiresAt': end, 'limit.used': 1 };
-    const r = await Message.findOneAndUpdate({ _id: id, 'limit.openedAt': null }, { $set: set }, { new: true }).lean();
+    const r = await Message.findOneAndUpdate({ _id: id, 'limit.openedAt': null }, { $set: set }, { returnDocument: 'after' }).lean();
     return r || Message.findById(id).lean();
   }
 
@@ -96,7 +96,7 @@ async function open(id, me) {
   return Message.findOneAndUpdate(
     { _id: id, expiredAt: null, 'limit.used': { $lt: lim.n } },
     { $inc: { 'limit.used': 1 }, $set: set },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
 }
 

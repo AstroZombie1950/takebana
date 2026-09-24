@@ -13,6 +13,21 @@ const Establishments = require('../models/Establishments');
 const { validate } = require('../middleware/validate');
 const daily = require('../utils/daily');
 const { roomName: venueRoom } = require('./venueLive');
+const ChatMessage = require('../models/ChatMessage');
+const Recording = require('../models/Recording');
+const GalleryVideo = require('../models/GalleryVideo');
+const RecordingComment = require('../models/RecordingComment');
+const liveSignal = require('../utils/liveSignal');
+
+// Где живёт цель жалобы каждого вида: жалоба на то, чего нет, — мусор в панели.
+const TARGET_MODELS = {
+    stream: Stream,
+    user: User,
+    message: ChatMessage,
+    recording: Recording,
+    video: GalleryVideo,
+    comment: RecordingComment,
+};
 
 // Разрыв идущего вещания. Подключается лениво и намеренно: require('../mediaServer')
 // на верхнем уровне поднимает RTMP-сервер как побочный эффект, и тогда любой
@@ -28,6 +43,19 @@ function dropDailyRoom(roomName) {
     if (!roomName) return;
     daily.deleteRoom(roomName).catch((err) => errorLog.external(err, 'daily.deleteRoom', { roomName, by: 'moderation' }));
 }
+// Эфир погашен модерацией: зрителям — событие, чтобы плеер показал конец
+// эфира, а не замер; витрине, /authors и левой панели — «не в эфире».
+function announceStopped(req, stream) {
+    const io = req.app.get('io');
+    if (!io) return;
+    io.to(`stream:${stream.streamKey}`).emit('stream:update', {
+        streamKey: stream.streamKey,
+        streamType: stream.streamType,
+        streamProvider: stream.streamProvider,
+        isActive: false,
+    });
+    liveSignal.changed(io, stream.userId, false);
+}
 const { audit, forget } = require('../utils/audit');
 const streamLog = require('../utils/streamLog');
 const errorLog = require('../utils/errorLog');
@@ -39,6 +67,11 @@ const {
     canModerate,
     wrap
 } = require('../middleware/auth');
+
+// Кривой :id доходил до findById и падал 500 со строкой в журнале ошибок.
+router.param('id', (req, res, next, id) => (
+    /^[a-f\d]{24}$/i.test(id) ? next() : res.status(404).json({ message: 'Не найдено' })
+));
 
 const REASONS = ['spam', 'abuse', 'adult', 'violence', 'copyright', 'other'];
 const TARGETS = ['stream', 'user', 'message', 'recording', 'video', 'comment'];
@@ -58,6 +91,9 @@ router.post('/api/reports', requireAuthApi, requireNotBanned, validate({
     // пустые жалобы, а уникальный индекс их даже не задержит.
     if (targetType === 'user' && targetId === req.session.userId.toString()) {
         return res.status(400).json({ message: 'Нельзя пожаловаться на себя' });
+    }
+    if (!(await TARGET_MODELS[targetType].exists({ _id: targetId }))) {
+        return res.status(404).json({ message: 'Объект жалобы не найден' });
     }
 
     try {
@@ -93,7 +129,7 @@ router.post('/api/moderation/reports/:id/close', requireModerator, validate({
             resolvedBy: req.session.userId,
             resolvedAt: new Date()
         },
-        { new: true }
+        { returnDocument: 'after' }
     );
 
     if (!report) return res.status(404).json({ message: 'Жалоба не найдена' });
@@ -153,7 +189,7 @@ router.post('/api/moderation/users/:id/ban', requireModerator, validate({
     // не гасит: OBS уже подключён к 1935 и продолжает лить. Гасим явно —
     // и в базе, и на медиасервере.
     const live = await Stream.find({ userId: req.params.id, isActive: true })
-        .select('streamKey dailyRoomName')
+        .select('userId streamKey streamType streamProvider dailyRoomName')
         .lean();
 
     if (live.length) {
@@ -172,6 +208,7 @@ router.post('/api/moderation/users/:id/ban', requireModerator, validate({
             dropPublisher(s.streamKey);
             dropDailyRoom(s.dailyRoomName);
             await streamLog.close(s.streamKey, { endedBy: 'moderation', reason: req.body.reason, by: req.session.userId });
+            announceStopped(req, s);
         }
     }
 
@@ -241,6 +278,7 @@ router.post('/api/moderation/streams/:id/stop', requireAuthApi, validate({
     // сегменты, зритель их получать. Рвём вещание на медиасервере.
     const wasLive = dropPublisher(stream.streamKey);
     dropDailyRoom(stream.dailyRoomName);
+    announceStopped(req, stream);
 
     // Отрезок эфира закрывается в обоих случаях, но с разной причиной:
     // в журнале должно быть видно, сам ведущий ушёл или его погасили.

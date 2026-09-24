@@ -12,6 +12,7 @@ const Subscription = require('../../models/Subscription');
 const Contact = require('../../models/Contact');
 const { SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
 const { commonDataMiddleware, getActiveStreamsCount } = require('./shared');
+const { notFound } = require('../../middleware/errors');
 const authors = require('../../utils/authors');
 const userView = require('../../utils/userView');
 const restriction = require('../../utils/restrict');
@@ -85,7 +86,6 @@ async function findStreams(category, filters) {
 }
 
 async function renderCatalog(req, res, category) {
-  const _t0 = Date.now();
   const page = PAGES[category];
   const filters = readFilters(category, req.query);
 
@@ -108,7 +108,6 @@ async function renderCatalog(req, res, category) {
     totalStreamsCount,
     showIntro: !req.session.userId && !introClosed(req),
   });
-  console.log(`[perf] GET ${req.path} render in ${Date.now() - _t0}ms`);
 }
 
 router.get('/', commonDataMiddleware, (req, res) => renderCatalog(req, res, 'popular'));
@@ -145,14 +144,12 @@ router.get('/streaming/:category/grid', async (req, res) => {
 router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
   const userId = req.params.id; // ID пользователя, чей профиль просматривается
   // Кривой адрес — страница «не найдено», а не 500 в журнале ошибок.
-  if (!/^[a-f\d]{24}$/i.test(userId)) return res.status(404).send('Пользователь не найден');
+  if (!/^[a-f\d]{24}$/i.test(userId)) return notFound(req, res);
   const currentUserId = req.session.userId; // ID текущего пользователя из сессии
 
   // Получаем данные пользователя, чей профиль просматривается
   const user = await User.findById(userId);
-  if (!user) {
-    return res.status(404).send('Пользователь не найден');
-  }
+  if (!user) return notFound(req, res);
 
   const displayName = userView.displayName(user);
   const avatarStyle = userView.avatarStyle(user, displayName);
@@ -229,9 +226,9 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
 // gallery.PAGE на страницу (?page=N). Ограничение доступа — как у профиля.
 router.get('/userPage/:id/gallery', commonDataMiddleware, async (req, res) => {
   const userId = req.params.id;
-  if (!/^[a-f\d]{24}$/i.test(userId)) return res.status(404).send('Пользователь не найден');
+  if (!/^[a-f\d]{24}$/i.test(userId)) return notFound(req, res);
   const user = await User.findById(userId).select('nickname login email avatar gallery').lean();
-  if (!user) return res.status(404).send('Пользователь не найден');
+  if (!user) return notFound(req, res);
 
   const me = req.session.userId;
   const isSelf = String(userId) === String(me);

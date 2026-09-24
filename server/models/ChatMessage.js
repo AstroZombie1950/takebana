@@ -28,5 +28,8 @@ const ChatMessageSchema = new mongoose.Schema({
 
 // Чат эфира и дозагрузка новых сообщений после известного времени
 ChatMessageSchema.index({ streamId: 1, createdAt: 1 });
+// Срок хранения — 90 дней: чат нужен, пока идёт эфир, и какое-то время
+// после — для жалоб. Без срока коллекция росла бы с каждым эфиром вечно.
+ChatMessageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 });
 
 module.exports = mongoose.model('ChatMessage', ChatMessageSchema);

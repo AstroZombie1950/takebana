@@ -110,6 +110,19 @@
       obsToggle.setAttribute('aria-expanded', String(!obsPanel.hidden));
     });
 
+    // Новый ключ — пока OBS-эфир не выходил (кнопки после выхода нет).
+    // То же в студии (tk-studio.js).
+    var rotate = document.querySelector('[data-rotate-key]');
+    if (rotate) rotate.addEventListener('click', function () {
+      confirmDialog(t('stream.keyRotateQ'), { okText: t('stream.keyRotate') }).then(function (yes) {
+        if (!yes) return;
+        return fetch('/stream-key/rotate', { method: 'POST' }).then(function (r) {
+          if (r.ok) return location.reload();
+          return r.json().catch(function () { return {}; }).then(function (d) { toast(d.message || t('stream.keyRotateFailed'), 'error'); });
+        });
+      }).catch(function () { toast(t('stream.keyRotateFailed'), 'error'); });
+    });
+
     // Предпросмотр ждёт плейлист, пока OBS не начал вещать, и снова ждёт после обрыва.
     var preview = $('video');
     preview.addEventListener('playing', function () {

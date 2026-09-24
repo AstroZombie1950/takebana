@@ -95,9 +95,10 @@ async function ownCover(id, dir) {
   }
 }
 
-// Принятый файл (временный, на диске) — в общую очередь. Файл удаляется после.
+// Принятый файл (временный, на диске) — в очередь галереи, отдельную от
+// переписки (videoEncode.js). Файл удаляется после.
 function enqueue(doc, src) {
-  schedule(() => convert(doc, src));
+  schedule(() => convert(doc, src), { lane: 'gallery', owner: doc.userId });
 }
 
 // Файл доехал и «Опубликовать» нажато — в очередь пережатия. Условие
@@ -107,7 +108,7 @@ async function publishIfReady(id) {
   const doc = await GalleryVideo.findOneAndUpdate(
     { _id: id, status: 'draft', publish: true },
     { $set: { status: 'processing' } },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
   if (doc) enqueue(doc, partPath(id));
   return doc;

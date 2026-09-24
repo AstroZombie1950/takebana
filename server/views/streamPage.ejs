@@ -66,6 +66,9 @@
         <% if (obsKeyExpiresAt) { %>
           <span class="tk-live__note"><span data-i18n="stream.keyValidUntil"><%- t('stream.keyValidUntil') %></span> <%= date(obsKeyExpiresAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %><span data-i18n="stream.keyRenew"><%- t('stream.keyRenew') %></span></span>
         <% } %>
+        <% if (!(stream && stream.firstLiveAt)) { %>
+          <button type="button" class="tk-btn tk-btn--outline tk-btn--xs tk-live__rotate" data-rotate-key data-i18n="stream.keyRotate"><%- t('stream.keyRotate') %></button>
+        <% } %>
       </li>
     </ol>
   <% }; %>
@@ -235,7 +238,7 @@
           <%- include('partials/streamInfo', { stream: s, user: user, isStreamer: true }) %>
         </section>
 
-        <%- include('partials/streamChat') %>
+        <%- include('partials/streamChat', { host: true }) %>
       </div>
     </div>
 

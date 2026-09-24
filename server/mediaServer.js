@@ -1,8 +1,6 @@
 const NodeMediaServer = require('node-media-server');
 require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env', quiet: true });
 
-
-const path = require('path');
 const { isPublishAuthEnabled, getSecret } = require('./utils/rtmpAuth');
 const hls = require('./utils/hls');
 const webLive = require('./utils/webLive');
@@ -46,14 +44,18 @@ const config = {
   // HTTP-сервер на 8000. HLS пишет наш ffmpeg (utils/hls.js), а раздаёт
   // с диска nginx — медиасервер в тракте зрителя не участвует. HTTP-FLV,
   // ради которого сервер был нужен, ушёл вместе с flv.js.
-  log: {
-    level: 3, // 0=error, 1=warn, 2=info, 3=debug
-    file: path.join(__dirname, 'media', 'server.log')
-  }
+  //
+  // Журнал node-media-server — только ошибки: 0 ничего, 1 ошибки, 2 каждое
+  // подключение (по умолчанию), 3 отладка. Прежний ключ log { level, file }
+  // версия 2.x не знает, и в журнал pm2 шла строка на каждое подключение.
+  logType: 1
 };
 
 const nms = new NodeMediaServer(config);
 const activeStreams = new Map();
+// Проверка сессии, начатая в prePublish: id сессии → обещание «пускать ли».
+// postPublish ждёт её, прежде чем что-либо делать (см. ниже).
+const publishChecks = new Map();
 let ioRef = null;
 
 function setIO(io) {
@@ -64,8 +66,10 @@ async function markObsStreamStarted(streamKey) {
   try {
     const Stream = require('./models/Stream');
     const now = new Date();
+    // Погашенный модерацией сюда уже не доходит (проверка в prePublish),
+    // но пометка «в эфире» — последнее место, где это можно не пропустить.
     const updated = await Stream.findOneAndUpdate(
-      { streamKey },
+      { streamKey, stoppedByModeration: { $ne: true } },
       [{ $set: {
         streamType: 'obs-stream',
         streamProvider: 'obs',
@@ -75,7 +79,8 @@ async function markObsStreamStarted(streamKey) {
         // Первый выход в эфир: пульт по нему отличает эфир на паузе от черновика.
         firstLiveAt: { $ifNull: ['$firstLiveAt', now] }
       } }],
-      { new: true }
+      // Обновление конвейером (ссылки на поля) mongoose 9 пускает только явно.
+      { returnDocument: 'after', updatePipeline: true }
     ).lean();
     if (ioRef) {
       ioRef.to(`stream:${streamKey}`).emit('stream:update', {
@@ -121,7 +126,7 @@ async function markObsStreamEnded(streamKey) {
         startedAt: null,
         updatedAt: Date.now()
       },
-      { new: true }
+      { returnDocument: 'after' }
     ).lean();
     if (ioRef) {
       ioRef.to(`stream:${streamKey}`).emit('stream:update', {
@@ -159,12 +164,19 @@ nms.on('prePublish', (id, streamPath, args) => {
 
     // Второй рубеж, работающий и без секрета: ключа, которого нет ни в одном
     // эфире, быть не должно — иначе на диск и в память сервера пишет кто угодно.
-    rejectUnknownStreamKey(id, streamKey);
+    const check = rejectUnknownStreamKey(id, streamKey);
+    publishChecks.set(id, check);
+    // Сессия, отбитая подписью, до postPublish не доходит — не копим.
+    check.then(() => setTimeout(() => publishChecks.delete(id), 60 * 1000).unref());
 });
 
 // Отклоняем публикацию, если ключ неизвестен, эфир погашен модерацией или
-// вещатель ограничен. Проверка асинхронная: сессия успевает открыться
-// и закрывается следом — этого достаточно, чтобы поток не начал раздаваться.
+// вещатель ограничен. Ответ — пускать ли (true) или сессия отклонена.
+// Проверка асинхронная, а postPublish node-media-server шлёт синхронно
+// следом за prePublish, раньше её конца. До 24.09.2026 postPublish этого
+// не ждал: забаненный через OBS на мгновение «выходил в эфир» — отрезок
+// в журнале, ffmpeg и, главное, пуш «в эфире» всем подписчикам. Теперь
+// postPublish сначала ждёт ответа отсюда.
 //
 // Без проверки бана ограничение обходилось целиком: HTTP-маршруты вещания
 // закрыты requireNotBanned, но OBS в них не ходит — он подключается прямо
@@ -198,9 +210,11 @@ async function rejectUnknownStreamKey(id, streamKey) {
 
         const owner = await User.findById(stream.userId).select('banned').lean();
         if (owner && owner.banned) return reject(`вещатель эфира ${streamKey} ограничен`, { reason: 'banned' });
+        return true;
     } catch (e) {
         // База недоступна — не роняем приём: подпись остаётся основной защитой
         errorLog.media(e, 'rtmp.prePublish', { streamKey });
+        return true;
     }
 }
 
@@ -208,6 +222,7 @@ function dropSession(id, why) {
     console.warn(`[mediaServer] публикация отклонена: ${why}`);
     const session = nms.getSession(id);
     if (session && typeof session.reject === 'function') session.reject();
+    return false;
 }
 
 // Разрыв уже идущего вещания: ведущий завершил эфир, модератор погасил его
@@ -226,9 +241,16 @@ function dropPublisher(streamKey, why = 'прервано модерацией')
     return true;
 }
 
-// Сюда попадаем только после успешной проверки подписи.
-nms.on('postPublish', (id, streamPath, args) => {
+// Сюда попадаем только после успешной проверки подписи. Дальше — только
+// когда пропустила и своя проверка (prePublish), и сессия ещё жива:
+// OBS мог отключиться, пока она шла.
+nms.on('postPublish', async (id, streamPath, args) => {
     const streamKey = streamPath.split('/')[2];
+    const check = publishChecks.get(id);
+    publishChecks.delete(id);
+    if (check && !(await check)) return;
+    const session = nms.getSession(id);
+    if (!session || !session.isPublishing) return;
     // src=daily — RTMP-выход комнаты веб-эфира (utils/webLive.js). Он не
     // переключает эфир на OBS: идёт ли веб-эфир, решает ведущий на пульте.
     const fromDaily = !!args && args.src === 'daily';
@@ -251,9 +273,12 @@ nms.on('donePublish', (id, streamPath, args) => {
     console.log(`[INFO] Stream has ended: ${streamPath}`);
     const streamKey = streamPath.split('/')[2];
     const live = activeStreams.get(streamKey);
+    // Не наша сессия (отклонена проверкой или ушла до её конца) — эфир
+    // она не начинала, и заканчивать нечего.
+    if (!live || live.id !== id) return;
     activeStreams.delete(streamKey);
     hls.stop(streamKey);
-    if (live && live.fromDaily) webLive.ended(streamKey);
+    if (live.fromDaily) webLive.ended(streamKey);
     else markObsStreamEnded(streamKey);
 });
 

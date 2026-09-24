@@ -43,5 +43,8 @@ const NotificationSchema = new mongoose.Schema({
 // Счётчик непрочитанных и лента уведомлений получателя
 NotificationSchema.index({ recipient: 1, isRead: 1 });
 NotificationSchema.index({ recipient: 1, createdAt: -1 });
+// Срок хранения — 180 дней: колокольчик показывает свежее, а без срока
+// коллекция растёт с каждой подпиской, эфиром и пропущенным звонком.
+NotificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 180 * 24 * 60 * 60 });
 
 module.exports = mongoose.model('Notification', NotificationSchema);

@@ -135,10 +135,12 @@
     </nav>
 
     <% if (!guest) { %>
-    <a href="/logout" class="tk-aside__item tk-aside__exit">
-      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path><path d="M12 3H5v18h7"></path></svg>
-      <span data-i18n="app.exit"><%- t('app.exit') %></span>
-    </a>
+    <form method="post" action="/logout">
+      <button type="submit" class="tk-aside__item tk-aside__exit">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path><path d="M12 3H5v18h7"></path></svg>
+        <span data-i18n="app.exit"><%- t('app.exit') %></span>
+      </button>
+    </form>
     <% } %>
   </div>
 </aside>

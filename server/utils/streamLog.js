@@ -64,7 +64,7 @@ async function close(streamKey, { endedBy = 'owner', reason = '', by = null, str
           duration: { $max: [0, { $round: [{ $divide: [{ $subtract: [now, '$startedAt'] }, 1000] }, 0] }] },
         },
       }],
-      { new: true, sort: { startedAt: -1 } }
+      { returnDocument: 'after', sort: { startedAt: -1 } }
     );
 
     if (!session) return null;

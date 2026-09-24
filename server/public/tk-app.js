@@ -385,7 +385,15 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  attach(document.getElementById('searchInput'), document.getElementById('searchResults'));
+  const field = document.getElementById('searchInput');
+  // На телефоне длинная подсказка не помещалась и обрывалась на полуслове
+  // («…эфиры, завед») — там просто «Поиск». Ключ меняем, а не только текст:
+  // переключение языка берёт подсказку по ключу.
+  if (field && matchMedia('(max-width: 767px)').matches) {
+    field.setAttribute('data-i18n-placeholder', 'app.searchPhShort');
+    field.placeholder = t('app.searchPhShort');
+  }
+  attach(field, document.getElementById('searchResults'));
 });
 
 // ===== Сайт как приложение на телефоне =====

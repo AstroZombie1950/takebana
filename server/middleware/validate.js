@@ -41,7 +41,9 @@ const checks = {
         if (typeof value !== 'string') return fail('ожидалась строка');
         if (value.length > 254) return fail('слишком длинный адрес');
         if (!EMAIL.test(value)) return fail('не похоже на адрес почты');
-        return { value };
+        // Почта хранится в нижнем регистре (models/User.js): Audit@ и audit@
+        // заводили два аккаунта, а вход с другим регистром не проходил.
+        return { value: value.toLowerCase() };
     },
     objectId(value) {
         if (typeof value !== 'string') return fail('ожидался идентификатор');

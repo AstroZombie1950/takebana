@@ -42,8 +42,11 @@ router.get('/check', commonDataMiddleware, (req, res) => {
 
 // Калькулятор расходов для заказчика (views/calc.html): самостоятельная
 // страница без каркаса и без данных сервера — отдаём файл как есть.
-// Не для поиска: ссылка у заказчика.
-router.get('/calc', (req, res) => {
+// Только администратору: это структура расходов, а не страница сайта.
+// Остальным — «нет такой», чтобы не выдавать, что она есть.
+router.get('/calc', requireAuth, async (req, res, next) => {
+  const me = await User.findById(req.session.userId).select('role').lean();
+  if (!me || me.role !== 'admin') return next();
   res.set('X-Robots-Tag', 'noindex, nofollow');
   res.sendFile(path.join(__dirname, '..', 'views', 'calc.html'));
 });
@@ -106,7 +109,10 @@ router.get('/main', commonDataMiddleware, async (req, res) => {
 });
 
 
-router.get('/logout', (req, res) => {
+// Выход — POST из формы (панель слева, настройки). Раньше был GET-ссылкой:
+// выйти человека заставляла любая картинка с этим адресом на чужой
+// странице, а браузер, предзагружающий ссылки, выходил сам.
+router.post('/logout', (req, res) => {
   // До destroy: после него в сессии уже некого записывать.
   audit(req, 'auth.logout');
   // Подписка на пуши принадлежит устройству, а не человеку: оставить её —
@@ -115,10 +121,10 @@ router.get('/logout', (req, res) => {
   if (req.session.pushEndpoint) require('../utils/push').unsubscribe(req.session.pushEndpoint).catch(() => {});
   req.session.destroy(err => {
     if (err) {
-      return res.redirect('/');
+      return res.redirect(303, '/');
     }
     res.clearCookie('connect.sid'); // имя по умолчанию у express-session, было 'sid'
-    res.redirect('/');
+    res.redirect(303, '/');
   });
 });
 

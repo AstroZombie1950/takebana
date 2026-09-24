@@ -127,7 +127,27 @@ expect "карта заведений"         "200"     GET /main
 expect "страница поиска"         "200"     GET "/search?q=ab"
 expect "авторы"                  "200"     GET /authors
 expect "переписка без входа"     "302"     GET /chatsPage           # на вход с возвратом
-expect "несуществующий путь 404" "404"     GET /такого-точно-нет-$RANDOM
+expect "регистрация"             "200"     GET /register
+expect "восстановление пароля"   "200"     GET /forgot-password
+expect "проверка связи"          "200"     GET /check
+expect "настройки без входа"     "302"     GET /settings
+expect "загрузка без входа"      "302"     GET /upload
+expect "студия без входа"        "302"     GET /studio
+# Калькулятор расходов — только администратору (аудит 23.09, п. 1.9):
+# гостя уводит на вход, вошедшего не-админа — «нет такой».
+expect "/calc без входа"          "302"     GET /calc
+
+# Несуществующее — страница сайта на языке интерфейса, а не голое
+# «Cannot GET» от Express (аудит 23.09, п. 3.7).
+NF=$("${CURL[@]}" -w '\n%{http_code}' -H 'Accept: text/html' "${BASE}/такого-точно-нет-$RANDOM" 2>/dev/null || echo "000")
+if [[ "${NF##*$'\n'}" == "404" && "$NF" == *'missing.title'* ]]; then
+  pass "404 — страницей сайта ${c_dim}→ 404${c_off}"
+else
+  fail "404 не страницей сайта" "код ${NF##*$'\n'}; нет missing.title — errors.js notFound не подключён?"
+fi
+expect "404 в API — JSON"        "404"     GET /api/такого-нет -H 'Accept: application/json'
+CHECK_HEADERS=$("${CURL[@]}" -sI "${BASE}/check" 2>/dev/null || echo "")
+grep -qi '^x-robots-tag:.*noindex' <<<"$CHECK_HEADERS" && pass "/check закрыт от поиска" || fail "/check без X-Robots-Tag noindex"
 
 # ═════════════════════════════════════════════════════════════════════════════
 step "TLS и прокси"
@@ -207,6 +227,27 @@ expect "DELETE /recording/:id"            "401"     DELETE /recording/0000000000
 expect "DELETE /profile/avatar"           "401"     DELETE /profile/avatar
 expect "POST /chat/message"               "401"     POST /chat/message               -H 'Content-Type: application/json' -d '{}'
 expect "GET /api/presence"                "401"     GET  /api/presence?ids=000000000000000000000000
+# Переписка, звонки, контакты, загрузка — всё, что пишет от имени человека.
+JSON=(-H 'Content-Type: application/json' -H 'Accept: application/json')
+OID=000000000000000000000000
+expect "GET /api/badge"                   "401"     GET  /api/badge -H 'Accept: application/json'
+expect "GET /api/dialogs"                 "401"     GET  "/api/dialogs?before=2026-01-01" -H 'Accept: application/json'
+expect "GET /api/calls"                   "401"     GET  /api/calls -H 'Accept: application/json'
+expect "POST /sendMessage"                "401"     POST /sendMessage "${JSON[@]}" -d "{\"recipientId\":\"$OID\",\"content\":\"x\"}"
+expect "POST /start-conversation"         "401"     POST /start-conversation "${JSON[@]}" -d "{\"recipientId\":\"$OID\"}"
+expect "POST /messages/delete"            "401"     POST /messages/delete "${JSON[@]}" -d "{\"ids\":[\"$OID\"]}"
+expect "POST /conversations/delete"       "401"     POST /conversations/delete "${JSON[@]}" -d "{\"peerId\":\"$OID\"}"
+expect "POST /messages/attach"            "401"     POST /messages/attach -H 'Accept: application/json'
+expect "POST /api/contacts/add"           "401"     POST /api/contacts/add "${JSON[@]}" -d "{\"peerId\":\"$OID\"}"
+expect "POST /upload/video"               "401"     POST /upload/video "${JSON[@]}" -d '{}'
+expect "POST /api/reports"                "401"     POST /api/reports "${JSON[@]}" -d '{}'
+expect "POST /api/push/subscribe"         "401"     POST /api/push/subscribe "${JSON[@]}" -d '{}'
+expect "POST /api/age/confirm"            "401"     POST /api/age/confirm "${JSON[@]}"
+expect "POST /api/moderation/streams/:id/stop" "401" POST "/api/moderation/streams/$OID/stop" "${JSON[@]}" -d '{}'
+expect "POST /update-password"            "401"     POST /update-password "${JSON[@]}" -d '{"oldPassword":"x","newPassword":"xxxxxxxx"}'
+# Эфир: новый ключ OBS и медленный режим чата (24.09.2026).
+expect "POST /stream-key/rotate"          "401|302" POST /stream-key/rotate -H 'X-Requested-With: XMLHttpRequest'
+expect "POST /chat/slow-mode"             "401|302" POST /chat/slow-mode -H 'X-Requested-With: XMLHttpRequest' "${JSON[@]}" -d "{\"streamId\":\"$OID\",\"seconds\":10}"
 # Витрина, поиск людей и карта открыты гостю с 15 сентября 2026: смотреть
 # и искать можно без входа. Поиск по почте при этом убран (profile.js).
 expect "GET /streaming/:category/grid"    "200"     GET  /streaming/popular/grid
@@ -220,6 +261,10 @@ if [[ "$leak" == *'$2a$'* || "$leak" == *'$2b$'* || "$leak" == *'"email"'* || "$
 else
   pass "чат не отдаёт email и хеш пароля"
 fi
+# Оператор Mongo в строке запроса: ?streamId[$ne]= отдавал чаты всех эфиров
+# (аудит 23.09, п. 1.1). Теперь строка запроса разбирается плоско.
+expect "чат: ?streamId[\$ne]= не оператор" "404" GET "/api/chat/messages/new?streamId%5B%24ne%5D=$OID"
+expect "чат несуществующего эфира"       "404" GET "/api/chat/messages/new?streamId=$OID"
 # API панели (routes/admin): без входа — 401, у каждой вкладки своя проверка прав.
 expect "GET /api/admin/summary"           "401"     GET  /api/admin/summary
 expect "GET /api/admin/users"             "401"     GET  /api/admin/users
@@ -228,10 +273,20 @@ expect "GET /api/admin/audit.csv"         "401"     GET  /api/admin/audit.csv
 expect "GET /api/admin/system"            "401"     GET  /api/admin/system
 expect "PUT /api/admin/venues/:id"        "401"     PUT  /api/admin/venues/000000000000000000000000
 expect "POST /api/client-error"           "204"     POST /api/client-error           -H 'Content-Type: application/json' -d '{}'
+# Свой предел тела 16 КБ (аудит 23.09, п. 3.10): раньше общий разбор JSON
+# успевал раньше, и действовал его предел в 100 КБ.
+BIG=$(head -c 20000 /dev/zero | tr '\0' 'x')
+expect "client-error: 20 КБ отбиты"      "413"     POST /api/client-error -H 'Content-Type: application/json' -d "{\"message\":\"$BIG\"}"
+# Права для MediaMTX — только ему, с петли: снаружи адреса нет (nginx — 404),
+# напрямую в приложение — 401 (аудит 23.09, п. 3.9).
+expect "POST /api/mtx/auth снаружи"      "401|404" POST /api/mtx/auth "${JSON[@]}" -d '{"path":"x","action":"publish"}'
 
 step "Удалённые маршруты: их не должно быть"
 expect "/stream"        "404" GET /stream
 expect "/video"         "404" GET /video
+# Выход — только POST из формы (аудит 23.09, п. 3.13): GET-ссылкой выйти
+# человека заставляла любая картинка с этим адресом на чужой странице.
+expect "GET /logout"    "404" GET /logout
 expect "/test-callback" "404" GET /test-callback
 # Конвейер под wrtc вырезан целиком вместе с папкой server/streams.
 # Ответ 200 здесь означал бы, что старый код вернулся.
@@ -390,11 +445,34 @@ if [[ $DO_LOGIN -eq 1 ]]; then
         fi
         grep -qi 'samesite' <<<"$setcookie" && pass "cookie SameSite" || fail "cookie без SameSite"
 
+        # Сессия — 30 дней и продлевается раз в сутки (аудит 23.09, п. 2.4).
+        exp=$(grep -oi 'expires=[^;]*' <<<"$setcookie" | head -1 | cut -d= -f2-)
+        exp_ts=$(date -d "$exp" +%s 2>/dev/null || date -jf '%a, %d %b %Y %T %Z' "$exp" +%s 2>/dev/null || echo 0)
+        days=$(( (exp_ts - $(date +%s)) / 86400 ))
+        (( days >= 29 )) && pass "cookie сессии на ${days} дн." || fail "cookie сессии на ${days} дн." "ждали 30: config/session.js"
+
         # Сессия должна действительно работать, а не просто выдаться.
         auth_code=$("${CURL[@]}" -b "$jar" -o /dev/null -w '%{http_code}' \
           -H 'X-Requested-With: XMLHttpRequest' "${BASE}/user-establishments" 2>/dev/null || echo 000)
         [[ "$auth_code" == "200" ]] && pass "с сессией /user-establishments отдаёт 200" \
           || fail "с сессией /user-establishments вернул $auth_code" "сессия не сохраняется — смотрите MongoDBStore"
+        badge=$(code GET /api/badge -b "$jar" -H 'Accept: application/json')
+        [[ "$badge" == "200" ]] && pass "с сессией /api/badge отдаёт 200" || fail "с сессией /api/badge вернул $badge"
+
+        # Почта в другом регистре — тот же аккаунт (аудит 23.09, п. 3.1).
+        upper=$(tr '[:lower:]' '[:upper:]' <<<"$SMOKE_EMAIL")
+        jar2=$(mktemp)
+        up_code=$(code POST /login -c "$jar2" -H 'Content-Type: application/json' \
+          -d "{\"email\":\"${upper}\",\"password\":\"${SMOKE_PASSWORD}\"}")
+        [[ "$up_code" == "200" ]] && pass "вход с почтой заглавными ${c_dim}→ 200${c_off}" \
+          || fail "вход с почтой заглавными вернул $up_code" "почта не приведена к нижнему регистру: jobs/lowercaseEmails.js"
+
+        # Выход — POST, сеанс после него закрыт.
+        out_code=$(code POST /logout -b "$jar2")
+        after=$(code GET /api/badge -b "$jar2" -H 'Accept: application/json')
+        [[ "$out_code" == "303" && "$after" == "401" ]] && pass "POST /logout закрывает сеанс ${c_dim}→ $out_code, затем $after${c_off}" \
+          || fail "выход не закрыл сеанс" "POST /logout → $out_code, затем /api/badge → $after"
+        rm -f "$jar2"
       fi
     else
       fail "/login не принял пароль" "$(grep -i '^HTTP/' <<<"$resp" | head -1)"

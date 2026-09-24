@@ -40,11 +40,16 @@ async function mark(height) {
 // Анимация (gif, анимированный webp) — знак на каждом кадре: sharp держит
 // её лентой кадров друг под другом, и одиночное наложение легло бы только
 // на первый. Возвращает { data, width, height }.
+// Предел пикселей для картинок от человека. У sharp по умолчанию 268 Мп:
+// PNG в 10 МБ разворачивается почти в гигабайт памяти («бомба»). 50 Мп —
+// с запасом больше любой камеры телефона; у анимации считаются все кадры.
+const USER_PIXELS = 50e6;
+
 async function stamp(input, box, quality) {
-  const animated = (await sharp(input).metadata().catch(() => ({}))).pages > 1;
+  const animated = (await sharp(input, { limitInputPixels: USER_PIXELS }).metadata().catch(() => ({}))).pages > 1;
   // Промежуточное — без потерь: сырые пиксели, у анимации — webp lossless
   // (сырой ленте sharp не передать границы кадров).
-  const step = sharp(input, { animated }).rotate()
+  const step = sharp(input, { animated, limitInputPixels: USER_PIXELS }).rotate()
     .resize({ width: box.width, height: box.height, fit: 'inside', withoutEnlargement: true });
   const resized = await (animated ? step.webp({ lossless: true }) : step.raw()).toBuffer({ resolveWithObject: true });
   const { width: w, channels } = resized.info;
@@ -59,4 +64,4 @@ async function stamp(input, box, quality) {
   return { data, width: w, height: pageH };
 }
 
-module.exports = { WATERMARK, WATERMARK_MARGIN, WATERMARK_SHARE, size, stamp };
+module.exports = { WATERMARK, WATERMARK_MARGIN, WATERMARK_SHARE, USER_PIXELS, size, stamp };

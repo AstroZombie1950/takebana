@@ -4,10 +4,11 @@ const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
 const { authLimiter, registerLimiter } = require('../middleware/rateLimit');
 const { validate } = require('../middleware/validate');
-const { safeNext } = require('../middleware/auth');
+const { safeNext, signIn } = require('../middleware/auth');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 
 const bcrypt = require('bcrypt');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const { PASSWORD_PROVIDER, PASSWORD_MIN, PASSWORD_MAX, hashPassword } = require('../utils/password');
 const { audit } = require('../utils/audit');
@@ -22,6 +23,11 @@ const NICK_ERRORS = {
   reserved: 'Этот ник зарезервирован',
   taken: 'Этот ник уже занят',
 };
+
+// Хеш для сверки, когда учётки нет: ответ идёт столько же, сколько с
+// неверным паролем, и по времени не видно, зарегистрирована ли почта.
+// Стоимость — та же, что у настоящих (utils/password.js).
+const TIMING_HASH = bcrypt.hashSync('timing-only', 10);
 
 // Маршрут входа
 router.post('/login', authLimiter, validate({
@@ -38,6 +44,7 @@ router.post('/login', authLimiter, validate({
     // Учётки нет. Ответ такой же, как при неверном пароле, но в журнале
     // это разные случаи: перебор почты и перебор пароля выглядят по-разному.
     audit(req, 'auth.login.fail', { result: 'fail', actorLogin: email, meta: { reason: 'no-account' } });
+    await bcrypt.compare(password, TIMING_HASH);
     return res.status(400).json({ message: 'Неверная почта или пароль' });
   }
 
@@ -47,8 +54,7 @@ router.post('/login', authLimiter, validate({
     return res.status(400).json({ message: 'Неверная почта или пароль' });
   }
 
-  req.session.userId = user._id.toString();
-  req.session.login = user.login || 'anon';
+  await signIn(req, user);
 
   // Туда, откуда пришёл на вход (?next= страницы входа), иначе на витрину.
   const redirectUrl = safeNext(req.body.next) || '/';
@@ -75,8 +81,7 @@ router.post('/register', registerLimiter, validate({
   const user = new User({ email: email, login: login, password: hashedPassword, provider: provider });
   await user.save();
 
-  req.session.userId = user._id.toString();
-  req.session.login = user.login || 'anon';
+  await signIn(req, user);
 
   // Туда, откуда пришёл на вход (?next= страницы входа), иначе на витрину.
   const redirectUrl = safeNext(req.body.next) || '/';
@@ -174,6 +179,10 @@ router.post('/update-password', authLimiter, validate({
   }
   user.password = await hashPassword(newPassword);
   await user.save();
+  // Прочие сеансы — закрыть, как при сбросе пароля и смене администратором:
+  // пароль меняют, в том числе, когда его узнал кто-то другой. Этот остаётся.
+  await mongoose.connection.collection('mySessions')
+    .deleteMany({ 'session.userId': String(user._id), _id: { $ne: req.sessionID } });
 
   audit(req, 'auth.password.change', { targetType: 'user', target: user });
   res.status(200).json({ message: 'Пароль успешно обновлен' });

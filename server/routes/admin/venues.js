@@ -118,7 +118,7 @@ router.put('/venues/:id', requireAdmin, byId, validate({
     return res.status(400).json({ message: 'Пожалуйста, укажите хотя бы одно поле для обновления' });
   }
 
-  const venue = await Establishments.findByIdAndUpdate(req.params.id, fields, { new: true });
+  const venue = await Establishments.findByIdAndUpdate(req.params.id, fields, { returnDocument: 'after' });
   if (!venue) return res.status(404).json({ message: 'Заведение не найдено' });
 
   audit(req, 'venue.update', { targetType: 'venue', target: venue, meta: { fields: Object.keys(fields), byAdmin: true } });
@@ -128,7 +128,7 @@ router.put('/venues/:id', requireAdmin, byId, validate({
 router.put('/venues/:id/status', requireAdmin, byId, validate({
   status: { type: 'bool', required: true, label: 'Статус' },
 }), async (req, res) => {
-  const venue = await Establishments.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
+  const venue = await Establishments.findByIdAndUpdate(req.params.id, { status: req.body.status }, { returnDocument: 'after' });
   if (!venue) return res.status(404).json({ message: 'Заведение не найдено' });
 
   audit(req, 'venue.status', { targetType: 'venue', target: venue, meta: { status: !!req.body.status } });

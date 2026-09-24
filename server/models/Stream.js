@@ -66,6 +66,13 @@ const StreamSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // Медленный режим чата: зритель пишет не чаще раза в столько секунд
+  // (0 — выключен). Включает ведущий на пульте (routes/streaming/streamChat.js).
+  slowMode: {
+    type: Number,
+    enum: [0, 10, 30, 60],
+    default: 0
+  },
   thumbnail: {
     type: String, // Путь к изображению
     default: null // Оставляем пустым по умолчанию

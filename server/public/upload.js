@@ -1,7 +1,7 @@
 /* Страница загрузки фото и видео в галерею (/upload, 21.09.2026).
  *
- * Фото: выбрали — видны снимки, «Опубликовать фото» отправляет их разом
- * (POST /profile/gallery, сжатие и знак — на сервере).
+ * Фото: выбрали — видны снимки, «Опубликовать фото» отправляет их пачками
+ * по 20 (POST /profile/gallery, сжатие и знак — на сервере).
  *
  * Видео: выбрали — сразу поехало в фоне (tk-upload.js), а на карточке можно
  * смотреть его и править, не дожидаясь конца: обрезать начало и конец,
@@ -127,33 +127,48 @@
     paintPhotos();
   });
 
-  // XHR — ради процентов отправки.
+  // XHR — ради процентов отправки. Пачками по PHOTOS_PER_REQUEST: сервер
+  // держит присланное в памяти и больше за раз не принимает
+  // (routes/streaming/profile.js). Отправленное уходит из списка сразу —
+  // оборвалось на третьей пачке, повтор отправит только оставшееся.
+  var PHOTOS_PER_REQUEST = 20;
   photoSend.addEventListener('click', function () {
     if (!photos.length) return;
-    var form = new FormData();
-    photos.forEach(function (p) { form.append('photos', p.file); });
+    var bytes = function (list) { return list.reduce(function (n, p) { return n + p.file.size; }, 0); };
+    var total = bytes(photos);
+    var done = 0;
     photoSend.disabled = true;
     photoBar.hidden = false;
     photoBar.firstElementChild.style.width = '0%';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/profile/gallery');
-    xhr.setRequestHeader('Accept', 'application/json');
-    xhr.upload.onprogress = function (e) {
-      if (e.lengthComputable) photoBar.firstElementChild.style.width = Math.round(e.loaded / e.total * 100) + '%';
-    };
-    var end = function () { photoSend.disabled = false; photoBar.hidden = true; };
-    xhr.onload = function () {
-      end();
-      var d = {};
-      try { d = JSON.parse(xhr.responseText); } catch (_) {}
-      if (xhr.status !== 200 || d.success === false) return toast(t('app.errorShort', { message: d.message || 'HTTP ' + xhr.status }), 'error');
-      photos.forEach(function (p) { URL.revokeObjectURL(p.url); });
-      photos = [];
-      paintPhotos();
-      toast(t('app.galleryDone', { total: d.total }), 'ok');
-    };
-    xhr.onerror = function () { end(); toast(t('common.noNetwork'), 'error'); };
-    xhr.send(form);
+    var end = function () { photoSend.disabled = false; photoBar.hidden = true; paintPhotos(); };
+
+    (function next() {
+      var part = photos.slice(0, PHOTOS_PER_REQUEST);
+      var form = new FormData();
+      part.forEach(function (p) { form.append('photos', p.file); });
+      var size = bytes(part);
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/profile/gallery');
+      xhr.setRequestHeader('Accept', 'application/json');
+      xhr.upload.onprogress = function (e) {
+        if (e.lengthComputable) photoBar.firstElementChild.style.width = Math.round((done + e.loaded / e.total * size) / total * 100) + '%';
+      };
+      xhr.onload = function () {
+        var d = {};
+        try { d = JSON.parse(xhr.responseText); } catch (_) {}
+        if (xhr.status !== 200 || d.success === false) {
+          end();
+          return toast(t('app.errorShort', { message: d.message || 'HTTP ' + xhr.status }), 'error');
+        }
+        photos.splice(0, part.length).forEach(function (p) { URL.revokeObjectURL(p.url); });
+        done += size;
+        if (photos.length) return next();
+        end();
+        toast(t('app.galleryDone', { total: d.total }), 'ok');
+      };
+      xhr.onerror = function () { end(); toast(t('common.noNetwork'), 'error'); };
+      xhr.send(form);
+    })();
   });
 
   // ── Видео ─────────────────────────────────────────────────────────────

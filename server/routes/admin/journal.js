@@ -182,7 +182,7 @@ router.post('/errors/:id/resolve', requireAdmin, async (req, res) => {
     resolved
       ? { resolved: true, resolvedBy: req.session.userId, resolvedAt: new Date() }
       : { resolved: false, resolvedBy: null, resolvedAt: null },
-    { new: true }
+    { returnDocument: 'after' }
   ).lean();
 
   if (!row) return res.status(404).json({ message: 'Ошибка не найдена' });

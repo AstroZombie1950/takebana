@@ -73,7 +73,8 @@
     }).then(function (r) {
       if (r.ok) { input.value = ''; return; }
       return r.json().catch(function () { return {}; }).then(function (b) {
-        toast(b.message || t('chat.sendFailed'), 'error');
+        // Медленный режим: сервер говорит, сколько секунд ждать.
+        toast(b.wait ? t('chat.slowWait', { n: b.wait }) : b.message || t('chat.sendFailed'), 'error');
       });
     }, function () {
       toast(t('chat.offline'), 'error');
@@ -163,6 +164,29 @@
   socket.on('stream:update', function (u) {
     if (!u || u.streamKey !== streamKey) return;
     updateHandlers.forEach(function (fn) { fn(u); });
+  });
+
+  // ── Медленный режим чата ──
+  // Зрителю — подсказка над полем; ведущему — выбор паузы (streamChat.ejs).
+  // Включил ведущий или модератор — приходит chat:slow.
+  var slowHint = document.getElementById('chatSlow');
+  var slowPick = document.getElementById('chatSlowPick');
+  socket.on('chat:slow', function (d) {
+    if (!d || d.streamKey !== streamKey) return;
+    if (slowPick) slowPick.value = String(d.seconds);
+    if (slowHint) {
+      slowHint.hidden = !d.seconds;
+      tkText(slowHint.firstElementChild, 'chat.slowOn', { n: d.seconds });
+    }
+  });
+  if (slowPick) slowPick.addEventListener('change', function () {
+    fetch('/chat/slow-mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ streamId: streamId, seconds: Number(slowPick.value) }),
+    }).then(function (r) {
+      if (!r.ok) toast(t('chat.slowFailed'), 'error');
+    }, function () { toast(t('chat.slowFailed'), 'error'); });
   });
 
   // Страховка на случай, если сокет не поднялся: история придёт и без него.

@@ -255,10 +255,12 @@
 
       <%# Выход — только на телефоне: на десктопе он в левой панели. Кнопкой
           во всю ширину, как остальные кнопки настроек. %>
-      <a href="/logout" class="tk-btn tk-btn--outline tk-btn--sm tk-set__exit">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M10 4H4v16h6M16 8l4 4-4 4M20 12H9"></path></svg>
-        <span data-i18n="settings.logout"><%- t('settings.logout') %></span>
-      </a>
+      <form method="post" action="/logout">
+        <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm tk-set__exit">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M10 4H4v16h6M16 8l4 4-4 4M20 12H9"></path></svg>
+          <span data-i18n="settings.logout"><%- t('settings.logout') %></span>
+        </button>
+      </form>
     </div>
   </main>
 </div>
