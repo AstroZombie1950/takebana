@@ -13,8 +13,9 @@ const ReportSchema = new mongoose.Schema({
   },
   targetType: {
     type: String,
-    // recording — запись эфира, comment — комментарий к записи
-    enum: ['stream', 'user', 'message', 'recording', 'comment'],
+    // recording — запись эфира, video — видео галереи, comment —
+    // комментарий к записи или видео
+    enum: ['stream', 'user', 'message', 'recording', 'video', 'comment'],
     required: true
   },
   // Ссылка без ref: цель живёт в разных коллекциях, и populate тут всё равно

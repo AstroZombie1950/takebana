@@ -1,24 +1,28 @@
 <%#
-  Запись эфира (/recording/:id). Смотрят все, метка 18+ — через гейт
-  (routes/recordings.js). Раскладка как у видеохостинга: плеер, под ним
-  название, автор, оценки и описание, ниже комментарии; справа «Смотрите
-  также». Широкий режим плеера растягивает его над обеими колонками.
+  Страница просмотра: запись эфира (/recording/:id) или видео галереи
+  (/video/:id) — kind, маршрут один (routes/watch.js). Смотрят все, метка
+  18+ (только у записи) — через гейт. Раскладка как у видеохостинга: плеер,
+  под ним название, автор, оценки и описание, ниже комментарии; справа
+  «Смотрите также». Широкий режим плеера растягивает его над обеими колонками.
 
-  Автор видит и незаконченную запись, правит название и описание, удаляет
-  запись и любые комментарии под ней; дизлайки считаются для всех, а число
-  видно только ему. Вёрстка — css/watch.css и css/player.css, поведение —
-  /tk-recording.js и /tk-player.js.
+  Автор видит и незаконченный ролик, правит название и описание, удаляет
+  ролик и любые комментарии под ним; дизлайки считаются для всех, а число
+  видно только ему. Строки, которые у двух видов разные, — под префиксом k
+  (rec.* или video.*). Вёрстка — css/watch.css и css/player.css, поведение —
+  /tk-watch.js и /tk-player.js.
 %>
 <%
-  var ready = rec.status === 'ready';
   var views = plural(rec.views || 0, 'rec.views');
   var commentsN = plural(rec.comments || 0, 'rec.comments');
-  var nextUrl = encodeURIComponent('/recording/' + rec._id);
+  var nextUrl = encodeURIComponent(base);
+  // Видео без названия подписываем датой — ни одно не остаётся безымянным.
+  var untitled = function (item) { return ta('video.untitled', { date: date(item.createdAt, { day: 'numeric', month: 'long', year: 'numeric' }) }); };
+  var title = rec.title || untitled(rec);
 %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { title: rec.title + ' — Takebana', description: (rec.description || '').slice(0, 160) }) %>
+<%- include('partials/tkHead', { title: title + ' — Takebana', description: (rec.description || '').slice(0, 160) }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/player.css') %>">
@@ -33,24 +37,25 @@
 
   <main class="tk-app-main">
     <div class="tk-watch" id="watch"
-         data-id="<%= rec._id %>"
+         data-base="<%= base %>"
+         data-k="<%= k %>"
          data-owner="<%= isOwner ? '1' : '' %>"
          data-user="<%= currentUser ? currentUser._id : '' %>"
-         data-back="/userPage/<%= author._id %>">
+         data-back="<%= back %>">
 
       <div class="tk-watch__stage">
         <div class="tk-live__player tk-watch__player">
           <% if (ready) { %>
-            <%- include('partials/player', { mode: 'vod', src: (rec.hls && rec.hls.url) || rec.video.url, poster: rec.thumb.url, theater: true }) %>
+            <%- include('partials/player', { mode: 'vod', src: src, poster: rec.thumb.url, theater: true }) %>
           <% } else { %>
-            <% var stateKey = rec.status === 'failed' ? 'rec.failedNote' : 'rec.processingNote'; %>
+            <% var stateKey = k + (rec.status === 'failed' ? '.failedNote' : '.processingNote'); %>
             <p class="tk-rec__state" data-i18n="<%= stateKey %>"><%- t(stateKey) %></p>
           <% } %>
         </div>
       </div>
 
       <div class="tk-watch__main">
-        <h1 class="tk-watch__title" id="recTitle"><%= rec.title %></h1>
+        <h1 class="tk-watch__title" id="recTitle"><%= title %></h1>
 
         <div class="tk-watch__bar">
           <div class="tk-live__author tk-watch__author">
@@ -83,7 +88,7 @@
             </button>
 
             <% if (currentUser && !isOwner) { %>
-            <button type="button" class="tk-watch__pill" data-report="recording" data-report-id="<%= rec._id %>" data-report-name="<%= rec.title %>">
+            <button type="button" class="tk-watch__pill" data-report="<%= kind %>" data-report-id="<%= rec._id %>" data-report-name="<%= title %>">
               <span data-i18n="common.report"><%- t('common.report') %></span>
             </button>
             <% } %>
@@ -94,27 +99,27 @@
         <div class="tk-watch__about" id="about">
           <p class="tk-watch__meta">
             <% if (ready) { %><span id="viewsLine" data-i18n="<%= views.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(rec.views) }) %>'><%= views.text %></span> · <% } %>
-            <span><%= date(rec.recordedAt || rec.createdAt, { day: 'numeric', month: 'long', year: 'numeric' }) %></span>
+            <span><%= date(at, { day: 'numeric', month: 'long', year: 'numeric' }) %></span>
             <% if (rec.isAdult) { %> · <span class="tk-watch__adult">18+</span><% } %>
           </p>
           <% if (rec.description) { %>
           <p class="tk-watch__desc" id="recDesc"><%= rec.description %></p>
           <button type="button" class="tk-watch__more" id="descMore" hidden data-i18n="rec.more"><%- t('rec.more') %></button>
           <% } else if (isOwner) { %>
-          <p class="tk-watch__desc tk-watch__desc--empty" id="recDesc" data-i18n="rec.noDesc"><%- t('rec.noDesc') %></p>
+          <p class="tk-watch__desc tk-watch__desc--empty" id="recDesc" data-i18n="<%= k %>.noDesc"><%- t(k + '.noDesc') %></p>
           <% } %>
 
-          <% if (isOwner && rec.status !== 'processing') { %>
+          <% if (isOwner && (rec.status !== 'processing' || kind === 'video')) { %>
           <div class="tk-watch__owner">
             <% if (ready) { %>
             <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="editRecording" data-i18n="rec.edit"><%- t('rec.edit') %></button>
             <% } %>
-            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="deleteRecording" data-i18n="rec.delete"><%- t('rec.delete') %></button>
+            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="deleteRecording" data-i18n="<%= k %>.delete"><%- t(k + '.delete') %></button>
           </div>
 
           <form class="tk-watch__edit" id="editForm" hidden>
             <label class="tk-form__label" for="editTitle" data-i18n="rec.fieldTitle"><%- t('rec.fieldTitle') %></label>
-            <input type="text" id="editTitle" class="tk-field" maxlength="<%= limits.title %>" required value="<%= rec.title %>">
+            <input type="text" id="editTitle" class="tk-field" maxlength="<%= limits.title %>"<% if (kind === 'recording') { %> required<% } %> value="<%= rec.title %>"<% if (kind === 'video') { %> placeholder="<%= untitled(rec) %>"<% } %>>
             <label class="tk-form__label" for="editDesc" data-i18n="rec.fieldDesc"><%- t('rec.fieldDesc') %></label>
             <textarea id="editDesc" class="tk-field" rows="6" maxlength="<%= limits.description %>"><%= rec.description %></textarea>
             <div class="tk-watch__edit-acts">
@@ -144,7 +149,7 @@
           <p class="tk-note" id="commentsEmpty"<% if (comments.length) { %> hidden<% } %> data-i18n="rec.commentsEmpty"><%- t('rec.commentsEmpty') %></p>
           <ol class="tk-watch__list" id="commentList"></ol>
           <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-watch__load" id="commentsMore"<% if (!moreComments) { %> hidden<% } %> data-i18n="rec.commentsMore"><%- t('rec.commentsMore') %></button>
-          <%# Первая порция — данными: ленту рисует один шаблон в tk-recording.js. %>
+          <%# Первая порция — данными: ленту рисует один шаблон в tk-watch.js. %>
           <script type="application/json" id="commentsData"><%- JSON.stringify(comments).replace(/</g, '\\u003c') %></script>
         </section>
         <% } %>
@@ -156,14 +161,14 @@
         <ul class="tk-watch__related">
           <% related.forEach(function (r) { var rv = plural(r.views || 0, 'rec.views'); %>
           <li>
-            <a class="tk-watch__card" href="/recording/<%= r._id %>">
+            <a class="tk-watch__card" href="<%= r.href %>">
               <span class="tk-watch__thumb">
                 <% if (r.thumb && r.thumb.url) { %><img src="<%= r.thumb.url %>" alt="" loading="lazy"><% } %>
                 <span class="tk-watch__len"><%= clock(r.duration) %></span>
                 <% if (r.isAdult) { %><span class="tk-watch__card-adult">18+</span><% } %>
               </span>
               <span class="tk-watch__card-body">
-                <span class="tk-watch__card-title"><%= r.title %></span>
+                <span class="tk-watch__card-title"><%= r.title || untitled(r) %></span>
                 <span class="tk-watch__card-meta"><%= r.authorName %></span>
                 <span class="tk-watch__card-meta"><span data-i18n="<%= rv.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(r.views) }) %>'><%= rv.text %></span> · <%= date(r.recordedAt || r.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></span>
               </span>
@@ -178,9 +183,10 @@
 </div>
 
 <% if (ready) { %>
-<script defer src="<%= asset('/tk-hls.js') %>"></script>
+<%# Загрузчик hls.js нужен только плейлисту; MP4 играет сам браузер. %>
+<% if (/\.m3u8(\?|$)/.test(src)) { %><script defer src="<%= asset('/tk-hls.js') %>"></script><% } %>
 <script defer src="<%= asset('/tk-player.js') %>"></script>
 <% } %>
-<script defer src="<%= asset('/tk-recording.js') %>"></script>
+<script defer src="<%= asset('/tk-watch.js') %>"></script>
 </body>
 </html>

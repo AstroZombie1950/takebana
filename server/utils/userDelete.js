@@ -33,6 +33,7 @@ const daily = require('./daily');
 const hls = require('./hls');
 const webLive = require('./webLive');
 const recording = require('./recording');
+const engagement = require('./engagement');
 const streamLog = require('./streamLog');
 const errorLog = require('./errorLog');
 const { forget } = require('./audit');
@@ -95,14 +96,14 @@ async function removeUser(user, io) {
   for (const r of recordings) {
     await recording.remove(r).catch((err) => errorLog.external(err, 'recording.remove', { recording: String(r._id) }));
   }
-  // Оценки и комментарии под чужими записями — со счётчиками тех записей.
-  await recording.forgetUser(user._id);
 
   // Видео галереи — тоже в хранилище, по одному.
   const videos = await GalleryVideo.find({ userId: id }).lean();
   for (const v of videos) {
     await galleryVideo.remove(v).catch((err) => errorLog.external(err, 'gallery.video.remove', { video: String(v._id) }));
   }
+  // Оценки и комментарии под чужими записями и видео — со счётчиками у них.
+  await engagement.forgetUser(user._id);
 
   // Жалобы на сам аккаунт, на его эфиры и сообщения чата — у них больше
   // нет предмета.

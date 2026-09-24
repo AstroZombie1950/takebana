@@ -13,7 +13,6 @@ const { requireAuth } = require('../../middleware/auth');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
 const { UPLOADS, uploadAvatar, uploadGallery } = require('./uploads');
 const GalleryVideo = require('../../models/GalleryVideo');
-const galleryVideo = require('../../utils/galleryVideo');
 const { saveImage, BadImageError } = require('../../utils/image');
 const galleryPhotos = require('../../utils/galleryPhotos');
 const errorLog = require('../../utils/errorLog');
@@ -186,7 +185,7 @@ router.delete('/profile/gallery/:name', requireAuth, async (req, res) => {
 // ── Видео в галерее ──────────────────────────────────────────────────────
 // Принимает их страница загрузки (routes/streaming/upload.js), пережатие
 // со знаком — в фоне (utils/galleryVideo.js). Здесь — состояние для
-// страницы профиля, пока ролик не готов, и удаление.
+// плитки, пока ролик не готов; удаление — DELETE /video/:id (routes/watch.js).
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
 function videoView(v) {
@@ -195,7 +194,6 @@ function videoView(v) {
     status: v.status,
     error: v.error || '',
     duration: v.duration || 0,
-    url: (v.video && v.video.url) || '',
     thumb: (v.thumb && v.thumb.url) || '',
   };
 }
@@ -206,18 +204,6 @@ router.get('/profile/gallery/video/:id', requireAuth, async (req, res) => {
     : null;
   if (!v) return res.status(404).json({ success: false, message: 'Видео не найдено' });
   res.json({ success: true, video: videoView(v) });
-});
-
-// Удаляет владелец. Пока ролик пережимается, удаление тоже можно: обработка
-// увидит, что записи нет, и уберёт выгруженное за собой.
-router.delete('/profile/gallery/video/:id', requireAuth, async (req, res) => {
-  const v = OBJECT_ID.test(req.params.id)
-    ? await GalleryVideo.findOne({ _id: req.params.id, userId: req.session.userId }).lean()
-    : null;
-  if (!v) return res.status(404).json({ success: false, message: 'Видео не найдено' });
-  await galleryVideo.remove(v);
-  audit(req, 'profile.gallery.video.delete', { targetType: 'user', targetId: req.session.userId, meta: { video: String(v._id) } });
-  res.json({ success: true });
 });
 
 // Удаление своего аккаунта. Право на удаление данных человек применяет сам,

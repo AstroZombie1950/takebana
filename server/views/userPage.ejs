@@ -5,8 +5,8 @@
 <%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/profile.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/gallery.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/lightbox.css') %>">
-<link rel="stylesheet" href="<%= asset('/css/player.css') %>">
 </head>
 <body class="tk-app">
 
@@ -223,68 +223,31 @@
         <% } %>
       </section>
 
-      <!-- Фото и видео. Своими управляет владелец прямо здесь. Фото —
-           строками в User.gallery (сжатие — utils/image.js), видео —
-           GalleryVideo: пережатие со знаком и хранилище — utils/galleryVideo.js.
-           Поведение — public/profile.js. -->
-      <% var galleryCount = (user.gallery || []).length + videos.filter(function (v) { return v.status === 'ready'; }).length; %>
+      <!-- Фото и видео: начало ленты (utils/gallery.js), целиком — на
+           /userPage/:id/gallery. Плитка — partials/galleryTile.ejs,
+           поведение — public/gallery.js. -->
       <section class="tk-prof__gal" id="gallery"<% if (isSelf) { %> data-own<% } %>>
         <div class="tk-prof__gal-head">
-          <p class="tk-kicker tk-prof__gal-title" data-i18n="user.gallery"><%- t('user.gallery') %></p>
-          <span class="tk-note" id="galleryCount"><%= galleryCount %></span>
+          <a href="/userPage/<%= user._id %>/gallery" class="tk-kicker tk-prof__gal-title" data-i18n="user.gallery"><%- t('user.gallery') %></a>
+          <span class="tk-note" id="galleryCount"><%= shotsCount %></span>
         </div>
 
         <div class="tk-shots" id="galleryShots">
-          <% videos.forEach(function (v) { %>
-          <div class="tk-shots__item<%= v.status !== 'ready' ? ' is-' + v.status : '' %>" data-video-id="<%= v._id %>">
-            <% if (v.status === 'ready') { %>
-            <button type="button" class="tk-shot tk-shot--video" data-video-url="<%= v.video.url %>" data-video-poster="<%= v.thumb.url %>" aria-label="<%= ta('user.videoPlay') %>" data-i18n-aria="user.videoPlay">
-              <% if (v.thumb.url) { %><img src="<%= v.thumb.url %>" alt="" loading="lazy" decoding="async"><% } %>
-              <span class="tk-shot__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5.5v13L20 12z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
-              <span class="tk-shot__len"><%= clock(v.duration) %></span>
-            </button>
-            <% } else if (v.status === 'uploading' || v.status === 'draft') { %>
-            <%# Незаконченное со страницы загрузки — ссылкой туда: там докачка,
-                правка и «Опубликовать». Проценты ставит profile.js. %>
-            <a class="tk-shot tk-shot--state" href="/upload#v<%= v._id %>">
-              <% if (v.status === 'uploading') { var pct = v.upload && v.upload.size ? Math.floor(v.upload.received / v.upload.size * 100) : 0; %>
-              <span data-upload-pct data-i18n="user.videoUploading" data-i18n-vars='<%= JSON.stringify({ p: pct }) %>'><%- t('user.videoUploading', { p: pct }) %></span>
-              <% } else { %>
-              <span data-i18n="user.videoDraft"><%- t('user.videoDraft') %></span>
-              <% } %>
-            </a>
-            <% } else { %>
-            <% var vKey = v.status === 'failed' ? (v.error === 'long' ? 'user.videoLong' : 'user.videoFailed') : 'user.videoProcessing'; %>
-            <div class="tk-shot tk-shot--state"><span data-i18n="<%= vKey %>"><%- t(vKey) %></span></div>
-            <% } %>
-            <% if (isSelf) { %>
-            <button type="button" class="tk-thumb__del" data-video-del aria-label="<%= ta('common.delete') %>" data-i18n-aria="common.delete">
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-            </button>
-            <% } %>
-          </div>
-          <% }); %>
-          <% (user.gallery || []).forEach(function (url, idx) { %>
-          <div class="tk-shots__item">
-            <button type="button" class="tk-shot" aria-label="<%= ta('user.photoN', { n: idx + 1 }) %>" data-i18n-aria="user.photoN" data-i18n-vars='{"n": <%= idx + 1 %>}'>
-              <img src="<%= url %>" alt="" loading="lazy" decoding="async" data-photo-url="<%= url %>">
-            </button>
-            <% if (isSelf) { %>
-            <button type="button" class="tk-thumb__del" data-name="<%= url.split('/').pop() %>" aria-label="<%= ta('common.delete') %>" data-i18n-aria="common.delete">
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-            </button>
-            <% } %>
-          </div>
-          <% }); %>
+          <% shots.forEach(function (item, i) { %><%- include('partials/galleryTile', { item: item, n: i + 1, isSelf: isSelf }) %><% }); %>
         </div>
-        <p class="tk-note tk-note--center" id="galleryEmpty" data-i18n="user.galleryEmpty"<% if ((user.gallery || []).length || videos.length) { %> hidden<% } %>><%- t('user.galleryEmpty') %></p>
+        <p class="tk-note tk-note--center" id="galleryEmpty" data-i18n="user.galleryEmpty"<% if (shots.length) { %> hidden<% } %>><%- t('user.galleryEmpty') %></p>
 
-        <%# Добавить — под снимками, по центру: ведёт на страницу загрузки
-            (/upload, 21.09) — там выбор файлов, докачка, правка видео
-            и «Опубликовать». %>
-        <% if (isSelf) { %>
+        <%# Под снимками, по центру: «Все» — если в превью влезло не всё;
+            «Добавить» ведёт на страницу загрузки (/upload, 21.09) — там
+            выбор файлов, докачка, правка видео и «Опубликовать». %>
+        <% if (shotsMore || isSelf) { %>
         <div class="tk-prof__gal-add">
+          <% if (shotsMore) { %>
+          <a href="/userPage/<%= user._id %>/gallery" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.all" data-i18n-vars='<%= JSON.stringify({ n: shotsCount }) %>'><%- t('gallery.all', { n: shotsCount }) %></a>
+          <% } %>
+          <% if (isSelf) { %>
           <a href="/upload" class="tk-btn tk-btn--outline tk-btn--xs" id="galleryAdd" data-i18n="user.galleryAdd"><%- t('user.galleryAdd') %></a>
+          <% } %>
         </div>
         <% } %>
       </section>
@@ -294,34 +257,7 @@
   </main>
 </div>
 
-<!-- Просмотр фотографии -->
-<div id="lightbox" class="tk-lightbox hidden">
-  <button type="button" class="tk-lightbox__btn tk-lightbox__close" id="lightboxClose" aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-  </button>
-  <button type="button" class="tk-lightbox__btn tk-lightbox__prev" id="lightboxPrev" aria-label="<%= ta('user.photoPrev') %>" data-i18n-aria="user.photoPrev">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
-  </button>
-  <button type="button" class="tk-lightbox__btn tk-lightbox__next" id="lightboxNext" aria-label="<%= ta('user.photoNext') %>" data-i18n-aria="user.photoNext">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
-  </button>
-  <span class="tk-lightbox__count" id="lightboxCounter">1 / 1</span>
-  <%# Без src: пустая строка — это адрес текущей страницы, браузер честно идёт
-      за ней и получает битую картинку. Адрес подставляет profile.js при открытии. %>
-  <img id="lightboxImg" alt="">
-</div>
-
-<!-- Просмотр видео из галереи: тот же плеер, что у записей эфиров -->
-<% if (videos.some(function (v) { return v.status === 'ready'; }) || isSelf) { %>
-<div id="videoBox" class="tk-lightbox tk-videobox hidden" role="dialog" aria-modal="true">
-  <button type="button" class="tk-lightbox__btn tk-lightbox__close" id="videoBoxClose" aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-  </button>
-  <div class="tk-videobox__stage">
-    <%- include('partials/player', { mode: 'vod' }) %>
-  </div>
-</div>
-<% } %>
+<%- include('partials/lightbox') %>
 
 <%# Единственное, что скрипту профиля нужно от сервера. %>
 <script>
@@ -331,9 +267,7 @@
     avatarUrl: <%- JSON.stringify(user.avatarStyle.url || '') %>
   };
 </script>
-<% if (videos.some(function (v) { return v.status === 'ready'; }) || isSelf) { %>
-<script defer src="<%= asset('/tk-player.js') %>"></script>
-<% } %>
+<script defer src="<%= asset('/gallery.js') %>"></script>
 <script defer src="<%= asset('/profile.js') %>"></script>
 </body>
 </html>

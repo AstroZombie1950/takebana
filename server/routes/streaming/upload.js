@@ -1,6 +1,6 @@
 // Страница загрузки фото и видео в галерею: /upload (решение заказчика
-// 21.09.2026). Видео — кусками с докачкой, правка (обрезка, без звука,
-// обложка) и «Опубликовать». Фото уходят прежним /profile/gallery.
+// 21.09.2026). Видео — кусками с докачкой, правка (название и описание,
+// обрезка, без звука, обложка) и «Опубликовать». Фото уходят прежним /profile/gallery.
 //
 // Кусок — PUT /upload/video/:id?offset=N, тело — байты файла с этого места.
 // Сервер принимает кусок, только если offset равен тому, что уже доехало:
@@ -48,6 +48,8 @@ function draftView(v) {
       cover: !!(v.edit && v.edit.cover),
     },
     publish: !!v.publish,
+    title: v.title || '',
+    description: v.description || '',
     thumb: (v.thumb && v.thumb.url) || '',
     duration: v.duration || 0,
   };
@@ -67,6 +69,7 @@ router.get('/upload', requireAuth, commonDataMiddleware, async (req, res) => {
     drafts: drafts.map(draftView),
     videoEnabled: galleryVideo.enabled,
     maxSeconds: galleryVideo.MAX_SECONDS,
+    limits: { title: galleryVideo.TITLE_MAX, description: galleryVideo.DESCRIPTION_MAX },
   });
 });
 
@@ -157,12 +160,16 @@ router.post('/upload/video/:id/edit', requireAuthApi, validate({
   mute: { type: 'bool', default: false, label: 'Без звука' },
   coverAt: { type: 'number', min: -1, max: 86400, default: -1, label: 'Кадр обложки' },
   publish: { type: 'bool', default: false, label: 'Опубликовать' },
+  title: { type: 'string', max: galleryVideo.TITLE_MAX, allowEmpty: true, label: 'Название' },
+  description: { type: 'string', max: galleryVideo.DESCRIPTION_MAX, allowEmpty: true, label: 'Описание' },
 }), async (req, res) => {
   const { start, end, mute, coverAt, publish } = req.body;
+  const title = req.body.title || '';
+  const description = req.body.description || '';
   if (end && end - start < 1) return res.status(400).json({ success: false, message: 'Видео короче секунды' });
   const v = await GalleryVideo.findOneAndUpdate(
     { _id: OBJECT_ID.test(req.params.id) ? req.params.id : null, userId: req.session.userId, status: { $in: ['uploading', 'draft'] } },
-    { $set: { 'edit.start': start, 'edit.end': end, 'edit.mute': mute, 'edit.coverAt': coverAt, publish } },
+    { $set: { 'edit.start': start, 'edit.end': end, 'edit.mute': mute, 'edit.coverAt': coverAt, publish, title, description } },
     { new: true },
   ).lean();
   if (!v) return res.status(404).json({ success: false, message: 'Видео не найдено' });

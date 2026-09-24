@@ -7,7 +7,6 @@ const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const User = require('../../models/User');
 const Recording = require('../../models/Recording');
-const GalleryVideo = require('../../models/GalleryVideo');
 const Stream = require('../../models/Stream');
 const Subscription = require('../../models/Subscription');
 const Contact = require('../../models/Contact');
@@ -16,6 +15,7 @@ const { commonDataMiddleware, getActiveStreamsCount } = require('./shared');
 const authors = require('../../utils/authors');
 const userView = require('../../utils/userView');
 const restriction = require('../../utils/restrict');
+const gallery = require('../../utils/gallery');
 
 // Вкладки каталога. popular — все категории разом, остальные совпадают
 // с кодами категорий в config/catalog.js.
@@ -194,18 +194,18 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
     .sort({ createdAt: -1 })
     .select('title status duration thumb isAdult createdAt views')
     .lean();
-  // Видео галереи: чужому — готовые, владельцу — и те, что пережимаются.
-  const videos = restricted ? [] : await GalleryVideo.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
-    .sort({ createdAt: -1 })
-    .select('status error duration video thumb upload')
-    .lean();
+  // Фото и видео одной лентой (utils/gallery.js): в профиле — начало,
+  // целиком — на /userPage/:id/gallery. Владельцу видны и ролики в работе.
+  const shots = restricted ? { list: [], count: 0 } : await gallery.feed(user, isSelf);
 
   res.locals.pageOwner = { id: String(userId), scope: 'profile', access: restricted ? 'them' : iRestricted ? 'me' : '' };
 
   // Передача данных в шаблон
   res.render('userPage', {
     recordings,
-    videos,
+    shots: shots.list.slice(0, gallery.PREVIEW),
+    shotsMore: shots.list.length > gallery.PREVIEW,
+    shotsCount: shots.count,
     restricted,
     iRestricted,
     inContacts,
@@ -218,7 +218,6 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
       isSubscribed, // Передаем статус подписки
       isStreaming: !!activeStream,
       activeStreamId: activeStream ? activeStream._id : null,
-      gallery: !restricted && Array.isArray(user.gallery) ? user.gallery : [],
       // Свою страницу человек смотрит сам — значит, он в сети, что бы ни
       // успела записать база.
       isOnline: !!user.isOnline || String(currentUserId) === String(user._id),
@@ -226,9 +225,33 @@ router.get('/userPage/:id', commonDataMiddleware, async (req, res) => {
     }
   });
 });
-// Добавьте другие маршруты, связанные с функционалом стриминга
+// Вся галерея человека: фото и видео одной лентой, новые сверху, по
+// gallery.PAGE на страницу (?page=N). Ограничение доступа — как у профиля.
+router.get('/userPage/:id/gallery', commonDataMiddleware, async (req, res) => {
+  const userId = req.params.id;
+  if (!/^[a-f\d]{24}$/i.test(userId)) return res.status(404).send('Пользователь не найден');
+  const user = await User.findById(userId).select('nickname login email avatar gallery').lean();
+  if (!user) return res.status(404).send('Пользователь не найден');
 
+  const me = req.session.userId;
+  const isSelf = String(userId) === String(me);
+  const restricted = !!me && !isSelf && await restriction.isRestricted(userId, me);
+  res.locals.pageOwner = { id: String(userId), scope: 'profile', access: restricted ? 'them' : '' };
 
-// Функция для преобразования времени в "назад"
+  const shots = restricted ? { list: [], count: 0 } : await gallery.feed(user, isSelf);
+  const pg = gallery.page(shots.list, parseInt(req.query.page, 10));
+  const displayName = userView.displayName(user);
+  res.render('gallery', {
+    owner: { _id: user._id, displayName },
+    isSelf,
+    restricted,
+    shots: pg.items,
+    count: shots.count,
+    page: pg.page,
+    pages: pg.pages,
+    // Номер первой плитки страницы — для подписей «Фото N».
+    offset: (pg.page - 1) * gallery.PAGE,
+  });
+});
 
 module.exports = router;

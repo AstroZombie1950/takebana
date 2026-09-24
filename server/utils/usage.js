@@ -162,7 +162,12 @@ function bunny(from, to) {
         cacheHitRate: stats.CacheHitRate != null ? Math.round(stats.CacheHitRate * 10) / 10 : null,
         spentUsd: balance.length > 1 ? Math.round(spent * 100) / 100 : null,
         balanceUsd: balance.length ? Math.round(balance[balance.length - 1] * 100) / 100 : null,
-        storage: zone ? { bytes: zone.StorageUsed || 0, files: zone.FilesStored || 0, region: zone.Region || '' } : null,
+        // Копий — основная плюс реплики в других регионах: хранение
+        // оплачивается за каждую (utils/storageReport.js).
+        storage: zone ? {
+          bytes: zone.StorageUsed || 0, files: zone.FilesStored || 0, region: zone.Region || '',
+          copies: 1 + (zone.ReplicationRegions || []).length,
+        } : null,
         pullZone: process.env.BUNNY_PULL_ZONE_ID || null,
       };
     } catch (err) {

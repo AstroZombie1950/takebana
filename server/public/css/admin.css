@@ -399,7 +399,7 @@ body.tk-panel {
 .tk-table tbody tr:last-child td { border-bottom: 0; }
 
 .tk-table a { color: var(--tk-paper); }
-.tk-table code { font-size: 12px; }
+.tk-table code { font-size: 12px; overflow-wrap: anywhere; }
 
 .tk-num { text-align: right; font-variant-numeric: tabular-nums; }
 .tk-nowrap { white-space: nowrap; }
@@ -707,3 +707,23 @@ body.tk-panel {
   .tk-panel__main { padding: 18px 16px 48px; }
   .tk-fields { grid-template-columns: 1fr; }
 }
+
+/* ── Хранилище: доля строки в объёме — полоса одного цвета ───────────── */
+.tk-share {
+  display: block;
+  width: 100%;
+  min-width: 80px;
+  height: 8px;
+  background: rgba(245, 241, 234, .06);
+}
+
+.tk-share i {
+  display: block;
+  height: 100%;
+  background: #3987e5;
+  border-radius: 0 4px 4px 0;   /* скруглён конец со значением, у нуля — прямо */
+}
+
+.tk-store__group td { font-weight: 600; }
+.tk-store__kind td:first-child { padding-left: 28px; color: var(--tk-beige); }
+.tk-store__kind.is-orphan td:first-child { color: var(--tk-accent); }

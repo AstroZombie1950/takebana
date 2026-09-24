@@ -593,7 +593,7 @@ const REASONS = {
   spam: 'спам', abuse: 'оскорбления', adult: 'контент 18+',
   violence: 'насилие', copyright: 'права на контент', other: 'другое',
 };
-const TARGETS = { stream: 'эфир', user: 'пользователь', message: 'сообщение чата', recording: 'запись эфира', comment: 'комментарий к записи' };
+const TARGETS = { stream: 'эфир', user: 'пользователь', message: 'сообщение чата', recording: 'запись эфира', video: 'видео галереи', comment: 'комментарий' };
 
 VIEWS.reports = {
   title: 'Жалобы',
@@ -635,9 +635,13 @@ VIEWS.reports = {
           acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/recording/' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
                   '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="recording-delete" data-id="' + esc(r.targetId) + '">Удалить запись</button>';
         }
+        if (r.targetType === 'video' && t) {
+          acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/video/' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
+                  '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="video-delete" data-id="' + esc(r.targetId) + '">Удалить видео</button>';
+        }
         if (r.targetType === 'comment' && t) {
-          acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/recording/' + esc(t.recordingId) + '#c-' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
-                  '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="comment-delete" data-id="' + esc(r.targetId) + '" data-recording="' + esc(t.recordingId) + '">Удалить комментарий</button>';
+          acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="' + esc(t.href) + '#c-' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
+                  '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="comment-delete" data-id="' + esc(r.targetId) + '" data-href="' + esc(t.href) + '">Удалить комментарий</button>';
         }
         if (r.targetType === 'stream' && t && t.isActive) {
           acts += '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="stop-stream" data-id="' + esc(r.targetId) + '">Остановить эфир</button>';
@@ -777,6 +781,7 @@ const GROUPS = [
   { value: 'auth', title: 'Вход и пароли' },
   { value: 'stream', title: 'Эфиры' },
   { value: 'recording', title: 'Записи' },
+  { value: 'video', title: 'Видео галереи' },
   { value: 'venue', title: 'Заведения' },
   { value: 'mod', title: 'Модерация' },
   { value: 'report', title: 'Жалобы' },
@@ -959,6 +964,145 @@ VIEWS.costs = {
   },
 };
 
+// ── Хранилище ────────────────────────────────────────────────────────────────
+//
+// Что лежит в Bunny и на диске сервера, по видам, и во что это обходится.
+// Отчёт считает сервер обходом хранилищ (utils/storageReport.js) — пока
+// считает, вкладка показывает «считаем» и спрашивает снова.
+const STORE_GROUPS = {
+  recordings: 'Записи эфиров', gallery: 'Галерея профилей', chat: 'Переписка', avatars: 'Аватары',
+  covers: 'Обложки эфиров', venues: 'Фото заведений', drafts: 'Видео в загрузке', recChunks: 'Куски идущих записей',
+  live: 'Эфиры сейчас (HLS)', basemap: 'Подложка карты', other: 'Прочее',
+};
+const STORE_KINDS = {
+  video: 'видео', hls: 'качества HLS', cover: 'обложки', photo: 'фото', image: 'фото', audio: 'аудио',
+  voice: 'голосовые', round: 'кружки', file: 'файлы', preview: 'превью в ленте', part: 'недокачанное',
+  orphan: 'без владельца',
+};
+const kindTitle = (group, kind) => (group === 'chat' && kind === 'file' ? 'документы' : STORE_KINDS[kind] || kind);
+const money = (n) => (n == null ? '—' : '$' + (n < 10 ? n.toFixed(2) : num(Math.round(n))));
+
+// Доля — полоса одного цвета (тот же синий, что у графиков сводки): видов
+// много, и различать их цветом не нужно — подпись стоит в той же строке.
+const share = (part, whole) => {
+  const p = whole ? (part / whole) * 100 : 0;
+  return '<span class="tk-share" title="' + p.toFixed(1) + '%"><i style="width:' + (part ? Math.max(1, p).toFixed(1) : 0) + '%"></i></span>';
+};
+
+function storeTable(t, prices) {
+  const groups = Object.entries(t.groups).sort((a, b) => b[1].bytes - a[1].bytes);
+  const rows = [];
+  for (const [g, v] of groups) {
+    rows.push('<tr class="tk-store__group"><td>' + esc(STORE_GROUPS[g] || g) + '</td><td>' + num(v.files) + '</td><td>' + bytes(v.bytes) +
+      '</td><td>' + share(v.bytes, t.bytes) + '</td>' + (prices ? '<td>' + money(prices[g]) + '</td>' : '') + '</tr>');
+    const kinds = Object.entries(v.kinds);
+    // Один вид без подписи («файлы») — строка повторила бы группу.
+    if (kinds.length === 1 && kinds[0][0] === 'file') continue;
+    kinds.sort((a, b) => b[1].bytes - a[1].bytes).forEach(([k, x]) => {
+      rows.push('<tr class="tk-store__kind' + (k === 'orphan' ? ' is-orphan' : '') + '"><td>' + esc(kindTitle(g, k)) + '</td><td>' + num(x.files) +
+        '</td><td>' + bytes(x.bytes) + '</td><td>' + share(x.bytes, t.bytes) + '</td>' + (prices ? '<td></td>' : '') + '</tr>');
+    });
+  }
+  const head = [{ title: 'Что' }, { title: 'Файлов' }, { title: 'Объём' }, { title: 'Доля' }];
+  if (prices) head.push({ title: 'В месяц' });
+  return table(head, rows);
+}
+
+function filesTable(list) {
+  return table([{ title: 'Файл' }, { title: 'Где' }, { title: 'Что' }, { title: 'Размер' }, { title: 'Загружен' }], list.map((f) =>
+    '<tr><td><code>' + esc(f.key) + '</code>' + (f.link ? ' <a href="' + esc(f.link) + '" target="_blank" rel="noopener">открыть</a>' : '') + '</td>' +
+    '<td>' + esc(f.place) + '</td><td>' + esc((STORE_GROUPS[f.group] || f.group) + ', ' + kindTitle(f.group, f.kind)) + '</td>' +
+    '<td>' + bytes(f.size) + '</td><td>' + esc(when(f.at)) + '</td></tr>'));
+}
+
+let storePending = false;
+
+VIEWS.storage = {
+  title: 'Хранилище',
+  admin: true,
+  csv: true,
+  tools: () => '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" id="storageFresh">Пересчитать</button>',
+  async render() {
+    const d = await api('/storage');
+    storePending = !!d.pending;
+    if (d.pending) return { html: note('Считаем место: обходим Bunny и диск сервера. Начали ' + when(d.startedAt) + ' — страница обновится сама.'), sub: '' };
+    if (d.error) return { html: note('Не удалось посчитать: ' + d.error), sub: '' };
+
+    const r = d.report, c = d.costs, z = d.zone;
+    let html = '';
+
+    html += '<h2 class="tk-panel__h2">Bunny — записи, галерея, переписка</h2>';
+    if (!r.bunny) {
+      html += note('Хранилище Bunny не подключено: записи, галерея и файлы переписки лежат на диске сервера — они ниже.');
+    } else {
+      const b = r.bunny, cb = c.bunny;
+      html += '<div class="tk-tiles">';
+      html += tile('Занято', bytes(b.bytes), count(b.files, 'файл', 'файла', 'файлов'));
+      html += tile('Хранение в месяц', money(cb.monthUsd), '$' + c.tariff.storeGb + ' за ГБ × ' + count(c.tariff.copies, 'копия', 'копии', 'копий'));
+      html += tile('Добавилось за 30 дней', bytes(b.added30), 'это +' + money(cb.forecast[0].usd - cb.monthUsd) + ' в месяц к счёту');
+      html += tile('Без владельца', bytes(cb.orphanBytes), cb.orphanBytes ? money(cb.orphanUsd) + ' в месяц впустую' : 'лишнего нет');
+      if (c.traffic) {
+        html += tile('Трафик за 30 дней', bytes(c.traffic.bytes), '≈ ' + money(c.traffic.usd) + ' по $' + c.tariff.trafficGb + ' за ГБ');
+        if (c.traffic.spentUsd != null) html += tile('Списано Bunny', money(c.traffic.spentUsd), 'за 30 дней, на счёте ' + money(c.traffic.balanceUsd));
+      }
+      html += '</div>';
+      if (!z.configured) html += '<p class="tk-panel__why">Ключ аккаунта Bunny (BUNNY_API_KEY) не задан: трафик, списания и число копий неизвестны — считаем одну копию.</p>';
+      else if (z.error) html += '<p class="tk-panel__why">Bunny не ответил: ' + esc(z.error) + '</p>';
+      else if (z.storage) html += '<p class="tk-panel__why">Сам Bunny считает ' + bytes(z.storage.bytes) + ', ' + count(z.storage.files, 'файл', 'файла', 'файлов') + ' (регион ' + esc(z.storage.region) + '); его цифра обновляется с задержкой до суток.</p>';
+      html += storeTable(b, cb.groups);
+
+      html += '<h2 class="tk-panel__h2">Прогноз хранения</h2>';
+      html += table([{ title: 'Через' }, { title: 'Объём' }, { title: 'Хранение в месяц' }], cb.forecast.map((f) =>
+        '<tr><td>' + count(f.months, 'месяц', 'месяца', 'месяцев') + '</td><td>' + bytes(f.bytes) + '</td><td>' + money(f.usd) + '</td></tr>'));
+      html += '<p class="tk-panel__why">Если каждый месяц добавляется столько же, сколько за последние 30 дней. Удалённое за это время не вычтено — прогноз с запасом.</p>';
+    }
+
+    const s = r.server, cs = c.server;
+    html += '<h2 class="tk-panel__h2">Сервер — аватары, обложки, эфиры, база</h2><div class="tk-tiles">';
+    if (s.disk) html += tile('Свободно на диске', bytes(s.disk.free), 'занято ' + Math.round((1 - s.disk.free / s.disk.total) * 100) + '% из ' + bytes(s.disk.total));
+    html += tile('Наши файлы и база', bytes(cs.usedBytes), count(s.files, 'файл', 'файла', 'файлов') + ', база ' + bytes(cs.dbBytes));
+    html += tile('Добавилось за 30 дней', bytes(s.added30), cs.daysLeft != null ? 'диска так хватит на ' + count(cs.daysLeft, 'день', 'дня', 'дней') : 'рост нулевой');
+    html += tile('Сервер в месяц', cs.hostingMonth ? money(cs.hostingMonth) : 'оплачен вперёд', 'место на диске входит в тариф');
+    html += '</div>';
+    html += storeTable(s, null);
+
+    const months = [...new Set([...Object.keys((r.bunny && r.bunny.months) || {}), ...Object.keys(s.months)])].sort().reverse().slice(0, 12);
+    if (months.length) {
+      const sum = (m) => Object.values(m || {}).reduce((a, n) => a + n, 0);
+      const peak = Math.max(...months.map((m) => sum(r.bunny && r.bunny.months[m]) + sum(s.months[m])), 1);
+      html += '<h2 class="tk-panel__h2">Сколько добавлялось по месяцам</h2>';
+      html += table([{ title: 'Месяц' }, { title: 'Bunny' }, { title: 'Сервер' }, { title: '' }], months.map((m) => {
+        const bb = sum(r.bunny && r.bunny.months[m]), ss = sum(s.months[m]);
+        return '<tr><td>' + esc(m.slice(5) + '.' + m.slice(0, 4)) + '</td><td>' + (r.bunny ? bytes(bb) : '—') + '</td><td>' + bytes(ss) + '</td><td>' + share(bb + ss, peak) + '</td></tr>';
+      }));
+      html += '<p class="tk-panel__why">По дате загрузки файлов, которые лежат сейчас: удалённое сюда не попадает.</p>';
+    }
+
+    const tag = (list, place) => list.map((f) => ({ ...f, place }));
+    const top = tag((r.bunny && r.bunny.top) || [], 'Bunny').concat(tag(s.top, 'Сервер')).sort((a, b) => b.size - a.size).slice(0, 20);
+    html += '<h2 class="tk-panel__h2">Самые большие файлы</h2>' + filesTable(top);
+    const orphans = tag((r.bunny && r.bunny.orphanTop) || [], 'Bunny').concat(tag(s.orphanTop, 'Сервер')).sort((a, b) => b.size - a.size);
+    if (orphans.length) {
+      html += '<h2 class="tk-panel__h2">Без владельца</h2>' + filesTable(orphans) +
+        '<p class="tk-panel__why">На эти файлы не ссылается ни одна запись, видео, фото или сообщение: скорее всего, остались от прерванной загрузки или удаления. Хранить их незачем.</p>';
+    }
+
+    return { html, sub: 'Посчитано ' + when(r.at) + (r.ms < 1000 ? ' меньше чем за секунду' : ' за ' + dur(r.ms / 1000)) + (r.bunny ? ', папок Bunny: ' + num(r.bunny.dirs) : '') + '. Пересчёт — не чаще раза в 30 минут, или кнопкой' };
+  },
+
+  after() {
+    const btn = document.getElementById('storageFresh');
+    if (btn) btn.onclick = async () => {
+      btn.disabled = true;
+      view.innerHTML = note('Пересчитываем…');
+      try { await api('/storage?fresh=1'); } catch (err) { toast('Не удалось: ' + err.message, 'error'); }
+      show();
+    };
+    // Считается — спрашиваем снова, пока вкладка открыта.
+    if (storePending) setTimeout(() => { if (route().name === 'storage') show(); }, 3000);
+  },
+};
+
 // ── Система ──────────────────────────────────────────────────────────────────
 VIEWS.system = {
   title: 'Система',
@@ -1027,7 +1171,7 @@ function serverParams(params) {
   return out;
 }
 
-const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'venues', 'recordings', 'audit', 'errors', 'costs', 'system'];
+const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'venues', 'recordings', 'audit', 'errors', 'costs', 'storage', 'system'];
 
 function drawNav(active) {
   nav.innerHTML = ORDER.filter((name) => !VIEWS[name].admin || IS_ADMIN).map((name) => {
@@ -1197,9 +1341,16 @@ view.addEventListener('click', async (e) => {
       return show();
     }
 
+    if (act === 'video-delete') {
+      if (!await confirmDialog('Удалить видео? Файл уйдёт из хранилища навсегда.', { okText: 'Удалить' })) return;
+      await send('DELETE', '/video/' + id);
+      toast('Видео удалено', 'ok');
+      return show();
+    }
+
     if (act === 'comment-delete') {
       if (!await confirmDialog('Удалить комментарий?', { okText: 'Удалить' })) return;
-      await send('DELETE', '/recording/' + el.dataset.recording + '/comments/' + id);
+      await send('DELETE', el.dataset.href + '/comments/' + id);
       toast('Комментарий удалён', 'ok');
       return show();
     }

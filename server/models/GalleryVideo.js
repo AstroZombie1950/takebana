@@ -1,6 +1,8 @@
 // Видео в галерее профиля («Фото и видео»). Фото лежат строками в
 // User.gallery, видео — здесь: у него есть обработка (пережатие со знаком,
-// utils/galleryVideo.js), обложка и длительность.
+// utils/galleryVideo.js), обложка и длительность. С 23.09.2026 у готового
+// видео своя страница /video/:id (routes/watch.js) — с названием, оценками,
+// комментариями и просмотрами, как у записи эфира.
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
@@ -34,11 +36,20 @@ const galleryVideoSchema = new Schema({
     cover: { type: Boolean, default: false },
   },
   publish: { type: Boolean, default: false },
+  // Пусто — страница подписывает видео датой (routes/watch.js).
+  title: { type: String, default: '' },
+  description: { type: String, default: '' },
   error: { type: String, default: '' },
   duration: { type: Number, default: 0 }, // секунды
   size: { type: Number, default: 0 },     // байты после пережатия
   video: { type: fileSchema, default: () => ({}) },
   thumb: { type: fileSchema, default: () => ({}) },
+  // Счётчики — как у записи (models/Recording.js): источники те же
+  // RecordingView, RecordingReaction, RecordingComment.
+  views: { type: Number, default: 0 },
+  likes: { type: Number, default: 0 },
+  dislikes: { type: Number, default: 0 },
+  comments: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -46,5 +57,7 @@ const galleryVideoSchema = new Schema({
 galleryVideoSchema.index({ userId: 1, createdAt: -1 });
 // Уборка брошенных загрузок (utils/galleryVideo.js, sweepDrafts).
 galleryVideoSchema.index({ status: 1, createdAt: 1 });
+// «Смотрите также»: популярные готовые (utils/recommend.js).
+galleryVideoSchema.index({ status: 1, views: -1 });
 
 module.exports = mongoose.model('GalleryVideo', galleryVideoSchema);

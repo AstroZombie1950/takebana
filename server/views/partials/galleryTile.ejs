@@ -1,0 +1,47 @@
+<%#
+  Плитка галереи — фото или видео (utils/gallery.js). Одна на превью
+  в профиле (userPage.ejs) и страницу галереи (gallery.ejs). Фото открывается
+  окном просмотра, готовое видео — своей страницей /video/:id. Крестик
+  владельца и ролики в работе обслуживает public/gallery.js.
+  Параметры: item, n — номер плитки для подписи, isSelf.
+%>
+<% if (item.type === 'photo') { %>
+<div class="tk-shots__item">
+  <button type="button" class="tk-shot" aria-label="<%= ta('user.photoN', { n: n }) %>" data-i18n-aria="user.photoN" data-i18n-vars='{"n": <%= n %>}'>
+    <img src="<%= item.url %>" alt="" loading="lazy" decoding="async" data-photo-url="<%= item.url %>">
+  </button>
+  <% if (isSelf) { %>
+  <button type="button" class="tk-thumb__del" data-name="<%= item.url.split('/').pop() %>" aria-label="<%= ta('common.delete') %>" data-i18n-aria="common.delete">
+    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+  </button>
+  <% } %>
+</div>
+<% } else { var v = item.video; %>
+<div class="tk-shots__item<%= v.status !== 'ready' ? ' is-' + v.status : '' %>" data-video-id="<%= v._id %>">
+  <% if (v.status === 'ready') { %>
+  <a class="tk-shot tk-shot--video" href="/video/<%= v._id %>"<% if (v.title) { %> aria-label="<%= v.title %>"<% } else { %> aria-label="<%= ta('user.videoPlay') %>" data-i18n-aria="user.videoPlay"<% } %>>
+    <% if (v.thumb && v.thumb.url) { %><img src="<%= v.thumb.url %>" alt="" loading="lazy" decoding="async"><% } %>
+    <span class="tk-shot__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5.5v13L20 12z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
+    <span class="tk-shot__len"><%= clock(v.duration) %></span>
+  </a>
+  <% } else if (v.status === 'uploading' || v.status === 'draft') { %>
+  <%# Незаконченное со страницы загрузки — ссылкой туда: там докачка,
+      правка и «Опубликовать». Проценты ставит gallery.js. %>
+  <a class="tk-shot tk-shot--state" href="/upload#v<%= v._id %>">
+    <% if (v.status === 'uploading') { var pct = v.upload && v.upload.size ? Math.floor(v.upload.received / v.upload.size * 100) : 0; %>
+    <span data-upload-pct data-i18n="user.videoUploading" data-i18n-vars='<%= JSON.stringify({ p: pct }) %>'><%- t('user.videoUploading', { p: pct }) %></span>
+    <% } else { %>
+    <span data-i18n="user.videoDraft"><%- t('user.videoDraft') %></span>
+    <% } %>
+  </a>
+  <% } else { %>
+  <% var vKey = v.status === 'failed' ? (v.error === 'long' ? 'user.videoLong' : 'user.videoFailed') : 'user.videoProcessing'; %>
+  <div class="tk-shot tk-shot--state"><span data-i18n="<%= vKey %>"><%- t(vKey) %></span></div>
+  <% } %>
+  <% if (isSelf) { %>
+  <button type="button" class="tk-thumb__del" data-video-del aria-label="<%= ta('common.delete') %>" data-i18n-aria="common.delete">
+    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+  </button>
+  <% } %>
+</div>
+<% } %>

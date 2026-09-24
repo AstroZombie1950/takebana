@@ -1,12 +1,13 @@
-/* Страница записи эфира: плеер, просмотр, оценки, «Поделиться», правка
- * и удаление автором, комментарии. Разметка — views/recording.ejs,
- * маршруты — routes/recordings.js.
+/* Страница просмотра — запись эфира или видео галереи: плеер, просмотр,
+ * оценки, «Поделиться», правка и удаление автором, комментарии. Разметка —
+ * views/watch.ejs, маршруты — routes/watch.js. Адрес ролика — data-base,
+ * префикс строк, разных у двух видов, — data-k (rec или video).
  */
 (function () {
   var watch = document.getElementById('watch');
   if (!watch) return;
-  var id = watch.dataset.id;
-  var base = '/recording/' + id;
+  var base = watch.dataset.base;
+  var k = watch.dataset.k;
   var isOwner = watch.dataset.owner === '1';
   var lang = document.documentElement.lang === 'en' ? 'en-US' : 'ru-RU';
   var $ = function (i) { return document.getElementById(i); };
@@ -136,8 +137,10 @@
       var submit = form.querySelector('[type="submit"]');
       submit.disabled = true;
       send('PATCH', base, { title: $('editTitle').value, description: $('editDesc').value }).then(function (r) {
-        $('recTitle').textContent = r.title;
-        document.title = r.title + ' — Takebana';
+        // Пустое название у видео — подпись датой, как рисует сервер.
+        var shown = r.title || $('editTitle').placeholder;
+        $('recTitle').textContent = shown;
+        document.title = shown + ' — Takebana';
         if (!desc) {
           desc = document.createElement('p');
           desc.id = 'recDesc';
@@ -148,7 +151,7 @@
           desc.removeAttribute('data-i18n');
           desc.textContent = r.description;
         } else {
-          tkText(desc, 'rec.noDesc');
+          tkText(desc, k + '.noDesc');
         }
         showForm(false);
         clampDesc();
@@ -159,11 +162,11 @@
 
   var del = $('deleteRecording');
   if (del) del.addEventListener('click', function () {
-    confirmDialog(t('rec.deleteQ'), { okText: t('rec.delete') }).then(function (ok) {
+    confirmDialog(t(k + '.deleteQ'), { okText: t(k + '.delete') }).then(function (ok) {
       if (!ok) return;
       del.disabled = true;
       return send('DELETE', base).then(function () {
-        location.href = watch.dataset.back + '#recordings';
+        location.href = watch.dataset.back;
       });
     }).catch(function (e) {
       del.disabled = false;

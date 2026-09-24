@@ -41,7 +41,7 @@ const {
 } = require('../middleware/auth');
 
 const REASONS = ['spam', 'abuse', 'adult', 'violence', 'copyright', 'other'];
-const TARGETS = ['stream', 'user', 'message', 'recording', 'comment'];
+const TARGETS = ['stream', 'user', 'message', 'recording', 'video', 'comment'];
 
 // ── Подача жалобы ────────────────────────────────────────────────────────────
 //

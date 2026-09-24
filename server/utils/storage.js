@@ -112,4 +112,22 @@ async function remove(key) {
   }
 }
 
-module.exports = { enabled: !!driver, driver, put, remove };
+// Содержимое папки хранилища (только Bunny): для сводки места в панели
+// (utils/storageReport.js). prefix — '' или 'recordings/…/', со слешем
+// на конце. Папки приходят отдельно от файлов; размер и дата — у файлов.
+async function list(prefix) {
+  if (driver !== 'bunny') throw new Error('список есть только у Bunny');
+  const res = await fetch(`${objectUrl(prefix)}${prefix && !prefix.endsWith('/') ? '/' : ''}`, {
+    headers: { AccessKey: bunny.key, Accept: 'application/json' },
+    signal: AbortSignal.timeout(20000),
+  });
+  await checked(res, 'LIST');
+  return (await res.json()).map((o) => ({
+    name: o.ObjectName,
+    dir: !!o.IsDirectory,
+    size: o.Length || 0,
+    at: new Date(o.DateCreated + (/Z|[+-]\d\d:?\d\d$/.test(o.DateCreated) ? '' : 'Z')),
+  }));
+}
+
+module.exports = { enabled: !!driver, driver, put, remove, list };

@@ -18,6 +18,7 @@ const os = require('os');
 const path = require('path');
 const storage = require('./storage');
 const errorLog = require('./errorLog');
+const engagement = require('./engagement');
 const { encode, schedule } = require('./videoEncode');
 const { stamp } = require('./watermark');
 const GalleryVideo = require('../models/GalleryVideo');
@@ -30,6 +31,9 @@ const MAX_SECONDS = 60 * 60;
 // технический потолок, чтобы один файл не забил диск сервера.
 const MAX_MB = 8192;
 const MAX_PER_USER = 30;
+// Название и описание — те же пределы, что у записи эфира (routes/watch.js).
+const TITLE_MAX = 120;
+const DESCRIPTION_MAX = 5000;
 const CHUNK_MB = 8;
 // Недокачанное и неопубликованное живёт столько, потом убирается.
 const DRAFT_DAYS = 3;
@@ -109,9 +113,14 @@ async function publishIfReady(id) {
   return doc;
 }
 
+// Вместе с видео — его оценки, комментарии, просмотры и жалобы
+// (utils/engagement.js).
 async function remove(doc) {
   await Promise.all([doc.video && doc.video.key, doc.thumb && doc.thumb.key].filter(Boolean).map((k) => storage.remove(k)));
-  await GalleryVideo.deleteOne({ _id: doc._id });
+  await Promise.all([
+    GalleryVideo.deleteOne({ _id: doc._id }),
+    engagement.forgetTarget(doc._id, 'video'),
+  ]);
   // Недокачанное и неопубликованное лежит у нас на диске.
   if (doc.status === 'uploading' || doc.status === 'draft') {
     await Promise.all([partPath(doc._id), coverPath(doc._id)].map((f) => fs.promises.rm(f, { force: true }).catch(() => {})));
@@ -142,6 +151,6 @@ async function sweepDrafts() {
 }
 
 module.exports = {
-  enabled: storage.enabled, MAX_SECONDS, MAX_MB, MAX_PER_USER, CHUNK_MB,
+  enabled: storage.enabled, MAX_SECONDS, MAX_MB, MAX_PER_USER, CHUNK_MB, TITLE_MAX, DESCRIPTION_MAX,
   partPath, coverPath, enqueue, publishIfReady, remove, sweep, sweepDrafts,
 };

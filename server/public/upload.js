@@ -171,9 +171,12 @@
       el: el, v: v, dur: 0, cover: v.edit.cover ? 'own' : 'frame',
       video: q('.tk-upv__video'), from: q('.tk-upv__from'), to: q('.tk-upv__to'), at: q('.tk-upv__at'),
       mute: q('.tk-upv__mute'), canvas: q('canvas'), img: q('.tk-upv__covershot img'),
+      title: q('.tk-upv__title'), desc: q('.tk-upv__desc'),
     };
     cards[v.id] = c;
     q('.tk-upv__name').textContent = v.name || '';
+    c.title.value = v.title || '';
+    c.desc.value = v.description || '';
     c.mute.checked = v.edit.mute;
     c.video.muted = v.edit.mute;
 
@@ -314,6 +317,8 @@
       end: c.dur && b < c.dur - 0.2 ? Math.round(b * 10) / 10 : 0,
       mute: c.mute.checked,
       coverAt: c.cover === 'frame' && c.dur ? Math.round(Number(c.at.value) * 10) / 10 : -1,
+      title: c.title.value,
+      description: c.desc.value,
       publish: true,
     }).then(function (d) {
       c.v = Object.assign(c.v, d.video);
@@ -338,10 +343,12 @@
     c.el.setAttribute('data-status', v.status);
     bar.hidden = v.status !== 'uploading';
     bar.firstElementChild.style.width = (v.size ? Math.min(100, got / v.size * 100) : 0) + '%';
-    [c.from, c.to, c.at, c.mute].forEach(function (x) { x.disabled = c.locked; });
+    [c.from, c.to, c.at, c.mute, c.title, c.desc].forEach(function (x) { x.disabled = c.locked; });
     c.el.querySelector('.tk-upv__publish').hidden = c.locked;
     c.el.querySelector('.tk-upv__delete').hidden = done;
-    c.el.querySelector('.tk-upv__open').hidden = v.status !== 'ready';
+    var open = c.el.querySelector('.tk-upv__open');
+    open.hidden = v.status !== 'ready';
+    open.href = '/video/' + encodeURIComponent(v.id);
 
     if (v.status === 'uploading' && !job) {
       window.tkText(state, 'upload.lost');

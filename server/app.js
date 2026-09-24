@@ -231,7 +231,7 @@ app.use(require('./routes/presence'));
 app.use(require('./routes/push'));
 app.use(require('./routes/calls'));
 app.use(require('./routes/contacts'));
-app.use(require('./routes/recordings'));
+app.use(require('./routes/watch'));
 app.use(require('./routes/pages'));
 app.use(require('./routes/streamStatus'));
 

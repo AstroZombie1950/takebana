@@ -116,6 +116,9 @@
 
 .tk-upv__edit { display: flex; flex-direction: column; gap: 10px; }
 .tk-upv__edit .tk-panel__title { margin: 6px 0 0; }
+/* Название и описание: подпись над полем. */
+.tk-upv__field { display: flex; flex-direction: column; gap: 6px; }
+.tk-upv__desc { resize: vertical; }
 /* Опубликовано — правка застыла: видно, что выбрано, но менять нечего. */
 .tk-upv.is-locked .tk-upv__edit { opacity: .55; pointer-events: none; }
 /* Без файла в браузере резать нечего. */

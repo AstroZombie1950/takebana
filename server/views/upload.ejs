@@ -65,6 +65,17 @@
       <p class="tk-upv__state" aria-live="polite"></p>
 
       <div class="tk-upv__edit">
+        <%# Название и описание — для страницы видео (/video/:id). Пустое
+            название там подписывается датой. %>
+        <label class="tk-upv__field">
+          <span class="tk-panel__title" data-i18n="rec.fieldTitle"><%- t('rec.fieldTitle') %></span>
+          <input type="text" class="tk-field tk-upv__title" maxlength="<%= limits.title %>" placeholder="<%= ta('upload.titlePh') %>" data-i18n-placeholder="upload.titlePh">
+        </label>
+        <label class="tk-upv__field">
+          <span class="tk-panel__title" data-i18n="rec.fieldDesc"><%- t('rec.fieldDesc') %></span>
+          <textarea class="tk-field tk-upv__desc" rows="3" maxlength="<%= limits.description %>"></textarea>
+        </label>
+
         <div class="tk-upv__row">
           <p class="tk-panel__title" data-i18n="upload.trim"><%- t('upload.trim') %></p>
           <span class="tk-upv__len"></span>
@@ -99,7 +110,8 @@
       <div class="tk-upv__acts">
         <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-upv__publish" data-i18n="upload.publish"><%- t('upload.publish') %></button>
         <button type="button" class="tk-btn tk-btn--quiet tk-btn--sm tk-upv__delete" data-i18n="upload.delete"><%- t('upload.delete') %></button>
-        <a class="tk-btn tk-btn--outline tk-btn--sm tk-upv__open" href="/userPage/<%= currentUser._id %>#gallery" hidden data-i18n="upload.open"><%- t('upload.open') %></a>
+        <%# Адрес — /video/<id>, ставит upload.js. %>
+        <a class="tk-btn tk-btn--outline tk-btn--sm tk-upv__open" href="#" hidden data-i18n="upload.open"><%- t('upload.open') %></a>
       </div>
     </div>
   </article>
