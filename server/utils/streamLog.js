@@ -64,7 +64,9 @@ async function close(streamKey, { endedBy = 'owner', reason = '', by = null, str
           duration: { $max: [0, { $round: [{ $divide: [{ $subtract: [now, '$startedAt'] }, 1000] }, 0] }] },
         },
       }],
-      { returnDocument: 'after', sort: { startedAt: -1 } }
+      // Обновление конвейером (ссылка на $startedAt) mongoose 9 пускает только
+      // явно; без этого ключа отрезки эфиров молча не закрывались.
+      { returnDocument: 'after', sort: { startedAt: -1 }, updatePipeline: true }
     );
 
     if (!session) return null;
