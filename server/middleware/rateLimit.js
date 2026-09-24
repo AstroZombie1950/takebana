@@ -21,15 +21,20 @@ const hit = (what) => (req, res, next, options) => {
 
 // Пределы вынесены в переменные окружения: при отладке удобно поднять,
 // чтобы не заблокировать самому себе вход десятком опечаток.
-const LOGIN_LIMIT = Number(process.env.RATE_LIMIT_LOGIN) || 10;
+const LOGIN_LIMIT = Number(process.env.RATE_LIMIT_LOGIN) || 20;
 const REGISTER_LIMIT = Number(process.env.RATE_LIMIT_REGISTER) || 5;
 
-// Подбор пароля: 10 попыток с одного адреса за 15 минут.
+// Подбор пароля: 20 попыток с одного адреса за 15 минут — верхняя граница
+// над счётчиками utils/loginGuard.js, которые ставят паузу раньше.
 // Успешные входы не считаются, иначе рабочий сеанс упирался бы в лимит.
+// Не считаются и ответы самой защиты — пауза и просьба решить задачу:
+// пароль при них не проверялся, а нажатия «Войти» во время паузы иначе
+// досрочно упирали бы человека в эти пятнадцать минут.
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: LOGIN_LIMIT,
     skipSuccessfulRequests: true,
+    requestWasSuccessful: (req, res) => res.statusCode < 400 || Boolean(res.locals.guardSoft),
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { message: 'Слишком много попыток. Попробуйте через 15 минут.' },

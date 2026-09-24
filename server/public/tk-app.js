@@ -448,7 +448,9 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
 
     // Переписка: события сокета уходят в document как tk:<событие>, их слушает
     // страница переписки (chats.js). Колокольчик зажигается на любой странице.
-    ['message:new', 'message:failed', 'message:expired', 'message:limit', 'message:read', 'message:delivered', 'message:deleted', 'conversation:deleted', 'call:logged', 'call:deleted', 'live:changed', 'author:live', 'recording:status'].forEach((name) => {
+    ['message:new', 'message:failed', 'message:expired', 'message:limit', 'message:read', 'message:delivered', 'message:deleted', 'conversation:deleted',
+      'group:message', 'group:read', 'group:updated', 'group:removed',
+      'call:logged', 'call:deleted', 'live:changed', 'author:live', 'recording:status'].forEach((name) => {
       socket.on(name, (detail) => document.dispatchEvent(new CustomEvent('tk:' + name, { detail })));
     });
     socket.on('notification:new', () => window.setNotificationDot(true));
@@ -458,6 +460,15 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     });
     // Входящее сообщение — +1 у иконки переписки. Открытый диалог тут же
     // его читает, и chats.js ставит точное число из ответа сервера.
+    // Сообщение группы (utils/groups.js): чужое — +1 у иконки; звук
+    // и системное уведомление — если у группы не выключен звук.
+    socket.on('group:message', (d) => {
+      if (!d || !d.message || d.message.system || d.message.sender === (window.TK && window.TK.userId)) return;
+      window.tkChatBadge({ addMessages: 1 });
+      if (!d.muted && window.TKNotify) window.TKNotify.groupMessage(d);
+    });
+    // Удаление в группе приходит без точных чисел — их у каждого свои.
+    socket.on('message:deleted', (d) => { if (d && d.groupId) refreshCounters(); });
     socket.on('message:new', (d) => {
       if (d && d.message && d.peer && d.message.sender === d.peer.id) window.tkChatBadge({ addMessages: 1 });
       // Звук и системное уведомление — если включены в настройках (tk-notify.js).
@@ -696,10 +707,25 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
         toast(t('call.startFailed', { message: e.message }), 'error');
       }
     }
+    // Звонок группе из переписки (routes/groups.js): звонит всем, кто в сети,
+    // разговор — сеткой до четверых. Окно — то же, что у звонка человеку.
+    window.startGroupCall = async (g, type) => {
+      window.showOutgoingCall({ displayName: g.title, avatarUrl: g.url || '', callType: type });
+      try {
+        const res = await fetch('/api/groups/' + encodeURIComponent(g.id) + '/call', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ type }) });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || 'HTTP ' + res.status);
+        window.currentCallId = data.callId;
+        window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('call.waitingAnswer');
+      } catch (e) {
+        window.hideOutgoingCall && window.hideOutgoingCall();
+        toast(e.message, 'error');
+      }
+    };
     window.startAudioCall = (calleeId) => startCall(calleeId, 'audio');
     window.startVideoCall = (calleeId) => startCall(calleeId, 'video');
 
-    socket.on('incoming_call', ({ callId, type, from, group, peers }) => {
+    socket.on('incoming_call', ({ callId, type, from, group, peers, chat }) => {
       if (!from) return;
       // Уже разговариваем: второй звонок получает «отклонено», а не окно
       // поверх идущего разговора.
@@ -707,7 +733,8 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       if (window.TKNotify) window.TKNotify.ring({ callId, name: from.displayName, video: type !== 'audio' });
       window.showIncomingCall && window.showIncomingCall({
         userId: from.userId,
-        displayName: from.displayName,
+        // Звонок группе — её название рядом с тем, кто звонит.
+        displayName: chat ? chat.title + ' · ' + from.displayName : from.displayName,
         avatarUrl: from.avatarUrl,
         callType: type,
         // Приглашение в идущий разговор: показываем, кто там уже есть, —
@@ -764,6 +791,10 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       });
     });
 
+    // Ответил на звонок группе, а в разговоре уже четверо.
+    socket.on('call:full', ({ callId }) => {
+      if (closeCall(callId)) toast(t('call.full'), 'error');
+    });
     socket.on('call:failed', ({ callId }) => {
       if (closeCall(callId)) toast(t('call.serviceDown'), 'error');
     });

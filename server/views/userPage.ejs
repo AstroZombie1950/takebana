@@ -2,8 +2,10 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName }, seo: { path: user.url, type: 'profile', robots: indexable ? '' : 'noindex, follow', image: ogImage, imageStd: !!ogImage, imageAlt: user.displayName,
-         jsonld: ld.profile({ url: user.url, name: user.displayName, image: user.avatarStyle.url, followers: user.followersCount }) } }) %>
+<%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName }, description: user.bio.replace(/\s+/g, ' ').slice(0, 160),
+         seo: { path: user.url, type: 'profile', robots: indexable ? '' : 'noindex, follow', image: ogImage, imageStd: !!ogImage, imageAlt: user.displayName,
+         jsonld: ld.profile({ url: user.url, name: user.displayName, image: user.avatarStyle.url, followers: user.followersCount,
+           description: user.bio, sameAs: user.links.map(function (l) { return l.url; }) }) } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/profile.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/gallery.css') %>">
@@ -95,6 +97,22 @@
               <span data-presence-lastseen-user="<%= user._id %>"<% if (user.isOnline) { %> data-i18n="common.now"<% } %>><%= user.isOnline ? ta('common.now') : (user.lastSeen ? date(user.lastSeen) : ta('common.dash')) %></span>
             </span>
           </p>
+
+          <%# Описание — текстом, как написано: ссылки в нём не кликаются.
+              Ссылки — только значками (решение 24.09): номер WhatsApp или
+              Telegram не стоит на странице текстом, его видно лишь тому,
+              кто перешёл. Сайт без nofollow — если так решил администратор. %>
+          <% if (user.bio) { %><p class="tk-prof__bio"><%= user.bio %></p><% } %>
+          <% if (user.links.length) { %>
+          <nav class="tk-prof__links" aria-label="<%= ta('user.links') %>" data-i18n-aria="user.links">
+            <% user.links.forEach(function (l) { var label = l.kind === 'site' ? ta('user.linkSite') : l.name; %>
+            <a href="<%= l.url %>" class="tk-prof__link" target="_blank" rel="<%= l.kind === 'site' && user.linksFollow ? 'noopener' : 'nofollow ugc noopener' %>"
+               aria-label="<%= label %>" title="<%= label %>"<% if (l.kind === 'site') { %> data-i18n-aria="user.linkSite" data-i18n-title="user.linkSite"<% } %>>
+              <%- include('partials/linkIcon', { kind: l.kind }) %>
+            </a>
+            <% }) %>
+          </nav>
+          <% } %>
 
           <%# Оба числа — ссылки на списки (routes/streaming/subscriptions.js).
               Раньше число подписчиков было просто текстом, а подписки

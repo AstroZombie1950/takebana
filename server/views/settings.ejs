@@ -77,6 +77,39 @@
           </div>
         </section>
 
+        <!-- О себе и ссылки: одной кнопкой (/settings/about). Ссылку сети
+             сервер собирает сам по логину (utils/profileLinks.js); под полем —
+             что получилось, чтобы проверить переходом. -->
+        <section class="tk-panel tk-set__about">
+          <p class="tk-panel__title" data-i18n="settings.about"><%- t('settings.about') %></p>
+          <form class="tk-form tk-set__form" id="aboutForm" novalidate>
+            <div class="tk-set__about-cols">
+              <div class="tk-set__bio">
+                <label class="tk-form__label" for="profileBio" data-i18n="settings.bio"><%- t('settings.bio') %></label>
+                <textarea id="profileBio" class="tk-field" maxlength="300" rows="7" placeholder="<%= ta('settings.bioPh') %>" data-i18n-placeholder="settings.bioPh"><%= profile.bio %></textarea>
+                <p class="tk-note tk-set__count" id="bioCount" aria-live="polite"><%= profile.bio.length %>/300</p>
+              </div>
+              <div class="tk-set__nets">
+                <p class="tk-form__label" data-i18n="settings.links"><%- t('settings.links') %></p>
+                <% linkKinds.forEach(function (k) { var l = profile.links[k]; %>
+                <div class="tk-set__net">
+                  <label class="tk-set__net-name" for="link-<%= k %>">
+                    <%- include('partials/linkIcon', { kind: k }) %>
+                    <% if (k === 'site') { %><span data-i18n="settings.linkSite"><%- t('settings.linkSite') %></span><% } else { %><span><%= linkNames[k] %></span><% } %>
+                  </label>
+                  <input id="link-<%= k %>" class="tk-field" type="text" data-link="<%= k %>" value="<%= l ? l.display : '' %>"
+                         placeholder="<%= ta('settings.linkPh.' + k) %>" data-i18n-placeholder="settings.linkPh.<%= k %>"
+                         autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="<%= k === 'whatsapp' ? 'tel' : k === 'site' ? 'url' : 'text' %>">
+                  <a class="tk-set__net-out" data-out="<%= k %>" href="<%= l ? l.url : '#' %>" target="_blank" rel="noopener noreferrer"<% if (!l) { %> hidden<% } %>><%= l ? l.url : '' %></a>
+                </div>
+                <% }) %>
+                <p class="tk-note" data-i18n="settings.linksHint"><%- t('settings.linksHint') %></p>
+              </div>
+            </div>
+            <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>
+          </form>
+        </section>
+
         <p class="tk-kicker tk-set__row-title" data-i18n="settings.security"><%- t('settings.security') %></p>
 
         <!-- Пароль: только у входа по паролю, у Google его нет -->

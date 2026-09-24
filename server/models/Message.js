@@ -12,10 +12,26 @@ const messageSchema = new Schema({
     ref: 'User', // Ссылка на отправителя сообщения
     required: true
   },
+  // Получатель — только в личной переписке. У сообщения группы
+  // (models/Group.js) его нет: там conversationId — id группы.
   recipient: {
     type: Schema.Types.ObjectId,
-    ref: 'User', // Ссылка на получателя сообщения
-    required: true
+    ref: 'User',
+    default: null
+  },
+  // Служебная строка группы: «Анна добавила Бориса». Имена — снимком на
+  // момент события, как у пересланного: человек мог потом смениться
+  // или удалить аккаунт. Текста и вложений у такой строки нет.
+  system: {
+    type: new Schema({
+      kind: { type: String, enum: ['created', 'added', 'removed', 'left', 'joined', 'title', 'photo', 'admin', 'unadmin', 'owner', 'call'], required: true },
+      actor: { type: Schema.Types.ObjectId, ref: 'User' },
+      actorName: String,
+      target: { type: Schema.Types.ObjectId, ref: 'User' },
+      targetName: String,
+      text: String,        // новое название — у kind: 'title'
+    }, { _id: false }),
+    default: undefined
   },
   // Текст. У сообщения с вложением может быть пустым — тогда это подпись,
   // которой нет; «либо текст, либо вложение» проверяет маршрут отправки.
@@ -61,6 +77,10 @@ const messageSchema = new Schema({
     default: undefined
   },
   expiredAt: { type: Date, default: null },
+  // Ответ: на какое сообщение этого же диалога. Хранится только ссылка,
+  // цитату сервер собирает при выдаче (utils/messageView.js): текст,
+  // удалённый «у всех» или исчезнувший, не должен жить дальше в цитате.
+  replyTo: { type: Schema.Types.ObjectId, ref: 'Message', default: null },
   sentAt: {
     type: Date,
     default: Date.now

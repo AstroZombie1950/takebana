@@ -8,30 +8,75 @@
   // Подписи — из общего словаря (public/tk-i18n.js), он грузится раньше.
   var t = function (key, vars) { return window.t ? window.t(key, vars) : ""; };
 
+  // Задача против подбора пароля (utils/loginGuard.js). После трёх ошибок
+  // сервер присылает строку, и браузер ищет число, с которым SHA-256
+  // от «строка:число» начинается с заданного числа нулевых бит. Хеши
+  // считаются пачками по 256: так crypto.subtle работает быстрее, чем по одному.
+  function zeroBits(hash) {
+    for (var i = 0, n = 0; i < hash.length; i++, n += 8) {
+      if (hash[i]) return n + Math.clz32(hash[i]) - 24;
+    }
+    return n;
+  }
+
+  function solve(task) {
+    var bits = Number(task.split(".")[1]);
+    var enc = new TextEncoder();
+    function from(n) {
+      var jobs = [];
+      for (var i = 0; i < 256; i++) jobs.push(crypto.subtle.digest("SHA-256", enc.encode(task + ":" + (n + i))));
+      return Promise.all(jobs).then(function (hashes) {
+        for (var i = 0; i < hashes.length; i++) {
+          if (zeroBits(new Uint8Array(hashes[i])) >= bits) return task + ":" + (n + i);
+        }
+        return from(n + 256);
+      });
+    }
+    return from(0);
+  }
+
+  // Решение следующей задачи. Сервер присылает её вместе с отказом, и браузер
+  // считает, пока человек заново набирает пароль, — к нажатию «Войти» оно
+  // обычно уже готово.
+  var task = null;
+
   // Ответ сервера один и тот же по форме: { message, redirectUrl }. Успех —
   // по адресу перехода: текст сообщения переводится на язык интерфейса, и
   // сравнение с ним ломалось бы на английском. onOk — для ответа без перехода
-  // (письмо восстановления).
-  function submit(url, body, button, onOk) {
+  // (письмо восстановления). 428 — нужна задача, а её не было или она
+  // устарела: решаем присланную и повторяем запрос сами, один раз.
+  function submit(url, body, button, onOk, retried) {
     button.disabled = true;
-    fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify(body),
-    })
-      .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+    var label = button.innerHTML;
+    if (task) button.textContent = t("auth.checking");
+    var ready = task || Promise.resolve("");
+    task = null;
+    ready
+      .then(function (answer) {
+        if (answer) body.task = answer;
+        return fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(body),
+        });
+      })
+      .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, status: r.status, data: data }; }); })
       .then(function (res) {
         var data = res.data;
         if (data.redirectUrl) {
           window.location.href = data.redirectUrl;
           return; // кнопку не возвращаем: уходим со страницы
         }
+        button.innerHTML = label;
+        if (data.task) task = solve(data.task);
+        if (res.status === 428 && !retried) return submit(url, body, button, onOk, true);
         button.disabled = false;
         if (res.ok && onOk) onOk();
         else toast(data.message);
       })
       .catch(function () {
+        button.innerHTML = label;
         button.disabled = false;
         toast(t("auth.noServer"));
       });

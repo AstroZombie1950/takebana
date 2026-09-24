@@ -21,6 +21,7 @@ const galleryVideo = require('./galleryVideo');
 const galleryPhotos = require('./galleryPhotos');
 const storage = require('./storage');
 const attachments = require('./attachments');
+const groups = require('./groups');
 const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
 const Report = require('../models/Report');
@@ -108,6 +109,9 @@ async function removeUser(user, io) {
 
   // Жалобы на сам аккаунт, на его эфиры и сообщения чата — у них больше
   // нет предмета.
+  // Из групп — молча, владение переходит преемнику, опустевшая удаляется
+  // (utils/groups.js). Его сообщения в группах уходят ниже, вместе с личными.
+  await groups.forgetUser(id, attachments.deleteMessages);
   const chatIds = await ChatMessage.distinct('_id', { userId: id });
   const conversations = await Conversation.find({ $or: [{ userOne: id }, { userTwo: id }] }).select('_id').lean();
 

@@ -5,6 +5,7 @@
  * и звук, и разрешение на уведомления — свойство устройства. Включает их
  * /settings (settings.js), события подаёт tk-app.js:
  *   TKNotify.message(d)   — пришло сообщение (d из message:new);
+ *   TKNotify.groupMessage(d) — сообщение группы (d из group:message);
  *   TKNotify.ring(call)   — входящий звонок { callId, name, video };
  *   TKNotify.stopRing()   — звонок принят, отклонён или отменён;
  *   TKNotify.talking(on)  — разговор начался / закончился (см. «Звук»).
@@ -137,6 +138,16 @@
     });
   }
 
+  // Группа: заголовок — её название, текст — «Автор: сообщение».
+  function groupMessage(d) {
+    var p = prefs();
+    if (!p.sndMsg && !p.sys) return;
+    once('m' + d.message._id, function () {
+      if (p.sndMsg) ping();
+      show(d.group.title, d.sender.displayName + ': ' + preview(d.message), 'group-' + d.groupId, '/chatsPage?group=' + d.groupId);
+    });
+  }
+
   var ringTimer = null;
   var ringNote = null;
   function ring(call) {
@@ -169,6 +180,7 @@
     setPref: setPref,
     supported: supported,
     message: message,
+    groupMessage: groupMessage,
     ring: ring,
     stopRing: stopRing,
     talking: talking,

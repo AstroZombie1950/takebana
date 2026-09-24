@@ -379,6 +379,8 @@
   flex-direction: column;
   align-items: flex-start;
   padding: 7px var(--feed-x);
+  /* Вертикаль — прокрутка браузера, горизонталь — смахивание-ответ (chats.js). */
+  touch-action: pan-y;
 }
 
 .tk-msg--out { align-items: flex-end; }
@@ -493,6 +495,93 @@
 .tk-msg--fwd .tk-msg__text { color: var(--tk-beige); }
 .tk-msg__ava.is-blank { visibility: hidden; }
 
+/* ── Ответ ──
+ * Цитата — черта слева, имя автора и строка текста или вид вложения.
+ * В пузыре она кнопка к исходному сообщению, над полем ввода — то же
+ * в полосе ответа. В исходящем красном пузыре черта и имя тёмные. */
+.tk-quote {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  margin: 0 0 6px;
+  padding: 4px 10px 4px 9px;
+  border: 0;
+  border-left: 3px solid var(--tk-accent);
+  background: rgba(144, 113, 99, .16);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tk-quote.is-gone { cursor: default; }
+.tk-msg--out .tk-quote { border-left-color: var(--tk-ink); background: rgba(0, 0, 0, .12); }
+.tk-quote__thumb { width: 34px; height: 34px; flex: none; object-fit: cover; }
+.tk-quote__body { display: flex; flex-direction: column; min-width: 0; }
+
+.tk-quote__name {
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  color: var(--tk-accent);
+}
+
+.tk-msg--out .tk-quote__name { color: var(--tk-ink); }
+
+.tk-quote__text {
+  font-size: 13px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: .85;
+}
+
+/* Смахивание: пузырь с временем едет за пальцем, справа проступает стрелка;
+ * взведённый жест красит её. Пузырь над стрелкой — z-index. */
+.tk-msg.is-swiping > .tk-msg__bubble,
+.tk-msg.is-swiping > .tk-msg__row,
+.tk-msg.is-swiping > .tk-msg__when {
+  position: relative;
+  z-index: 1;
+  transform: translateX(var(--swipe, 0));
+}
+
+.tk-msg.is-returning > .tk-msg__bubble,
+.tk-msg.is-returning > .tk-msg__row,
+.tk-msg.is-returning > .tk-msg__when { transition: transform .2s cubic-bezier(.2, .7, .2, 1); }
+
+.tk-msg__swipe {
+  position: absolute;
+  right: calc(var(--feed-x) - 8px);
+  top: 50%;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(144, 113, 99, .3);
+  color: var(--tk-paper);
+  opacity: 0;
+  transform: scale(.6);
+  transition: opacity .15s ease, transform .15s ease, background-color .15s ease, color .15s ease;
+}
+
+.tk-msg.is-swiping .tk-msg__swipe { opacity: 1; transform: scale(.85); }
+.tk-msg.is-armed .tk-msg__swipe { background: var(--tk-accent); color: var(--tk-ink); transform: scale(1); }
+
+/* Переход к сообщению из цитаты — строка на миг подсвечивается. */
+.tk-msg.is-flash { animation: tk-msg-flash 1.4s ease-out; }
+
+@keyframes tk-msg-flash {
+  from { background: rgba(227, 66, 52, .28); }
+  to { background: transparent; }
+}
+
 .tk-msg__when {
   display: flex;
   align-items: center;
@@ -548,6 +637,18 @@
   padding: 14px 20px calc(14px + var(--tk-safe-b));
   border-top: 1px solid var(--tk-rule);
 }
+
+/* Полоса ответа над полем ввода (chats.js, setReply). */
+.tk-replybar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tk-replybar[hidden] { display: none; }
+.tk-replybar__icon { flex: none; color: var(--tk-accent); }
+.tk-replybar .tk-quote { flex: 1; margin: 0; }
 
 /* position — для полосы записи: она ложится поверх всей строки. */
 /* Ограничение доступа — вместо поля ввода строка-объяснение. */
@@ -1803,3 +1904,253 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 }
 
 .tk-chat__ava-big:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
+
+/* ── Группы (routes/groups.js, public/tk-groups.js) ──────────────────────
+ * Строка «Новая группа» над недавними, значок группы у названия в списке,
+ * в шапке — сколько участников вместо «в сети». В ленте — автор над первым
+ * сообщением серии и служебные строки по центру, как строки звонков.
+ * Экран группы ложится поверх диалога, на телефоне — во весь экран. */
+.tk-chat__newgroup {
+  flex: none;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-chat__newgroup[hidden] { display: none; }
+
+.tk-newgroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--tk-beige);
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  letter-spacing: .04em;
+  cursor: pointer;
+  transition: color .18s ease;
+}
+
+.tk-newgroup:hover,
+.tk-newgroup:focus-visible { color: var(--tk-accent); }
+
+.tk-dialog__group { flex: none; color: var(--tk-muted); }
+
+.tk-chat__sub {
+  display: block;
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+.tk-chat__sub:empty { display: none; }
+
+/* В группе нет «в контакты», исчезающих и присутствия. Звонок — всей
+ * группе (routes/groups.js), те же кнопки. */
+.tk-chat.is-group #limitBtn,
+.tk-chat.is-group .tk-chat__peer .presence-dot { display: none; }
+.tk-chat.is-group .tk-chat__ava-big { cursor: pointer; }
+
+.tk-msg__author {
+  display: block;
+  margin-bottom: 4px;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tk-accent);
+}
+
+.tk-sysnote {
+  align-self: center;
+  max-width: calc(100% - 2 * var(--feed-x));
+  margin: 7px var(--feed-x);
+  padding: 5px 12px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--tk-muted);
+  border: 1px solid rgba(144, 113, 99, .25);
+}
+
+/* Экран группы. */
+.tk-gpane {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  background: var(--tk-ink);
+}
+
+.tk-gpane[hidden] { display: none; }
+.tk-chat.is-pane .tk-chat__area > .tk-gpane { display: flex; }
+
+.tk-gpane__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-gpane__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tk-paper);
+}
+
+.tk-gpane__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+}
+
+.tk-gpane__foot {
+  flex: none;
+  padding: 14px 20px calc(14px + var(--tk-safe-b));
+  border-top: 1px solid var(--tk-rule);
+}
+
+.tk-gpane .tk-form__label { margin: 4px 0 -4px; }
+
+/* Выбор людей: отмеченные — фишками сверху, ниже поиск и список. */
+.tk-gpick { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.tk-gpick__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tk-gpick__list { margin: 0 -20px; }
+
+.tk-gchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 3px;
+  border: 1px solid var(--tk-rule);
+  background: none;
+  color: var(--tk-paper);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tk-gchip:hover { border-color: var(--tk-accent); }
+
+.tk-gchip__ava,
+.tk-gmember__ava {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-gchip__ava img,
+.tk-gmember__ava img,
+.tk-ginfo__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Карточка группы: фото, название, звук, ссылка, участники. */
+.tk-ginfo { display: flex; align-items: center; gap: 16px; }
+.tk-ginfo--center { flex-direction: column; text-align: center; padding-top: 24px; }
+
+.tk-ginfo__ava {
+  width: 72px;
+  height: 72px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-ginfo__photo { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.tk-ginfo__name {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--tk-paper);
+  overflow-wrap: anywhere;
+}
+
+.tk-ginfo__title { display: flex; gap: 8px; }
+.tk-ginfo__title .tk-field { flex: 1; min-width: 0; padding: 10px 14px; }
+
+.tk-gswitch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--tk-beige);
+  cursor: pointer;
+}
+
+.tk-gswitch input { width: 16px; height: 16px; accent-color: var(--tk-accent); }
+
+.tk-gsec {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--tk-rule);
+}
+
+.tk-gsec .tk-kicker { margin: 0; }
+
+.tk-ginvite {
+  margin: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.tk-ginvite code { font-size: 13px; color: var(--tk-beige); }
+
+.tk-gmembers { align-self: stretch; display: flex; flex-direction: column; }
+
+.tk-gmember {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.tk-gmember__ava { width: 32px; height: 32px; font-size: 13px; }
+
+.tk-gmember__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tk-paper);
+}
+
+.tk-gmember__role {
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: var(--tk-muted);
+}
+
+.tk-gsec--danger { flex-direction: row; flex-wrap: wrap; }
+.tk-gdanger.tk-btn { color: var(--tk-accent); }
+
+@media (max-width: 767px) {
+  .tk-chat__newgroup { padding: 8px 16px; }
+  .tk-gpane__head { padding: 10px 16px; gap: 8px; }
+  .tk-gpane__body { padding: 16px; }
+  .tk-gpane__foot { padding-left: 16px; padding-right: 16px; }
+  .tk-gpick__list { margin: 0 -16px; }
+}

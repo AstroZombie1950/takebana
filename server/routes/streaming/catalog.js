@@ -20,6 +20,7 @@ const gallery = require('../../utils/gallery');
 const search = require('../../utils/search');
 const nickname = require('../../utils/nickname');
 const { profileUrl } = require('../../utils/profileUrl');
+const profileLinks = require('../../utils/profileLinks');
 const ogImage = require('../../utils/ogImage');
 
 // Вкладки каталога. popular — все категории разом, остальные совпадают
@@ -264,6 +265,11 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
       avatarStyle,
       _id: user._id,
       url: profileUrl(user),
+      bio: user.bio || '',
+      // Значки ссылок (utils/profileLinks.js). Сайт без nofollow — только
+      // у тех, кому это включил администратор (User.linksFollow).
+      links: profileLinks.list(user.links),
+      linksFollow: !!user.linksFollow,
       followersCount,
       followingCount,
       isSubscribed, // Передаем статус подписки

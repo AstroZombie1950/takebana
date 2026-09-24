@@ -27,8 +27,8 @@ function quiet(promise) {
 const creating = new Map();
 const after = (callId, fn) => quiet(Promise.resolve(creating.get(callId)).then(fn));
 
-function created(callId, { callerId, calleeId, type }) {
-  const p = quiet(Call.create({ callId, caller: callerId, callee: calleeId, type }))
+function created(callId, { callerId, calleeId, type, chat }) {
+  const p = quiet(Call.create({ callId, caller: callerId, callee: calleeId, type, chat: chat || null }))
     .finally(() => { if (creating.get(callId) === p) creating.delete(callId); });
   creating.set(callId, p);
   return p;
@@ -124,6 +124,7 @@ function view(c) {
     startedAt: c.startedAt,
     // Сколько всего народу было в разговоре: пара плюс приглашённые.
     ...(c.group ? { group: true, people: 2 + (c.participants || []).length } : {}),
+    ...(c.chat ? { chat: String(c.chat) } : {}),
     duration: c.answeredAt && c.endedAt ? Math.round((c.endedAt - c.answeredAt) / 1000) : 0,
   };
 }
@@ -160,6 +161,7 @@ async function between(a, b, { from, to } = {}) {
   if (to) startedAt.$lt = to;
   const calls = await Call.find({
     $or: [{ caller: a, callee: b }, { caller: b, callee: a }],
+    chat: null,
     endedAt: { $ne: null },
     deletedFor: { $ne: a },
     ...(from || to ? { startedAt } : {}),

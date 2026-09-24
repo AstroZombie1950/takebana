@@ -123,7 +123,13 @@ moved  "старый адрес персональных данных"   /person
 expect "о нас"                    "200"     GET /about
 expect "раздел каталога"         "200"     GET /streaming/business   # гость смотрит без входа
 expect "старый адрес популярного" "302"    GET /streaming           # ведёт на главную
-expect "карта заведений"         "200"     GET /main
+expect "карта заведений"         "200"     GET /map
+moved  "старый адрес карты"               /main /map
+# SEO (docs/seo/): robots, карта сайта, подтверждение Вебмастера.
+expect "robots.txt"               "200"     GET /robots.txt
+expect "карта сайта"              "200"     GET /sitemap.xml
+expect "файл Вебмастера"          "200"     GET /yandex_80b052bf060e4036.html
+moved  "адрес страницы без хвостовой косой" /about/ /about
 expect "страница поиска"         "200"     GET "/search?q=ab"
 expect "авторы"                  "200"     GET /authors
 expect "переписка без входа"     "302"     GET /chatsPage           # на вход с возвратом
@@ -483,19 +489,22 @@ fi
 
 # ═════════════════════════════════════════════════════════════════════════════
 if [[ $DO_RATELIMIT -eq 1 ]]; then
-  step "Лимит попыток входа"
-  printf '  %sпосле этой проверки вход с текущего адреса заблокирован на 15 минут%s\n' "$c_warn" "$c_off"
+  step "Защита входа от подбора"
+  # Три ошибки с адреса — дальше вход просит решить задачу (utils/loginGuard.js):
+  # 428 и сама задача в ответе. Почты разные: паузу на пару это не трогает,
+  # а счётчик адреса — да. Сам лимит 429 без решённых задач уже не достать.
+  printf '  %sпосле этой проверки вход с текущего адреса сутки просит невидимую задачу%s\n' "$c_warn" "$c_off"
 
-  limited=0
-  for i in $(seq 1 14); do
-    rc=$(code POST /login -H 'Content-Type: application/json' \
-      -d '{"email":"smoke-'"$RANDOM"'@example.invalid","password":"неверный"}')
-    [[ "$rc" == "429" ]] && { limited=$i; break; }
+  asked=0
+  for i in $(seq 1 6); do
+    body=$("${CURL[@]}" -X POST "${BASE}/login" -H 'Content-Type: application/json' \
+      -d '{"email":"smoke-'"$RANDOM"'@example.invalid","password":"неверный"}' -w '\n%{http_code}')
+    [[ "${body##*$'\n'}" == "428" && "$body" == *'"task":"'* ]] && { asked=$i; break; }
   done
-  if (( limited > 0 )); then
-    pass "429 после ${limited} попыток"
+  if (( asked > 0 )); then
+    pass "задача после $((asked - 1)) ошибок ${c_dim}→ 428${c_off}"
   else
-    fail "за 14 попыток лимит не сработал" "RATE_LIMIT_LOGIN в .env; за nginx нужен trust proxy, иначе все адреса считаются одним"
+    fail "за 6 попыток вход не попросил задачу" "utils/loginGuard.js; за nginx нужен trust proxy, иначе все адреса считаются одним"
   fi
 fi
 

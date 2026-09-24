@@ -124,6 +124,47 @@
       .finally(function () { btn.disabled = false; });
   });
 
+  // ── О себе и ссылки ───────────────────────────────────────────────────
+  // Ссылки проверяет сервер (utils/profileLinks.js): у сетей он берёт только
+  // логин и сам собирает адрес. В ответ — как значения теперь выглядят;
+  // под каждым полем — итоговая ссылка, чтобы проверить её переходом.
+  var aboutForm = $('aboutForm');
+  var bio = $('profileBio');
+  bio.addEventListener('input', function () { $('bioCount').textContent = bio.value.length + '/300'; });
+
+  aboutForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var links = {};
+    aboutForm.querySelectorAll('[data-link]').forEach(function (f) {
+      links[f.dataset.link] = f.value.trim();
+      f.removeAttribute('aria-invalid');
+    });
+    var btn = aboutForm.querySelector('[type="submit"]');
+    btn.disabled = true;
+    fetch('/settings/about', json({ bio: bio.value, links: links }))
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+      .then(function (x) {
+        if (!x.ok) {
+          var bad = x.b.field && aboutForm.querySelector('[data-link="' + x.b.field + '"]');
+          if (bad) { bad.setAttribute('aria-invalid', 'true'); bad.focus(); }
+          return toast(x.b.message || t('common.noNetwork'), 'error');
+        }
+        var got = {};
+        x.b.links.forEach(function (l) { got[l.kind] = l; });
+        aboutForm.querySelectorAll('[data-link]').forEach(function (f) {
+          var l = got[f.dataset.link];
+          var out = aboutForm.querySelector('[data-out="' + f.dataset.link + '"]');
+          f.value = l ? l.display : '';
+          out.hidden = !l;
+          out.href = l ? l.url : '#';
+          out.textContent = l ? l.url : '';
+        });
+        toast(t('settings.saved'), 'ok');
+      })
+      .catch(function () { toast(t('common.noNetwork'), 'error'); })
+      .finally(function () { btn.disabled = false; });
+  });
+
   // ── Почта ─────────────────────────────────────────────────────────────
   // Новый адрес вступает в силу по ссылке из письма на него
   // (routes/emailChange.js); до тех пор — «ждёт подтверждения».

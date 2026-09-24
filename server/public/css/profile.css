@@ -159,6 +159,38 @@
 }
 
 /* Подписчики: число крупно, подпись мелко под ним. */
+/* Описание — как написано, с переносами строк; ссылки — ряд значков. */
+.tk-prof__bio {
+  margin: 14px 0 0;
+  max-width: 560px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tk-beige);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.tk-prof__links {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tk-prof__link {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--tk-rule);
+  color: var(--tk-beige);
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.tk-prof__link:hover,
+.tk-prof__link:focus-visible { color: var(--tk-accent); border-color: var(--tk-accent); }
+
 .tk-prof__stats {
   margin-top: 18px;
   display: flex;
@@ -399,6 +431,8 @@
   .tk-prof__ava { width: 92px; height: 92px; font-size: 30px; }
   .tk-prof__name { font-size: 28px; }
   .tk-prof__stats { justify-content: center; }
+  .tk-prof__bio { margin-left: auto; margin-right: auto; }
+  .tk-prof__links { justify-content: center; }
   /* Телефон: «Написать» забирает строку, звонки — квадратами со значком;
    * подписка — во всю ширину под ними. */
   .tk-prof__acts { align-items: stretch; }

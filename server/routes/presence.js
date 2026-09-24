@@ -9,7 +9,7 @@ const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const { requireAuthApi } = require('../middleware/auth');
 const User = require('../models/User');
-const Message = require('../models/Message');
+const { unreadTotal } = require('../utils/groups');
 const Stream = require('../models/Stream');
 const Notification = require('../models/Notification');
 const callLog = require('../utils/callLog');
@@ -49,7 +49,7 @@ router.get('/api/presence', requireAuthApi, async (req, res) => {
 router.get('/api/badge', requireAuthApi, async (req, res) => {
   const me = req.session.userId;
   const [unreadMessages, missedCalls, notifications] = await Promise.all([
-    Message.countDocuments({ recipient: me, readAt: null, deletedFor: { $ne: me } }),
+    unreadTotal(me), // личные и в группах
     callLog.missedCount(me),
     Notification.countDocuments({ recipient: me, isRead: false, type: { $ne: 'message' } }),
   ]);

@@ -26,6 +26,7 @@ const { audit } = require('../../utils/audit');
 const { validate } = require('../../middleware/validate');
 const { PASSWORD_PROVIDER, PASSWORD_MIN, PASSWORD_MAX, hashPassword } = require('../../utils/password');
 const { removeUser } = require('../../utils/userDelete');
+const profileLinks = require('../../utils/profileLinks');
 const { requireModerator, requireAdmin, paging, list, needle, personBrief, csvRoute } = require('./shared');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -188,6 +189,11 @@ router.get('/users/:id', requireModerator, async (req, res) => {
       bannedBy: user.bannedBy ? String(user.bannedBy) : null,
       sessions: sessions.length,
       sessionUntil: sessions.length ? sessions.map((x) => x.expires).sort((a, b) => b - a)[0] : null,
+      // Описание и ссылки — на виду у модерации: сюда в первую очередь
+      // понесут рекламу.
+      bio: user.bio || '',
+      links: profileLinks.list(user.links).map((l) => ({ kind: l.kind, url: l.url })),
+      linksFollow: !!user.linksFollow,
     },
     streams: {
       count: s.count || 0,
@@ -250,6 +256,26 @@ router.post('/users/:id/sessions/kill', requireAdmin, async (req, res) => {
   });
 
   res.json({ ok: true, sessions: deletedCount });
+});
+
+// ── Ссылка на сайт для поисковиков ──────────────────────────────────────────
+//
+// По умолчанию ссылки профиля уходят с nofollow: иначе страницы людей
+// быстро стали бы площадкой для чужого SEO. Своим и партнёрам ссылку на
+// сайт открывает администратор — ставит этот флаг (userPage.ejs).
+router.post('/users/:id/links-follow', requireAdmin, validate({
+  on: { type: 'bool', required: true, label: 'Индексировать' },
+}), async (req, res) => {
+  if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Пользователь не найден' });
+  const user = await User.findByIdAndUpdate(req.params.id, { $set: { linksFollow: req.body.on } }, { returnDocument: 'after' })
+    .select('nickname login email linksFollow').lean();
+  if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
+  audit(req, 'admin.links.follow', {
+    targetType: 'user', target: user,
+    targetLabel: user.nickname || user.login || user.email || '',
+    meta: { on: req.body.on },
+  });
+  res.json({ ok: true, linksFollow: user.linksFollow });
 });
 
 // ── Пароль ───────────────────────────────────────────────────────────────────

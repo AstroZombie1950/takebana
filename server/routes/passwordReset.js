@@ -23,6 +23,7 @@ asyncify(router); // ошибки async-обработчиков уходят в
 const { authLimiter, resetLimiter } = require('../middleware/rateLimit');
 const { validate } = require('../middleware/validate');
 const { signIn } = require('../middleware/auth');
+const loginGuard = require('../utils/loginGuard');
 const User = require('../models/User');
 const { PASSWORD_PROVIDER, PASSWORD_MIN, PASSWORD_MAX, hashPassword } = require('../utils/password');
 const { mailConfigured, siteUrl, sendMail } = require('../utils/mail');
@@ -122,6 +123,7 @@ if (mailConfigured) {
     user.password = await hashPassword(req.body.password);
     user.passwordReset = undefined;
     await user.save();
+    await loginGuard.forget(user.email);
 
     // Сессии хранит connect-mongodb-session в коллекции mySessions (config/session.js).
     await mongoose.connection.collection('mySessions').deleteMany({ 'session.userId': user._id.toString() });

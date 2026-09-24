@@ -58,6 +58,20 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null // Ссылка на фото профиля, по умолчанию пустая
   },
+  // Описание профиля — обычный текст до 300 знаков. Ссылки в нём не
+  // кликаются: иначе правило «одна ссылка на свой сайт» обходилось бы.
+  bio: { type: String, default: '' },
+  // Ссылки профиля (utils/profileLinks.js): у сетей — только логин или
+  // номер, адрес собирается по нашему шаблону; site — ссылка целиком.
+  links: {
+    type: new mongoose.Schema({
+      site: String, youtube: String, instagram: String, tiktok: String, telegram: String, whatsapp: String,
+    }, { _id: false }),
+    default: undefined,
+  },
+  // Ссылка на сайт без nofollow — поисковики её учитывают. Включает
+  // администратор в панели: своим и партнёрам, не всем подряд.
+  linksFollow: { type: Boolean, default: false },
   // Настройки последнего эфира: студия подставляет их в форму, чтобы
   // регулярный эфир не заполнять заново. Пишет /start-stream.
   streamDefaults: {

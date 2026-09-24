@@ -181,7 +181,7 @@ function registerSockets(io) {
     pendingCalls.delete(callId);
     activeCalls.delete(callId);
     if (call.members) everyone(call).emit(event, { callId });
-    else io.to(`user:${call.callerId}`).to(`user:${call.calleeId}`).emit(event, { callId });
+    else io.to([`user:${call.callerId}`, ...[...(call.calleeIds || [call.calleeId])].map((id) => `user:${id}`)]).emit(event, { callId });
     // Приглашённый, который не успел ответить, тоже гасит своё окно.
     if (call.invited) for (const id of call.invited.keys()) io.to(`user:${id}`).emit('call:canceled', { callId });
     if (call.roomName) {
@@ -206,7 +206,8 @@ function registerSockets(io) {
   async function joinGroup(socket, callId, call) {
     const userId = socket.data.userId;
     call.invited.delete(userId);
-    if (call.members.size >= GROUP_MAX) return socket.emit('call:failed', { callId });
+    // Места кончились, пока звонило (звонок группе зовёт всех, кто в сети).
+    if (call.members.size >= GROUP_MAX) return socket.emit('call:full', { callId });
     call.members.set(userId, { joinedAt: Date.now() });
     callLog.joined(callId, userId);
 
@@ -231,6 +232,38 @@ function registerSockets(io) {
     }
     // Остальные вкладки вошедшего перестают звонить.
     socket.to(`user:${userId}`).emit('call:canceled', { callId });
+  }
+
+  // Звонок группе (routes/groups.js): ответивший первым — собеседник для
+  // журнала; остальные, кому звонило, — приглашённые: их окно продолжает
+  // звонить, и кто ответит, войдёт через joinGroup, пока есть место.
+  // Сразу своим путём — в группе нужна сетка, Daily в ней не участвует.
+  function startChatCall(socket, callId, call) {
+    const me = socket.data.userId;
+    const now = Date.now();
+    const invited = new Map([...call.calleeIds].filter((id) => id !== me)
+      .map((id) => [id, { by: call.callerId, at: call.createdAt, quiet: true }]));
+    const active = {
+      callerId: call.callerId, calleeId: me, type: call.type, groupId: call.groupId,
+      engine: 'own', roomName: null, startedAt: now,
+      members: new Map([[call.callerId, { joinedAt: now }], [me, { joinedAt: now + 1 }]]),
+      invited,
+    };
+    activeCalls.set(callId, active);
+    callLog.created(callId, { callerId: call.callerId, calleeId: me, type: call.type, chat: call.groupId });
+    callLog.answered(callId, 'own');
+    socket.to(`user:${me}`).emit('call:canceled', { callId });
+    goOwn(callId, active, 'call:accepted');
+    // Кому звонило и кто так и не ответил за полминуты с начала — гаснет.
+    setTimeout(() => {
+      const live = activeCalls.get(callId);
+      if (!live) return;
+      for (const [id, inv] of live.invited) {
+        if (!inv.quiet) continue;
+        live.invited.delete(id);
+        io.to(`user:${id}`).emit('call:canceled', { callId });
+      }
+    }, Math.max(0, 30000 - (now - call.createdAt))).unref();
   }
 
   function finishCallsOf(userId) {
@@ -405,8 +438,9 @@ function registerSockets(io) {
       if (running && running.invited && running.invited.has(socket.data.userId)) return joinGroup(socket, callId, running);
 
       const call = pendingCalls.get(callId);
-      if (!call || call.calleeId !== socket.data.userId) return;
+      if (!call || !(call.calleeId === socket.data.userId || (call.calleeIds && call.calleeIds.has(socket.data.userId)))) return;
       pendingCalls.delete(callId);
+      if (call.calleeIds) return startChatCall(socket, callId, call);
 
       const ownPath = turn.configured() && (call.own || own === true);
       // В активные — до запроса к Daily, чтобы отмена или обрыв во время
@@ -457,10 +491,25 @@ function registerSockets(io) {
       // пригласившему — только строка «не берёт трубку».
       const running = activeCalls.get(callId);
       if (running && running.invited && running.invited.has(socket.data.userId)) {
-        const by = running.invited.get(socket.data.userId).by;
+        const { by, quiet } = running.invited.get(socket.data.userId);
         running.invited.delete(socket.data.userId);
-        io.to(`user:${by}`).emit('call:invite:declined', { callId, userId: socket.data.userId });
+        // Звонок группе: отказы участников звонящему не показываем — их
+        // было бы по одному на каждого, кому звонило.
+        if (!quiet) io.to(`user:${by}`).emit('call:invite:declined', { callId, userId: socket.data.userId });
         socket.to(`user:${socket.data.userId}`).emit('call:canceled', { callId });
+        return;
+      }
+
+      // Звонок группе, никто ещё не ответил: отказался один — звонит
+      // остальным; отказались все — звонящему «отклонено».
+      const ringing = pendingCalls.get(callId);
+      if (ringing && ringing.calleeIds && ringing.calleeIds.has(socket.data.userId)) {
+        ringing.calleeIds.delete(socket.data.userId);
+        socket.to(`user:${socket.data.userId}`).emit('call:canceled', { callId });
+        if (!ringing.calleeIds.size) {
+          pendingCalls.delete(callId);
+          io.to(`user:${ringing.callerId}`).emit('call:declined', { callId });
+        }
         return;
       }
 
@@ -477,7 +526,7 @@ function registerSockets(io) {
       if (!call || call.callerId !== socket.data.userId) return;
       pendingCalls.delete(callId);
       callLog.ended(io, callId, 'canceled');
-      io.to(`user:${call.calleeId}`).emit('call:canceled', { callId });
+      io.to(call.calleeIds ? [...call.calleeIds].map((id) => `user:${id}`) : `user:${call.calleeId}`).emit('call:canceled', { callId });
     });
 
     // «Завершить» у себя: вдвоём это конец звонка, в группе — уход одного.
@@ -503,7 +552,10 @@ function registerSockets(io) {
       const no = (reason) => socket.emit('call:invite:failed', { callId, reason });
       if (!turn.configured()) return no('unavailable');
       if (call.members.has(guestId) || call.invited.has(guestId)) return;
-      if (call.members.size + call.invited.size >= GROUP_MAX) return no('full');
+      // Звонок группе держит приглашёнными всех, кому звонило (quiet), — они
+      // места не занимают, пока не ответят.
+      const asked = [...call.invited.values()].filter((v) => !v.quiet).length;
+      if (call.members.size + asked >= GROUP_MAX) return no('full');
 
       // Ограничение доступа (utils/restrict.js) — с каждым, кто уже в
       // разговоре, и в обе стороны: затащить человека к тому, кто его

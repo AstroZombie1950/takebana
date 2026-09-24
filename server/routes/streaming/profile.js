@@ -20,6 +20,7 @@ const { commonDataMiddleware } = require('./shared');
 const bcrypt = require('bcrypt');
 const { PASSWORD_PROVIDER, PASSWORD_MAX } = require('../../utils/password');
 const { authLimiter } = require('../../middleware/rateLimit');
+const loginGuard = require('../../utils/loginGuard');
 const { validate } = require('../../middleware/validate');
 const { removeUser } = require('../../utils/userDelete');
 const userView = require('../../utils/userView');
@@ -27,6 +28,7 @@ const ogImage = require('../../utils/ogImage');
 const { audit } = require('../../utils/audit');
 const nickname = require('../../utils/nickname');
 const { mailConfigured } = require('../../utils/mail');
+const profileLinks = require('../../utils/profileLinks');
 
 // Страница настроек: имя и ник, фото, пароль, почта, язык, удаление. Раньше — окно поверх
 // любой страницы кабинета, и его разметка со скриптом ехали с каждой из них.
@@ -35,7 +37,7 @@ router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
   // commonDataMiddleware роль не тянет, и ради одной страницы добавлять её
   // в выборку каждой страницы кабинета незачем.
   const user = await User.findById(req.session.userId)
-    .select('provider role login nickname nicknameChangedAt email emailChange emailVerifiedAt restricted').lean();
+    .select('provider role login nickname nicknameChangedAt email emailChange emailVerifiedAt restricted bio links').lean();
   if (!user) return res.redirect('/login');
   // Кому закрыт канал (utils/restrict.js): здесь доступ можно вернуть.
   const restrictedUsers = (user.restricted || []).length
@@ -59,7 +61,12 @@ router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
       pendingEmail: pending,
       // У входа через Google почту подтвердил Google.
       emailVerified: !!user.emailVerifiedAt || (user.provider || '') !== PASSWORD_PROVIDER,
+      bio: user.bio || '',
+      // Ссылки — как их показать в полях: kind → { display, url }.
+      links: Object.fromEntries(profileLinks.list(user.links).map((l) => [l.kind, l])),
     },
+    linkKinds: profileLinks.KINDS,
+    linkNames: profileLinks.NAMES,
   });
 });
 
@@ -233,10 +240,12 @@ router.post('/profile/delete', authLimiter, requireAuth, validate({
   }
 
   if ((user.provider || '') === PASSWORD_PROVIDER) {
+    const attempt = await loginGuard.start(req, res, user.email, { task: false });
+    if (!attempt) return;
     const match = req.body.password ? await bcrypt.compare(req.body.password, user.password) : false;
     if (!match) {
       audit(req, 'profile.delete', { result: 'fail', targetType: 'user', target: user });
-      return res.status(400).json({ success: false, message: 'Неверный пароль' });
+      return attempt.fail('Неверный пароль');
     }
   }
 

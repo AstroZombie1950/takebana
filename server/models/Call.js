@@ -31,6 +31,9 @@ const callSchema = new Schema({
   // добавляются приглашённые. Старые поля остаются как были — по ним
   // считается журнал и расходы, — а participants заполняется только здесь.
   group: { type: Boolean, default: false },
+  // Звонок группе из переписки (routes/groups.js): callee — кто ответил
+  // первым. Такой звонок — не разговор двоих, в их личную ленту не идёт.
+  chat: { type: Schema.Types.ObjectId, ref: 'Group', default: null },
   participants: [{
     user: { type: Schema.Types.ObjectId, ref: 'User' },
     joinedAt: { type: Date, default: Date.now },

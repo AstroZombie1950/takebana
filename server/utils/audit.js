@@ -32,6 +32,8 @@ const ACTIONS = {
   'auth.ratelimit': 'Сработал лимит попыток',
 
   'profile.update': 'Правка профиля',
+  'group.create': 'Создание группы',
+  'group.delete': 'Удаление группы',
   'profile.email.request': 'Запрос смены почты',
   'profile.email.change': 'Почта сменена по ссылке',
   'profile.avatar': 'Смена фото',
@@ -102,6 +104,7 @@ const ACTIONS = {
   'admin.audit.clear': 'Очистка журнала',
   'admin.session.kill': 'Сеанс завершён администратором',
   'admin.password.set': 'Пароль задан администратором',
+  'admin.links.follow': 'Индексация ссылки на сайт',
   'admin.error.resolve': 'Ошибка отмечена разобранной',
 };
 

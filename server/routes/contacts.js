@@ -26,6 +26,8 @@ function person(user, extra) {
     id: String(user._id),
     displayName,
     avatarStyle: userView.avatarStyle(user, displayName),
+    // Имя рядом с ником: поиск во вкладке ищет по обоим (public/chats.js).
+    login: user.nickname ? user.login || '' : '',
     isOnline: !!user.isOnline,
     ...extra,
   };

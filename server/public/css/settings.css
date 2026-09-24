@@ -292,8 +292,76 @@
   margin-top: 20px;
 }
 
+/* ── О себе и ссылки ──
+ * Во всю ширину сетки: описание слева, ссылки справа строками «значок,
+ * название — поле»; под полем — итоговая ссылка после сохранения. */
+.tk-set__grid > .tk-set__about { grid-column: 1 / -1; }
+
+.tk-set__about-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 24px;
+}
+
+.tk-set__bio,
+.tk-set__nets {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tk-set__bio textarea {
+  flex: 1;
+  min-height: 170px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.45;
+}
+
+.tk-set__form .tk-set__count { align-self: flex-end; margin: -4px 0 0; }
+
+.tk-set__net {
+  display: grid;
+  grid-template-columns: 136px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+}
+
+.tk-set__net-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  letter-spacing: .03em;
+  color: var(--tk-beige);
+}
+
+.tk-set__form .tk-set__net .tk-field { padding: 10px 14px; }
+.tk-set__net .tk-field[aria-invalid="true"] { border-color: var(--tk-accent); }
+
+.tk-set__net-out {
+  grid-column: 2;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+.tk-set__net-out:hover { color: var(--tk-paper); }
+.tk-set__net-out[hidden] { display: none; }
+
 @media (max-width: 1023px) {
   .tk-set__grid { grid-template-columns: 1fr; }
+  .tk-set__about-cols { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .tk-set__nets { gap: 16px; }
+  .tk-set__net { grid-template-columns: minmax(0, 1fr); row-gap: 6px; }
+  .tk-set__net-out { grid-column: 1; margin-top: 0; }
 }
 
 @media (max-width: 767px) {

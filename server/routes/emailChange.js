@@ -19,6 +19,7 @@ const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const bcrypt = require('bcrypt');
 const { authLimiter } = require('../middleware/rateLimit');
+const loginGuard = require('../utils/loginGuard');
 const { requireAuthApi } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const User = require('../models/User');
@@ -56,10 +57,13 @@ if (mailConfigured) {
     if (email === String(user.email || '').toLowerCase()) {
       return res.status(400).json({ message: 'Это и есть ваша почта' });
     }
+    const attempt = await loginGuard.start(req, res, user.email, { task: false });
+    if (!attempt) return;
     if (!(await bcrypt.compare(req.body.password, user.password))) {
       audit(req, 'profile.email.request', { result: 'fail', targetType: 'user', target: user, meta: { reason: 'bad-password' } });
-      return res.status(400).json({ message: 'Неверный пароль' });
+      return attempt.fail('Неверный пароль');
     }
+    await attempt.ok();
     if (await User.exists({ email, provider: PASSWORD_PROVIDER, _id: { $ne: user._id } })) {
       return res.status(400).json({ message: 'Эта почта уже занята другим аккаунтом' });
     }

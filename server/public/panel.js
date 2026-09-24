@@ -558,6 +558,16 @@ VIEWS.person = {
     html += fact('Заведён', esc(when(p.createdAt)));
     html += fact('Был на связи', esc(p.isOnline ? 'сейчас' : ago(p.lastSeen)));
     html += fact('Подтвердил 18+', a.adultConfirmedAt ? esc(when(a.adultConfirmedAt)) : 'нет');
+    if (a.bio) html += fact('Описание', '<span class="tk-facts__pre">' + esc(a.bio) + '</span>');
+    if (a.links.length) {
+      html += fact('Ссылки', a.links.map((l) => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + esc(l.url) + '</a>').join('<br>'));
+    }
+    // Ссылка на сайт без nofollow — решает администратор (routes/admin/people.js).
+    if (a.links.some((l) => l.kind === 'site')) {
+      html += fact('Сайт для поисковиков', (a.linksFollow ? 'индексируется' : 'nofollow, не индексируется') +
+        (IS_ADMIN ? ' <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="links-follow" data-id="' + esc(p.id) + '" data-on="' + (a.linksFollow ? '' : '1') + '">' +
+          (a.linksFollow ? 'Закрыть от индексации' : 'Индексировать') + '</button>' : ''));
+    }
     html += fact('Ключ вещания', a.hasStreamKey ? 'есть' : 'нет');
     html += fact('Фото в галерее', num(a.gallery));
     if (IS_ADMIN) html += fact('Открытых сеансов', num(a.sessions) + (a.sessionUntil ? ' <span class="tk-panel__why">до ' + esc(when(a.sessionUntil)) + '</span>' : ''));
@@ -1306,6 +1316,14 @@ view.addEventListener('click', async (e) => {
       const r = await send('POST', '/api/admin/users/' + id + '/password', { password });
       field.value = '';
       toast('Пароль сменён' + (r.sessions ? ', сеансов закрыто: ' + r.sessions : ''), 'ok');
+      return show();
+    }
+
+    if (act === 'links-follow') {
+      const on = !!el.dataset.on;
+      if (!await confirmDialog(on ? 'Открыть ссылку на сайт поисковикам? Она будет без nofollow.' : 'Вернуть ссылке на сайт nofollow?', { okText: on ? 'Открыть' : 'Закрыть' })) return;
+      await send('POST', '/api/admin/users/' + id + '/links-follow', { on });
+      toast(on ? 'Ссылка на сайт индексируется' : 'Ссылка снова с nofollow', 'ok');
       return show();
     }
 

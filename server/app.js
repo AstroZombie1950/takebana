@@ -264,6 +264,7 @@ app.use(require('./routes/presence'));
 app.use(require('./routes/push'));
 app.use(require('./routes/calls'));
 app.use(require('./routes/contacts'));
+app.use(require('./routes/groups'));
 app.use(require('./routes/watch'));
 app.use(require('./routes/pages'));
 // robots.txt и карта сайта (docs/seo/).

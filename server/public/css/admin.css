@@ -622,6 +622,8 @@ body.tk-panel {
 .tk-facts dt { color: var(--tk-muted); }
 .tk-facts dd { margin: 0; word-break: break-word; }
 .tk-facts code { font-size: 12px; color: var(--tk-beige); }
+/* Описание профиля — с переносами строк, как его написали. */
+.tk-facts__pre { white-space: pre-line; }
 
 .tk-list {
   margin: 0;

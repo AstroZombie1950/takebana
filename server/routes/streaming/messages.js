@@ -16,6 +16,7 @@ const mongoose = require('mongoose');
 const User = require('../../models/User');
 const { requireAuth, requireAuthApi, requireNotBanned } = require('../../middleware/auth');
 const Conversation = require('../../models/Conversation');
+const Group = require('../../models/Group');
 const Message = require('../../models/Message');
 const Notification = require('../../models/Notification');
 const { validate } = require('../../middleware/validate');
@@ -30,8 +31,9 @@ const limits = require('../../utils/messageLimit');
 const push = require('../../utils/push');
 const { rankPeers } = require('../../utils/recentPeers');
 const { audit } = require('../../utils/audit');
-const { view } = require('../../utils/messageView');
+const { view, viewAll, QUOTED } = require('../../utils/messageView');
 const restriction = require('../../utils/restrict');
+const groups = require('../../utils/groups');
 const { tr, langOf } = require('../../utils/i18n');
 
 // Ограничение доступа закрывает и переписку (utils/restrict.js): 403
@@ -83,7 +85,7 @@ async function unreadAfter(userId, peers) {
   const oid = (id) => new mongoose.Types.ObjectId(String(id));
   const mine = { recipient: oid(userId), readAt: null, deletedFor: { $ne: oid(userId) } };
   const [unreadMessages, rows] = await Promise.all([
-    Message.countDocuments(mine),
+    groups.unreadTotal(userId),
     peers.length
       ? Message.aggregate([
           { $match: { ...mine, sender: { $in: peers.map(oid) } } },
@@ -155,7 +157,7 @@ function pushMessage({ message, sender, recipient, online }) {
 // Сохранить сообщение и разослать: получателю и вкладкам отправителя.
 // Общее у отправки, вложений и пересылки. ref — метка вкладки, отправившей
 // файл: по ней она меняет свою заглушку загрузки на готовое сообщение.
-async function deliver(req, { conversation, sender, recipient, content = '', attachments: files, forwardedFrom, ref, limit, silent }) {
+async function deliver(req, { conversation, sender, recipient, content = '', attachments: files, forwardedFrom, ref, limit, silent, reply }) {
   const now = new Date();
   const message = await Message.create({
     conversationId: conversation._id,
@@ -168,6 +170,7 @@ async function deliver(req, { conversation, sender, recipient, content = '', att
     // Получатель на связи — сообщение дошло до его браузера сразу.
     deliveredAt: isOnline(req, recipient._id) ? now : null,
     forwardedFrom,
+    replyTo: reply ? reply._id : null,
   });
 
   conversation.lastMessage = message._id;
@@ -178,7 +181,7 @@ async function deliver(req, { conversation, sender, recipient, content = '', att
   // В колокольчик сообщение не пишется (18.09.2026): о нём говорит счётчик
   // у иконки переписки в шапке, его ведёт tk-app.js по message:new.
 
-  const out = view(message);
+  const out = view(message, reply);
   const socket = io(req);
   if (socket) {
     socket.to(`user:${recipient._id}`).emit('message:new', { message: out, peer: person(sender) });
@@ -253,10 +256,53 @@ async function dialogPage(me, before) {
         },
         unread: unreadBy.get(String(c._id)) || 0,
         lastActivity: last ? last.sentAt : c.createdAt,
+        sortAt: c.lastUpdated,
       };
     });
 
-  return { list, more, before: more ? conversations[conversations.length - 1].lastUpdated : null };
+  // Группы — в тот же список, по тому же времени (models/Group.js). Две
+  // выборки по странице каждая, общий порядок, срез: отрезанное придёт
+  // следующей страницей — у него lastUpdated раньше нового before.
+  const rows = list.concat(await groupRows(me, before)).sort((a, b) => b.sortAt - a.sortAt);
+  const page = rows.slice(0, DIALOGS_PAGE);
+  const cut = more || rows.length > DIALOGS_PAGE;
+  page.forEach((r) => { delete r.sortAt; });
+  return { list: page, more: cut, before: cut ? rows[DIALOGS_PAGE - 1].sortAt : null };
+}
+
+// Строки групп для списка диалогов: последнее видимое мне сообщение с его
+// автором, непрочитанное. Страница — как у личных, по lastUpdated.
+async function groupRows(me, before) {
+  const list = await Group.find({ 'members.user': me, ...(before ? { lastUpdated: { $lt: before } } : {}) })
+    .sort({ lastUpdated: -1 })
+    .limit(DIALOGS_PAGE + 1)
+    .lean();
+  if (!list.length) return [];
+  const [stored, unread] = await Promise.all([
+    Message.find({ _id: { $in: list.map((g) => g.lastMessage).filter(Boolean) }, deletedFor: { $ne: me } }).lean(),
+    groups.unread(me),
+  ]);
+  const byGroup = new Map(stored.map((m) => [String(m.conversationId), m]));
+  const lasts = await Promise.all(list.map((g) => byGroup.get(String(g._id))
+    || Message.findOne({ conversationId: g._id, deletedFor: { $ne: me } }).sort({ sentAt: -1 }).lean()));
+  const authors = await User.find({ _id: { $in: lasts.filter(Boolean).map((m) => m.sender) } }).select('nickname login email').lean();
+  const nameOf = new Map(authors.map((u) => [String(u._id), userView.displayName(u)]));
+  return list.map((g, i) => {
+    const last = lasts[i];
+    return {
+      group: groups.brief(g),
+      last: last && {
+        content: last.content || '',
+        kind: last.attachments && last.attachments[0] ? last.attachments[0].kind : '',
+        system: last.system && last.system.kind ? view(last).system : null,
+        mine: String(last.sender) === String(me),
+        author: nameOf.get(String(last.sender)) || '',
+      },
+      unread: unread.byGroup[String(g._id)] || 0,
+      lastActivity: last ? last.sentAt : g.createdAt,
+      sortAt: g.lastUpdated,
+    };
+  });
 }
 
 router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => {
@@ -274,7 +320,8 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
     lastUpdated: { $gte: new Date(Date.now() - 60 * 24 * 3600 * 1000) },
   }).select('userOne userTwo').lean();
   const order = await rankPeers(me, recentConversations);
-  const known = new Map(list.map((c) => [String(c.interlocutor.id), c.interlocutor]));
+  // Строки групп собеседника не несут — в «недавние» идут только люди.
+  const known = new Map(list.filter((c) => c.interlocutor).map((c) => [String(c.interlocutor.id), c.interlocutor]));
   const unknown = order.filter((id) => !known.has(id));
   if (unknown.length) {
     const users = await User.find({ _id: { $in: unknown } })
@@ -359,9 +406,15 @@ router.get('/getMessages', requireAuthApi, async (req, res) => {
   const from = messages.length === PAGE ? messages[messages.length - 1].sentAt : null;
   const calls = await callLog.between(me, recipientId, { from, to: before });
 
-  res.json({ messages: messages.reverse().map(view), calls, restricted: await restriction.between(me, recipientId) });
+  res.json({ messages: await viewAll(messages.reverse()), calls, restricted: await restriction.between(me, recipientId) });
 });
 
+
+// Сообщение, на которое отвечают: только из этого же диалога. Нет его
+// (удалили, пока писали ответ) — уходит обычное сообщение, без цитаты.
+function replyOf(conversation, id) {
+  return id ? Message.findOne({ _id: id, conversationId: conversation._id }).select(QUOTED).lean() : null;
+}
 
 // Тридцать сообщений в минуту с человека: переписке хватает, а скрипт,
 // забрасывающий собеседника, упирается сразу.
@@ -378,6 +431,7 @@ router.post('/sendMessage', requireAuthApi, requireNotBanned, sendLimiter, valid
   recipientId: { type: 'objectId', required: true, label: 'Собеседник' },
   content: { type: 'string', required: true, min: 1, max: 5000, label: 'Сообщение' },
   limit: { type: 'string', default: '', max: 8, label: 'Ограничение' },
+  replyTo: { type: 'objectId', label: 'Ответ' },
 }), async (req, res) => {
   const { recipientId, content } = req.body;
   if (!limits.OPTIONS.includes(req.body.limit)) return res.status(400).json({ message: 'Неверное ограничение' });
@@ -394,7 +448,8 @@ router.post('/sendMessage', requireAuthApi, requireNotBanned, sendLimiter, valid
   }
 
   try {
-    res.json(await deliver(req, { conversation, sender, recipient, content, limit: limits.parse(req.body.limit, 'text') }));
+    const reply = await replyOf(conversation, req.body.replyTo);
+    res.json(await deliver(req, { conversation, sender, recipient, content, limit: limits.parse(req.body.limit, 'text'), reply }));
   } catch (e) {
     // Удачу текстового сообщения не пишем — их тысячи; отказ пишем всегда.
     // Без этого «сообщение не отправилось» не оставляло следа нигде.
@@ -419,31 +474,47 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
   const ref = String(req.body.ref || '').slice(0, 40);
   const special = ['voice', 'round'].includes(req.body.special) ? req.body.special : '';
   const option = String(req.body.limit || '');
+  const replyTo = req.body.replyTo || undefined;
+  // В группу (routes/groups.js) — groupId вместо собеседника.
+  const groupId = req.body.groupId || undefined;
   const me = req.session.userId;
 
   if (!file) return res.status(400).json({ message: 'Файл не пришёл' });
-  if (typeof recipientId !== 'string' || !ObjectId.isValid(recipientId) || content.length > 5000 || !limits.OPTIONS.includes(option)) {
+  const target = groupId !== undefined
+    ? typeof groupId === 'string' && ObjectId.isValid(groupId)
+    : typeof recipientId === 'string' && ObjectId.isValid(recipientId);
+  if (!target || content.length > 5000 || !limits.OPTIONS.includes(option)
+    || (replyTo !== undefined && (typeof replyTo !== 'string' || !ObjectId.isValid(replyTo)))) {
     drop();
     return res.status(400).json({ message: 'Неверный запрос' });
+  }
+  if (groupId && option) {
+    drop();
+    return res.status(400).json({ message: 'В группах нет исчезающих сообщений' });
   }
   if (!attachments.enabled) {
     drop();
     return res.status(503).json({ message: 'Файлы сейчас не принимаются' });
   }
-  if (await restriction.between(me, recipientId)) {
+  if (!groupId && await restriction.between(me, recipientId)) {
     drop();
     return refuseRestricted(res, me, recipientId);
   }
 
+  // conversation — диалог двоих или группа: у обеих _id, по нему ключи
+  // файлов в хранилище и поиск сообщения, на которое отвечают.
   const [conversation, sender, recipient] = await Promise.all([
-    findConversation(me, recipientId),
+    groupId ? groups.forMember(groupId, me) : findConversation(me, recipientId),
     User.findById(me).select('nickname login email avatar').lean(),
-    User.findById(recipientId).select('nickname login email avatar').lean(),
+    groupId ? null : User.findById(recipientId).select('nickname login email avatar').lean(),
   ]);
-  if (!conversation || !sender || !recipient) {
+  if (!conversation || !sender || (!groupId && !recipient)) {
     drop();
-    return res.status(404).json({ message: 'Диалог не найден' });
+    return res.status(404).json({ message: groupId ? 'Группа не найдена' : 'Диалог не найден' });
   }
+  const post = (fields) => (groupId
+    ? groups.deliver(req, conversation, sender, fields)
+    : deliver(req, { conversation, sender, recipient, ...fields }));
 
   // Записанное на странице (голосовое, кружок) браузер собирает сам, и
   // телефоны пишут по-разному. Отказ по такому файлу — в журнал панели
@@ -458,7 +529,7 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
   // когда говорят «кружок не отправляется».
   const startedAt = Date.now();
   const mark = (result, extra = {}) => audit(req, 'msg.attach', {
-    result, targetType: 'user', targetId: recipient._id,
+    result, targetType: groupId ? 'group' : 'user', targetId: groupId ? conversation._id : recipient._id,
     meta: {
       kind: special || 'file', ext: String(file.originalname || '').split('.').pop().slice(0, 8).toLowerCase(),
       mb: +(file.size / 1048576).toFixed(2), ms: Date.now() - startedAt, ...extra,
@@ -477,11 +548,16 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
 
   // У вложения с ограничением подписи нет: она ушла бы вместе с файлом
   // в корзину. Текст уходит отдельным обычным сообщением перед ним.
+  // Ответ — на первом из ушедших: на подписи, если она идёт отдельно.
   const limit = limits.parse(option, info.kind);
-  if (limit && content) await deliver(req, { conversation, sender, recipient, content });
+  let reply = await replyOf(conversation, replyTo);
+  if (limit && content) {
+    await post({ content, reply });
+    reply = null;
+  }
   const send = async () => {
     const stored = await attachments.store(info, conversation._id);
-    return deliver(req, { conversation, sender, recipient, content: limit ? '' : content, attachments: [stored], ref, limit });
+    return post({ content: limit ? '' : content, attachments: [stored], ref, limit, reply });
   };
 
   if (!attachments.SLOW.has(info.kind)) {
@@ -521,19 +597,25 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
 // первым, над пересланными, как подпись к ним.
 router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
   messageIds: { type: 'array', required: true, max: 50, of: { type: 'objectId' }, label: 'Сообщения' },
-  recipientIds: { type: 'array', required: true, max: 20, of: { type: 'objectId' }, label: 'Кому' },
+  recipientIds: { type: 'array', default: [], max: 20, of: { type: 'objectId' }, label: 'Кому' },
+  // Группы, где пересылающий состоит (routes/groups.js).
+  groupIds: { type: 'array', default: [], max: 20, of: { type: 'objectId' }, label: 'Кому' },
   comment: { type: 'string', max: 5000, default: '', label: 'Комментарий' },
 }), async (req, res) => {
   const me = String(req.session.userId);
   const { comment } = req.body;
   const chosen = [...new Set(req.body.recipientIds)].filter((id) => id !== me);
-  if (!chosen.length) {
+  const [targetGroups, myGroups] = await Promise.all([
+    req.body.groupIds.length ? Group.find({ _id: { $in: req.body.groupIds }, 'members.user': me }) : [],
+    Group.find({ 'members.user': me }).select('_id').lean(),
+  ]);
+  if (!chosen.length && !targetGroups.length) {
     return res.status(400).json({ message: 'Выберите, кому переслать' });
   }
   // Тем, с кем стоит ограничение доступа, не пересылается (utils/restrict.js).
   const barred = await Promise.all(chosen.map((id) => restriction.between(me, id)));
   const recipientIds = chosen.filter((id, i) => !barred[i]);
-  if (!recipientIds.length) {
+  if (!recipientIds.length && !targetGroups.length) {
     return res.status(403).json({ restricted: barred[0], message: restriction.BLOCKED[barred[0]] });
   }
 
@@ -542,7 +624,8 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
   // без ограничения.
   const originals = await Message.find({
     _id: { $in: [...new Set(req.body.messageIds)] },
-    $or: [{ sender: me }, { recipient: me }],
+    $or: [{ sender: me }, { recipient: me }, { conversationId: { $in: myGroups.map((g) => g._id) } }],
+    system: { $exists: false },
     deletedFor: { $ne: me },
     'limit.mode': { $exists: false },
   }).sort({ sentAt: 1 }).lean();
@@ -581,6 +664,10 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
     for (let i = 0; i < batch.length; i++) {
       sent.push(await deliver(req, { conversation, sender, recipient, ...batch[i], silent: i < batch.length - 1 }));
     }
+  }
+  for (const group of targetGroups) {
+    if (comment) sent.push(await groups.deliver(req, group, sender, { content: comment, silent: batch.length > 0 }));
+    for (let i = 0; i < batch.length; i++) sent.push(await groups.deliver(req, group, sender, { ...batch[i], silent: i < batch.length - 1 }));
   }
 
   res.json({ success: true, messages: sent });
@@ -655,7 +742,7 @@ router.post('/messages/read', requireAuthApi, validate({
 
   const [unread, unreadMessages] = await Promise.all([
     Notification.countDocuments({ recipient: me, isRead: false, type: { $ne: 'message' } }),
-    Message.countDocuments({ recipient: me, readAt: null, deletedFor: { $ne: me } }),
+    groups.unreadTotal(me),
   ]);
   res.json({ success: true, unread, unreadMessages });
 });
@@ -673,11 +760,15 @@ router.post('/messages/delete', requireAuthApi, validate({
   const { ids, forAll } = req.body;
 
   // Только то, что я вижу: удалённое у себя больше не моё, чтобы стирать
-  // его у собеседника (в Telegram его тоже уже не достать).
-  const messages = await Message.find({ _id: { $in: ids }, $or: [{ sender: me }, { recipient: me }], deletedFor: { $ne: me } })
-    .select('sender recipient')
-    .lean();
-  if (!messages.length) return res.json({ success: true, deleted: 0 });
+  // его у собеседника (в Telegram его тоже уже не достать). Сообщения
+  // групп — отдельно (deleteInGroups): у них нет получателя.
+  const [messages, inGroups] = await Promise.all([
+    Message.find({ _id: { $in: ids }, recipient: { $ne: null }, $or: [{ sender: me }, { recipient: me }], deletedFor: { $ne: me } })
+      .select('sender recipient')
+      .lean(),
+    deleteInGroups(req, me, ids, forAll),
+  ]);
+  if (!messages.length) return res.json({ success: true, deleted: inGroups });
   const found = messages.map((m) => m._id);
   const peerOf = (m) => (String(m.sender) === me ? String(m.recipient) : String(m.sender));
   // Собеседники, чьи входящие мне могли быть непрочитанными.
@@ -701,8 +792,35 @@ router.post('/messages/delete', requireAuthApi, validate({
     }
   }
 
-  res.json({ success: true, deleted: messages.length });
+  res.json({ success: true, deleted: messages.length + inGroups });
 });
+
+// Сообщения групп, где я состою. «У всех» — своё, а администратору
+// и создателю — любое; чужое без таких прав уходит только у меня, как
+// и просили бы «у меня». Остальным участникам — событие с id: счётчики
+// они сверяют сами (/api/badge). Сколько удалено — в ответ.
+async function deleteInGroups(req, me, ids, forAll) {
+  const list = await Message.find({ _id: { $in: ids }, recipient: null, deletedFor: { $ne: me } }).select('sender conversationId').lean();
+  if (!list.length) return 0;
+  const mine = await Group.find({ _id: { $in: [...new Set(list.map((m) => String(m.conversationId)))] }, 'members.user': me });
+  const byId = new Map(mine.map((g) => [String(g._id), g]));
+  const visible = list.filter((m) => byId.has(String(m.conversationId)));
+  const forEveryone = forAll ? visible.filter((m) => String(m.sender) === me || groups.canManage(groups.roleOf(byId.get(String(m.conversationId)), me))) : [];
+  const justMine = visible.filter((m) => !forEveryone.includes(m));
+
+  if (forEveryone.length) {
+    await attachments.deleteMessages({ _id: { $in: forEveryone.map((m) => m._id) } });
+    for (const g of mine) {
+      const gone = forEveryone.filter((m) => String(m.conversationId) === String(g._id)).map((m) => String(m._id));
+      if (gone.length) groups.emit(io(req), g, 'message:deleted', { ids: gone, groupId: String(g._id) });
+    }
+  }
+  if (justMine.length) {
+    await Message.updateMany({ _id: { $in: justMine.map((m) => m._id) } }, { $addToSet: { deletedFor: me } });
+    if (io(req)) io(req).to(`user:${me}`).emit('message:deleted', { ids: justMine.map((m) => String(m._id)), unreadMessages: await groups.unreadTotal(me) });
+  }
+  return visible.length;
+}
 
 
 // Удаление переписки целиком. «У меня» — диалог уходит из моего списка

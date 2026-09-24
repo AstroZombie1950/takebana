@@ -9,7 +9,7 @@ const User = require('../../models/User');
 const Subscription = require('../../models/Subscription');
 const Stream = require('../../models/Stream');
 const Notification = require('../../models/Notification');
-const Message = require('../../models/Message');
+const { unreadTotal } = require('../../utils/groups');
 const userView = require('../../utils/userView');
 const callLog = require('../../utils/callLog');
 const errorLog = require('../../utils/errorLog');
@@ -52,7 +52,7 @@ const commonDataMiddleware = async (req, res, next) => {
         // Старые уведомления о сообщениях (до 18.09.2026) не считаем.
         Notification.countDocuments({ recipient: currentUserId, isRead: false, type: { $ne: 'message' } }),
         callLog.missedCount(currentUserId),
-        Message.countDocuments({ recipient: currentUserId, readAt: null, deletedFor: { $ne: currentUserId } })
+        unreadTotal(currentUserId) // личные и в группах (utils/groups.js)
       ]);
 
       // Получение данных о подписанных пользователях

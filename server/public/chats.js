@@ -18,6 +18,12 @@
   var contactBtn = $('contactToggle');   // «В контакты» в шапке диалога
 
   var peer = null;          // { id, name, url, bg, initial }
+  // Открытая группа (routes/groups.js) — вместо peer: { id, title, name, url,
+  // bg, initial, count, myRole }. Открыт всегда кто-то один из двух.
+  var group = null;
+  var people = {};          // авторы в группе: id → { displayName, avatarStyle }
+  var seenUntil = null;     // докуда группу дочитал хоть кто-то, кроме меня
+  var groupReadAt = null;   // когда я сам отметил группу прочитанной
   var messages = [];        // лента открытого диалога, от старых к новым
   var calls = [];           // звонки с собеседником за загруженный отрезок
   var loadingOld = false;
@@ -108,6 +114,101 @@
     return list.querySelector('.tk-dialog[data-id="' + CSS.escape(String(id)) + '"]');
   }
 
+  // Кто сейчас открыт — одной строкой: ей помечаются заглушки загрузок
+  // и сверяются ответы, пришедшие после переключения.
+  function chatKey() { return peer ? 'p:' + peer.id : group ? 'g:' + group.id : ''; }
+
+  // ── Строки групп ──────────────────────────────────────────────────────
+  // Те же .tk-dialog, но с data-group вместо data-id: у группы нет
+  // присутствия и меню человека (chatsPage.ejs рисует так же).
+  function groupEl(id) {
+    return list.querySelector('.tk-dialog[data-group="' + CSS.escape(String(id)) + '"]');
+  }
+
+  function groupOf(el) {
+    return {
+      id: el.getAttribute('data-group'),
+      title: el.getAttribute('data-name'), name: el.getAttribute('data-name'),
+      url: el.getAttribute('data-ava-url'), bg: el.getAttribute('data-ava-bg'), initial: el.getAttribute('data-ava-initial'),
+      count: Number(el.getAttribute('data-count')) || 0
+    };
+  }
+
+  // g — как отдаёт сервер (utils/groups.js, brief): { id, title, avatarStyle, count }.
+  function paintGroupRow(el, g) {
+    var a = g.avatarStyle || {};
+    el.setAttribute('data-name', g.title);
+    el.setAttribute('data-ava-url', a.url || '');
+    el.setAttribute('data-ava-bg', a.gradient || '');
+    el.setAttribute('data-ava-initial', a.initial || '');
+    el.setAttribute('data-count', String(g.count || 0));
+    el.querySelector('.tk-dialog__ava').outerHTML = avatar('tk-dialog__ava', groupOf(el));
+    el.querySelector('.tk-dialog__name').textContent = g.title;
+  }
+
+  function groupNode(g) {
+    var el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'tk-dialog tk-dialog--group';
+    el.setAttribute('data-group', g.id);
+    el.innerHTML = '<span class="tk-dialog__ava"></span>' +
+      '<span class="tk-dialog__body">' +
+        '<span class="tk-dialog__top"><span class="tk-dialog__who">' + GROUP_ICON + '<span class="tk-dialog__name"></span></span><span class="tk-dialog__when"></span></span>' +
+        '<span class="tk-dialog__bottom"><span class="tk-dialog__last"></span><span class="tk-dialog__unread hidden">0</span></span>' +
+      '</span>';
+    paintGroupRow(el, g);
+    return el;
+  }
+
+  function addGroupRow(g) {
+    var el = groupNode(g);
+    list.prepend(el);
+    $('conversationsEmpty').classList.add('hidden');
+    return el;
+  }
+
+  // Последнее в строке группы: служебная строка как есть, иначе автор
+  // («Вы:» или имя) и текст. author — имя, если его нет в people.
+  function groupLastHtml(m, author) {
+    if (m.system) return escapeHtml(sysText(m.system));
+    var who = m.sender === ME ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : escapeHtml(author || personOf(m.sender).name) + ': ';
+    return who + summaryHtml(m);
+  }
+
+  // То же по строке /api/dialogs (routes/streaming/messages.js, groupRows).
+  function groupRowLast(l) {
+    if (!l) return '<span data-i18n="chats.empty">' + escapeHtml(t('chats.empty')) + '</span>';
+    if (l.system) return escapeHtml(sysText(l.system));
+    return (l.mine ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : escapeHtml(l.author) + ': ') + lastHtml({ content: l.content, kind: l.kind });
+  }
+
+  function setGroupLast(el, m, author) {
+    el.querySelector('.tk-dialog__last').innerHTML = groupLastHtml(m, author);
+    var when = el.querySelector('.tk-dialog__when');
+    when.setAttribute('data-time', m.sentAt);
+    when.textContent = timeAgo(m.sentAt);
+    list.prepend(el);
+  }
+
+  var GROUP_ICON = '<svg class="tk-dialog__group" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"></path><path d="M15.5 5.2a3 3 0 010 5.6M17.5 13.8c2 .6 3.5 2.4 3.5 5.2"></path></svg>';
+
+  // Автор сообщения в группе — из people; ушедший и неизвестный — «?».
+  function personOf(id) {
+    var u = people[id];
+    if (!u) return { id: id, name: '?', url: '', bg: '', initial: '?' };
+    var a = u.avatarStyle || {};
+    return { id: id, name: u.displayName, url: a.url || '', bg: a.gradient || '', initial: a.initial || '?' };
+  }
+
+  // Служебная строка группы (models/Message.js, system): имена — снимком.
+  function sysText(sys) {
+    return t('groups.sys.' + sys.kind, { actor: sys.actorName || '?', target: sys.targetName || '?', text: sys.text || '' });
+  }
+
+  function sysHtml(m) {
+    return '<div class="tk-sysnote" data-mid="' + escapeHtml(m._id) + '"><span>' + escapeHtml(sysText(m.system)) + '</span></div>';
+  }
+
   // ── Лента ─────────────────────────────────────────────────────────────
   // Одна галочка — та же, что первая из двух: при «доставлено» вторая
   // дорисовывается рядом, а первая не прыгает.
@@ -116,9 +217,12 @@
 
   var ticks = {};            // id сообщения → статус при прошлой отрисовке
 
+  // В группе «прочитано» — когда хоть кто-то из остальных дочитал дальше
+  // этого сообщения (seenUntil); «доставлено» там не показываем.
   function status(m) {
-    if (m.readAt) return { key: 'chats.status.read', cls: 'is-read', icon: TICKS };
-    if (m.deliveredAt) return { key: 'chats.status.delivered', cls: '', icon: TICKS };
+    var read = group ? seenUntil && new Date(m.sentAt) <= new Date(seenUntil) : m.readAt;
+    if (read) return { key: 'chats.status.read', cls: 'is-read', icon: TICKS };
+    if (!group && m.deliveredAt) return { key: 'chats.status.delivered', cls: '', icon: TICKS };
     return { key: 'chats.status.sent', cls: '', icon: TICK };
   }
 
@@ -290,11 +394,41 @@
       '<span class="tk-sealed__kind">' + escapeHtml(t('chats.gone')) + '</span></div>';
   }
 
+  // ── Цитата ответа ─────────────────────────────────────────────────────
+  // Одна разметка на цитату в пузыре и на полосу над полем ввода. r — цитата
+  // от сервера (utils/messageView.js, reply) или собранная из сообщения
+  // ленты (quoteOf): { id, sender, text, kind, sealed, thumb, gone }.
+  function i18nSpan(key) { return '<span data-i18n="' + key + '">' + escapeHtml(t(key)) + '</span>'; }
+
+  function quoteOf(m) {
+    var a = m.attachments[0];
+    return { id: m._id, sender: m.sender, text: m.content || '', kind: a ? a.kind : '', sealed: !!m.limit,
+      thumb: !m.limit && a ? a.preview || (a.kind === 'image' ? a.url : '') : '' };
+  }
+
+  function quoteInner(r) {
+    var name = r.gone ? '' : r.sender === ME ? i18nSpan('chats.replyYou') : escapeHtml(peer ? peer.name : '');
+    var text = r.gone ? i18nSpan('chats.replyGone')
+      : r.sealed ? i18nSpan('chats.sealed.' + (r.kind || 'text'))
+      : (r.kind ? i18nSpan('chats.att.' + r.kind) + (r.text ? ' · ' : '') : '') + escapeHtml(r.text || '');
+    return (r.thumb ? '<img class="tk-quote__thumb" src="' + escapeHtml(src(r.thumb)) + '" alt="" loading="lazy">' : '') +
+      '<span class="tk-quote__body">' + (name ? '<span class="tk-quote__name">' + name + '</span>' : '') +
+      '<span class="tk-quote__text">' + text + '</span></span>';
+  }
+
+  function quoteHtml(r) {
+    return r.gone ? '<span class="tk-quote is-gone">' + quoteInner(r) + '</span>'
+      : '<button type="button" class="tk-quote" data-goto="' + escapeHtml(r.id) + '" aria-label="' + escapeHtml(t('chats.replyGoto')) + '">' + quoteInner(r) + '</button>';
+  }
+
   function messageHtml(m, g) {
+    if (m.system) return sysHtml(m);
     var out = m.sender === ME;
     var f = m.forwardedFrom;
-    g = g || { first: true, last: true, name: null };
+    g = g || { first: true, last: true, name: null, author: true };
     var head = '';
+    // В группе над первым сообщением серии — кто пишет.
+    if (group && !out && g.author) head += '<span class="tk-msg__author">' + escapeHtml(personOf(m.sender).name) + '</span>';
     if (f) {
       if (g.first) head += '<span class="tk-msg__fwd-head">' + escapeHtml(t('chats.forwarded')) + '</span>';
       if (g.first || g.name !== f.name) {
@@ -302,6 +436,8 @@
           (f.sentAt ? ' <time>' + escapeHtml(tkDate(f.sentAt, FWD_TIME)) + '</time>' : '') + '</span>';
       }
     }
+    // Исчезнувшее — одна заглушка, без цитаты: от сообщения ничего не осталось.
+    if (m.reply && !m.expired) head += quoteHtml(m.reply);
     var body;
     var bare = false;
     if (m.expired) body = goneHtml();
@@ -333,7 +469,9 @@
       (f ? ' tk-msg--fwd' + (g.first ? ' is-first' : '') + (g.last ? ' is-last' : '') : '');
     // Аватар собеседника — у первого в пачке; у остальных место под него
     // остаётся, чтобы рамка пачки шла ровным столбцом.
-    var ava = avatar('tk-msg__ava' + (g.first ? '' : ' is-blank'), peer, g.first ? ' data-peer' : ' aria-hidden="true"');
+    var ava = group
+      ? avatar('tk-msg__ava' + (g.author ? '' : ' is-blank'), personOf(m.sender), g.author ? ' data-person="' + escapeHtml(m.sender) + '"' : ' aria-hidden="true"')
+      : avatar('tk-msg__ava' + (g.first ? '' : ' is-blank'), peer, g.first ? ' data-peer' : ' aria-hidden="true"');
     return '<div class="' + cls + '" data-mid="' + escapeHtml(m._id) + '" data-key="' + escapeHtml(key) + '">' +
       (out ? bubble : '<div class="tk-msg__row">' + ava + bubble + '</div>') +
       (g.last ? '<p class="tk-msg__when">' + when + '</p>' : '') + '</div>';
@@ -349,7 +487,9 @@
         return y && y.m && batch && y.m.sender === x.m.sender && y.m.forwardedFrom && y.m.forwardedFrom.batch === batch;
       };
       var prev = items[i - 1], next = items[i + 1];
-      x.g = { first: !same(prev), last: !same(next), name: same(prev) ? prev.m.forwardedFrom.name : null };
+      x.g = { first: !same(prev), last: !same(next), name: same(prev) ? prev.m.forwardedFrom.name : null,
+        // Серия в группе: подряд от одного автора, без служебной строки между.
+        author: !(prev && prev.m && !prev.m.system && prev.m.sender === x.m.sender) };
     });
   }
 
@@ -393,7 +533,7 @@
   }
 
   function render() {
-    var waiting = uploads.filter(function (u) { return peer && u.peerId === peer.id; }).map(uploadHtml).join('');
+    var waiting = uploads.filter(function (u) { return u.chat === chatKey(); }).map(uploadHtml).join('');
     if (!messages.length && !calls.length) {
       feed.innerHTML = waiting || '<p class="tk-note tk-note--center">' + escapeHtml(t('chats.dialogEmpty')) + '</p>';
       return;
@@ -432,10 +572,29 @@
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
   }
 
+  // Страница открытого чата — личного или группы, в одном виде. У группы
+  // заодно авторы (people), докуда дочитали остальные (seenUntil) и её
+  // карточка с моей ролью.
+  function loadChat(before) {
+    if (!group) return load(peer.id, before);
+    return fetch('/api/groups/' + encodeURIComponent(group.id) + '/messages' + (before ? '?before=' + encodeURIComponent(before) : ''))
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (page) {
+        Object.assign(people, page.people || {});
+        seen(page.seenUntil);
+        if (page.group) setGroup(page.group);
+        return { messages: page.messages, calls: [], restricted: null };
+      });
+  }
+
+  function seen(at) {
+    if (at && (!seenUntil || new Date(at) > new Date(seenUntil))) seenUntil = at;
+  }
+
   function openHistory() {
-    var id = peer.id;
-    load(id).then(function (page) {
-      if (!peer || peer.id !== id) return;
+    var key = chatKey();
+    loadChat().then(function (page) {
+      if (chatKey() !== key) return;
       messages = page.messages;
       calls = page.calls;
       allLoaded = page.messages.length < PAGE;
@@ -451,20 +610,40 @@
   // Пока первая страница не пришла, сообщений нет и дозагружать не от чего:
   // открытие диалога очищает ленту, и прокрутка срабатывала раньше истории
   // (TypeError 'sentAt' из журнала ошибок, 17.09).
-  feed.addEventListener('scroll', function () {
-    if (!peer || loadingOld || allLoaded || !messages.length || feed.scrollTop > 40) return;
+  function loadOlder() {
     loadingOld = true;
-    var id = peer.id;
-    load(id, messages[0].sentAt).then(function (page) {
-      if (!peer || peer.id !== id) return;
+    var key = chatKey();
+    return loadChat(messages[0].sentAt).then(function (page) {
+      if (chatKey() !== key) return;
       allLoaded = page.messages.length < PAGE;
       var before = feed.scrollHeight;
       merge(page.messages, page.calls);
       render();
       feed.scrollTop = feed.scrollHeight - before;
-    }).catch(function (e) { console.error('getMessages (старые):', e); })
-      .finally(function () { loadingOld = false; });
+    }).finally(function () { loadingOld = false; });
+  }
+
+  feed.addEventListener('scroll', function () {
+    if (!chatKey() || loadingOld || allLoaded || !messages.length || feed.scrollTop > 40) return;
+    loadOlder().catch(function (e) { console.error('getMessages (старые):', e); });
   });
+
+  // Переход к сообщению из цитаты: к середине ленты и короткая подсветка.
+  // В загруженной части его нет — дочитываем историю назад, пока не найдётся.
+  function revealMessage(id) {
+    var el = feed.querySelector('[data-mid="' + CSS.escape(id) + '"]');
+    if (el) {
+      el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      el.classList.remove('is-flash');
+      void el.offsetWidth;   // перезапуск анимации при повторном переходе
+      el.classList.add('is-flash');
+      return;
+    }
+    if (!chatKey() || loadingOld || !messages.length) return;
+    if (allLoaded) return toast(t('chats.replyGone'), 'error');
+    loadOlder().then(function () { revealMessage(id); })
+      .catch(function (e) { console.error('getMessages (к цитате):', e); });
+  }
 
   // ── Ограничение доступа ───────────────────────────────────────────────
   // Между нами стоит ограничение (utils/restrict.js) — вместо поля ввода
@@ -474,6 +653,7 @@
     var note = $('chatBlocked');
     var form = $('composeForm');
     if (who && rec) cancelVoice();
+    if (who) clearReply();
     form.hidden = !!who;
     note.hidden = !who;
     // Ограничение закрывает и звонки, в обе стороны (utils/restrict.js):
@@ -502,11 +682,11 @@
   var syncing = false;
 
   function softSync() {
-    if (!peer || syncing || !messages.length) return;
+    if (!chatKey() || syncing || !messages.length) return;
     syncing = true;
-    var id = peer.id;
-    load(id).then(function (page) {
-      if (!peer || peer.id !== id) return;
+    var key = chatKey();
+    loadChat().then(function (page) {
+      if (chatKey() !== key) return;
       setBlocked(page.restricted);
       var byId = {};
       page.messages.forEach(function (m) { byId[m._id] = m; });
@@ -538,8 +718,10 @@
       .finally(function () { syncing = false; });
   }
 
+  // Ждать есть чего только в личном: в группе «прочитано» приходит
+  // событием group:read, исчезающих там нет.
   function waiting() {
-    return messages.some(function (m) {
+    return !group && messages.some(function (m) {
       return (m.sender === ME && !m.readAt) || (m.limit && !m.expired);
     });
   }
@@ -556,6 +738,7 @@
   // Входящие открытого диалога читаются, только пока вкладку видно: иначе
   // собеседник видел бы «прочитано» у сообщения, которого никто не видел.
   function markRead() {
+    if (group) return markGroupRead();
     if (!peer || document.visibilityState !== 'visible') return;
     var unread = messages.some(function (m) { return m.sender === peer.id && !m.readAt; });
     var el = dialogEl(peer.id);
@@ -570,6 +753,23 @@
         if (window.tkChatBadge) window.tkChatBadge({ messages: r.unreadMessages });
       })
       .catch(function (e) { console.error('read:', e); });
+  }
+
+  // Группа: отметка «прочитано до сейчас» (routes/groups.js). Спрашиваем
+  // сервер, только когда есть что отмечать: чужое новее прошлой отметки
+  // или горит счётчик в строке.
+  function markGroupRead() {
+    if (document.visibilityState !== 'visible') return;
+    var id = group.id;
+    var el = groupEl(id);
+    var badge = el && el.querySelector('.tk-dialog__unread');
+    var unseen = messages.some(function (m) { return m.sender !== ME && !m.system && (!groupReadAt || new Date(m.sentAt) > new Date(groupReadAt)); });
+    if (!unseen && !(badge && !badge.classList.contains('hidden'))) return;
+    groupReadAt = new Date().toISOString();
+    if (badge) { badge.textContent = '0'; badge.classList.add('hidden'); }
+    post('/api/groups/' + encodeURIComponent(id) + '/read', {})
+      .then(function (r) { if (window.tkChatBadge) window.tkChatBadge({ messages: r.unreadMessages }); })
+      .catch(function (e) { console.error('group read:', e); });
   }
 
   document.addEventListener('visibilitychange', markRead);
@@ -636,6 +836,19 @@
       .then(function (d) {
         var ids = [];
         d.dialogs.forEach(function (c) {
+          if (c.group) {
+            if (groupEl(c.group.id)) return;
+            var row = groupNode(c.group);
+            row.querySelector('.tk-dialog__last').innerHTML = groupRowLast(c.last);
+            var at = row.querySelector('.tk-dialog__when');
+            at.setAttribute('data-time', c.lastActivity);
+            at.textContent = timeAgo(c.lastActivity);
+            var unread = row.querySelector('.tk-dialog__unread');
+            unread.textContent = String(c.unread);
+            unread.classList.toggle('hidden', !c.unread);
+            list.insertBefore(row, $('conversationsEmpty'));
+            return;
+          }
           var p = c.interlocutor;
           if (dialogEl(p.id)) return;
           var el = dialogNode(p);
@@ -720,10 +933,13 @@
 
   // ── Выбор диалога ─────────────────────────────────────────────────────
   function select(el) {
+    if (el.hasAttribute('data-group')) return openGroup(groupOf(el));
     closeAllSealed();
     stopVoice(false);
     stopPicking();
     closeMenu();
+    clearReply();
+    leaveGroupMode();
     peer = peerOf(el);
     messages = [];
     calls = [];
@@ -767,6 +983,8 @@
     stopVoice(false);
     stopPicking();
     closeMenu();
+    clearReply();
+    leaveGroupMode();
     peer = null;
     paintContactBtn();
     messages = [];
@@ -779,36 +997,143 @@
     $('chat').classList.remove('has-peer', 'is-open');
   }
 
+  // ── Открытая группа ───────────────────────────────────────────────────
+  // Та же правая часть, что у диалога: шапка — фото, название и сколько
+  // участников; звонков, «в контакты» и исчезающих в группе нет (звонок
+  // группе — отдельным этапом). Нажатие на шапку — экран группы
+  // (public/tk-groups.js).
+  function openGroup(g) {
+    closeAllSealed();
+    stopVoice(false);
+    stopPicking();
+    closeMenu();
+    clearReply();
+    peer = null;
+    group = g;
+    people = {};
+    seenUntil = null;
+    groupReadAt = null;
+    messages = [];
+    calls = [];
+    allLoaded = false;
+    feed.innerHTML = '';
+    setTab('messages');
+    list.querySelectorAll('.tk-dialog').forEach(function (d) {
+      d.classList.toggle('tk-dialog--on', d.getAttribute('data-group') === g.id);
+    });
+    setBlocked(null);
+    setLimit('');
+    $('chat').classList.add('is-group');
+    paintGroupHead();
+    history.replaceState(null, '', '/chatsPage?group=' + encodeURIComponent(g.id));
+    $('chat').classList.add('has-peer', 'is-open');
+    openHistory();
+  }
+
+  function paintGroupHead() {
+    $('peerName').textContent = group.title;
+    $('chatAvatar').outerHTML = avatar('tk-chat__ava-big', group, ' id="chatAvatar" data-group-info role="button" tabindex="0" aria-label="' + escapeHtml(t('groups.info')) + '"');
+    $('chatSub').textContent = t('groups.count', { n: group.count });
+    $('chatHeaderPresence').setAttribute('data-presence-user', '');
+    input.removeAttribute('data-i18n-placeholder');
+    input.placeholder = t('groups.messagePh', { title: group.title });
+    paintContactBtn();
+  }
+
+  // Карточка группы с сервера (utils/groups.js, brief или info): обновить
+  // открытую группу, её шапку и строку в списке.
+  function setGroup(info) {
+    var el = groupEl(info.id);
+    if (el) paintGroupRow(el, info);
+    if (!group || group.id !== info.id) return;
+    var a = info.avatarStyle || {};
+    group.title = group.name = info.title;
+    group.url = a.url || '';
+    group.bg = a.gradient || '';
+    group.initial = a.initial || '';
+    group.count = info.count;
+    if (info.myRole) group.myRole = info.myRole;
+    paintGroupHead();
+  }
+
+  function leaveGroupMode() {
+    if (!group) return;
+    group = null;
+    people = {};
+    seenUntil = null;
+    $('chat').classList.remove('is-group');
+    $('chatSub').textContent = '';
+  }
+
   $('backToList').addEventListener('click', function () {
     $('chat').classList.remove('is-open');
   });
 
   function goToPeer() {
     if (peer) location.href = '/userPage/' + encodeURIComponent(peer.id);
+    else if (group && window.TKGroups) window.TKGroups.settings(group.id);
   }
   $('peerLink').addEventListener('click', goToPeer);
+
+  // ── Ответ ─────────────────────────────────────────────────────────────
+  // Ответить — пунктом меню (правый клик, удержание) или на телефоне
+  // смахиванием сообщения влево, как в Telegram. Над полем — полоса
+  // с цитатой; следующее сообщение, файл, голосовое или кружок уходят
+  // с replyTo, и цитату сервер собирает сам (utils/messageView.js).
+  var replyTo = null;       // сообщение ленты, на которое отвечаем
+
+  function setReply(m) {
+    var stick = atBottom();
+    replyTo = m;
+    $('replyQuote').innerHTML = quoteInner(quoteOf(m));
+    $('replyBar').hidden = false;
+    if (stick) scrollToBottom();   // полоса съела высоту ленты
+    input.focus();
+  }
+
+  function clearReply() {
+    replyTo = null;
+    $('replyBar').hidden = true;
+  }
+
+  // Кому отвечаем — забираем из полосы вместе с отправкой.
+  function takeReply() {
+    var id = replyTo && replyTo._id;
+    clearReply();
+    return id || '';
+  }
+
+  $('replyCancel').addEventListener('click', function () { clearReply(); input.focus(); });
+  $('replyQuote').addEventListener('click', function () { if (replyTo) revealMessage(replyTo._id); });
 
   // ── Отправка ──────────────────────────────────────────────────────────
   $('composeForm').addEventListener('submit', function (e) {
     e.preventDefault();
     if (rec) return stopVoice(true);
     var content = input.value.trim();
-    if (!peer || !content) return;
+    if (!chatKey() || !content) return;
     input.value = '';
     syncActs();
     var limit = limitOpt;
     setLimit('');
-    post('/sendMessage', { recipientId: peer.id, content: content, limit: limit })
+    var quoted = replyTo;
+    var key = chatKey();
+    var gid = group && group.id;
+    (gid
+      ? post('/api/groups/' + encodeURIComponent(gid) + '/send', { content: content, replyTo: takeReply() || undefined })
+      : post('/sendMessage', { recipientId: peer.id, content: content, limit: limit, replyTo: takeReply() || undefined }))
       .then(function (m) {
-        merge([m]);
-        render();
-        scrollToBottom();
-        var el = dialogEl(m.recipient);
-        if (el) setLast(el, m);
+        if (chatKey() === key) {
+          merge([m]);
+          render();
+          scrollToBottom();
+        }
+        var el = gid ? groupEl(gid) : dialogEl(m.recipient);
+        if (el) (gid ? setGroupLast : setLast)(el, m);
       })
       .catch(function (err) {
         console.error('sendMessage:', err);
-        if (!input.value) { input.value = content; setLimit(limit); syncActs(); } // текст не теряем
+        if (!input.value) { input.value = content; setLimit(limit); syncActs(); if (quoted && !replyTo) setReply(quoted); } // текст не теряем
         // Ограничение доступа (utils/restrict.js) — сервер объясняет сам.
         toast(err.status === 403 && err.message ? err.message : t('chats.sendFailed'), 'error');
       });
@@ -877,14 +1202,16 @@
         failUpload(u);
         return;
       }
-      load(u.peerId).then(function (page) {
+      (u.groupId
+        ? fetch('/api/groups/' + encodeURIComponent(u.groupId) + '/messages').then(function (r) { return r.json(); })
+        : load(u.peerId)).then(function (page) {
         var found = page.messages.some(function (m) {
           return m.sender === ME && new Date(m.sentAt).getTime() >= since &&
             m.attachments && m.attachments[0] && m.attachments[0].kind === u.kind;
         });
         if (!found) return;
         dropUpload(u.ref);
-        if (peer && peer.id === u.peerId) openHistory();
+        if (chatKey() === u.chat) openHistory();
       }).catch(function () {});
     }, WATCH_EVERY);
   }
@@ -898,15 +1225,17 @@
   // special — 'voice' или 'round': записанное на странице. Выбранное
   // ограничение действует на всю пачку и после неё сбрасывается.
   function queueFiles(files, special) {
-    if (!peer || !files.length) return;
+    if (!chatKey() || !files.length) return;
     var caption = input.value.trim();
     var limit = limitOpt;
+    var reply = takeReply();
     input.value = '';
     setLimit('');
     Array.prototype.forEach.call(files, function (file, i) {
       uploads.push({
         ref: 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-        peerId: peer.id, file: file, special: special || '', limit: limit, caption: i === 0 ? caption : '',
+        chat: chatKey(), peerId: peer ? peer.id : '', groupId: group ? group.id : '',
+        file: file, special: special || '', limit: limit, caption: i === 0 ? caption : '', replyTo: i === 0 ? reply : '',
         name: special ? t('chats.att.' + special) : file.name, kind: kindOf(file, special), pct: 0, state: 'queued'
       });
     });
@@ -923,11 +1252,13 @@
     u.state = 'uploading';
     redrawUpload(u);
     var form = new FormData();
-    form.append('recipientId', u.peerId);
+    if (u.groupId) form.append('groupId', u.groupId);
+    else form.append('recipientId', u.peerId);
     form.append('content', u.caption);
     form.append('ref', u.ref);
     if (u.special) form.append('special', u.special);
     if (u.limit) form.append('limit', u.limit);
+    if (u.replyTo) form.append('replyTo', u.replyTo);
     form.append('file', u.file, u.file.name);
 
     var xhr = u.xhr = new XMLHttpRequest();
@@ -954,7 +1285,7 @@
         watchProcessing(u);
       } else if (xhr.status >= 200 && xhr.status < 300) {
         dropUpload(u.ref);
-        delivered(data);
+        delivered(data, u);
       } else {
         failUpload(u, data.message);
       }
@@ -977,14 +1308,14 @@
   }
 
   // Своё сообщение готово: в ленту и наверх списка диалогов.
-  function delivered(m) {
-    if (peer && (m.recipient === peer.id)) {
+  function delivered(m, u) {
+    if (chatKey() === u.chat) {
       merge([m]);
       render();
       scrollToBottom();
     }
-    var el = dialogEl(m.recipient);
-    if (el) setLast(el, m);
+    var el = u.groupId ? groupEl(u.groupId) : dialogEl(m.recipient);
+    if (el) (u.groupId ? setGroupLast : setLast)(el, m);
   }
 
   feed.addEventListener('click', function (e) {
@@ -1863,6 +2194,56 @@
     }
   });
 
+  // ── События групп (utils/groups.js) ──
+  // Новое в группе: строка — наверх с автором, открытая — в ленту и сразу
+  // прочитано; закрытая — счётчик в строке. Своё из другой вкладки тоже
+  // приходит сюда, с ref — заглушка загрузки этой вкладки снимается.
+  document.addEventListener('tk:group:message', function (e) {
+    var d = e.detail;
+    var m = d.message;
+    people[d.sender.id] = d.sender;
+    var el = groupEl(d.groupId) || addGroupRow(d.group);
+    paintGroupRow(el, d.group);
+    setGroupLast(el, m, d.sender.displayName);
+    if (d.ref) dropUpload(d.ref);
+    if (group && group.id === d.groupId) {
+      var stick = atBottom() || m.sender === ME;
+      merge([m]);
+      if (m.system) setGroup(d.group);
+      render();
+      if (stick) scrollToBottom();
+      if (m.sender !== ME) markRead();
+    } else if (m.sender !== ME && !m.system) {
+      var badge = el.querySelector('.tk-dialog__unread');
+      badge.textContent = String((parseInt(badge.textContent, 10) || 0) + 1);
+      badge.classList.remove('hidden');
+    }
+  });
+
+  // Кто-то дочитал группу — у моих сообщений до этого места «прочитано».
+  document.addEventListener('tk:group:read', function (e) {
+    if (!group || group.id !== e.detail.groupId || e.detail.userId === ME) return;
+    var was = seenUntil;
+    seen(e.detail.at);
+    if (seenUntil === was) return;
+    var top = feed.scrollTop;
+    render();
+    feed.scrollTop = top;
+  });
+
+  document.addEventListener('tk:group:updated', function (e) { setGroup(e.detail.group); });
+
+  // Меня удалили, я вышел в другой вкладке или группу удалили.
+  document.addEventListener('tk:group:removed', function (e) {
+    var el = groupEl(e.detail.groupId);
+    if (el) el.remove();
+    if (group && group.id === e.detail.groupId) {
+      closeDialog();
+      if (e.detail.reason !== 'left') toast(t('groups.gone.' + e.detail.reason), 'error');
+    }
+    if (!list.querySelector('.tk-dialog')) $('conversationsEmpty').classList.remove('hidden');
+  });
+
   // Исчезающее истекло — у обоих на его месте заглушка.
   document.addEventListener('tk:message:expired', function (e) {
     var fresh = e.detail.message;
@@ -1871,8 +2252,9 @@
     if (viewing === fresh._id) closeViewers(true);
     if (roundPlayer.url && roundPlayer.url.indexOf('/messages/' + fresh._id + '/') === 0) stopRound();
     if (sound.url && sound.url.indexOf('/messages/' + fresh._id + '/') === 0) { sound.audio.pause(); sound.url = ''; sound.el = null; }
-    if (i === -1) return;
-    messages[i] = fresh;
+    var quoted = dropQuotes([fresh._id]);
+    if (i === -1 && !quoted) return;
+    if (i !== -1) messages[i] = fresh;
     var top = feed.scrollTop;
     render();
     feed.scrollTop = top;
@@ -1949,6 +2331,8 @@
   // и свежий журнал на вкладке «Звонки».
   document.addEventListener('tk:call:logged', function (e) {
     var c = e.detail.call;
+    // Звонок группе — не разговор двоих: в их ленту не идёт (callLog, chat).
+    if (c.chat) { journalStale = true; if (!callsList.hidden) loadJournal(); return; }
     // Звонок — тоже общение: собеседник уезжает в начало ленты недавних.
     // Карточку берём из списка диалогов: в записи звонка её нет, а ставить
     // в ленту человека, которого ещё нет на экране, незачем — он появится
@@ -1972,7 +2356,7 @@
   // Пока сокета не было, что-то могло прийти или прочитаться — перечитываем
   // открытый диалог целиком.
   document.addEventListener('tk:reconnect', function () {
-    if (peer) (messages.length ? softSync : openHistory)();
+    if (chatKey()) (messages.length ? softSync : openHistory)();
     journalStale = true;
     if (!callsList.hidden) loadJournal();
   });
@@ -1993,6 +2377,7 @@
     contactsPane.hidden = !onContacts;
     // Лента недавних — часть списка диалогов: на других вкладках ей не место.
     recentBox.hidden = onCalls || onContacts || !recentRow.children.length;
+    $('newGroupRow').hidden = onCalls || onContacts;
     var q = new URLSearchParams(location.search);
     if (onCalls) q.set('tab', 'calls');
     else if (onContacts) q.set('tab', 'contacts');
@@ -2028,6 +2413,8 @@
   var contactSearch = $('contactSearch');
   var contacts = [];        // записанные, в том же виде, что строки диалогов
   var suggest = [];         // с кем общаемся чаще всего — для пустой вкладки
+  var found = [];           // люди из общего поиска по строке запроса
+  var foundFor = '';        // для какой строки они найдены
   var contactsReady = false;
 
   function isContact(id) {
@@ -2036,10 +2423,13 @@
 
   // Человек с сервера ({ id, displayName, avatarStyle, … }) — в тот же вид,
   // что отдаёт peerOf: одна отрисовка на диалоги, контакты и подсказки.
+  // Строка для поиска: ник и имя, без регистра, «ё» как «е».
+  function norm(s) { return String(s || '').toLowerCase().replace(/ё/g, 'е'); }
+
   function asPeer(u) {
     var a = u.avatarStyle || {};
     return {
-      id: String(u.id), name: u.displayName,
+      id: String(u.id || u._id), name: u.displayName, find: norm(u.displayName + ' ' + (u.login || '')),
       url: a.url || '', bg: a.gradient || '', initial: a.initial || '',
       favorite: !!u.favorite, online: !!u.isOnline
     };
@@ -2055,9 +2445,11 @@
 
   var STAR = '<svg class="tk-contact__star" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"></path></svg>';
 
-  function contactRow(c, asSuggest) {
-    var acts = asSuggest
-      ? '<button type="button" class="tk-contact__add" data-add="' + escapeHtml(c.id) + '">' + escapeHtml(t('contacts.add')) + '</button>'
+  // addFrom — строка не из контактов: вместо звонков «В контакты», и откуда
+  // человек добавлен (models/Contact.js, source): подсказка или поиск.
+  function contactRow(c, addFrom) {
+    var acts = addFrom
+      ? '<button type="button" class="tk-contact__add" data-add="' + addFrom + '">' + escapeHtml(t('contacts.add')) + '</button>'
       : ['audio', 'video'].map(function (type) {
           var key = type === 'audio' ? 'calls.audio' : 'calls.video';
           return '<button type="button" class="tk-contact__btn" data-call="' + type + '" aria-label="' + escapeHtml(t(key)) + '" title="' + escapeHtml(t(key)) + '">' +
@@ -2079,26 +2471,37 @@
   function renderContacts() {
     paintContactBtn();
     if (!contactsReady) return;
-    var q = contactSearch.value.trim().toLowerCase();
-    var rows = q ? contacts.filter(function (c) { return c.name.toLowerCase().indexOf(q) !== -1; }) : contacts;
+    // Ищем по нику и по имени: раньше только по нику, и «Иван» не находил
+    // записанного как ivan_p (жалоба заказчика 24.09). Ниже своих — люди
+    // со всего сайта, чтобы найти и того, кого ещё не записали.
+    var q = norm(contactSearch.value.trim().replace(/^@/, ''));
+    var rows = q ? contacts.filter(function (c) { return c.find.indexOf(q) !== -1; }) : contacts;
+    var others = q && foundFor === q ? found.filter(function (u) { return u.id !== ME && !isContact(u.id); }) : [];
     var html;
-    if (rows.length) {
-      html = rows.map(function (c) { return contactRow(c, false); }).join('');
-    } else if (q) {
-      html = '<p class="tk-note tk-chat__empty-list">' + escapeHtml(t('contacts.nothing')) + '</p>';
+    if (q) {
+      html = rows.map(function (c) { return contactRow(c); }).join('');
+      if (others.length) {
+        html += '<p class="tk-contacts__hint">' + escapeHtml(t('contacts.found')) + '</p>' +
+          others.map(function (c) { return contactRow(c, 'search'); }).join('');
+      }
+      if (!html && (foundFor === q || q.length < 2)) html = '<p class="tk-note tk-chat__empty-list">' + escapeHtml(t('contacts.nothing')) + '</p>';
+    } else if (rows.length) {
+      html = rows.map(function (c) { return contactRow(c); }).join('');
     } else {
       // Пустая вкладка не пустая: подсказываем, кого записать первым.
       html = '<p class="tk-note tk-chat__empty-list">' + escapeHtml(t('contacts.empty')) + '</p>';
       if (suggest.length) {
         html += '<p class="tk-contacts__hint">' + escapeHtml(t('contacts.suggest')) + '</p>' +
-          suggest.map(function (c) { return contactRow(c, true); }).join('');
+          suggest.map(function (c) { return contactRow(c, 'recent'); }).join('');
       }
     }
     contactsList.innerHTML = html;
     // Точки присутствия ставит tk-app.js по data-presence-user; начальное
     // состояние знает сервер и прислал вместе со списком.
     contactsList.querySelectorAll('.tk-contact').forEach(function (el) {
-      var c = (isContact(el.getAttribute('data-id')) || suggest.find(function (s) { return s.id === el.getAttribute('data-id'); })) || {};
+      var id = el.getAttribute('data-id');
+      var same = function (x) { return x.id === id; };
+      var c = isContact(id) || suggest.find(same) || found.find(same) || {};
       el.querySelector('[data-slot="ava"]').insertAdjacentHTML('beforeend',
         '<span class="presence-dot ' + (c.online ? 'presence-online' : 'presence-offline') + '"></span>');
     });
@@ -2160,11 +2563,31 @@
     var p = peerOf(row);
     var call = e.target.closest('[data-call]');
     if (call) return callPeer(p, call.getAttribute('data-call'));
-    if (e.target.closest('[data-add]')) return addContact(p, 'recent');
+    var add = e.target.closest('[data-add]');
+    if (add) return addContact(p, add.getAttribute('data-add'));
     openPeer({ id: p.id, displayName: p.name, avatarStyle: { url: p.url, gradient: p.bg, initial: p.initial } });
   });
 
-  contactSearch.addEventListener('input', renderContacts);
+  // Люди со всего сайта — тем же поиском, что в шапке (routes/search.js),
+  // с паузой на набор: не запрос на каждую букву.
+  var findTimer = null;
+  contactSearch.addEventListener('input', function () {
+    renderContacts();
+    clearTimeout(findTimer);
+    var q = norm(contactSearch.value.trim().replace(/^@/, ''));
+    if (q.length < 2 || q === foundFor) return;
+    findTimer = setTimeout(function () {
+      fetch('/api/search?type=people&limit=10&q=' + encodeURIComponent(q))
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (data) {
+          if (norm(contactSearch.value.trim().replace(/^@/, '')) !== q) return;
+          found = (data.people || []).map(asPeer);
+          foundFor = q;
+          renderContacts();
+        })
+        .catch(function (e) { console.error('contacts search:', e); });
+    }, 250);
+  });
 
   // ── Журнал звонков ────────────────────────────────────────────────────
   // Открыли — пропущенные увидены: сервер гасит их у себя, здесь гаснут
@@ -2304,6 +2727,8 @@
     el.classList.add('is-picked');   // правый клик выделяет то, над чем меню
     // Исчезающее не копируется и не пересылается.
     menu.querySelectorAll('[data-for="message"]').forEach(function (b) { b.hidden = what.kind !== 'message' || !plain(what.m); });
+    // Ответить — на любое сообщение, кроме исчезнувшего, и пока писать можно.
+    menu.querySelector('[data-for="reply"]').hidden = what.kind !== 'message' || what.m.expired || $('composeForm').hidden;
     menu.hidden = false;
     var target = el.querySelector('.tk-msg__bubble') || el;
     var r = target.getBoundingClientRect();
@@ -2400,6 +2825,10 @@
   });
 
   feed.addEventListener('click', function (e) {
+    var quote = e.target.closest('[data-goto]');
+    if (quote && !picking && !longPressed) return revealMessage(quote.getAttribute('data-goto'));
+    var who = e.target.closest('[data-person]');
+    if (who && !picking) return (location.href = '/userPage/' + encodeURIComponent(who.getAttribute('data-person')));
     if (e.target.closest('[data-peer]') && !picking) return goToPeer();
     var el = itemOf(e.target);
     if (!el || !picking) return;
@@ -2443,6 +2872,60 @@
     feed.addEventListener(name, function () { clearTimeout(pressTimer); pressFrom = null; });
   });
 
+  // Смахнуть сообщение влево — ответить на него, как в Telegram. Только
+  // пальцем: у мыши для этого меню. Жест горизонтальный, когда палец ушёл
+  // вбок заметно дальше, чем вверх-вниз, — иначе это прокрутка ленты.
+  // Вертикаль браузер забирает себе сам, горизонталь отдаёт нам
+  // (touch-action: pan-y у .tk-msg, chats.css), поэтому слушатели пассивные.
+  var SWIPE_ARM = 56;       // столько провести, чтобы отпускание стало ответом
+  var swipe = null;         // { el, m, x, y, on, armed, icon }
+
+  feed.addEventListener('touchstart', function (e) {
+    swipe = null;
+    var el = !picking && e.touches.length === 1 && e.target.closest('.tk-msg[data-mid]');
+    var m = el && findMessage(el.getAttribute('data-mid'));
+    if (!m || m.expired || $('composeForm').hidden) return;
+    swipe = { el: el, m: m, x: e.touches[0].clientX, y: e.touches[0].clientY, on: null };
+  }, { passive: true });
+
+  feed.addEventListener('touchmove', function (e) {
+    if (!swipe) return;
+    var dx = swipe.x - e.touches[0].clientX, dy = e.touches[0].clientY - swipe.y;
+    if (swipe.on === null) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      if (!(dx > 0 && dx > Math.abs(dy) * 1.5)) { swipe = null; return; }
+      swipe.on = true;
+      swipe.icon = document.createElement('span');
+      swipe.icon.className = 'tk-msg__swipe';
+      swipe.icon.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 8 5 12.5l5 4.5"></path><path d="M5.5 12.5H14a5 5 0 015 5V19"></path></svg>';
+      swipe.el.appendChild(swipe.icon);
+      swipe.el.classList.add('is-swiping');
+    }
+    // За порогом сообщение идёт туже — как резина.
+    var shift = dx > SWIPE_ARM ? SWIPE_ARM + (dx - SWIPE_ARM) * 0.25 : Math.max(0, dx);
+    swipe.el.style.setProperty('--swipe', -shift + 'px');
+    var armed = dx >= SWIPE_ARM;
+    if (armed !== !!swipe.armed) {
+      swipe.armed = armed;
+      swipe.el.classList.toggle('is-armed', armed);
+      if (armed && navigator.vibrate) navigator.vibrate(10);
+    }
+  }, { passive: true });
+
+  // Отпустили — сообщение возвращается на место; взведённый жест — ответ.
+  function endSwipe(apply) {
+    var s = swipe;
+    swipe = null;
+    if (!s || !s.on) return;
+    s.el.classList.remove('is-swiping', 'is-armed');
+    s.el.classList.add('is-returning');
+    s.el.style.removeProperty('--swipe');
+    setTimeout(function () { s.el.classList.remove('is-returning'); s.icon.remove(); }, 220);
+    if (apply && s.armed) setReply(s.m);
+  }
+  feed.addEventListener('touchend', function () { endSwipe(true); });
+  feed.addEventListener('touchcancel', function () { endSwipe(false); });
+
   feed.addEventListener('keydown', function (e) {
     var el = itemOf(e.target);
     if (!el || e.target !== (el.querySelector('.tk-msg__bubble') || el)) return;
@@ -2464,6 +2947,7 @@
     if (closeViewers()) return;
     if (!menu.hidden) closeMenu();
     else if (picking && fwd.classList.contains('hidden')) stopPicking();
+    else if (replyTo && fwd.classList.contains('hidden')) clearReply();
   });
   feed.addEventListener('scroll', closeMenu);
 
@@ -2474,6 +2958,7 @@
     var act = btn.getAttribute('data-act');
     closeMenu();
     if (act === 'select') startPicking(key);
+    else if (act === 'reply') setReply(resolve(key).m);
     else if (act === 'copy') copy([key]);
     else if (act === 'forward') openForward([key]);
     else if (act === 'delete') removeItems([key]);
@@ -2508,9 +2993,12 @@
 
     var q = n > 1 ? t('chats.deleteManyQ', { n: n }) : msgs.length ? t('chats.deleteMsgQ') : t('chats.deleteCallQ');
     if (msgs.length && callIds.length) q += ' ' + t('chats.deleteMixedNote');
-    var choices = msgs.length
+    // В группе «у всех» — только своё, а администратору — любое
+    // (routes/streaming/messages.js, deleteInGroups).
+    var forAll = !group || group.myRole === 'owner' || group.myRole === 'admin' || msgs.every(function (m) { return m.sender === ME; });
+    var choices = msgs.length && forAll
       ? [{ value: 'me', text: t('chats.deleteForMe'), danger: false }, { value: 'all', text: t('chats.deleteForAll') }]
-      : [{ value: 'me', text: t('chats.delete') }];
+      : [{ value: 'me', text: msgs.length ? t('chats.deleteForMe') : t('chats.delete') }];
 
     chooseDialog(q, choices).then(function (v) {
       if (!v) return;
@@ -2525,12 +3013,24 @@
     }).catch(function (e) { toast(t('chats.deleteFailed') + ': ' + e.message, 'error'); });
   }
 
+  // Цитаты удалённых или исчезнувших — «Сообщение удалено»; полоса ответа
+  // на такое снимается. true — в ленте что-то поменялось.
+  function dropQuotes(ids) {
+    if (replyTo && ids.indexOf(replyTo._id) !== -1) clearReply();
+    var changed = false;
+    messages.forEach(function (m) {
+      if (m.reply && !m.reply.gone && ids.indexOf(m.reply.id) !== -1) { m.reply = { id: m.reply.id, gone: true }; changed = true; }
+    });
+    return changed;
+  }
+
   function dropMessages(ids) {
     if (!ids.length) return;
     var before = messages.length;
     messages = messages.filter(function (m) { return ids.indexOf(m._id) === -1; });
     ids.forEach(function (id) { delete picked['m:' + id]; });
-    if (messages.length === before) return;
+    var quoted = dropQuotes(ids);
+    if (messages.length === before && !quoted) return;
     var top = feed.scrollTop;
     render();
     feed.scrollTop = top;
@@ -2588,6 +3088,7 @@
   ['audio', 'video'].forEach(function (type) {
     $(type === 'audio' ? 'callAudio' : 'callVideo').addEventListener('click', function () {
       if (peer) callPeer(peer, type);
+      else if (group && window.startGroupCall) window.startGroupCall(group, type);
     });
   });
 
@@ -2705,7 +3206,7 @@
     box.addEventListener('scroll', closePeerMenu);
   }
 
-  menuOn(list, 'dialog', '.tk-dialog');
+  menuOn(list, 'dialog', '.tk-dialog[data-id]');
   menuOn(contactsList, 'contact', '.tk-contact');
   menuOn(callsList, 'call', '.tk-callrow');
 
@@ -2724,9 +3225,16 @@
   var fwdPicked = {};      // id → true
   var fwdTimer = null;
 
-  // Кандидаты — собеседники из списка слева; поиск добавляет остальных.
+  // Кандидаты — собеседники и группы из списка слева; поиск добавляет
+  // остальных людей. У группы id с приставкой «g:» — так её не спутать
+  // с человеком в одном списке отметок.
   function known() {
-    return Array.prototype.map.call(list.querySelectorAll('.tk-dialog'), peerOf);
+    return Array.prototype.map.call(list.querySelectorAll('.tk-dialog'), function (el) {
+      if (!el.hasAttribute('data-group')) return peerOf(el);
+      var g = groupOf(el);
+      g.id = 'g:' + g.id;
+      return g;
+    });
   }
 
   function fwdRender(people) {
@@ -2809,7 +3317,8 @@
     fwdSend.disabled = true;
     post('/messages/forward', {
       messageIds: fwdMessages.map(function (m) { return m._id; }),
-      recipientIds: Object.keys(fwdPicked),
+      recipientIds: Object.keys(fwdPicked).filter(function (k) { return k.indexOf('g:') !== 0; }),
+      groupIds: Object.keys(fwdPicked).filter(function (k) { return k.indexOf('g:') === 0; }).map(function (k) { return k.slice(2); }),
       comment: fwdComment.value.trim()
     })
       .then(function () {
@@ -2830,11 +3339,12 @@
     refreshTimes();
     renderJournal();
     renderContacts();
-    if (!peer) return;
+    if (!chatKey()) return;
     var fromBottom = feed.scrollHeight - feed.scrollTop;
     render();
     feed.scrollTop = feed.scrollHeight - fromBottom;
-    input.placeholder = t('chats.messageTo') + ' ' + peer.name + '…';
+    if (group) paintGroupHead();
+    else input.placeholder = t('chats.messageTo') + ' ' + peer.name + '…';
   });
 
   refreshTimes();
@@ -2843,8 +3353,30 @@
 
   // Переход с профиля («Сообщение») или из уведомления: открыть нужный диалог
   // или вкладку звонков.
+  // Открытая извне (кнопка «Новая группа», ссылка-приглашение, группа,
+  // которой нет на первой странице списка) — через TKChats (tk-groups.js).
+  window.TKChats = {
+    openGroup: function (g) {
+      var el = groupEl(g.id) || addGroupRow(g);
+      openGroup(groupOf(el));
+    },
+    current: function () { return group; },
+    setGroup: setGroup,
+    avatar: avatar,
+    close: closeDialog
+  };
+
+  $('chat').addEventListener('click', function (e) {
+    if (e.target.closest('[data-group-info]') && group && window.TKGroups) window.TKGroups.settings(group.id);
+  });
+
   var params = new URLSearchParams(location.search);
   var target = params.get('peer') && dialogEl(params.get('peer'));
+  var groupId = params.get('group');
+  if (groupId && !groupEl(groupId)) {
+    fetch('/api/groups/' + encodeURIComponent(groupId)).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d) window.TKChats.openGroup(d.group); });
+  } else if (groupId) target = groupEl(groupId);
   var onContactsTab = params.get('tab') === 'contacts';
   // Контакты нужны не только своей вкладке: по ним меню человека решает,
   // предлагать «В контакты» или «Убрать из контактов».

@@ -43,7 +43,9 @@ function video({ path, title, description, thumb, src, seconds, date, views, aut
   };
 }
 
-function profile({ url, name, image, followers }) {
+// description — описание профиля, sameAs — его ссылки: сайт и сети
+// (utils/profileLinks.js), по ним поисковик связывает человека с ними.
+function profile({ url, name, image, followers, description, sameAs }) {
   return {
     '@context': 'https://schema.org',
     '@type': 'ProfilePage',
@@ -52,6 +54,8 @@ function profile({ url, name, image, followers }) {
       name,
       url: siteUrl(url),
       ...(image ? { image: siteUrl(image) } : {}),
+      ...(description ? { description } : {}),
+      ...(sameAs && sameAs.length ? { sameAs } : {}),
       interactionStatistic: { '@type': 'InteractionCounter', interactionType: { '@type': 'FollowAction' }, userInteractionCount: followers || 0 },
     },
   };

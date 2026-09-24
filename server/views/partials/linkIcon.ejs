@@ -1,0 +1,11 @@
+<%# Значок ссылки профиля (utils/profileLinks.js): kind — site, youtube,
+    instagram, tiktok, telegram, whatsapp. Линией, как остальные значки
+    сайта, а не фирменными знаками: в тёмной вёрстке они смотрятся чужими. %>
+<svg class="tk-linkico" viewBox="0 0 24 24" width="<%= typeof size !== 'undefined' ? size : 20 %>" height="<%= typeof size !== 'undefined' ? size : 20 %>" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<% if (kind === 'site') { %><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.4 2.5 3.7 5.5 3.7 9s-1.3 6.5-3.7 9c-2.4-2.5-3.7-5.5-3.7-9S9.6 5.5 12 3Z"></path>
+<% } else if (kind === 'youtube') { %><rect x="2.5" y="5.5" width="19" height="13" rx="4"></rect><path d="M10.2 9.3v5.4l4.6-2.7Z" fill="currentColor"></path>
+<% } else if (kind === 'instagram') { %><rect x="3.5" y="3.5" width="17" height="17" rx="5"></rect><circle cx="12" cy="12" r="3.8"></circle><circle cx="17.2" cy="6.8" r=".9" fill="currentColor" stroke="none"></circle>
+<% } else if (kind === 'tiktok') { %><path d="M13.5 3.5v11a3.5 3.5 0 1 1-3.5-3.5"></path><path d="M13.5 3.5c.4 2.8 2.3 4.7 5 5"></path>
+<% } else if (kind === 'telegram') { %><path d="M20.5 4.5 3.5 11.2l5.6 2 2 6.3 3.2-3.8 4.7 3.3Z"></path><path d="m9.1 13.2 8.4-6"></path>
+<% } else if (kind === 'whatsapp') { %><path d="M4 20.5l1.3-4.2A8.3 8.3 0 1 1 8 19.2Z"></path><path d="M9 8.3c-.4 2.9 3.3 6.9 6.6 6.8l.9-1.6-2.1-1.2-.9.9c-1-.5-2-1.5-2.5-2.5l.9-.9-1.1-2.2Z"></path>
+<% } %></svg>

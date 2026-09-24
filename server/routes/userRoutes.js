@@ -12,7 +12,9 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const { PASSWORD_PROVIDER, PASSWORD_MIN, PASSWORD_MAX, hashPassword } = require('../utils/password');
 const { audit } = require('../utils/audit');
+const loginGuard = require('../utils/loginGuard');
 const nickname = require('../utils/nickname');
+const profileLinks = require('../utils/profileLinks');
 const errorLog = require('../utils/errorLog');
 // Подтверждение почты после регистрации (router.sendVerify есть, когда настроена почта).
 const emailRoutes = require('./emailChange');
@@ -36,8 +38,12 @@ router.post('/login', authLimiter, validate({
   // нынешнего минимума, и человек должен суметь войти и сменить его.
   password: { type: 'string', required: true, max: PASSWORD_MAX, trim: false, label: 'Пароль' },
   next: { type: 'string', max: 500, default: '', label: 'Возврат' },
+  // Решённая задача против подбора (utils/loginGuard.js), после трёх ошибок.
+  task: { type: 'string', max: 100, default: '', label: 'Проверка' },
 }), async (req, res) => {
   const { email, password } = req.body;
+  const attempt = await loginGuard.start(req, res, email);
+  if (!attempt) return;
   const provider = PASSWORD_PROVIDER;
   const user = await User.findOne({ email: email, provider: provider });
   if (!user) {
@@ -45,15 +51,16 @@ router.post('/login', authLimiter, validate({
     // это разные случаи: перебор почты и перебор пароля выглядят по-разному.
     audit(req, 'auth.login.fail', { result: 'fail', actorLogin: email, meta: { reason: 'no-account' } });
     await bcrypt.compare(password, TIMING_HASH);
-    return res.status(400).json({ message: 'Неверная почта или пароль' });
+    return attempt.fail('Неверная почта или пароль');
   }
 
   const match = await bcrypt.compare(password, user.password);
   if (!match) {
     audit(req, 'auth.login.fail', { result: 'fail', actor: user, actorLogin: email, meta: { reason: 'bad-password' } });
-    return res.status(400).json({ message: 'Неверная почта или пароль' });
+    return attempt.fail('Неверная почта или пароль');
   }
 
+  await attempt.ok();
   await signIn(req, user);
 
   // Туда, откуда пришёл на вход (?next= страницы входа), иначе на витрину.
@@ -147,6 +154,24 @@ router.post('/update-profile', validate({
   res.status(200).json({ message: 'Профиль успешно обновлен', nickname: user.nickname, login });
 });
 
+// Описание и ссылки профиля из настроек. Ссылки разбирает
+// utils/profileLinks.js; ответ — как их теперь видно, чтобы форма показала
+// принятое значение и итоговую ссылку.
+router.post('/settings/about', requireAuthApi, validate({
+  bio: { type: 'string', max: 300, allowEmpty: true, default: '', label: 'Описание' },
+  links: { type: 'object', default: {}, label: 'Ссылки', schema: Object.fromEntries(profileLinks.KINDS.map((k) => [k, { type: 'string', max: 300, allowEmpty: true, default: '' }])) },
+}), async (req, res) => {
+  const parsed = profileLinks.parse(req.body.links);
+  if (parsed.error) return res.status(400).json({ message: parsed.message, field: parsed.error });
+  // Больше двух пустых строк подряд — просто отступ, не вёрстка.
+  const bio = req.body.bio.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n');
+  const user = await User.findByIdAndUpdate(req.session.userId, { $set: { bio, links: parsed.links } }, { returnDocument: 'after' })
+    .select('bio links nickname login email').lean();
+  if (!user) return res.status(401).json({ message: 'Необходима авторизация' });
+  audit(req, 'profile.update', { targetType: 'user', target: user, meta: { bio: bio.length, links: Object.keys(parsed.links) } });
+  res.json({ bio: user.bio, links: profileLinks.list(user.links) });
+});
+
 // Свободен ли ник — поле в настройках спрашивает на ходу, пока человек печатает.
 router.get('/api/nickname/check', requireAuthApi, async (req, res) => {
   const nick = nickname.normalize(req.query.n);
@@ -174,11 +199,14 @@ router.post('/update-password', authLimiter, validate({
   if (!user) {
     return res.status(400).json({ message: 'Пользователь не найден' });
   }
+  const attempt = await loginGuard.start(req, res, user.email, { task: false });
+  if (!attempt) return;
   const match = await bcrypt.compare(oldPassword, user.password);
   if (!match) {
     audit(req, 'auth.password.change', { result: 'fail', targetType: 'user', target: user });
-    return res.status(400).json({ message: 'Неверный старый пароль' });
+    return attempt.fail('Неверный старый пароль');
   }
+  await attempt.ok();
   user.password = await hashPassword(newPassword);
   await user.save();
   // Прочие сеансы — закрыть, как при сбросе пароля и смене администратором:
