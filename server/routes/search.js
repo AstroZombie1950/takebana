@@ -28,7 +28,7 @@ router.get('/api/search', async (req, res) => {
   const type = search.TYPES.includes(req.query.type) ? [req.query.type] : search.TYPES;
   const asked = Number(req.query.limit);
   const limit = Number.isInteger(asked) && asked > 0 ? Math.min(asked, 10) : QUICK_LIMIT;
-  res.json(await search.search(req.query.q, { limit, types: type }));
+  res.json(await search.search(req.query.q, { limit, types: type, viewer: req.session.userId }));
 });
 
 router.get('/search', commonDataMiddleware, async (req, res) => {
@@ -51,6 +51,7 @@ router.get('/search', commonDataMiddleware, async (req, res) => {
     search.search(query, {
       limit: tab === 'all' ? ALL_LIMIT : TAB_LIMIT,
       types: tab === 'all' ? search.TYPES : [tab],
+      viewer: req.session.userId,
     }),
     search.counts(query),
   ]);

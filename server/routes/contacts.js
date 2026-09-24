@@ -16,9 +16,10 @@ const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const userView = require('../utils/userView');
 const restriction = require('../utils/restrict');
+const privacy = require('../utils/privacy');
 const { rankPeers } = require('../utils/recentPeers');
 
-const FIELDS = 'nickname login email avatar isOnline lastSeen';
+const FIELDS = 'nickname login email avatar isOnline lastSeen role';
 
 function person(user, extra) {
   const displayName = userView.displayName(user);
@@ -29,6 +30,7 @@ function person(user, extra) {
     // Имя рядом с ником: поиск во вкладке ищет по обоим (public/chats.js).
     login: user.nickname ? user.login || '' : '',
     isOnline: !!user.isOnline,
+    ...(privacy.isOfficial(user) ? { official: true } : {}),
     ...extra,
   };
 }
@@ -50,6 +52,7 @@ function order(a, b) {
 router.get('/api/contacts', requireAuthApi, async (req, res) => {
   const me = String(req.session.userId);
   const rows = await Contact.find({ owner: me }).populate('peer', FIELDS).lean();
+  await privacy.maskPresence(me, rows.map((c) => c.peer));
   const contacts = rows
     .filter((c) => c.peer) // человек удалил аккаунт
     .map((c) => person(c.peer, { favorite: !!c.favorite, note: c.note || '', addedAt: c.addedAt }))
@@ -62,6 +65,7 @@ router.get('/api/contacts', requireAuthApi, async (req, res) => {
     .lean();
   const ids = await rankPeers(me, conversations);
   const users = ids.length ? await User.find({ _id: { $in: ids } }).select(FIELDS).lean() : [];
+  await privacy.maskPresence(me, users);
   const by = new Map(users.map((u) => [String(u._id), u]));
   res.json({ contacts, suggest: ids.map((id) => by.get(id)).filter(Boolean).map((u) => person(u)) });
 });
@@ -82,6 +86,7 @@ router.post('/api/contacts/add', requireAuthApi, requireNotBanned, validate({
 
   const peer = await User.findById(peerId).select(FIELDS).lean();
   if (!peer) return res.status(404).json({ message: 'Пользователь не найден' });
+  await privacy.maskPresence(me, [peer]);
 
   await Contact.updateOne(
     { owner: me, peer: peerId },

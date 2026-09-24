@@ -15,6 +15,9 @@ const { audit } = require('../utils/audit');
 const loginGuard = require('../utils/loginGuard');
 const nickname = require('../utils/nickname');
 const profileLinks = require('../utils/profileLinks');
+const privacy = require('../utils/privacy');
+const support = require('../utils/support');
+const { langOf } = require('../utils/i18n');
 const errorLog = require('../utils/errorLog');
 // Подтверждение почты после регистрации (router.sendVerify есть, когда настроена почта).
 const emailRoutes = require('./emailChange');
@@ -85,8 +88,11 @@ router.post('/register', registerLimiter, validate({
   }
 
   const hashedPassword = await hashPassword(password);
-  const user = new User({ email: email, login: login, password: hashedPassword, provider: provider });
+  const lang = langOf(req);
+  const user = new User({ email: email, login: login, password: hashedPassword, provider: provider, lang });
   await user.save();
+  // Приветствие от поддержки, если оно включено в панели (utils/support.js).
+  support.welcome(req, user, lang);
 
   await signIn(req, user);
 
@@ -123,7 +129,7 @@ router.post('/update-profile', validate({
   const nick = nickname.normalize(req.body.nickname);
   const changed = nick !== user.nickname;
   if (changed) {
-    const bad = nickname.problem(nick);
+    const bad = nickname.problem(nick, { official: user.role === 'admin' });
     if (bad) return res.status(400).json({ message: NICK_ERRORS[bad], reason: bad });
     const wait = nickname.nextChangeAt(user);
     if (wait) {
@@ -172,13 +178,32 @@ router.post('/settings/about', requireAuthApi, validate({
   res.json({ bio: user.bio, links: profileLinks.list(user.links) });
 });
 
+// Приватность (utils/privacy.js): поле за полем, сохраняется сразу по
+// переключению. Приходит только то, что меняют; остальное не трогаем.
+router.post('/settings/privacy', requireAuthApi, validate({
+  ...Object.fromEntries(Object.entries(privacy.OPTIONS).map(([k, values]) => [k, { type: 'string', values, label: 'Приватность' }])),
+  searchable: { type: 'bool', label: 'Приватность' },
+}), async (req, res) => {
+  const changed = {};
+  for (const key of Object.keys(privacy.DEFAULTS)) {
+    if (req.body[key] !== undefined) changed[key] = req.body[key];
+  }
+  if (!Object.keys(changed).length) return res.status(400).json({ message: 'Неверный запрос' });
+  const set = Object.fromEntries(Object.entries(changed).map(([k, v]) => ['privacy.' + k, v]));
+  const user = await User.findByIdAndUpdate(req.session.userId, { $set: set }, { returnDocument: 'after' })
+    .select('privacy nickname login email').lean();
+  if (!user) return res.status(401).json({ message: 'Необходима авторизация' });
+  audit(req, 'profile.privacy', { targetType: 'user', target: user, meta: { privacy: Object.entries(changed).map(([k, v]) => k + '=' + v).join(', ') } });
+  res.json({ privacy: privacy.of(user) });
+});
+
 // Свободен ли ник — поле в настройках спрашивает на ходу, пока человек печатает.
 router.get('/api/nickname/check', requireAuthApi, async (req, res) => {
   const nick = nickname.normalize(req.query.n);
-  const me = await User.findById(req.session.userId).select('nickname nicknameChangedAt').lean();
+  const me = await User.findById(req.session.userId).select('nickname nicknameChangedAt role').lean();
   if (!me) return res.status(401).json({ message: 'Необходима авторизация' });
   if (nick === me.nickname) return res.json({ ok: true, same: true });
-  const bad = nickname.problem(nick);
+  const bad = nickname.problem(nick, { official: me.role === 'admin' });
   if (bad) return res.json({ ok: false, reason: bad });
   if (await User.exists({ nickname: nick })) return res.json({ ok: false, reason: 'taken' });
   const wait = nickname.nextChangeAt(me);

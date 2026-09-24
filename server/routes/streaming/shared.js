@@ -13,6 +13,7 @@ const { unreadTotal } = require('../../utils/groups');
 const userView = require('../../utils/userView');
 const callLog = require('../../utils/callLog');
 const errorLog = require('../../utils/errorLog');
+const { langOf } = require('../../utils/i18n');
 
 const commonDataMiddleware = async (req, res, next) => {
   try {
@@ -26,7 +27,7 @@ const commonDataMiddleware = async (req, res, next) => {
       // Получение данных текущего пользователя
       // (lean/select) чтобы уменьшить нагрузку при каждом F5
       const currentUser = await User.findById(currentUserId)
-        .select('nickname login email avatar gallery streamKey banned banReason adultConfirmedAt')
+        .select('nickname login email avatar gallery streamKey banned banReason adultConfirmedAt lang')
         .lean();
       // Пользователя уже нет: он удалил себя сам или его удалил администратор,
       // а вкладка осталась открытой. Это не ошибка сервера — гасим сеанс
@@ -36,6 +37,13 @@ const commonDataMiddleware = async (req, res, next) => {
           res.clearCookie('connect.sid');
           next();
         });
+      }
+
+      // Язык, которым человек пользуется, — в аккаунт: рассылкам поддержки
+      // (utils/support.js) его не у кого спросить. Пишется только при смене.
+      const lang = langOf(req);
+      if (currentUser.lang !== lang) {
+        User.updateOne({ _id: currentUser._id }, { $set: { lang } }).catch((e) => errorLog.server(e, 'user.lang'));
       }
 
       // Определение отображаемой информации для текущего пользователя

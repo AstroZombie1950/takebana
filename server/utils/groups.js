@@ -11,14 +11,16 @@ const path = require('path');
 const mongoose = require('mongoose');
 const Group = require('../models/Group');
 const Message = require('../models/Message');
+const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const userView = require('./userView');
+const privacy = require('./privacy');
 const { view } = require('./messageView');
 const { isPlainFileName, resolveWithin } = require('./safePath');
 
 const MAX_MEMBERS = 100;
 const TITLE_MAX = 64;
-const PEOPLE = 'nickname login email avatar isOnline lastSeen';
+const PEOPLE = 'nickname login email avatar isOnline lastSeen role';
 
 // Фото групп — рядом с аватарами людей, на своём сервере.
 const PHOTOS = path.join(__dirname, '..', 'public', 'uploads', 'groups');
@@ -52,7 +54,7 @@ function forMember(groupId, userId) {
 
 function person(user) {
   const displayName = userView.displayName(user);
-  return { id: String(user._id), displayName, avatarStyle: userView.avatarStyle(user, displayName), isOnline: !!user.isOnline };
+  return { id: String(user._id), displayName, avatarStyle: userView.avatarStyle(user, displayName), isOnline: !!user.isOnline, ...(privacy.isOfficial(user) ? { official: true } : {}) };
 }
 
 // Кратко — для списка диалогов и сокета: фото или градиент с буквой названия.
@@ -69,6 +71,7 @@ function brief(group) {
 // остальные по имени. Код ссылки видят только те, кто ею управляет.
 async function info(group, me) {
   const users = await User.find({ _id: { $in: group.members.map((m) => m.user) } }).select(PEOPLE).lean();
+  await privacy.maskPresence(me, users);
   const byId = new Map(users.map((u) => [String(u._id), u]));
   const rank = { owner: 0, admin: 1, member: 2 };
   const members = group.members
@@ -177,9 +180,13 @@ async function unread(me) {
 // Непрочитанных сообщений всего: личные и в группах. Одно число на значок
 // в шапке — его считают страница (routes/streaming/shared.js), сверка
 // (/api/badge) и ответы на прочтение и удаление.
+//
+// Заявки на переписку (utils/privacy.js) в число не входят: незнакомый
+// не должен зажигать значок тому, кто от незнакомых закрылся.
 async function unreadTotal(me) {
+  const requests = await Conversation.find({ requestFor: me }).distinct('_id');
   const [direct, groups] = await Promise.all([
-    Message.countDocuments({ recipient: me, readAt: null, deletedFor: { $ne: me } }),
+    Message.countDocuments({ recipient: me, readAt: null, deletedFor: { $ne: me }, ...(requests.length ? { conversationId: { $nin: requests } } : {}) }),
     unread(me),
   ]);
   return direct + groups.total;

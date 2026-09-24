@@ -23,6 +23,11 @@ const conversationSchema = new Schema({
   // Кто удалил переписку у себя: диалог пропадает из его списка и
   // возвращается с первым новым сообщением.
   hiddenFor: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  // Заявка на переписку (utils/privacy.js): незнакомый написал тому, кто
+  // принимает новых собеседников через заявки. Здесь — получатель: у него
+  // диалог лежит в «Заявках», без пуша и звука, и не в счётчике. Снимается,
+  // когда он ответил или принял.
+  requestFor: { type: Schema.Types.ObjectId, ref: 'User', default: undefined },
   // Пара «меньший id:больший id» — для уникального индекса: два
   // одновременных «написать» (двойное нажатие, оба пишут друг другу)
   // заводили два диалога, и история расползалась. Есть только у диалогов
@@ -39,5 +44,7 @@ conversationSchema.index({ userTwo: 1, userOne: 1 });
 conversationSchema.index({ userOne: 1, lastUpdated: -1 });
 conversationSchema.index({ userTwo: 1, lastUpdated: -1 });
 conversationSchema.index({ pair: 1 }, { unique: true, partialFilterExpression: { pair: { $exists: true } } });
+// Папка «Заявки»: частичный — заявок единицы на фоне всех диалогов.
+conversationSchema.index({ requestFor: 1, lastUpdated: -1 }, { partialFilterExpression: { requestFor: { $exists: true } } });
 
 module.exports = mongoose.model('Conversation', conversationSchema);

@@ -152,6 +152,7 @@ const META = {
   subscriptions: 'подписок', calls: 'звонков', byAdmin: 'из панели', streamsStopped: 'погашено эфиров', venuesStopped: 'погашено камер',
   resolved: 'разобрано', count: 'случаев', action: 'сделано', about: 'на что', city: 'город', type: 'тип',
   category: 'раздел', isAdult: '18+', wasLive: 'шёл', login: 'логин',
+  privacy: 'приватность', audience: 'кому', template: 'заготовка', len: 'знаков', on: 'включено',
 };
 
 function meta(m) {
@@ -1167,6 +1168,235 @@ VIEWS.system = {
   },
 };
 
+// ── Поддержка ────────────────────────────────────────────────────────────────
+//
+// Переписка официального аккаунта (utils/support.js): список диалогов
+// и лента одного, ответ — от имени аккаунта поддержки. Аккаунт выбирается
+// на вкладке «Рассылка».
+const ATT = { image: 'фото', video: 'видео', round: 'кружок', voice: 'голосовое', audio: 'аудио', file: 'файл' };
+
+function supportMessage(m, supportId) {
+  const mine = m.sender === supportId;
+  let body = '';
+  if (m.expired) body = '<em>сообщение исчезло</em>';
+  else if (m.limit) body = '<em>сообщение с ограничением — открыть может только получатель</em>';
+  else {
+    body = (m.attachments || []).map((a) => a.url
+      ? '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(ATT[a.kind] || a.kind) + (a.name ? ': ' + esc(a.name) : '') + '</a>'
+      : esc(ATT[a.kind] || a.kind)).join('<br>');
+    if (m.content) body += (body ? '<br>' : '') + esc(m.content);
+  }
+  if (m.forwardedFrom) body = '<span class="tk-panel__why">переслано от ' + esc(m.forwardedFrom.name) + '</span><br>' + body;
+  return '<li class="tk-sup__msg' + (mine ? ' tk-sup__msg--mine' : '') + '" data-at="' + esc(m.sentAt) + '">' +
+    '<div class="tk-sup__text">' + body + '</div>' +
+    '<span class="tk-sup__when">' + esc(when(m.sentAt)) + (mine ? (m.readAt ? ' · прочитано' : ' · доставлено') : '') + '</span></li>';
+}
+
+const lastText = (l) => (l ? (l.mine ? 'Вы: ' : '') + (l.kind ? '[' + (ATT[l.kind] || l.kind) + '] ' : '') + l.text : '—');
+
+VIEWS.support = {
+  title: 'Поддержка',
+  admin: true,
+  // Список обновляется сам: обращения приходят, пока вкладка открыта.
+  // Открытый диалог — нет: перерисовка стёрла бы недописанный ответ.
+  refresh: (params) => (params.peer ? 0 : 30000),
+  // Отбор — только у списка: в открытом диалоге отбирать нечего.
+  filters: (params) => (params.peer ? [] : [{ name: 'show', options: [
+    { value: '', title: 'С ответами людей' }, { value: 'unread', title: 'Непрочитанные' }, { value: 'all', title: 'Все диалоги' },
+  ] }]),
+  async render(params) {
+    if (params.peer) return supportThread(params);
+    const d = await api('/support/dialogs?' + new URLSearchParams(serverParams(params)).toString() + '&page=' + (params.page || 1));
+    if (!d.account) {
+      return { html: note('Аккаунт поддержки не выбран — его выбирают на вкладке «Рассылка».') +
+        '<p class="tk-panel__more"><a href="' + href('broadcast') + '">Выбрать →</a></p>' };
+    }
+    const rows = d.items.map((r) => '<tr>' +
+      '<td>' + person(r.peer) + '</td>' +
+      '<td><a class="tk-sup__last" href="' + href('support', { peer: r.peer.id }) + '">' + esc(lastText(r.last)) + '</a></td>' +
+      '<td class="tk-num">' + (r.unread ? '<span class="tk-panel__badge">' + num(r.unread) + '</span>' : '') + '</td>' +
+      '<td>' + esc(ago(r.at)) + '</td></tr>');
+    return {
+      html: table([{ title: 'Кто' }, { title: 'Последнее' }, { title: 'Новых', cls: 'tk-num' }, { title: 'Когда' }], rows) + pager(d, 'support', params),
+      sub: 'от имени ' + d.account.displayName + ' · ' + count(d.total, 'диалог', 'диалога', 'диалогов'),
+    };
+  },
+  async after(params) {
+    if (!params.peer) return;
+    const list = document.getElementById('supList');
+    if (list) list.lastElementChild && list.lastElementChild.scrollIntoView({ block: 'end' });
+    try {
+      await send('POST', '/api/admin/support/dialogs/' + encodeURIComponent(params.peer) + '/read');
+      badges();
+    } catch (_) { /* лента видна и без отметки */ }
+  },
+};
+
+async function supportThread(params) {
+  const d = await api('/support/dialogs/' + encodeURIComponent(params.peer));
+  const html = '<a class="tk-panel__back" href="' + href('support') + '">← ко всем диалогам</a>' +
+    '<div class="tk-dossier__head">' + person(d.peer) +
+      '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/userPage/' + esc(d.peer.id) + '" target="_blank" rel="noopener">Страница на сайте</a></div>' +
+    '<div class="tk-sup">' +
+      (d.more ? '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs tk-sup__more" data-act="sup-more" data-id="' + esc(d.peer.id) + '">Раньше</button>' : '') +
+      (d.messages.length ? '' : note('Переписки ещё нет — первое сообщение начнёт её.')) +
+      '<ol class="tk-sup__list" id="supList" data-support="' + esc(d.account.id) + '">' +
+        d.messages.map((m) => supportMessage(m, d.account.id)).join('') + '</ol>' +
+      '<form class="tk-sup__form" data-peer="' + esc(d.peer.id) + '">' +
+        '<textarea class="tk-field" name="content" rows="3" maxlength="5000" placeholder="Ответ от имени ' + esc(d.account.displayName) + '"></textarea>' +
+        '<button type="submit" class="tk-btn tk-btn--primary tk-btn--xs">Отправить</button>' +
+      '</form>' +
+    '</div>';
+  return { html, title: d.peer.displayName, sub: 'Переписка с поддержкой' };
+}
+
+// Ответ: Ctrl/Cmd+Enter тоже отправляет — в панели пишут длинно, Enter
+// остаётся переносом строки.
+view.addEventListener('submit', async (e) => {
+  const form = e.target.closest('.tk-sup__form');
+  if (!form) return;
+  e.preventDefault();
+  const field = form.elements.content;
+  const content = field.value.trim();
+  if (!content) return;
+  const btn = form.querySelector('button');
+  btn.disabled = true;
+  try {
+    const r = await send('POST', '/api/admin/support/dialogs/' + encodeURIComponent(form.dataset.peer) + '/send', { content });
+    const list = document.getElementById('supList');
+    list.insertAdjacentHTML('beforeend', supportMessage(r.message, list.dataset.support));
+    list.lastElementChild.scrollIntoView({ block: 'end' });
+    const empty = list.previousElementSibling;
+    if (empty && empty.classList.contains('tk-panel__note')) empty.remove();
+    field.value = '';
+  } catch (err) {
+    toast(err.message || 'Не отправилось', 'error');
+  }
+  btn.disabled = false;
+});
+view.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.closest('.tk-sup__form')) {
+    e.preventDefault();
+    e.target.closest('.tk-sup__form').requestSubmit();
+  }
+});
+
+// ── Рассылка ─────────────────────────────────────────────────────────────────
+//
+// Письмо от аккаунта поддержки сразу многим: от руки или с заготовки,
+// на двух языках — каждому уходит на его (utils/support.js).
+const AUDIENCES = {
+  all: 'Все', recent: 'Новые за последние дни', nopush: 'Без пуш-уведомлений', self: 'Только мне — проверить',
+};
+const BROADCAST_STATUS = { running: 'идёт', done: 'готово', stopped: 'прервана' };
+let TEMPLATES = [];
+
+VIEWS.broadcast = {
+  title: 'Рассылка',
+  admin: true,
+  async render() {
+    const d = await api('/support');
+    TEMPLATES = d.templates;
+    const a = d.account;
+
+    let html = '<h2 class="tk-panel__h2">Аккаунт поддержки</h2><div class="tk-card"><div class="tk-dossier__head">' +
+      (a ? person(a) : note('Не выбран. Аккаунтом поддержки может быть только администратор.')) +
+      '<div class="tk-dossier__acts">' +
+        '<select class="tk-field tk-select" id="supAccount">' +
+          (a ? '' : '<option value="">Выберите администратора</option>') +
+          d.admins.map((p) => '<option value="' + esc(p.id) + '"' + (a && a.id === p.id ? ' selected' : '') + '>' + esc(p.displayName) + '</option>').join('') +
+        '</select>' +
+        '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="sup-account">Назначить</button>' +
+      '</div></div>' +
+      (a ? '<label class="tk-switch tk-switch--wrap"><input type="checkbox" data-act="sup-welcome"' + (a.welcome ? ' checked' : '') + '> Приветствие каждому новичку сразу после регистрации</label>' : '') +
+      '</div>';
+
+    if (a) {
+      html += '<h2 class="tk-panel__h2">Новая рассылка</h2><div class="tk-card" id="bcForm">' +
+        '<div class="tk-fields">' +
+          '<label class="tk-field-row tk-field-row--wide"><span class="tk-field-row__label">Заготовка</span>' +
+            '<select class="tk-field tk-select" id="bcTemplate"><option value="">От руки</option>' +
+            TEMPLATES.map((t) => '<option value="' + esc(t.key) + '">' + esc(t.title) + '</option>').join('') + '</select></label>' +
+          '<label class="tk-field-row"><span class="tk-field-row__label">По-русски</span>' +
+            '<textarea class="tk-field tk-sup__area" id="bcRu" rows="12" maxlength="5000"></textarea></label>' +
+          '<label class="tk-field-row"><span class="tk-field-row__label">По-английски — кто пользуется сайтом на английском</span>' +
+            '<textarea class="tk-field tk-sup__area" id="bcEn" rows="12" maxlength="5000"></textarea></label>' +
+          '<label class="tk-field-row"><span class="tk-field-row__label">Кому</span>' +
+            '<select class="tk-field tk-select" id="bcAudience">' +
+            Object.entries(AUDIENCES).map(([k, v]) => '<option value="' + k + '">' + esc(v) + '</option>').join('') + '</select></label>' +
+          '<label class="tk-field-row" id="bcDaysRow" hidden><span class="tk-field-row__label">Дней</span>' +
+            '<input class="tk-field" type="number" id="bcDays" min="1" max="365" value="7"></label>' +
+        '</div>' +
+        '<div class="tk-card__acts">' +
+          '<label class="tk-switch"><input type="checkbox" id="bcPush" checked> С пуш-уведомлением</label>' +
+          '<span class="tk-panel__why" id="bcCount"></span>' +
+          '<button type="button" class="tk-btn tk-btn--primary tk-btn--xs" data-act="bc-send">Отправить</button>' +
+        '</div></div>';
+    }
+
+    html += '<h2 class="tk-panel__h2">Отправленные</h2><div id="bcHistory">' + note('Загружаем…') + '</div>';
+    return { html, sub: a ? 'от имени ' + a.displayName : 'сначала выберите аккаунт поддержки' };
+  },
+  async after() {
+    audienceCount();
+    history();
+  },
+};
+
+async function audienceCount() {
+  const box = document.getElementById('bcCount');
+  if (!box) return;
+  const kind = document.getElementById('bcAudience').value;
+  document.getElementById('bcDaysRow').hidden = kind !== 'recent';
+  const days = document.getElementById('bcDays').value;
+  try {
+    const d = await api('/support/audience?kind=' + kind + '&days=' + encodeURIComponent(days));
+    box.textContent = 'получат ' + count(d.count, 'человек', 'человека', 'человек');
+    box.dataset.count = d.count;
+  } catch (err) {
+    box.textContent = err.message;
+  }
+}
+
+// История; пока рассылка идёт — перечитывается сама, пока вкладка на экране.
+async function history() {
+  const box = document.getElementById('bcHistory');
+  if (!box) return;
+  let d;
+  try {
+    d = await api('/support/broadcasts?perPage=20');
+  } catch (err) {
+    box.innerHTML = note('Не загрузилась: ' + err.message);
+    return;
+  }
+  if (!box.isConnected) return;
+  const title = (b) => {
+    const t = TEMPLATES.find((x) => x.key === b.template);
+    return (t ? t.title + ': ' : '') + (b.text.ru || b.text.en).slice(0, 90);
+  };
+  box.innerHTML = table(
+    [{ title: 'Когда' }, { title: 'Кто' }, { title: 'Текст' }, { title: 'Кому' }, { title: 'Дошло', cls: 'tk-num' }, { title: 'Статус' }],
+    d.items.map((b) => '<tr><td class="tk-nowrap">' + esc(when(b.createdAt)) + '</td>' +
+      '<td>' + person(b.by) + '</td>' +
+      '<td>' + esc(title(b)) + (b.text.en ? ' <span class="tk-tag">EN</span>' : '') + (b.push ? '' : ' <span class="tk-tag">без пуша</span>') + '</td>' +
+      '<td>' + esc(AUDIENCES[b.audience.kind] || b.audience.kind) + (b.audience.days ? ' (' + b.audience.days + ' дн)' : '') + '</td>' +
+      '<td class="tk-num">' + num(b.sent) + ' из ' + num(b.total) + (b.failed ? ' <span class="tk-tag tk-tag--bad">ошибок ' + num(b.failed) + '</span>' : '') + '</td>' +
+      '<td>' + (b.status === 'running' ? dot(true) : '') + esc(BROADCAST_STATUS[b.status] || b.status) + '</td></tr>'));
+  if (d.items.some((b) => b.status === 'running')) setTimeout(() => { if (box.isConnected) history(); }, 4000);
+}
+
+view.addEventListener('change', (e) => {
+  const id = e.target.id;
+  if (id === 'bcAudience' || id === 'bcDays') audienceCount();
+  if (id === 'bcTemplate') {
+    const ru = document.getElementById('bcRu');
+    const en = document.getElementById('bcEn');
+    const t = TEMPLATES.find((x) => x.key === e.target.value);
+    ru.value = t ? t.ru : '';
+    en.value = t ? t.en : '';
+  }
+});
+
 // ── Каркас ───────────────────────────────────────────────────────────────────
 
 // «За неделю» в фильтре — это from= для сервера. Отдельная функция, потому
@@ -1181,7 +1411,7 @@ function serverParams(params) {
   return out;
 }
 
-const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'venues', 'recordings', 'audit', 'errors', 'costs', 'storage', 'system'];
+const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'support', 'broadcast', 'venues', 'recordings', 'audit', 'errors', 'costs', 'storage', 'system'];
 
 function drawNav(active) {
   nav.innerHTML = ORDER.filter((name) => !VIEWS[name].admin || IS_ADMIN).map((name) => {
@@ -1218,7 +1448,7 @@ async function show() {
   drawNav(name);
   viewTitle.textContent = v.title;
   viewSub.textContent = '';
-  viewTools.innerHTML = filtersHtml(v.filters, params) +
+  viewTools.innerHTML = filtersHtml(typeof v.filters === 'function' ? v.filters(params) : v.filters, params) +
     // Выгрузка — тем же отбором, что на экране: сервер читает те же параметры.
     (v.csv ? '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/api/admin/' + (v.api ? v.api.slice(1) : name) + '.csv?' +
       new URLSearchParams(serverParams(params)).toString() + '">CSV</a>' : '') +
@@ -1248,20 +1478,24 @@ async function show() {
     view.innerHTML = note(err.message === 'HTTP 403' ? 'Нет прав на этот раздел' : 'Не удалось загрузить: ' + err.message);
   }
 
-  if (v.refresh) timer = setInterval(() => { if (!document.hidden) show(); }, v.refresh);
+  const every = typeof v.refresh === 'function' ? v.refresh(params) : v.refresh;
+  if (every) timer = setInterval(() => { if (!document.hidden) show(); }, every);
   badges();
 }
 
-// Счётчик новых жалоб виден со всех вкладок: это единственное, что требует
-// внимания сразу, а не когда откроют нужный раздел.
+// Счётчики новых жалоб и обращений в поддержку видны со всех вкладок: это
+// то, что требует внимания сразу, а не когда откроют нужный раздел.
 async function badges() {
   try {
     const d = await api('/summary');
-    const badge = nav.querySelector('[data-badge="reports"]');
-    if (badge) {
-      badge.textContent = d.reports.new ? String(d.reports.new) : '';
-      badge.hidden = !d.reports.new;
-    }
+    const put = (name, n) => {
+      const badge = nav.querySelector('[data-badge="' + name + '"]');
+      if (!badge) return;
+      badge.textContent = n ? String(n) : '';
+      badge.hidden = !n;
+    };
+    put('reports', d.reports.new);
+    put('support', d.support); // непрочитанное поддержкой (routes/admin/support.js)
   } catch (_) {
     // Панель без счётчика работает; ошибку покажет сама вкладка.
   }
@@ -1283,6 +1517,46 @@ view.addEventListener('click', async (e) => {
   const id = el.dataset.id;
 
   try {
+    if (act === 'sup-more') {
+      const list = document.getElementById('supList');
+      const first = list.firstElementChild;
+      const d = await api('/support/dialogs/' + encodeURIComponent(id) + (first ? '?before=' + encodeURIComponent(first.dataset.at) : ''));
+      list.insertAdjacentHTML('afterbegin', d.messages.map((m) => supportMessage(m, d.account.id)).join(''));
+      if (!d.more) el.remove();
+      return;
+    }
+
+    if (act === 'sup-account') {
+      const userId = document.getElementById('supAccount').value;
+      if (!userId) return toast('Выберите администратора', 'error');
+      if (!await confirmDialog('Назначить аккаунтом поддержки? От него пойдут рассылки, его переписка откроется во вкладке «Поддержка».', { okText: 'Назначить' })) return;
+      await send('POST', '/api/admin/support/account', { userId });
+      toast('Аккаунт поддержки назначен', 'ok');
+      return show();
+    }
+
+    if (act === 'bc-send') {
+      const text = { ru: document.getElementById('bcRu').value.trim(), en: document.getElementById('bcEn').value.trim() };
+      if (!text.ru && !text.en) return toast('Напишите текст рассылки', 'error');
+      const kind = document.getElementById('bcAudience').value;
+      const n = Number(document.getElementById('bcCount').dataset.count || 0);
+      if (kind !== 'self' && !await confirmDialog('Отправить ' + count(n, 'человеку', 'людям', 'людям') + '? Отменить рассылку нельзя.', { okText: 'Отправить' })) return;
+      el.disabled = true;
+      try {
+        const r = await send('POST', '/api/admin/support/broadcast', {
+          text,
+          template: document.getElementById('bcTemplate').value,
+          audience: { kind, days: Number(document.getElementById('bcDays').value) || 7 },
+          push: document.getElementById('bcPush').checked,
+        });
+        toast('Рассылка пошла: ' + count(r.total, 'получатель', 'получателя', 'получателей'), 'ok');
+        history();
+      } finally {
+        el.disabled = false;
+      }
+      return;
+    }
+
     if (act === 'stop-stream') {
       const reason = reasonOf(el);
       if (!await confirmDialog('Остановить эфир? Зрители и вещатель увидят это сразу.', { okText: 'Остановить' })) return;
@@ -1434,6 +1708,11 @@ view.addEventListener('change', async (e) => {
     if (el.dataset.act === 'venue-status') {
       await send('PUT', '/api/admin/venues/' + el.dataset.id + '/status', { status: el.checked });
       toast(el.checked ? 'Заведение активно' : 'Заведение выключено', 'ok');
+    }
+
+    if (el.dataset.act === 'sup-welcome') {
+      await send('POST', '/api/admin/support/welcome', { on: el.checked });
+      toast(el.checked ? 'Новичкам — приветствие' : 'Приветствие выключено', 'ok');
     }
 
     if (el.dataset.act === 'role') {

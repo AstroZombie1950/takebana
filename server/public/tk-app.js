@@ -19,6 +19,14 @@ var t = window.t || function () { return ''; };
 // Текст, который переживает переключение языка: ключ остаётся на элементе.
 var tkText = window.tkText || function () {};
 
+// Галочка официального аккаунта после имени — та же, что рисуют шаблоны
+// (partials/official.ejs, стиль .tk-official в tk.css). Для строк, которые
+// собирают скрипты: поиск, переписка, комментарии.
+var tkOfficial = function () {
+  var label = escapeHtml(t('common.official'));
+  return '<span class="tk-official" role="img" title="' + label + '" aria-label="' + label + '" data-i18n-title="common.official" data-i18n-aria="common.official"></span>';
+};
+
 // Левая панель — единственное меню кабинета. На десктопе стоит всегда,
 // ниже 1024 выезжает по бургеру из шапки поверх страницы. Раньше рядом жили
 // ещё мобильное меню и выпадашка у аватара с теми же ссылками.
@@ -316,7 +324,7 @@ document.addEventListener('DOMContentLoaded', function () {
       <a href="${href}" class="search-result-item"${key === 'people' ? ` data-presence-user="${escapeHtml(item._id)}"` : ''}>
         ${media}
         <span class="tk-found__body">
-          <span class="tk-found__name">${escapeHtml(name)}</span>
+          <span class="tk-found__name">${escapeHtml(name)}${key === 'people' && item.official ? tkOfficial() : ''}</span>
           <span class="tk-found__meta">${escapeHtml(meta)}</span>
         </span>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
@@ -470,6 +478,8 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     // Удаление в группе приходит без точных чисел — их у каждого свои.
     socket.on('message:deleted', (d) => { if (d && d.groupId) refreshCounters(); });
     socket.on('message:new', (d) => {
+      // Заявка на переписку (utils/privacy.js) — молча: ни счётчика, ни звука.
+      if (d && d.request) return;
       if (d && d.message && d.peer && d.message.sender === d.peer.id) window.tkChatBadge({ addMessages: 1 });
       // Звук и системное уведомление — если включены в настройках (tk-notify.js).
       if (window.TKNotify) window.TKNotify.message(d);

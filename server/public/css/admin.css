@@ -567,6 +567,7 @@ body.tk-panel {
 
 .tk-field-row { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .tk-field-row--wide { grid-column: 1 / -1; }
+.tk-field-row[hidden] { display: none; }
 
 .tk-field-row__label {
   font-size: 11px;
@@ -587,6 +588,10 @@ body.tk-panel {
 }
 
 .tk-switch input { accent-color: var(--tk-green); }
+/* Длинная подпись (рассылка, приветствие) переносится: на телефоне она
+ * иначе вылезает за карточку. */
+.tk-switch--wrap { white-space: normal; align-items: flex-start; }
+.tk-switch--wrap input { flex: none; margin-top: 2px; }
 
 /* ── Досье ────────────────────────────────────────────────────────────── */
 .tk-dossier__head {
@@ -729,3 +734,69 @@ body.tk-panel {
 .tk-store__group td { font-weight: 600; }
 .tk-store__kind td:first-child { padding-left: 28px; color: var(--tk-beige); }
 .tk-store__kind.is-orphan td:first-child { color: var(--tk-accent); }
+
+/* ── Поддержка: лента диалога и ответ (routes/admin/support.js) ───────── */
+.tk-sup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 820px;
+}
+
+.tk-sup__more { align-self: center; }
+
+.tk-sup__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tk-sup__msg {
+  align-self: flex-start;
+  max-width: 78%;
+  padding: 10px 12px;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-sup__msg--mine {
+  align-self: flex-end;
+  border-color: rgba(227, 66, 52, .45);
+  background: rgba(227, 66, 52, .06);
+}
+
+.tk-sup__text {
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tk-sup__text a { color: var(--tk-accent); }
+
+.tk-sup__when {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--tk-label);
+}
+
+.tk-sup__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tk-sup__form .tk-field { width: 100%; padding: 10px 12px; font-size: 14px; resize: vertical; }
+.tk-sup__form .tk-btn { align-self: flex-end; }
+
+.tk-sup__last { color: var(--tk-beige); }
+.tk-sup__last:hover { color: var(--tk-paper); }
+
+.tk-sup__area { resize: vertical; line-height: 1.5; }
+
+@media (max-width: 700px) {
+  .tk-sup__msg { max-width: 92%; }
+}

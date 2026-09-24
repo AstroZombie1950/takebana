@@ -23,6 +23,7 @@ const Message = require('../models/Message');
 const User = require('../models/User');
 const groups = require('../utils/groups');
 const restriction = require('../utils/restrict');
+const privacy = require('../utils/privacy');
 const turn = require('../utils/turn');
 const attachments = require('../utils/attachments');
 const { viewAll, QUOTED } = require('../utils/messageView');
@@ -53,11 +54,18 @@ const actorOf = (req) => User.findById(req.session.userId).select(groups.PEOPLE)
 // Кого можно добавить: существующие, ещё не в группе, не ограничившие того,
 // кто добавляет (utils/restrict.js — «добавить того, кто вас ограничил,
 // нельзя»). Ответ — люди в порядке запроса.
+// Кто запретил добавлять себя в группы (utils/privacy.js), тоже не
+// добавляется — считается в closed: ему можно отправить ссылку-приглашение.
 async function addable(group, adderId, ids) {
   const fresh = [...new Set(ids)].filter((id) => id !== String(adderId) && !groups.memberOf(group, id));
   const users = await User.find({ _id: { $in: fresh } }).select(groups.PEOPLE).lean();
-  const barred = await Promise.all(users.map((u) => restriction.isRestricted(u._id, adderId)));
-  return users.filter((u, i) => !barred[i]);
+  const [barred, rules] = await Promise.all([
+    Promise.all(users.map((u) => restriction.isRestricted(u._id, adderId))),
+    Promise.all(users.map((u) => privacy.decide('groups', u._id, adderId))),
+  ]);
+  const people = users.filter((u, i) => !barred[i] && rules[i].ok);
+  people.closed = users.filter((u, i) => !barred[i] && !rules[i].ok).length;
+  return people;
 }
 
 // ── Создание ─────────────────────────────────────────────────────────────────
@@ -74,7 +82,7 @@ router.post('/api/groups', requireAuthApi, requireNotBanned, validate({
 
   await groups.note(req, group, actor, 'created', { text: group.title });
   audit(req, 'group.create', { targetType: 'group', targetId: group._id, targetLabel: group.title, meta: { members: group.members.length } });
-  res.json({ group: await groups.info(group, actor._id), skipped: req.body.memberIds.length - people.length });
+  res.json({ group: await groups.info(group, actor._id), skipped: req.body.memberIds.length - people.length, closed: people.closed });
 });
 
 // ── Экран группы ─────────────────────────────────────────────────────────────
@@ -135,7 +143,7 @@ router.post('/api/groups/:id/members/add', requireAuthApi, requireNotBanned, val
   await group.save();
   for (const u of people) await groups.note(req, group, actor, 'added', { target: u });
   groups.emit(io(req), group, 'group:updated', { group: groups.brief(group) });
-  res.json({ group: await groups.info(group, me(req)), added: people.length, skipped: req.body.userIds.length - people.length });
+  res.json({ group: await groups.info(group, me(req)), added: people.length, skipped: req.body.userIds.length - people.length, closed: people.closed });
 });
 
 // Удалить участника: администратор — рядовых, создатель — любого, кроме себя.
@@ -361,8 +369,12 @@ router.post('/api/groups/:id/call', requireAuthApi, requireNotBanned, callLimite
   const caller = me(req);
   const online = group.members.map((m) => String(m.user)).filter((id) => id !== caller && rooms && rooms.has(id));
   // С кем стоит ограничение доступа — тому не звоним (utils/restrict.js).
-  const barred = await Promise.all(online.map((id) => restriction.between(caller, id)));
-  const callees = online.filter((id, i) => !barred[i]);
+  // И тому, кто не принимает звонки от звонящего (utils/privacy.js).
+  const [barred, rules] = await Promise.all([
+    Promise.all(online.map((id) => restriction.between(caller, id))),
+    Promise.all(online.map((id) => privacy.decide('calls', id, caller))),
+  ]);
+  const callees = online.filter((id, i) => !barred[i] && rules[i].ok);
   if (!callees.length || !pendingCalls) return res.status(409).json({ message: 'Сейчас никого из группы нет в сети' });
 
   const callId = crypto.randomUUID();

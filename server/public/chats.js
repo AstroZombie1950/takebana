@@ -106,8 +106,22 @@
       name: el.getAttribute('data-name'),
       url: el.getAttribute('data-ava-url'),
       bg: el.getAttribute('data-ava-bg'),
-      initial: el.getAttribute('data-ava-initial')
+      initial: el.getAttribute('data-ava-initial'),
+      // Официальный аккаунт (utils/privacy.js): галочка и живые ссылки.
+      official: el.hasAttribute('data-official')
     };
+  }
+
+  // Ссылки кликаются только в сообщениях официального аккаунта: у людей
+  // живая ссылка — готовый способ заманить на чужой сайт. html — уже
+  // экранированный текст; хвостовая пунктуация в ссылку не входит.
+  function linkify(html) {
+    return html.replace(/https?:\/\/[^\s<]+/g, function (url) {
+      var tail = (/[.,;:!?)»]+$/.exec(url) || [''])[0];
+      url = url.slice(0, url.length - tail.length);
+      var own = url.indexOf(location.origin + '/') === 0;
+      return '<a class="tk-msg__link" href="' + url + '"' + (own ? '' : ' target="_blank" rel="noopener noreferrer"') + '>' + url + '</a>' + tail;
+    });
   }
 
   function dialogEl(id) {
@@ -447,7 +461,9 @@
       var att = (m.attachments || []).map(attachmentHtml).join('');
       // Картинка, видео или кружок без подписи — пузырь без полей.
       bare = att && !m.content && !head && /^(image|video|round)$/.test(m.attachments[0].kind);
-      body = att + (m.content ? '<p class="tk-msg__text">' + escapeHtml(m.content) + '</p>' : '');
+      var text = escapeHtml(m.content || '');
+      if (!out && !group && peer && peer.official) text = linkify(text);
+      body = att + (m.content ? '<p class="tk-msg__text">' + text + '</p>' : '');
     }
     var special = m.expired || m.limit || (m.attachments && m.attachments.length);
     var bubble = '<div class="tk-msg__bubble' + (special ? ' has-att' : '') + (bare ? ' is-bare' : '') + (m.limit || m.expired ? ' is-sealed' : '') + '" tabindex="0" role="button" aria-haspopup="menu" aria-label="' + escapeHtml(t('chats.actions')) + '">' +
@@ -583,7 +599,7 @@
         Object.assign(people, page.people || {});
         seen(page.seenUntil);
         if (page.group) setGroup(page.group);
-        return { messages: page.messages, calls: [], restricted: null };
+        return { messages: page.messages, calls: [], restricted: null, request: null };
       });
   }
 
@@ -599,6 +615,7 @@
       calls = page.calls;
       allLoaded = page.messages.length < PAGE;
       setBlocked(page.restricted);
+      setRequest(page.request);
       render();
       scrollToBottom();
       markRead();
@@ -688,6 +705,7 @@
     loadChat().then(function (page) {
       if (chatKey() !== key) return;
       setBlocked(page.restricted);
+      setRequest(page.request);
       var byId = {};
       page.messages.forEach(function (m) { byId[m._id] = m; });
       var oldest = page.messages.length ? page.messages[0].sentAt : null;
@@ -739,7 +757,8 @@
   // собеседник видел бы «прочитано» у сообщения, которого никто не видел.
   function markRead() {
     if (group) return markGroupRead();
-    if (!peer || document.visibilityState !== 'visible') return;
+    // Заявка ко мне: «прочитано» автор не получает, пока её не приняли.
+    if (!peer || requestIn || document.visibilityState !== 'visible') return;
     var unread = messages.some(function (m) { return m.sender === peer.id && !m.readAt; });
     var el = dialogEl(peer.id);
     var badge = el && el.querySelector('.tk-dialog__unread');
@@ -781,7 +800,7 @@
     var when = el.querySelector('.tk-dialog__when');
     when.setAttribute('data-time', m.sentAt);
     when.textContent = timeAgo(m.sentAt);
-    list.prepend(el);
+    (el.parentNode || list).prepend(el); // строка заявки — наверх своей папки
   }
 
   function addDialog(p) {
@@ -803,10 +822,12 @@
     el.setAttribute('data-ava-bg', p.avatarStyle.gradient || '');
     el.setAttribute('data-ava-initial', p.avatarStyle.initial || '');
     el.setAttribute('data-presence-user', p.id);
+    if (p.official) el.setAttribute('data-official', '');
     el.innerHTML =
       avatar('tk-dialog__ava', peerOf(el)) +
       '<span class="tk-dialog__body">' +
         '<span class="tk-dialog__top"><span class="tk-dialog__who"><span class="tk-dialog__name">' + escapeHtml(p.displayName) + '</span>' +
+        (p.official && window.tkOfficial ? window.tkOfficial() : '') +
         '<span class="presence-dot presence-offline"></span></span><span class="tk-dialog__when"></span></span>' +
         '<span class="tk-dialog__bottom"><span class="tk-dialog__last"></span><span class="tk-dialog__unread hidden">0</span></span>' +
       '</span>';
@@ -821,6 +842,21 @@
     if (k) return you + '<span data-i18n="' + k + '">' + escapeHtml(t(k)) + '</span>';
     var label = l.kind ? '<span data-i18n="chats.att.' + l.kind + '">' + escapeHtml(t('chats.att.' + l.kind)) + '</span>' : '';
     return you + label + (label && l.content ? ' · ' : '') + escapeHtml(l.content || '');
+  }
+
+  // Строка диалога из ответа /api/dialogs и /api/requests — целиком.
+  function filledDialog(c) {
+    var p = c.interlocutor;
+    var el = dialogNode(p);
+    el.querySelector('.presence-dot').className = 'presence-dot ' + (p.isOnline ? 'presence-online' : 'presence-offline');
+    el.querySelector('.tk-dialog__last').innerHTML = lastHtml(c.last);
+    var when = el.querySelector('.tk-dialog__when');
+    when.setAttribute('data-time', c.lastActivity);
+    when.textContent = timeAgo(c.lastActivity);
+    var badge = el.querySelector('.tk-dialog__unread');
+    badge.textContent = String(c.unread);
+    badge.classList.toggle('hidden', !c.unread);
+    return el;
   }
 
   // Догрузка списка: сервер отдаёт диалоги по 30 (routes/streaming/messages.js),
@@ -851,16 +887,7 @@
           }
           var p = c.interlocutor;
           if (dialogEl(p.id)) return;
-          var el = dialogNode(p);
-          el.querySelector('.presence-dot').className = 'presence-dot ' + (p.isOnline ? 'presence-online' : 'presence-offline');
-          el.querySelector('.tk-dialog__last').innerHTML = lastHtml(c.last);
-          var when = el.querySelector('.tk-dialog__when');
-          when.setAttribute('data-time', c.lastActivity);
-          when.textContent = timeAgo(c.lastActivity);
-          var badge = el.querySelector('.tk-dialog__unread');
-          badge.textContent = String(c.unread);
-          badge.classList.toggle('hidden', !c.unread);
-          list.insertBefore(el, $('conversationsEmpty'));
+          list.insertBefore(filledDialog(c), $('conversationsEmpty'));
           ids.push(p.id);
         });
         if (ids.length && window.subscribePresence) window.subscribePresence(ids);
@@ -903,6 +930,7 @@
     el.setAttribute('data-ava-bg', (p.avatarStyle || {}).gradient || '');
     el.setAttribute('data-ava-initial', (p.avatarStyle || {}).initial || '');
     el.setAttribute('data-presence-user', p.id);
+    if (p.official) el.setAttribute('data-official', '');
     el.title = p.displayName;
     var a = peerOf(el);
     el.innerHTML =
@@ -928,7 +956,150 @@
     var el = e.target.closest('.tk-recent__item');
     if (!el) return;
     var r = peerOf(el);
-    openPeer({ id: r.id, displayName: r.name, avatarStyle: { url: r.url, gradient: r.bg, initial: r.initial } });
+    openPeer({ id: r.id, displayName: r.name, official: r.official, avatarStyle: { url: r.url, gradient: r.bg, initial: r.initial } });
+  });
+
+  // ── Заявки на переписку (utils/privacy.js) ───────────────────────────
+  // Незнакомые пишут тому, кто принимает их через заявки: такие диалоги
+  // лежат в своей папке — без звука, пуша и счётчика в шапке. Ответ
+  // или «Принять» переносит диалог в общий список, «Удалить» убирает его
+  // у меня (новое сообщение вернёт его в заявки).
+  var requestsList = $('requestsList');
+  var requestsRows = $('requestsRows');
+  var requestsBtn = $('requestsBtn');
+  var inRequests = false;
+  var requestIn = false;    // открытый диалог — заявка ко мне
+  // От кого заявки: счётчик на кнопке — люди, а не сообщения.
+  var requestPeers = {};
+  (requestsBtn.getAttribute('data-peers') || '').split(',').filter(Boolean).forEach(function (id) { requestPeers[id] = true; });
+
+  function paintRequests() {
+    var n = Object.keys(requestPeers).length;
+    $('requestsCount').textContent = String(n);
+    requestsBtn.hidden = !n;
+  }
+
+  function requestEl(id) {
+    return requestsRows.querySelector('.tk-dialog[data-id="' + CSS.escape(String(id)) + '"]');
+  }
+
+  function openRequests() {
+    inRequests = true;
+    setTab('messages');
+    requestsRows.innerHTML = '';
+    $('requestsEmpty').hidden = true;
+    fetch('/api/requests', { headers: { Accept: 'application/json' } })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) {
+        d.dialogs.forEach(function (c) {
+          requestPeers[c.interlocutor.id] = true;
+          requestsRows.appendChild(filledDialog(c));
+        });
+        paintRequests();
+        $('requestsEmpty').hidden = d.dialogs.length > 0;
+        if (d.dialogs.length && window.subscribePresence) window.subscribePresence(d.dialogs.map(function (c) { return c.interlocutor.id; }));
+      })
+      .catch(function (e) { console.error('[chats] заявки не загрузились:', e); });
+  }
+
+  requestsBtn.addEventListener('click', openRequests);
+  $('requestsBack').addEventListener('click', function () {
+    inRequests = false;
+    setTab('messages');
+  });
+  requestsRows.addEventListener('click', function (e) {
+    var el = e.target.closest('.tk-dialog');
+    if (el) select(el);
+  });
+
+  // У открытого диалога: 'in' — заявка ко мне, 'out' — моя, null — нет.
+  function setRequest(state) {
+    requestIn = state === 'in';
+    $('chatRequest').hidden = !state;
+    if (!state) return;
+    $('chatRequestActs').hidden = state !== 'in';
+    say($('chatRequestText'), state === 'in' ? 'chats.requestIn' : 'chats.requestOut');
+  }
+
+  // Новая заявка или новое в ней: строка — наверх папки, счётчик на кнопке.
+  function requestMessage(m, p) {
+    var el = requestEl(p.id);
+    requestPeers[p.id] = true;
+    paintRequests();
+    if (!el) {
+      if (inRequests) {
+        el = dialogNode(p);
+        requestsRows.prepend(el);
+        $('requestsEmpty').hidden = true;
+      }
+    }
+    if (el) {
+      setLast(el, m);
+      if (!(peer && peer.id === p.id)) {
+        var badge = el.querySelector('.tk-dialog__unread');
+        badge.textContent = String((parseInt(badge.textContent, 10) || 0) + 1);
+        badge.classList.remove('hidden');
+      }
+    }
+    if (peer && peer.id === p.id) {
+      var stick = atBottom();
+      merge([m]);
+      render();
+      if (stick) scrollToBottom();
+      markRead();
+    }
+  }
+
+  // Заявка принята: строка — в общий список, папка — на одну меньше.
+  function acceptedRow(id) {
+    var el = requestEl(id);
+    if (el) {
+      list.prepend(el);
+      $('conversationsEmpty').classList.add('hidden');
+    }
+    delete requestPeers[id];
+    paintRequests();
+    if (peer && peer.id === id) {
+      setRequest(null);
+      markRead(); // пока была заявкой, «прочитано» не отправлялось
+    }
+    leaveEmptyRequests();
+  }
+
+  // Последнюю заявку разобрали — пустая папка ни к чему, обратно в список.
+  function leaveEmptyRequests() {
+    if (requestsRows.querySelector('.tk-dialog')) return;
+    $('requestsEmpty').hidden = false;
+    if (!inRequests) return;
+    inRequests = false;
+    setTab('messages');
+  }
+
+  $('requestAccept').addEventListener('click', function () {
+    if (!peer) return;
+    var id = peer.id;
+    post('/requests/accept', { peerId: id })
+      .then(function (r) {
+        acceptedRow(id);
+        if (window.tkChatBadge) window.tkChatBadge({ messages: r.unreadMessages });
+      })
+      .catch(function (err) { toast(err.message, 'error'); });
+  });
+
+  $('requestDecline').addEventListener('click', function () {
+    if (!peer) return;
+    var id = peer.id;
+    confirmDialog(t('chats.requestDeclineAsk'), { okText: t('chats.requestDecline') }).then(function (ok) {
+      if (!ok) return;
+      return post('/conversations/delete', { peerId: id, forAll: false }).then(function () {
+        var el = requestEl(id);
+        if (el) el.remove();
+        delete requestPeers[id];
+        paintRequests();
+        if (peer && peer.id === id) closeDialog();
+        leaveEmptyRequests();
+      });
+    }).catch(function (err) { toast(err.message, 'error'); });
   });
 
   // ── Выбор диалога ─────────────────────────────────────────────────────
@@ -950,8 +1121,12 @@
     list.querySelectorAll('.tk-dialog').forEach(function (d) {
       d.classList.toggle('tk-dialog--on', d === el);
     });
+    requestsRows.querySelectorAll('.tk-dialog').forEach(function (d) {
+      d.classList.toggle('tk-dialog--on', d === el);
+    });
 
-    $('peerName').textContent = peer.name;
+    $('peerName').innerHTML = escapeHtml(peer.name) + (peer.official && window.tkOfficial ? window.tkOfficial() : '');
+    setRequest(null);
     paintContactBtn();
     // Аватар ведёт в профиль, как и имя рядом.
     $('chatAvatar').outerHTML = avatar('tk-chat__ava-big', peer,
@@ -990,7 +1165,8 @@
     messages = [];
     calls = [];
     feed.innerHTML = '';
-    list.querySelectorAll('.tk-dialog--on').forEach(function (d) { d.classList.remove('tk-dialog--on'); });
+    document.querySelectorAll('.tk-dialog--on').forEach(function (d) { d.classList.remove('tk-dialog--on'); });
+    setRequest(null);
     input.setAttribute('data-i18n-placeholder', 'chats.messagePh');
     input.placeholder = t('chats.messagePh');
     history.replaceState(null, '', '/chatsPage');
@@ -2175,6 +2351,10 @@
   document.addEventListener('tk:message:new', function (e) {
     var m = e.detail.message;
     var p = e.detail.peer;
+    // Заявка — в свою папку, мимо недавних (utils/privacy.js).
+    if (e.detail.request) return requestMessage(m, p);
+    // Мой ответ на заявку её принял (сервер уже снял) — строка в общий список.
+    if (m.sender === ME && requestPeers[p.id]) acceptedRow(p.id);
     var el = dialogEl(p.id) || addDialog(p);
     setLast(el, m);
     bumpRecent(p);
@@ -2372,12 +2552,15 @@
     $('tabMessages').setAttribute('aria-selected', String(!onCalls && !onContacts));
     $('tabCalls').setAttribute('aria-selected', String(onCalls));
     $('tabContacts').setAttribute('aria-selected', String(onContacts));
-    list.hidden = onCalls || onContacts;
+    // Папка «Заявки» открыта поверх вкладки сообщений; другая вкладка её закрывает.
+    if (onCalls || onContacts) inRequests = false;
+    list.hidden = onCalls || onContacts || inRequests;
+    requestsList.hidden = !inRequests;
     callsList.hidden = !onCalls;
     contactsPane.hidden = !onContacts;
     // Лента недавних — часть списка диалогов: на других вкладках ей не место.
-    recentBox.hidden = onCalls || onContacts || !recentRow.children.length;
-    $('newGroupRow').hidden = onCalls || onContacts;
+    recentBox.hidden = onCalls || onContacts || inRequests || !recentRow.children.length;
+    $('newGroupRow').hidden = onCalls || onContacts || inRequests;
     var q = new URLSearchParams(location.search);
     if (onCalls) q.set('tab', 'calls');
     else if (onContacts) q.set('tab', 'contacts');
@@ -2671,8 +2854,11 @@
   // заводим, как кнопка «Сообщение» на его странице; не вышло (например,
   // аккаунт ограничен) — ведём на страницу человека.
   function openPeer(p) {
-    var el = dialogEl(p.id);
+    var el = dialogEl(p.id) || requestEl(p.id);
     if (el) return select(el);
+    // Заявка от него есть, но папка не открывалась: «написать» её примет
+    // (/start-conversation), строка встанет в общий список.
+    if (requestPeers[p.id]) { delete requestPeers[p.id]; paintRequests(); }
     post('/start-conversation', { recipientId: p.id })
       .then(function () { select(dialogEl(p.id) || addDialog(p)); })
       .catch(function () { location.href = '/userPage/' + encodeURIComponent(p.id); });

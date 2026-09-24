@@ -3,7 +3,7 @@
   подписчиков (/userPage/:id/followers). Раньше она была выписана в каждом
   шаблоне своя. Стили — css/search.css.
 
-  person: _id, displayName, avatarStyle, isOnline, followersCount;
+  person: _id, displayName, avatarStyle, isOnline, followersCount, official;
           у авторов ещё stream (идёт эфир) или recordings (сколько записей).
   href — куда ведёт карточка; по умолчанию на страницу человека.
 %>
@@ -13,7 +13,7 @@
     <span class="presence-dot <%= person.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
   </span>
   <span class="tk-person__body">
-    <span class="tk-person__name"><%= person.displayName %></span>
+    <span class="tk-person__name"><%= person.displayName %><% if (person.official) { %><%- include('official') %><% } %></span>
 
     <% if (person.stream) { %>
     <span class="tk-person__meta tk-person__meta--live">

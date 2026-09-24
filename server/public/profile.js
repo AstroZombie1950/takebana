@@ -141,7 +141,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Ограничение закрывает и общение — кнопки «Написать» и звонков
             // уходят вместе с ним и возвращаются, когда доступ вернули.
             var talk = document.getElementById('talkActions');
-            if (talk) talk.hidden = on;
+            if (talk) talk.hidden = on || !talk.children.length; // пустой — кнопки закрыла приватность
             window.tkText(restrictButton.querySelector('[data-i18n]'), on ? 'user.unrestrict' : 'user.restrict');
             toast(pt(on ? 'user.restricted' : 'user.unrestricted', { name: P.displayName }), 'ok');
           });

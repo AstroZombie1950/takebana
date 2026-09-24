@@ -13,6 +13,7 @@ const { unreadTotal } = require('../utils/groups');
 const Stream = require('../models/Stream');
 const Notification = require('../models/Notification');
 const callLog = require('../utils/callLog');
+const privacy = require('../utils/privacy');
 
 // ===== Presence API =====
 // Онлайн-статусы нужны мессенджеру, то есть вошедшему пользователю.
@@ -35,6 +36,7 @@ router.get('/api/presence', requireAuthApi, async (req, res) => {
     User.find({ _id: { $in: ids } }, { _id: 1, isOnline: 1, lastSeen: 1 }).lean(),
     Stream.find({ userId: { $in: ids }, isActive: true }).distinct('userId'),
   ]);
+  await privacy.maskPresence(req.session.userId, users); // скрытое «в сети» (utils/privacy.js)
   const liveSet = new Set(live.map(String));
   res.json({ users: users.map((u) => ({ ...u, isLive: liveSet.has(String(u._id)) })) });
 });

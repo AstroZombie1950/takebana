@@ -15,6 +15,8 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const { audit } = require('../utils/audit');
 const { signIn } = require('../middleware/auth');
+const support = require('../utils/support');
+const { langOf } = require('../utils/i18n');
 
 // Учётке из Google пароль не нужен: вход по паролю ищет по provider: '' и такую
 // запись не найдёт никогда. Но поле в схеме есть, и раньше в него клали id
@@ -50,6 +52,7 @@ if (googleOAuthConfigured) {
               login: '' // оставляем логин пустым
           });
           await user.save();
+          profile.tkNew = true; // колбэку ниже: новичку — приветствие поддержки
       }
 
       return done(null, profile);
@@ -96,6 +99,7 @@ router.get('/auth/google/callback',
     }
 
     await signIn(req, user);
+    if (req.user.tkNew) support.welcome(req, user, langOf(req)); // utils/support.js
 
     audit(req, 'auth.google', { actor: user });
 

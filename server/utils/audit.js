@@ -32,6 +32,11 @@ const ACTIONS = {
   'auth.ratelimit': 'Сработал лимит попыток',
 
   'profile.update': 'Правка профиля',
+  'profile.privacy': 'Правка приватности',
+  'support.account': 'Аккаунт поддержки',
+  'support.welcome': 'Приветствие новичкам',
+  'support.reply': 'Ответ поддержки',
+  'support.broadcast': 'Рассылка поддержки',
   'group.create': 'Создание группы',
   'group.delete': 'Удаление группы',
   'profile.email.request': 'Запрос смены почты',

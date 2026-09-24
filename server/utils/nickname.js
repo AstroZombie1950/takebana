@@ -26,10 +26,12 @@ function normalize(value) {
   return String(value || '').trim().toLowerCase();
 }
 
-// Почему ник не годится: 'format' | 'reserved' — или null.
-function problem(nick) {
+// Почему ник не годится: 'format' | 'reserved' — или null. Список RESERVED —
+// против самозванцев, поэтому официальному аккаунту (администратору,
+// utils/privacy.js) он не мешает: @takebana и @support заводятся им.
+function problem(nick, { official = false } = {}) {
   if (!RULE.test(nick)) return 'format';
-  if (RESERVED.has(nick)) return 'reserved';
+  if (RESERVED.has(nick) && !official) return 'reserved';
   return null;
 }
 

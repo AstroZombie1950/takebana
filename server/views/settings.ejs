@@ -4,6 +4,9 @@
     имя и никнейм  | фото профиля
     ── Безопасность ──
     пароль         | почта
+    ── Приватность ── (с 24.09, utils/privacy.js)
+    кто может      | видимость
+    ограниченный доступ — во всю ширину
     ── Это устройство ──
     уведомления    | камера и микрофон
     язык           | удаление аккаунта
@@ -168,6 +171,57 @@
           <% } %>
         </section>
 
+        <%# Приватность — свойство аккаунта, не устройства: хранится в базе
+            (User.privacy), сохраняется сразу по выбору (settings.js). %>
+        <p class="tk-kicker tk-set__row-title" data-i18n="settings.privacy"><%- t('settings.privacy') %></p>
+
+        <% var PRIV = [
+          ['messages', ['all', 'requests', 'contacts', 'nobody']],
+          ['calls', ['all', 'contacts', 'nobody']],
+          ['groups', ['all', 'contacts', 'nobody']],
+        ]; var SEEN = [
+          ['presence', ['all', 'contacts', 'nobody']],
+          ['comments', ['all', 'followers', 'nobody']],
+        ]; %>
+        <% function privSelect(key, values) { %>
+            <label class="tk-form__label" for="priv-<%= key %>" data-i18n="settings.priv.<%= key %>"><%- t('settings.priv.' + key) %></label>
+            <select class="tk-field tk-select" id="priv-<%= key %>" data-privacy="<%= key %>">
+              <% values.forEach(function (v) { %><option value="<%= v %>"<% if (privacy[key] === v) { %> selected<% } %> data-i18n="settings.priv.<%= key %>.<%= v %>"><%- t('settings.priv.' + key + '.' + v) %></option><% }) %>
+            </select>
+        <% } %>
+        <section class="tk-panel" id="privacyPanel">
+          <p class="tk-panel__title" data-i18n="settings.privWho"><%- t('settings.privWho') %></p>
+          <div class="tk-set__form">
+            <% PRIV.forEach(function (p) { privSelect(p[0], p[1]); }) %>
+            <p class="tk-note tk-set__foot" data-i18n="settings.privWhoHint"><%- t('settings.privWhoHint') %></p>
+          </div>
+        </section>
+
+        <section class="tk-panel" id="visibilityPanel">
+          <p class="tk-panel__title" data-i18n="settings.privSeen"><%- t('settings.privSeen') %></p>
+          <div class="tk-set__form">
+            <% SEEN.forEach(function (p) { privSelect(p[0], p[1]); }) %>
+            <label class="tk-form__toggle"><input type="checkbox" data-privacy="searchable"<% if (privacy.searchable) { %> checked<% } %>><span data-i18n="settings.priv.searchable"><%- t('settings.priv.searchable') %></span></label>
+            <p class="tk-note tk-set__foot" data-i18n="settings.privSeenHint"><%- t('settings.privSeenHint') %></p>
+          </div>
+        </section>
+
+        <%# Кому закрыт канал и общение (utils/restrict.js): вернуть доступ.
+            Закрывают — со страницы человека или из своих подписчиков. %>
+        <section class="tk-panel tk-set__restricted" id="restrictedPanel">
+          <p class="tk-panel__title" data-i18n="settings.restricted"><%- t('settings.restricted') %></p>
+          <p class="tk-note" data-i18n="settings.restrictedHint"><%- t('settings.restrictedHint') %></p>
+          <ul class="tk-set__people"<% if (!restricted.length) { %> hidden<% } %>>
+            <% restricted.forEach(function (p) { %>
+            <li class="tk-set__person" data-restricted="<%= p._id %>">
+              <a href="/userPage/<%= p._id %>" class="tk-set__person-name"><%= p.displayName %></a>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-unrestrict data-i18n="user.unrestrict"><%- t('user.unrestrict') %></button>
+            </li>
+            <% }); %>
+          </ul>
+          <p class="tk-note tk-set__empty" id="restrictedEmpty"<% if (restricted.length) { %> hidden<% } %> data-i18n="settings.restrictedNone"><%- t('settings.restrictedNone') %></p>
+        </section>
+
         <p class="tk-kicker tk-set__row-title" data-i18n="settings.device"><%- t('settings.device') %></p>
 
         <!-- Уведомления: звук сообщения, звук звонка, системные (tk-notify.js) -->
@@ -267,24 +321,6 @@
           <% } %>
         </section>
       </div>
-
-      <%# Ограниченный доступ к каналу: список появляется, только когда
-          кому-то канал закрыт. Закрывают — со страницы человека или
-          из своих подписчиков (utils/restrict.js). %>
-      <% if (restricted.length) { %>
-      <section class="tk-panel tk-set__restricted" id="restrictedPanel">
-        <p class="tk-panel__title" data-i18n="settings.restricted"><%- t('settings.restricted') %></p>
-        <p class="tk-note" data-i18n="settings.restrictedHint"><%- t('settings.restrictedHint') %></p>
-        <ul class="tk-set__people">
-          <% restricted.forEach(function (p) { %>
-          <li class="tk-set__person" data-restricted="<%= p._id %>">
-            <a href="/userPage/<%= p._id %>" class="tk-set__person-name"><%= p.displayName %></a>
-            <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-unrestrict data-i18n="user.unrestrict"><%- t('user.unrestrict') %></button>
-          </li>
-          <% }); %>
-        </ul>
-      </section>
-      <% } %>
 
       <%# Выход — только на телефоне: на десктопе он в левой панели. Кнопкой
           во всю ширину, как остальные кнопки настроек. %>

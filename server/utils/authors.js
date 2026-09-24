@@ -11,6 +11,7 @@ const Stream = require('../models/Stream');
 const Recording = require('../models/Recording');
 const Subscription = require('../models/Subscription');
 const userView = require('../utils/userView');
+const privacy = require('./privacy');
 const { profileUrl } = require('./profileUrl');
 
 // Сколько человек в группе на странице авторов. Постраничной подгрузки нет:
@@ -30,6 +31,7 @@ function view(user, extra = {}) {
     displayName,
     avatarStyle: userView.avatarStyle(user, displayName),
     isOnline: !!user.isOnline,
+    official: privacy.isOfficial(user),
     ...extra,
   };
 }
@@ -39,14 +41,16 @@ function view(user, extra = {}) {
 async function liveStreams() {
   const streams = await Stream.find({ isActive: true })
     .sort({ viewers: -1, startedAt: -1 })
-    .populate('userId', 'nickname login email avatar isOnline banned')
+    .populate('userId', 'nickname login email avatar isOnline banned role')
     .select('title viewers userId')
     .lean();
   return streams.filter((s) => s.userId && !s.userId.banned);
 }
 
 // Кто вообще автор: выходил в эфир (firstLiveAt проставляется навсегда)
-// или у него есть готовая запись. Забаненных отсеиваем здесь же.
+// или у него есть готовая запись. Забаненных отсеиваем здесь же, и тех,
+// кто попросил не показывать его в подборках (utils/privacy.js).
+// «Сейчас в эфире» он всё равно виден: эфир он открыл сам.
 async function authorIds() {
   const [everLive, withRecordings] = await Promise.all([
     Stream.distinct('userId', { firstLiveAt: { $ne: null } }),
@@ -54,7 +58,7 @@ async function authorIds() {
   ]);
   const all = [...new Set([...everLive, ...withRecordings].map(id))].map((x) => new mongoose.Types.ObjectId(x));
   if (!all.length) return [];
-  const banned = await User.find({ _id: { $in: all }, banned: true }).select('_id').lean();
+  const banned = await User.find({ _id: { $in: all }, $or: [{ banned: true }, { 'privacy.searchable': false }] }).select('_id').lean();
   const stop = new Set(banned.map((u) => id(u._id)));
   return all.filter((x) => !stop.has(id(x)));
 }
@@ -79,8 +83,10 @@ async function followersOf(ids) {
  * fresh    — появились недавно (порядок регистрации — по _id)
  * recorded — у кого есть записи, новее сверху
  */
-async function groups({ limit = GROUP_SIZE } = {}) {
+// viewer — кто смотрит: от него зависит, чьё «в сети» видно.
+async function groups({ limit = GROUP_SIZE, viewer = null } = {}) {
   const [streams, ids] = await Promise.all([liveStreams(), authorIds()]);
+  await privacy.maskPresence(viewer, streams.map((s) => s.userId));
 
   const live = streams.slice(0, limit).map((s) => view(s.userId, {
     stream: { _id: s._id, title: s.title, viewers: s.viewers },
@@ -93,7 +99,7 @@ async function groups({ limit = GROUP_SIZE } = {}) {
   if (!rest.length) return { live, popular: [], fresh: [], recorded: [] };
 
   const [users, followers, recent] = await Promise.all([
-    User.find({ _id: { $in: rest } }).select('nickname login email avatar isOnline').lean(),
+    User.find({ _id: { $in: rest } }).select('nickname login email avatar isOnline role').lean().then((u) => privacy.maskPresence(viewer, u)),
     followersOf(rest),
     // Последняя запись каждого — по ней сортируется группа «С записями».
     Recording.aggregate([
@@ -141,8 +147,8 @@ async function groups({ limit = GROUP_SIZE } = {}) {
 
 // Для витрины: несколько авторов в боковую колонку. Сначала те, кто в эфире,
 // потом популярные, потом новые — и только если есть кого показать.
-async function featured(limit = 3) {
-  const { live, popular, fresh, recorded } = await groups({ limit });
+async function featured(limit = 3, viewer = null) {
+  const { live, popular, fresh, recorded } = await groups({ limit, viewer });
   const picked = [];
   const seen = new Set();
   for (const person of [...live, ...popular, ...fresh, ...recorded]) {

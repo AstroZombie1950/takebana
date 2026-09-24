@@ -10,12 +10,14 @@ const Recording = require('../../models/Recording');
 const Stream = require('../../models/Stream');
 const Subscription = require('../../models/Subscription');
 const Contact = require('../../models/Contact');
+const Conversation = require('../../models/Conversation');
 const { SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
 const { commonDataMiddleware, getActiveStreamsCount } = require('./shared');
 const { notFound } = require('../../middleware/errors');
 const authors = require('../../utils/authors');
 const userView = require('../../utils/userView');
 const restriction = require('../../utils/restrict');
+const privacy = require('../../utils/privacy');
 const gallery = require('../../utils/gallery');
 const search = require('../../utils/search');
 const nickname = require('../../utils/nickname');
@@ -111,7 +113,7 @@ async function renderCatalog(req, res, category) {
   // Запросы параллельно (ускоряет F5)
   const [users, totalStreamsCount, streams, recordings] = await Promise.all([
     // Трое в колонку «Авторы»; кто это — utils/authors.js, остальные на /authors.
-    authors.featured(3),
+    authors.featured(3, req.session.userId),
     getActiveStreamsCount(),
     findStreams(category, filters),
     findRecordings(category),
@@ -232,6 +234,18 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
       Contact.exists({ owner: currentUserId, peer: userId }).then(Boolean),
     ])
     : [false, false, false];
+  // Приватность хозяина страницы (utils/privacy.js): видно ли его «в сети»,
+  // можно ли ему написать и позвонить — кнопки, которые откажут, не рисуем.
+  const conversation = currentUserId && !isSelf
+    ? await Conversation.findOne({ $or: [{ userOne: currentUserId, userTwo: userId }, { userOne: userId, userTwo: currentUserId }] }).select('lastMessage requestFor').lean()
+    : null;
+  const [seen, canWrite, canCall] = isSelf
+    ? [true, true, true]
+    : await Promise.all([
+      privacy.presenceVisible(currentUserId, [userId]).then((ids) => ids.length > 0),
+      currentUserId ? privacy.messageGate(conversation, currentUserId, userId).then((g) => g.ok) : true,
+      currentUserId ? privacy.decide('calls', userId, currentUserId).then((g) => g.ok) : true,
+    ]);
   const recordings = restricted ? [] : await Recording.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
     .sort({ createdAt: -1 })
     .select('title status duration thumb isAdult createdAt views')
@@ -260,7 +274,10 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
     restricted,
     iRestricted,
     inContacts,
+    canWrite,
+    canCall,
     user: {
+      official: privacy.isOfficial(user),
       displayName,
       avatarStyle,
       _id: user._id,
@@ -277,8 +294,10 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
       activeStreamId: activeStream ? activeStream._id : null,
       // Свою страницу человек смотрит сам — значит, он в сети, что бы ни
       // успела записать база.
-      isOnline: !!user.isOnline || String(currentUserId) === String(user._id),
-      lastSeen: user.lastSeen || null
+      // Скрытое «в сети» — ни точки, ни даты (utils/privacy.js).
+      isOnline: isSelf || (seen && !!user.isOnline),
+      lastSeen: seen ? user.lastSeen || null : null,
+      presenceHidden: !seen,
     }
   });
 });

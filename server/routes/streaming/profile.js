@@ -29,6 +29,7 @@ const { audit } = require('../../utils/audit');
 const nickname = require('../../utils/nickname');
 const { mailConfigured } = require('../../utils/mail');
 const profileLinks = require('../../utils/profileLinks');
+const privacy = require('../../utils/privacy');
 
 // Страница настроек: имя и ник, фото, пароль, почта, язык, удаление. Раньше — окно поверх
 // любой страницы кабинета, и его разметка со скриптом ехали с каждой из них.
@@ -37,7 +38,7 @@ router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
   // commonDataMiddleware роль не тянет, и ради одной страницы добавлять её
   // в выборку каждой страницы кабинета незачем.
   const user = await User.findById(req.session.userId)
-    .select('provider role login nickname nicknameChangedAt email emailChange emailVerifiedAt restricted bio links').lean();
+    .select('provider role login nickname nicknameChangedAt email emailChange emailVerifiedAt restricted bio links privacy').lean();
   if (!user) return res.redirect('/login');
   // Кому закрыт канал (utils/restrict.js): здесь доступ можно вернуть.
   const restrictedUsers = (user.restricted || []).length
@@ -53,6 +54,7 @@ router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
     canDelete: user.role !== 'admin',
     mailOn: mailConfigured,
     restricted,
+    privacy: privacy.of(user),
     profile: {
       login: user.login || '',
       nickname: user.nickname || '',

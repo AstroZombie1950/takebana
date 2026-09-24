@@ -256,6 +256,8 @@ require('./utils/netCheck').prepare();
 require('./utils/nickname').ensureAll(require('./models/User')).catch((e) => require('./utils/errorLog').server(e, 'nickname.ensureAll'));
 // Почта аккаунтов, заведённых до 24.09.2026, — в нижний регистр.
 require('./jobs/lowercaseEmails').run();
+// Рассылки поддержки, оборванные перезапуском, — в «прервана».
+require('./utils/support').markInterrupted().catch((e) => require('./utils/errorLog').server(e, 'support.sweep'));
 // Отрезки эфиров, оставшиеся открытыми от прошлого процесса, — закрыть,
 // иначе они навсегда останутся «в эфире» и испортят сумму часов.
 require('./utils/streamLog').sweep();

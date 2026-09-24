@@ -12,6 +12,7 @@ const Recording = require('../models/Recording');
 const Establishments = require('../models/Establishments');
 const Subscription = require('../models/Subscription');
 const userView = require('./userView');
+const privacy = require('./privacy');
 const { profileUrl } = require('./profileUrl');
 
 const TYPES = ['people', 'streams', 'recordings', 'venues'];
@@ -32,13 +33,14 @@ function normalize(raw) {
 // а у кого нет ни того ни другого — по началу почты до «@». По всей почте
 // не ищем: запрос «gmail» выдавал бы список людей, а по выдаче проверялся
 // бы чужой адрес.
+// Кто скрылся из поиска (utils/privacy.js), не находится вовсе.
 function peopleWhere(query) {
   const rx = new RegExp(escapeRegex(query), 'i');
   const where = [{ nickname: rx }, { login: rx }];
   if (!query.includes('@')) {
     where.push({ login: { $in: ['', null] }, email: new RegExp('^[^@]*' + escapeRegex(query), 'i') });
   }
-  return { $or: where };
+  return { $or: where, ...privacy.SEARCHABLE };
 }
 
 // Эфиры — только идущие: черновик не открыть, а в выдаче он выглядел бы
@@ -80,17 +82,20 @@ function rankPeople(users, query) {
     .map((x) => x.user);
 }
 
-async function findPeople(query, limit) {
+async function findPeople(query, limit, viewer) {
   const users = await User.find(peopleWhere(query))
-    .select('nickname login email avatar isOnline')
+    .select('nickname login email avatar isOnline role')
     .limit(POOL)
     .lean();
+  // Скрытое «в сети» не должно и поднимать в выдаче — маска до сортировки.
+  await privacy.maskPresence(viewer, users);
   return peopleCards(rankPeople(users, query).slice(0, limit));
 }
 
 // Карточки людей (partials/personCard.ejs): имя, аватар, подписчики, в сети ли.
 // Общие для поиска и списков подписчиков. users — с полями login, email,
-// avatar, isOnline; порядок сохраняется.
+// avatar, isOnline, role; «в сети» уже сверено с приватностью
+// (privacy.maskPresence); порядок сохраняется.
 async function peopleCards(users) {
   if (!users.length) return [];
 
@@ -110,6 +115,7 @@ async function peopleCards(users) {
       avatarStyle: userView.avatarStyle(user, displayName),
       followersCount: byId.get(String(user._id)) || 0,
       isOnline: !!user.isOnline,
+      official: privacy.isOfficial(user),
     };
   });
 }
@@ -176,7 +182,8 @@ async function findVenues(rx, limit) {
 
 // Одна выдача на все виды. types — какие искать (выпадашка берёт все,
 // вкладка страницы — один), limit — сколько на вид.
-async function search(rawQuery, { limit = 5, types = TYPES } = {}) {
+// viewer — кто ищет: от него зависит, чьё «в сети» видно.
+async function search(rawQuery, { limit = 5, types = TYPES, viewer = null } = {}) {
   const query = normalize(rawQuery);
   const empty = { query, people: [], streams: [], recordings: [], venues: [] };
   if (!query) return empty;
@@ -185,7 +192,7 @@ async function search(rawQuery, { limit = 5, types = TYPES } = {}) {
   const want = (type) => types.includes(type);
 
   const [people, streams, recordings, venues] = await Promise.all([
-    want('people') ? findPeople(query, limit) : [],
+    want('people') ? findPeople(query, limit, viewer) : [],
     want('streams') ? findStreams(rx, limit) : [],
     want('recordings') ? findRecordings(rx, limit) : [],
     want('venues') ? findVenues(rx, limit) : [],

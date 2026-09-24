@@ -86,6 +86,31 @@ const EN = {
     'Вы ограничили доступ этому человеку — сначала верните его': 'You have restricted this person \u2014 restore their access first',
     'Автор ограничил вам доступ — написать и позвонить нельзя': 'The author has restricted your access \u2014 you cannot message or call them',
 
+    // Приватность (utils/privacy.js) и официальный аккаунт
+    'Приватность': 'Privacy',
+    'Человек принимает сообщения только от своих контактов': 'This person only accepts messages from their contacts',
+    'Человек не принимает новые сообщения': 'This person does not accept new messages',
+    'Человек принимает звонки только от своих контактов': 'This person only accepts calls from their contacts',
+    'Человек не принимает звонки': 'This person does not accept calls',
+    'Добавить в группу этого человека могут только его контакты': 'Only this person\'s contacts can add them to groups',
+    'Этот человек не разрешает добавлять себя в группы': 'This person does not allow being added to groups',
+    'Автор принимает комментарии только от подписчиков': 'The author only accepts comments from followers',
+    'Автор закрыл комментарии': 'The author has turned off comments',
+    'Официальный аккаунт ограничить нельзя': 'An official account cannot be restricted',
+
+    // Поддержка и рассылка в панели (routes/admin/support.js)
+    'Аккаунт поддержки не выбран': 'No support account chosen',
+    'Аккаунтом поддержки может быть только администратор': 'Only an administrator can be the support account',
+    'Напишите текст рассылки': 'Write the broadcast text',
+    'Предыдущая рассылка ещё идёт': 'The previous broadcast is still running',
+    'Проверку отправьте из личного аккаунта администратора: этот — аккаунт поддержки': 'Send the test from a personal administrator account: this one is the support account',
+    'Аккаунт': 'Account',
+    'Приветствие': 'Welcome',
+    'Текст': 'Text',
+    'Заготовка': 'Template',
+    'Пуш': 'Push',
+    'Дней': 'Days',
+
     // Контакты (routes/contacts.js)
     'Себя в контакты добавить нельзя': 'You cannot add yourself to contacts',
     'Контакт не найден': 'Contact not found',

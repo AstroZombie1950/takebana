@@ -20,6 +20,7 @@ const Establishments = require('../../models/Establishments');
 const Call = require('../../models/Call');
 const AuditLog = require('../../models/AuditLog');
 const ErrorLog = require('../../models/ErrorLog');
+const Message = require('../../models/Message');
 const { requireAdmin, requireModerator, sendCsv } = require('./shared');
 const usage = require('../../utils/usage');
 const health = require('../../utils/health');
@@ -32,6 +33,11 @@ const since = (ms) => new Date(Date.now() - ms);
 const idSince = (ms) => mongoose.Types.ObjectId.createFromTime(Math.floor((Date.now() - ms) / 1000));
 
 const hours = (seconds) => Math.round((seconds || 0) / 360) / 10;
+
+async function supportUnread() {
+  const sender = await User.findOne({ support: true, role: 'admin' }).select('_id').lean();
+  return sender ? Message.countDocuments({ recipient: sender._id, readAt: null, deletedFor: { $ne: sender._id } }) : 0;
+}
 
 router.get('/summary', requireModerator, async (req, res) => {
   const isAdmin = req.userRole === 'admin';
@@ -82,6 +88,8 @@ router.get('/summary', requireModerator, async (req, res) => {
     },
     recordings: { count: r.n || 0, bytes: r.bytes || 0, processing: r.processing || 0, failed: r.failed || 0 },
     errors: isAdmin ? { groups: e.groups || 0, cases: e.cases || 0, fresh: e.fresh || 0, loginFails } : null,
+    // Непрочитанное поддержкой — счётчик у вкладки «Поддержка» (utils/support.js).
+    support: isAdmin ? await supportUnread() : 0,
   });
 });
 

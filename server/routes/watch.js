@@ -11,6 +11,7 @@
 
 const crypto = require('crypto');
 const restriction = require('../utils/restrict');
+const privacy = require('../utils/privacy');
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
@@ -97,7 +98,7 @@ function commentView(c, me, ownerId, moderator) {
     _id: String(c._id),
     text: c.text,
     createdAt: c.createdAt,
-    author: { _id: u._id ? String(u._id) : '', name, avatar: userView.avatarStyle(u, name) },
+    author: { _id: u._id ? String(u._id) : '', name, avatar: userView.avatarStyle(u, name), official: privacy.isOfficial(u) },
     mine,
     canDelete: mine || String(ownerId) === String(me) || moderator,
   };
@@ -109,7 +110,7 @@ function commentsPage(recordingId, before) {
   return RecordingComment.find(filter)
     .sort({ createdAt: -1 })
     .limit(COMMENTS_PAGE + 1)
-    .populate('userId', 'nickname login email avatar')
+    .populate('userId', 'nickname login email avatar role')
     .lean();
 }
 
@@ -151,7 +152,7 @@ function mount(kind) {
   // у эфира: подтверждение возраста хранится в аккаунте, гостя гейт зовёт войти.
   router.get(path, commonDataMiddleware, async (req, res) => {
     const item = OBJECT_ID.test(req.params.id)
-      ? await K.Model.findById(req.params.id).populate('userId', 'nickname login email avatar banned').lean()
+      ? await K.Model.findById(req.params.id).populate('userId', 'nickname login email avatar banned role privacy').lean()
       : null;
     const me = req.session.userId;
     const isOwner = !!item && !!item.userId && String(item.userId._id) === String(me);
@@ -169,11 +170,16 @@ function mount(kind) {
       return res.render('ageGate');
     }
 
-    const [moderator, mine, comments, related] = await Promise.all([
+    // Кто может комментировать — решает автор (utils/privacy.js). Закрыто
+    // для этого зрителя — вместо поля ввода строка почему; гостю — только
+    // когда закрыто для всех, иначе ему по-прежнему «Войти».
+    const commentsRule = privacy.of(item.userId).comments;
+    const [moderator, mine, comments, related, commentGate] = await Promise.all([
       isModerator(req),
       me ? RecordingReaction.findOne({ recordingId: item._id, userId: me }).select('value').lean() : null,
       commentsPage(item._id),
       recommend.forItem(item, kind, { adultOk: !!(current && current.adultConfirmedAt) }),
+      me && !isOwner ? privacy.decide('comments', item.userId._id, me) : { ok: me || commentsRule !== 'nobody' },
     ]);
 
     const displayName = userView.displayName(item.userId);
@@ -193,7 +199,8 @@ function mount(kind) {
       moreComments: comments.length > COMMENTS_PAGE,
       related,
       limits: { title: TITLE_MAX, description: DESCRIPTION_MAX, comment: COMMENT_MAX },
-      author: { _id: item.userId._id, url: profileUrl(item.userId), displayName, avatarStyle: userView.avatarStyle(item.userId, displayName) },
+      commentsClosed: commentGate.ok ? '' : commentsRule,
+      author: { official: privacy.isOfficial(item.userId), _id: item.userId._id, url: profileUrl(item.userId), displayName, avatarStyle: userView.avatarStyle(item.userId, displayName) },
     });
   });
 
@@ -281,6 +288,8 @@ function mount(kind) {
     const item = await readyItem(req, res);
     if (!item) return;
     const me = req.session.userId;
+    const rule = await privacy.decide('comments', item.userId, me);
+    if (!rule.ok) return res.status(403).json({ privacy: rule.rule, message: rule.message });
     const c = await RecordingComment.create({ recordingId: item._id, userId: me, text: req.body.text });
     await K.Model.updateOne({ _id: item._id }, { $inc: { comments: 1 } });
 

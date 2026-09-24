@@ -15,6 +15,7 @@ const errorLog = require('../utils/errorLog');
 const turn = require('../utils/turn');
 const userView = require('../utils/userView');
 const restriction = require('../utils/restrict');
+const privacy = require('../utils/privacy');
 const { LIVE_ROOM } = require('../utils/liveSignal');
 
 // Список подписок приходит от клиента, поэтому и формат, и длина проверяются.
@@ -328,11 +329,17 @@ function registerSockets(io) {
     // то есть каждому подключённому браузеру про каждого пользователя, кем бы он
     // ему ни приходился. Теперь клиент называет тех, чьи точки у него на экране
     // (шапка собирает их из [data-presence-user]), и получает только их.
-    socket.on('presence:subscribe', (ids) => {
+    // Кто скрыл «в сети» от этого человека (utils/privacy.js), в комнату
+    // не попадает: его событий тот не получит вовсе.
+    socket.on('presence:subscribe', async (ids) => {
       if (!Array.isArray(ids)) return;
       // Потолок на всякий случай: список приходит от клиента, а комнаты стоят памяти.
-      for (const id of ids.slice(0, PRESENCE_SUBSCRIBE_LIMIT)) {
-        if (typeof id === 'string' && OBJECT_ID.test(id)) socket.join(`presence:${id}`);
+      const wanted = ids.slice(0, PRESENCE_SUBSCRIBE_LIMIT).filter((id) => typeof id === 'string' && OBJECT_ID.test(id));
+      if (!wanted.length) return;
+      try {
+        for (const id of await privacy.presenceVisible(socket.data.userId, wanted)) socket.join(`presence:${id}`);
+      } catch (e) {
+        errorLog.server(e, 'socket.presenceSubscribe');
       }
     });
 
@@ -563,6 +570,8 @@ function registerSockets(io) {
       for (const id of call.members.keys()) {
         if (await restriction.between(id, guestId)) return no('restricted');
       }
+      // Звонки гостя закрыты для приглашающего (utils/privacy.js).
+      if (!(await privacy.decide('calls', guestId, me)).ok) return no('privacy');
       if (!activeCalls.has(callId) || !call.members.has(me)) return; // разговор кончился, пока спрашивали базу
 
       if (call.engine === 'daily') {

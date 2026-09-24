@@ -72,7 +72,7 @@
               <% if (author.avatarStyle.url) { %><img src="<%= author.avatarStyle.url %>" alt=""><% } else { %><%= author.avatarStyle.initial %><% } %>
             </a>
             <div class="tk-live__author-body">
-              <a href="<%= author.url %>" class="tk-live__author-name"><%= author.displayName %></a>
+              <a href="<%= author.url %>" class="tk-live__author-name"><%= author.displayName %><% if (author.official) { %><%- include('partials/official') %><% } %></a>
             </div>
           </div>
 
@@ -143,7 +143,10 @@
         <section class="tk-watch__comments" id="comments" aria-labelledby="commentsTitle">
           <h2 class="tk-watch__h2" id="commentsTitle" data-count="<%= rec.comments || 0 %>" data-i18n="<%= commentsN.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(rec.comments) }) %>'><%= commentsN.text %></h2>
 
-          <% if (currentUser) { %>
+          <%# Автор закрыл комментарии для этого зрителя (utils/privacy.js). %>
+          <% if (commentsClosed) { %>
+          <p class="tk-note" data-i18n="rec.commentsClosed.<%= commentsClosed %>"><%- t('rec.commentsClosed.' + commentsClosed) %></p>
+          <% } else if (currentUser) { %>
           <form class="tk-watch__form" id="commentForm">
             <textarea id="commentText" class="tk-field" rows="1" maxlength="<%= limits.comment %>" placeholder="<%= ta('rec.commentPh') %>" data-i18n-placeholder="rec.commentPh" aria-label="<%= ta('rec.commentPh') %>" data-i18n-aria="rec.commentPh"></textarea>
             <div class="tk-watch__form-acts" hidden>
@@ -155,7 +158,7 @@
           <a class="tk-btn tk-btn--outline tk-btn--sm tk-watch__login" href="/login?next=<%= nextUrl %>" data-i18n="rec.commentLogin"><%- t('rec.commentLogin') %></a>
           <% } %>
 
-          <p class="tk-note" id="commentsEmpty"<% if (comments.length) { %> hidden<% } %> data-i18n="rec.commentsEmpty"><%- t('rec.commentsEmpty') %></p>
+          <p class="tk-note" id="commentsEmpty"<% if (comments.length || commentsClosed) { %> hidden<% } %><% if (commentsClosed) { %> data-closed="1"<% } %> data-i18n="rec.commentsEmpty"><%- t('rec.commentsEmpty') %></p>
           <ol class="tk-watch__list" id="commentList"></ol>
           <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-watch__load" id="commentsMore"<% if (!moreComments) { %> hidden<% } %> data-i18n="rec.commentsMore"><%- t('rec.commentsMore') %></button>
           <%# Первая порция — данными: ленту рисует один шаблон в tk-watch.js. %>

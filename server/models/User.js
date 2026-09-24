@@ -72,6 +72,29 @@ const UserSchema = new mongoose.Schema({
   // Ссылка на сайт без nofollow — поисковики её учитывают. Включает
   // администратор в панели: своим и партнёрам, не всем подряд.
   linksFollow: { type: Boolean, default: false },
+  // Приватность (utils/privacy.js): кто может писать, звонить, добавлять
+  // в группы, видеть «в сети», комментировать; виден ли в поиске. Пусто —
+  // значения по умолчанию, у большинства строк поля нет вовсе.
+  privacy: {
+    type: new mongoose.Schema({
+      messages: { type: String, enum: ['all', 'requests', 'contacts', 'nobody'] },
+      calls: { type: String, enum: ['all', 'contacts', 'nobody'] },
+      groups: { type: String, enum: ['all', 'contacts', 'nobody'] },
+      presence: { type: String, enum: ['all', 'contacts', 'nobody'] },
+      comments: { type: String, enum: ['all', 'followers', 'nobody'] },
+      searchable: Boolean,
+    }, { _id: false }),
+    default: undefined,
+  },
+  // Язык интерфейса, которым человек пользуется последним (пишет
+  // commonDataMiddleware). Нужен тому, что собирается без его запроса:
+  // рассылкам поддержки (utils/support.js).
+  lang: { type: String, enum: ['ru', 'en'] },
+  // Аккаунт поддержки (utils/support.js) — один из администраторов: от него
+  // уходят рассылки и приветствие, его переписку ведут из панели.
+  // supportWelcome — писать ли новичкам приветствие при регистрации.
+  support: { type: Boolean, default: undefined },
+  supportWelcome: { type: Boolean, default: undefined },
   // Настройки последнего эфира: студия подставляет их в форму, чтобы
   // регулярный эфир не заполнять заново. Пишет /start-stream.
   streamDefaults: {

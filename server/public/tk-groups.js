@@ -297,7 +297,9 @@
       btn.disabled = true;
       return post('/api/groups', { title: state.title, memberIds: Object.keys(state.picked) })
         .then(function (d) {
-          if (d.skipped) toast(t('groups.skipped', { n: d.skipped }), 'error');
+          // closed — запретили добавлять себя (utils/privacy.js): им — ссылку.
+          if (d.closed) toast(t('groups.closed', { n: d.closed }), 'error');
+          else if (d.skipped) toast(t('groups.skipped', { n: d.skipped }), 'error');
           close();
           window.TKChats.openGroup(d.group);
         })
@@ -307,7 +309,9 @@
       btn.disabled = true;
       return post(base + '/members/add', { userIds: Object.keys(state.picked) })
         .then(function (d) {
-          if (d.skipped) toast(t('groups.skipped', { n: d.skipped }), 'error');
+          // closed — запретили добавлять себя (utils/privacy.js): им — ссылку.
+          if (d.closed) toast(t('groups.closed', { n: d.closed }), 'error');
+          else if (d.skipped) toast(t('groups.skipped', { n: d.skipped }), 'error');
           state = { mode: 'settings', group: d.group };
           window.TKChats.setGroup(d.group);
           paintSettings();

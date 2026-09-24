@@ -250,8 +250,10 @@
 .tk-set__zone { border-color: rgba(227, 66, 52, .45); }
 .tk-set__zone .tk-panel__title { color: var(--tk-accent); }
 
-/* Кому закрыт канал — список с «Вернуть доступ». */
-.tk-set__restricted { margin: 16px 0 0; }
+/* Кому закрыт канал — список с «Вернуть доступ», во всю ширину ряда
+ * «Приватность». */
+.tk-set__grid > .tk-set__restricted { grid-column: 1 / -1; }
+.tk-set__empty { margin: 12px 0 0; }
 
 .tk-set__people {
   list-style: none;

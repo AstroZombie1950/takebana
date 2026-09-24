@@ -12,6 +12,7 @@ const userView = require('../../utils/userView');
 const push = require('../../utils/push');
 const errorLog = require('../../utils/errorLog');
 const restriction = require('../../utils/restrict');
+const privacy = require('../../utils/privacy');
 const profileSignal = require('../../utils/profileSignal');
 
 // Подписка и отписка туда-обратно — не повод звать человека каждый раз:
@@ -139,7 +140,11 @@ router.post('/restrict', requireAuthApi, validate({
   const me = req.session.userId;
   const { userId, on } = req.body;
   if (String(userId) === String(me)) return res.status(400).json({ message: 'Себе ограничить доступ нельзя' });
-  if (!(await User.exists({ _id: userId }))) return res.status(404).json({ message: 'Пользователь не найден' });
+  const target = await User.findById(userId).select('role').lean();
+  if (!target) return res.status(404).json({ message: 'Пользователь не найден' });
+  // Официальный аккаунт (utils/privacy.js) не ограничить: закрытый от
+  // поддержки не получил бы ни ответа, ни рассылки.
+  if (on && privacy.isOfficial(target)) return res.status(400).json({ message: 'Официальный аккаунт ограничить нельзя' });
   if (on) await restriction.restrict(me, userId);
   else await restriction.unrestrict(me, userId);
   profileSignal.access(me, userId, on);
@@ -180,7 +185,8 @@ router.get(['/userPage/:id/followers', '/userPage/:id/following'], commonDataMid
 
   // Порядок подписок сохраняем: find по $in отдаёт в своём порядке.
   // Удалённых аккаунтов в списке нет — их карточке некуда вести.
-  const users = await User.find({ _id: { $in: ids } }).select('nickname login email avatar isOnline').lean();
+  const users = await User.find({ _id: { $in: ids } }).select('nickname login email avatar isOnline role').lean();
+  await privacy.maskPresence(req.session.userId, users);
   const byId = new Map(users.map((u) => [String(u._id), u]));
   const people = await peopleCards(ids.map((i) => byId.get(String(i))).filter(Boolean));
 

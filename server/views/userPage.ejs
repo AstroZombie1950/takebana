@@ -54,11 +54,15 @@
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M10 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3.5 20c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5M17 6.5v5M19.5 9h-5"></path></svg>
               <span data-i18n="<%= cKey %>"><%- t(cKey) %></span>
             </button>
+            <%# Официальный аккаунт ограничить нельзя (utils/privacy.js) — пункта
+                нет; вернуть доступ, закрытый до 24.09, — можно. %>
+            <% if (!user.official || iRestricted) { %>
             <% var rKey = iRestricted ? 'user.unrestrict' : 'user.restrict'; %>
             <button type="button" role="menuitem" class="is-danger" id="restrictButton" data-on="<%= iRestricted ? '1' : '' %>">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M6 6l12 12"></path></svg>
               <span data-i18n="<%= rKey %>"><%- t(rKey) %></span>
             </button>
+            <% } %>
           </div>
         </div>
         <% } %>
@@ -72,7 +76,7 @@
         </div>
 
         <div class="tk-prof__main">
-          <h1 class="tk-prof__name"><%= user.displayName %></h1>
+          <h1 class="tk-prof__name"><%= user.displayName %><% if (user.official) { %><%- include('partials/official') %><% } %></h1>
 
           <%# Активность: строка под именем, а не панель в сетке ниже —
               это две строчки, целого блока им не нужно. Атрибуты присутствия
@@ -80,6 +84,9 @@
           <%# Класс присутствия — на всей строке: по нему CSS прячет ненужную
               половину. «Онлайн» и «Последний раз в сети: Сейчас» рядом — одно
               и то же дважды. Тот же класс проставляет живое обновление. %>
+          <%# Скрытое «в сети» (utils/privacy.js) — строки нет вовсе: «не в сети»
+              было бы неправдой. %>
+          <% if (!user.presenceHidden) { %>
           <p class="tk-prof__meta <%= user.isOnline ? 'presence-online' : 'presence-offline' %>" data-presence-user="<%= user._id %>">
             <%# Цвет точки задаёт общий класс из app.css. Прежде страница
                 держала свою пару правил с зашитыми цветами. %>
@@ -97,6 +104,7 @@
               <span data-presence-lastseen-user="<%= user._id %>"<% if (user.isOnline) { %> data-i18n="common.now"<% } %>><%= user.isOnline ? ta('common.now') : (user.lastSeen ? date(user.lastSeen) : ta('common.dash')) %></span>
             </span>
           </p>
+          <% } %>
 
           <%# Описание — текстом, как написано: ссылки в нём не кликаются.
               Ссылки — только значками (решение 24.09): номер WhatsApp или
@@ -149,12 +157,17 @@
               (utils/restrict.js), поэтому первой группы тогда нет вовсе.
               Поведение — profile.js. %>
           <div class="tk-prof__acts">
-            <div class="tk-prof__acts-row tk-prof__talk" id="talkActions"<% if (restricted || iRestricted) { %> hidden<% } %>>
+            <%# Кнопки, которые правила человека не пропустят (utils/privacy.js),
+                не рисуются: отказ после нажатия хуже, чем их отсутствие. %>
+            <div class="tk-prof__acts-row tk-prof__talk" id="talkActions"<% if (restricted || iRestricted || (!canWrite && !canCall)) { %> hidden<% } %>>
+              <% if (canWrite) { %>
               <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-prof__write" id="message-button" data-user-id="<%= user._id %>">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
                 <span data-i18n="user.message"><%- t('user.message') %></span>
               </button>
+              <% } %>
 
+              <% if (canCall) { %>
               <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-prof__call" id="video-call-button" data-user-id="<%= user._id %>" aria-label="<%= ta('user.videoCall') %>" data-i18n-aria="user.videoCall">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M15.5 10.5l4.5-2.25v7.5l-4.5-2.25"></path><rect x="3.5" y="6" width="12" height="12"></rect></svg>
                 <span data-i18n="user.videoCall"><%- t('user.videoCall') %></span>
@@ -164,6 +177,7 @@
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M6.5 3h-2A1.5 1.5 0 003 4.5C3 13 11 21 19.5 21a1.5 1.5 0 001.5-1.5v-2l-4-1.5-1.7 2A14 14 0 018 11.7l2-1.7L8.5 6l-2-3Z"></path></svg>
                 <span data-i18n="user.audioCall"><%- t('user.audioCall') %></span>
               </button>
+              <% } %>
             </div>
 
             <% if (!restricted) { %>

@@ -14,6 +14,7 @@ const userView = require('../utils/userView');
 const User = require('../models/User');
 const callLog = require('../utils/callLog');
 const restriction = require('../utils/restrict');
+const privacy = require('../utils/privacy');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
 const { randomUUID: uuidv4 } = require('crypto');
 
@@ -47,6 +48,9 @@ router.post('/api/calls/create', requireAuthApi, requireNotBanned, callLimiter, 
   // Ограничение доступа закрывает и звонки — в обе стороны (utils/restrict.js).
   const barred = await restriction.between(callerId, calleeId);
   if (barred) return res.status(403).json({ success: false, restricted: barred, message: restriction.BLOCKED[barred] });
+  // Кто может звонить — решает вызываемый (utils/privacy.js).
+  const rule = await privacy.decide('calls', calleeId, callerId);
+  if (!rule.ok) return res.status(403).json({ success: false, privacy: rule.rule, message: rule.message });
   const [caller, callee] = await Promise.all([
     User.findById(callerId).select('nickname login email avatar').lean(),
     User.exists({ _id: calleeId }),

@@ -2154,3 +2154,55 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   .tk-gpane__foot { padding-left: 16px; padding-right: 16px; }
   .tk-gpick__list { margin: 0 -16px; }
 }
+
+/* ── Заявки на переписку (utils/privacy.js) ──────────────────────────────
+ * Кнопка папки — справа в ряду «Новая группа», со счётчиком. Сама папка —
+ * на месте списка диалогов, вверху «назад» и одна строка объяснения. */
+.tk-chat__newgroup:not([hidden]) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tk-requests[hidden] { display: none; }
+.tk-requests .tk-dialog__unread { margin-left: 0; }
+
+.tk-requests__back { padding: 14px 20px 6px; }
+.tk-requests__hint { margin: 0; padding: 0 20px 12px; border-bottom: 1px solid var(--tk-rule); }
+
+/* Полоса над полем ввода: входящая заявка — текст и две кнопки,
+ * своя — только текст. */
+.tk-chat__request {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-chat__request[hidden],
+.tk-chat__request-acts[hidden] { display: none; }
+
+.tk-chat__request-text {
+  flex: 1 1 240px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--tk-beige);
+}
+
+.tk-chat__request-acts { display: flex; gap: 8px; }
+
+/* Ссылки — только в сообщениях официального аккаунта (chats.js, linkify). */
+.tk-msg__link {
+  color: var(--tk-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+
+.tk-dialog__who .tk-official { margin-left: 0; }

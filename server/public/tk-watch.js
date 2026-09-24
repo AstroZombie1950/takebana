@@ -188,7 +188,7 @@
     count = Math.max(0, n);
     title.dataset.count = count;
     setCounted(title, count, 'rec.comments');
-    empty.hidden = list.children.length > 0;
+    empty.hidden = list.children.length > 0 || !!empty.dataset.closed; // закрыто — «напишите первым» ни к чему
   }
 
   var WHEN = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
@@ -212,7 +212,7 @@
     li.innerHTML =
       '<a class="tk-watch__c-ava" href="' + profile + '"' + (av.url ? '' : ' style="background:' + escapeHtml(av.gradient || '') + '"') + '>' +
         (av.url ? '<img src="' + escapeHtml(av.url) + '" alt="" loading="lazy">' : escapeHtml(av.initial || '')) + '</a>' +
-      '<div><div class="tk-watch__c-head"><a class="tk-watch__c-name" href="' + profile + '">' + escapeHtml(a.name) + '</a>' +
+      '<div><div class="tk-watch__c-head"><a class="tk-watch__c-name" href="' + profile + '">' + escapeHtml(a.name) + (a.official && window.tkOfficial ? window.tkOfficial() : '') + '</a>' +
         '<time class="tk-watch__c-when" datetime="' + escapeHtml(c.createdAt) + '">' + escapeHtml(tkDate(c.createdAt, WHEN)) + '</time></div>' +
         '<p class="tk-watch__c-text">' + escapeHtml(c.text) + '</p></div>' +
       '<div class="tk-watch__c-acts">' + acts + '</div>';
@@ -221,7 +221,7 @@
 
   function append(items) {
     items.forEach(function (c) { list.appendChild(item(c)); oldest = c.createdAt; });
-    empty.hidden = list.children.length > 0;
+    empty.hidden = list.children.length > 0 || !!empty.dataset.closed;
   }
 
   append(JSON.parse($('commentsData').textContent || '[]'));

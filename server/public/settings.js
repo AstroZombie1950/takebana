@@ -515,11 +515,51 @@
       return r.json().catch(function () { return {}; }).then(function (data) {
         if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
         row.remove();
-        if (!panel.querySelector('[data-restricted]')) panel.remove();
+        if (!panel.querySelector('[data-restricted]')) {
+          panel.querySelector('.tk-set__people').hidden = true;
+          document.getElementById('restrictedEmpty').hidden = false;
+        }
       });
     }).catch(function (err) {
       btn.disabled = false;
       toast(err.message, 'error');
+    });
+  });
+})();
+
+// Приватность (utils/privacy.js): сохраняется сразу по выбору. Не вышло —
+// поле возвращается к тому, что лежит на сервере.
+(function () {
+  var t = window.t || function () { return ''; };
+  document.querySelectorAll('[data-privacy]').forEach(function (field) {
+    var box = field.type === 'checkbox';
+    var was = box ? field.checked : field.value;
+    var reverting = false; // откат шлёт change для tk-listbox.js — его не сохраняем
+    field.addEventListener('change', function () {
+      if (reverting) return;
+      var key = field.getAttribute('data-privacy');
+      var body = {};
+      body[key] = box ? field.checked : field.value;
+      fetch('/settings/privacy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(body)
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (data) {
+          if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+          was = box ? field.checked : field.value;
+          toast(t('settings.privSaved'), 'ok');
+        });
+      }).catch(function (err) {
+        if (box) field.checked = was;
+        else {
+          reverting = true;
+          field.value = was;
+          field.dispatchEvent(new Event('change'));
+          reverting = false;
+        }
+        toast(err.message, 'error');
+      });
     });
   });
 })();

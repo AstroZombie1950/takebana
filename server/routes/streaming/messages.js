@@ -33,6 +33,7 @@ const { rankPeers } = require('../../utils/recentPeers');
 const { audit } = require('../../utils/audit');
 const { view, viewAll, QUOTED } = require('../../utils/messageView');
 const restriction = require('../../utils/restrict');
+const privacy = require('../../utils/privacy');
 const groups = require('../../utils/groups');
 const { tr, langOf } = require('../../utils/i18n');
 
@@ -43,6 +44,20 @@ async function refuseRestricted(res, me, peerId) {
   if (!who) return false;
   res.status(403).json({ success: false, restricted: who, message: restriction.BLOCKED[who] });
   return true;
+}
+
+// Правило получателя «кто может писать» (utils/privacy.js). Отказ — 403
+// и null. Иначе решение: заявку ставим, ответ на чужую заявку её принимает —
+// поле диалога меняется здесь, сохраняет его deliver.
+async function gate(res, conversation, me, peerId) {
+  const g = await privacy.messageGate(conversation, me, peerId);
+  if (!g.ok) {
+    res.status(403).json({ success: false, privacy: g.rule, message: g.message });
+    return null;
+  }
+  if (conversation && g.request && !conversation.requestFor) conversation.requestFor = peerId;
+  if (conversation && g.accept) conversation.requestFor = undefined;
+  return g;
 }
 
 const PAGE = 15;
@@ -100,7 +115,7 @@ async function unreadAfter(userId, peers) {
 
 function person(user) {
   const displayName = userView.displayName(user);
-  return { id: String(user._id), displayName, avatarStyle: userView.avatarStyle(user, displayName) };
+  return { id: String(user._id), displayName, avatarStyle: userView.avatarStyle(user, displayName), ...(privacy.isOfficial(user) ? { official: true } : {}) };
 }
 
 const io = (req) => req.app.get('io');
@@ -177,6 +192,9 @@ async function deliver(req, { conversation, sender, recipient, content = '', att
   conversation.lastUpdated = now;
   conversation.hiddenFor = []; // удалённая переписка возвращается с новым сообщением
   await conversation.save();
+  // Заявка (utils/privacy.js): получатель видит её в своей папке, без пуша
+  // и звука, и в счётчик она не идёт.
+  const request = !!conversation.requestFor && String(conversation.requestFor) === String(recipient._id);
 
   // В колокольчик сообщение не пишется (18.09.2026): о нём говорит счётчик
   // у иконки переписки в шапке, его ведёт tk-app.js по message:new.
@@ -184,12 +202,12 @@ async function deliver(req, { conversation, sender, recipient, content = '', att
   const out = view(message, reply);
   const socket = io(req);
   if (socket) {
-    socket.to(`user:${recipient._id}`).emit('message:new', { message: out, peer: person(sender) });
+    socket.to(`user:${recipient._id}`).emit('message:new', { message: out, peer: person(sender), ...(request ? { request: true } : {}) });
     socket.to(`user:${sender._id}`).emit('message:new', { message: out, peer: person(recipient), ...(ref ? { ref } : {}) });
   }
   // silent — пересылка пачкой: двадцать писем за секунду это одно действие
   // человека, и будить телефон двадцать раз незачем. Пуш уходит с последним.
-  if (!silent) pushMessage({ message, sender, recipient, online: isOnline(req, recipient._id) });
+  if (!silent && !request) pushMessage({ message, sender, recipient, online: isOnline(req, recipient._id) });
   return out;
 }
 
@@ -198,18 +216,23 @@ async function deliver(req, { conversation, sender, recipient, content = '', att
 // lastUpdated последнего уже показанного. Раньше список отдавался целиком:
 // у человека с сотнями диалогов — сотни строк и запросов на каждое открытие.
 const DIALOGS_PAGE = 30;
-async function dialogPage(me, before) {
+// requests — папка «Заявки» (utils/privacy.js): только они и без групп.
+// Обычный список заявки к себе не показывает.
+async function dialogPage(me, before, { requests = false } = {}) {
   const conversations = await Conversation.find({
     $or: [{ userOne: me }, { userTwo: me }],
     hiddenFor: { $ne: me },
+    requestFor: requests ? me : { $ne: me },
     ...(before ? { lastUpdated: { $lt: before } } : {}),
   })
     .sort({ lastUpdated: -1 })
     .limit(DIALOGS_PAGE + 1)
-    .populate('userOne userTwo', 'nickname login email avatar isOnline lastSeen')
+    .populate('userOne userTwo', 'nickname login email avatar isOnline lastSeen role')
     .lean();
   const more = conversations.length > DIALOGS_PAGE;
   if (more) conversations.pop();
+  // «В сети» — только тем, кому человек его показывает.
+  await privacy.maskPresence(me, conversations.map((c) => (String(c.userOne && c.userOne._id) === String(me) ? c.userTwo : c.userOne)));
 
   const ids = conversations.map((c) => c._id);
   // Последнее сообщение диалога хранится в нём самом (deliver). Перебирать
@@ -263,7 +286,7 @@ async function dialogPage(me, before) {
   // Группы — в тот же список, по тому же времени (models/Group.js). Две
   // выборки по странице каждая, общий порядок, срез: отрезанное придёт
   // следующей страницей — у него lastUpdated раньше нового before.
-  const rows = list.concat(await groupRows(me, before)).sort((a, b) => b.sortAt - a.sortAt);
+  const rows = list.concat(requests ? [] : await groupRows(me, before)).sort((a, b) => b.sortAt - a.sortAt);
   const page = rows.slice(0, DIALOGS_PAGE);
   const cut = more || rows.length > DIALOGS_PAGE;
   page.forEach((r) => { delete r.sortAt; });
@@ -317,6 +340,7 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
   const recentConversations = await Conversation.find({
     $or: [{ userOne: me }, { userTwo: me }],
     hiddenFor: { $ne: me },
+    requestFor: { $ne: me },
     lastUpdated: { $gte: new Date(Date.now() - 60 * 24 * 3600 * 1000) },
   }).select('userOne userTwo').lean();
   const order = await rankPeers(me, recentConversations);
@@ -325,8 +349,9 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
   const unknown = order.filter((id) => !known.has(id));
   if (unknown.length) {
     const users = await User.find({ _id: { $in: unknown } })
-      .select('nickname login email avatar isOnline')
+      .select('nickname login email avatar isOnline role')
       .lean();
+    await privacy.maskPresence(me, users);
     for (const user of users) known.set(String(user._id), { ...person(user), isOnline: !!user.isOnline });
   }
   const recent = order.map((id) => known.get(id)).filter(Boolean);
@@ -334,7 +359,10 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
   // Вкладки «Звонки» и «Контакты» открываются и адресом: из уведомления
   // о пропущенном и из ссылок «в контакты» на других страницах.
   const tabs = ['calls', 'contacts'];
-  res.render('chatsPage', { conversations: list, dialogsBefore: before ? before.toISOString() : '', recent, timeAgo, tab: tabs.includes(req.query.tab) ? req.query.tab : 'messages' });
+  // Заявки — кто их прислал: счётчик папки считает людей, а не сообщения.
+  const requests = (await Conversation.find({ requestFor: me, hiddenFor: { $ne: me } }).select('userOne userTwo').limit(500).lean())
+    .map((c) => String(String(c.userOne) === String(me) ? c.userTwo : c.userOne));
+  res.render('chatsPage', { conversations: list, dialogsBefore: before ? before.toISOString() : '', recent, requests, timeAgo, tab: tabs.includes(req.query.tab) ? req.query.tab : 'messages' });
 });
 
 
@@ -344,6 +372,29 @@ router.get('/api/dialogs', requireAuthApi, async (req, res) => {
   if (!before || isNaN(before)) return res.status(400).json({ message: 'Неверный запрос' });
   const page = await dialogPage(new ObjectId(String(req.session.userId)), before);
   res.json({ dialogs: page.list, before: page.before });
+});
+
+// Папка «Заявки»: первая страница без before, дальше — как у списка.
+router.get('/api/requests', requireAuthApi, async (req, res) => {
+  const before = typeof req.query.before === 'string' ? new Date(req.query.before) : null;
+  if (before && isNaN(before)) return res.status(400).json({ message: 'Неверный запрос' });
+  const page = await dialogPage(new ObjectId(String(req.session.userId)), before, { requests: true });
+  res.json({ dialogs: page.list, before: page.before });
+});
+
+// Принять заявку: диалог переходит в обычный список. Отклонить — удалить
+// переписку у себя (/conversations/delete): новое сообщение вернёт её в заявки.
+router.post('/requests/accept', requireAuthApi, validate({
+  peerId: { type: 'objectId', required: true, label: 'Собеседник' },
+}), async (req, res) => {
+  const me = req.session.userId;
+  const conversation = await findConversation(me, req.body.peerId);
+  if (!conversation || String(conversation.requestFor) !== String(me)) {
+    return res.status(404).json({ message: 'Диалог не найден' });
+  }
+  conversation.requestFor = undefined;
+  await conversation.save();
+  res.json({ success: true, unreadMessages: await groups.unreadTotal(me) });
 });
 
 router.post('/start-conversation', requireAuthApi, requireNotBanned, validate({
@@ -360,13 +411,18 @@ router.post('/start-conversation', requireAuthApi, requireNotBanned, validate({
   if (!(await User.exists({ _id: recipientId }))) {
     return res.status(404).json({ success: false, message: 'Пользователь не найден' });
   }
+  // Закрытую личку видно сразу, по кнопке «Написать», а не после текста.
+  if (!(await gate(res, await findConversation(me, recipientId), me, recipientId))) return;
 
   const conversation = await openConversation(me, recipientId);
+  // «Написать» тому, кто прислал мне заявку, — значит принять её: иначе
+  // переписка открылась бы из общего списка, а её там нет.
+  if (String(conversation.requestFor) === String(me)) conversation.requestFor = undefined;
   if (conversation.hiddenFor.some((id) => String(id) === String(me))) {
     // Написать тому, с кем переписку удалили, — значит вернуть диалог в список.
     conversation.hiddenFor.pull(me);
-    await conversation.save();
   }
+  if (conversation.isModified()) await conversation.save();
 
   res.json({ success: true, conversationId: conversation._id });
 });
@@ -406,7 +462,9 @@ router.get('/getMessages', requireAuthApi, async (req, res) => {
   const from = messages.length === PAGE ? messages[messages.length - 1].sentAt : null;
   const calls = await callLog.between(me, recipientId, { from, to: before });
 
-  res.json({ messages: await viewAll(messages.reverse()), calls, restricted: await restriction.between(me, recipientId) });
+  // Заявка: 'in' — ко мне (показать «Принять»), 'out' — моя, ждёт ответа.
+  const request = conversation.requestFor ? (String(conversation.requestFor) === String(me) ? 'in' : 'out') : null;
+  res.json({ messages: await viewAll(messages.reverse()), calls, restricted: await restriction.between(me, recipientId), request });
 });
 
 
@@ -440,12 +498,13 @@ router.post('/sendMessage', requireAuthApi, requireNotBanned, sendLimiter, valid
 
   const [conversation, sender, recipient] = await Promise.all([
     findConversation(me, recipientId),
-    User.findById(me).select('nickname login email avatar').lean(),
-    User.findById(recipientId).select('nickname login email avatar').lean(),
+    User.findById(me).select('nickname login email avatar role').lean(),
+    User.findById(recipientId).select('nickname login email avatar role').lean(),
   ]);
   if (!conversation || !sender || !recipient) {
     return res.status(404).json({ message: 'Диалог не найден' });
   }
+  if (!(await gate(res, conversation, me, recipientId))) return;
 
   try {
     const reply = await replyOf(conversation, req.body.replyTo);
@@ -505,12 +564,16 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
   // файлов в хранилище и поиск сообщения, на которое отвечают.
   const [conversation, sender, recipient] = await Promise.all([
     groupId ? groups.forMember(groupId, me) : findConversation(me, recipientId),
-    User.findById(me).select('nickname login email avatar').lean(),
-    groupId ? null : User.findById(recipientId).select('nickname login email avatar').lean(),
+    User.findById(me).select('nickname login email avatar role').lean(),
+    groupId ? null : User.findById(recipientId).select('nickname login email avatar role').lean(),
   ]);
   if (!conversation || !sender || (!groupId && !recipient)) {
     drop();
     return res.status(404).json({ message: groupId ? 'Группа не найдена' : 'Диалог не найден' });
+  }
+  if (!groupId && !(await gate(res, conversation, me, recipientId))) {
+    drop();
+    return;
   }
   const post = (fields) => (groupId
     ? groups.deliver(req, conversation, sender, fields)
@@ -634,8 +697,8 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
   }
 
   const [sender, recipients] = await Promise.all([
-    User.findById(me).select('nickname login email avatar').lean(),
-    User.find({ _id: { $in: recipientIds } }).select('nickname login email avatar').lean(),
+    User.findById(me).select('nickname login email avatar role').lean(),
+    User.find({ _id: { $in: recipientIds } }).select('nickname login email avatar role').lean(),
   ]);
 
   // Автор каждого — один раз на всю пачку: в выделении обычно два человека.
@@ -657,13 +720,23 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
   for (const m of originals) batch.push({ content: m.content, attachments: m.attachments, forwardedFrom: await origin(m) });
 
   const sent = [];
+  let closed = null;
   for (const recipient of recipients) {
+    // Закрытая личка (utils/privacy.js) — мимо, как и ограничение выше.
+    const g = await privacy.messageGate(await findConversation(me, recipient._id), me, recipient._id);
+    if (!g.ok) { closed = closed || g; continue; }
     const conversation = await openConversation(me, recipient._id);
+    if (g.request && !conversation.requestFor) conversation.requestFor = recipient._id;
+    if (g.accept) conversation.requestFor = undefined;
     // Пуш — один на всю пересылку, с последним сообщением пачки.
     if (comment) sent.push(await deliver(req, { conversation, sender, recipient, content: comment, silent: batch.length > 0 }));
     for (let i = 0; i < batch.length; i++) {
       sent.push(await deliver(req, { conversation, sender, recipient, ...batch[i], silent: i < batch.length - 1 }));
     }
+  }
+  // Не ушло никому — личка закрыта у всех: отказ с причиной, а не «успех».
+  if (!sent.length && !targetGroups.length && closed) {
+    return res.status(403).json({ privacy: closed.rule, message: closed.message });
   }
   for (const group of targetGroups) {
     if (comment) sent.push(await groups.deliver(req, group, sender, { content: comment, silent: batch.length > 0 }));
@@ -727,7 +800,9 @@ router.post('/messages/read', requireAuthApi, validate({
   const { peerId } = req.body;
 
   const conversation = await findConversation(me, peerId);
-  if (conversation) {
+  // Заявку можно читать, но отправитель об этом не узнает, пока её не
+  // приняли (utils/privacy.js): «прочитано» — уже ответ ему.
+  if (conversation && String(conversation.requestFor) !== String(me)) {
     const now = new Date();
     const result = await Message.updateMany(
       { conversationId: conversation._id, recipient: me, readAt: null },
@@ -860,3 +935,8 @@ router.post('/conversations/delete', requireAuthApi, validate({
 });
 
 module.exports = router;
+// Доставка личной переписки нужна и поддержке (utils/support.js): рассылка
+// и ответы из панели — те же сообщения, что пишут люди.
+router.openConversation = openConversation;
+router.findConversation = findConversation;
+router.deliver = deliver;
