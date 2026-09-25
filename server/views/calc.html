@@ -6,11 +6,15 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Takebana — калькулятор расходов</title>
 <!--
-  Калькулятор расходов для заказчика (routes/pages.js, GET /calc).
-  Тарифы — открытые цены Bunny и Daily на 21.09.2026, объёмы видео —
-  замер на наших записях (temp/costs-2026-09-21.md). 25.09.2026 — третий
-  вариант камер заведений: свой сервер (MediaMTX, ops/mediamtx/README.md). Страница самостоятельная:
-  без каркаса сайта, без запросов к серверу; всё считает скрипт ниже.
+  Калькулятор расходов для заказчика (routes/pages.js, GET /calc, после входа).
+  Переписан 25.09.2026 под устройство после решений того дня
+  (docs/ROADMAP.md, «Медиа: решения 25 сентября»): звонки 1:1 — Daily и
+  свой путь через TURN, групповые — только свой путь, камеры заведений —
+  наш приёмник + HLS через Bunny (вариант А, utils/venueCam.js), эфиры —
+  три качества, раздача зрителям — только Bunny, наш канал — 16 ТБ.
+  Тарифы — открытые цены на 25.09.2026 (bunny.net/pricing, daily.co/pricing),
+  нагрузка — наши замеры (utils/hls.js, temp/capacity-2026-09-25.md).
+  Страница самостоятельная: без каркаса сайта и без запросов к серверу.
   Изменённые поля попадают в адрес (#…) — ссылкой можно поделиться вариантом.
 -->
 <style>
@@ -21,21 +25,20 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
     font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  main { max-width: 1080px; margin: 0 auto; padding: 32px 20px 56px; }
+  main { max-width: 1080px; margin: 0 auto; padding: 32px 16px 56px; }
   h1 { margin: 0 0 4px; font-size: 28px; letter-spacing: -.01em; }
   .sub { color: var(--muted); margin: 0 0 24px; }
   section { background: var(--card); border: 1px solid var(--rule); border-radius: 10px;
     padding: 20px 22px 16px; margin-bottom: 18px; }
   h2 { margin: 0 0 4px; font-size: 19px; }
   h2 span { color: var(--accent); margin-right: 6px; }
+  h3 { margin: 14px 0 6px; font-size: 15px; }
   .how { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; margin-bottom: 14px; }
   label.f { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #3b372f; }
   label.f input, label.f select { font: inherit; font-size: 15px; padding: 7px 9px; border: 1px solid var(--rule);
     border-radius: 6px; background: var(--field); color: var(--ink); width: 100%; font-variant-numeric: tabular-nums; }
   label.f input:focus, label.f select:focus { outline: 2px solid #d9b8a8; border-color: #c9a898; }
-  .seg { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 14px; font-size: 14px; }
-  .seg label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
   table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
   th, td { padding: 8px 10px; border-bottom: 1px solid var(--rule); text-align: right; }
   th:first-child, td:first-child { text-align: left; }
@@ -43,34 +46,34 @@
   tbody tr:last-child td { border-bottom: none; }
   .res { background: var(--head); border-radius: 8px; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 6px 26px; font-size: 14px; }
   .res b { font-size: 16px; }
-  .off { opacity: .45; }
-  .on { background: #fff4ee; }
   .note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
   .warn { font-size: 13px; color: var(--accent); margin: 8px 0 0; }
+  .fine { font-size: 13px; color: var(--good); margin: 8px 0 0; }
   .total td { font-weight: 700; font-size: 17px; background: var(--head); }
+  .group td { background: #faf8f4; font-weight: 600; font-size: 13px; color: #3b372f; }
   .price { font-size: 34px; font-weight: 800; letter-spacing: -.02em; margin: 4px 0 2px; }
   .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 18px; }
   .bar button { font: inherit; font-size: 14px; padding: 7px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--card); cursor: pointer; }
   .bar span { font-size: 13px; color: var(--muted); }
   .wrap { overflow-x: auto; }
-  /* Сводка про водяной знак и Daily в конце страницы — свои отступы и таблица влево. */
-  .doc-h1 { margin: 36px 0 16px; font-size: 25px; letter-spacing: -.01em; }
-  .doc section { line-height: 1.5; }
+  .meter { height: 8px; background: var(--head); border-radius: 4px; overflow: hidden; margin: 4px 0 0; }
+  .meter i { display: block; height: 100%; background: var(--good); }
+  .meter i.hot { background: var(--accent); }
   .doc h2 { margin: 0 0 10px; font-size: 20px; }
   .doc p { margin: 0 0 10px; }
-  .doc ul { margin: 0 0 10px; padding-left: 20px; }
-  .doc li { margin-bottom: 4px; }
   .doc table { margin: 6px 0 10px; font-size: 14px; }
   .doc th, .doc td { padding: 9px 10px; text-align: left; vertical-align: top; }
-  .doc .yes { color: var(--good); font-weight: 600; }
-  .doc .no { color: var(--accent); font-weight: 600; }
-  .doc .box { background: var(--head); border-radius: 8px; padding: 12px 16px; margin: 8px 0 12px; }
+  @media (max-width: 600px) {
+    section { padding: 16px 14px 12px; }
+    h1 { font-size: 23px; }
+    th, td { padding: 7px 6px; }
+  }
 </style>
 </head>
 <body>
 <main>
   <h1>Takebana — калькулятор расходов</h1>
-  <p class="sub">Серые поля можно менять — всё пересчитывается сразу. Цены — открытые тарифы Bunny (раздача и хранение видео) и Daily (звонки, камеры из браузера) на 21 сентября 2026; размеры видео замерены на наших записях. Суммы — в долларах США, за месяц. Обновлено 25 сентября 2026.</p>
+  <p class="sub">Серые поля можно менять — всё пересчитывается сразу. Цены — открытые тарифы Bunny (раздача и хранение видео) и Daily (звонки, эфиры из браузера) на 25 сентября 2026; нагрузка на сервер — наши замеры. Суммы — в долларах США, за месяц. Считает по тому, как сайт устроен после решений 25 сентября: зрителям всё раздаёт Bunny, наш сервер только принимает и готовит видео.</p>
 
   <div class="bar">
     <button type="button" id="reset">Вернуть исходные цифры</button>
@@ -78,121 +81,136 @@
     <span id="copied"></span>
   </div>
 
-  <!-- Общие -->
+  <!-- 0. Аудитория и Bunny -->
   <section>
-    <h2><span>0</span>Аудитория</h2>
-    <p class="how">Цена раздачи видео зависит от того, где зрители: Европа (с Москвой) и Северная Америка — $0,01 за ГБ, Азия — $0,03, Южная Америка — $0,045.</p>
+    <h2><span>0</span>Аудитория и раздача</h2>
+    <p class="how">Bunny берёт за раздачу по регионам (сеть Standard): Европа и Северная Америка — $0,01 за ГБ, Азия — $0,03, Южная Америка — $0,045, Ближний Восток и Африка — $0,06. Сеть Volume — $0,005 за ГБ откуда угодно, но точек раздачи 10 вместо 119. Сеть выбирается у каждой зоны отдельно: эфиры и камеры идут через live.takebana.com, записи и файлы — через vod.takebana.com.</p>
     <div class="grid">
       <label class="f">Пользователей в месяц<input type="number" min="0" step="100" data-k="users" value="10000"></label>
-      <label class="f">Европа и Москва, %<input type="number" min="0" max="100" data-k="rEU" value="85"></label>
-      <label class="f">Северная Америка, %<input type="number" min="0" max="100" data-k="rNA" value="5"></label>
-      <label class="f">Азия, %<input type="number" min="0" max="100" data-k="rAS" value="5"></label>
+      <label class="f">Европа, %<input type="number" min="0" max="100" data-k="rEU" value="70"></label>
+      <label class="f">Северная Америка, %<input type="number" min="0" max="100" data-k="rNA" value="10"></label>
+      <label class="f">Азия, %<input type="number" min="0" max="100" data-k="rAS" value="10"></label>
       <label class="f">Южная Америка, %<input type="number" min="0" max="100" data-k="rSA" value="5"></label>
+      <label class="f">Ближний Восток и Африка, %<input type="number" min="0" max="100" data-k="rME" value="5"></label>
+      <label class="f">Сеть эфиров и камер (live)
+        <select data-k="liveNet"><option value="vol">Volume — $0,005</option><option value="std">Standard — по регионам</option></select>
+      </label>
+      <label class="f">Сеть записей и файлов (vod)
+        <select data-k="vodNet"><option value="std">Standard — по регионам</option><option value="vol">Volume — $0,005</option></select>
+      </label>
     </div>
-    <div class="res"><span>Средняя цена раздачи: <b id="oBlend"></b> за ГБ</span></div>
+    <div class="res">
+      <span>Standard по вашим регионам: <b id="oBlend"></b> за ГБ</span>
+      <span>Эфиры и камеры: <b id="oLiveGB"></b> за ГБ</span>
+      <span>Записи и файлы: <b id="oVodGB"></b> за ГБ</span>
+    </div>
     <p class="warn" id="oRegWarn" hidden></p>
   </section>
 
-  <!-- 1. Звонки -->
+  <!-- 1. Звонки 1:1 -->
   <section>
     <h2><span>1</span>Звонки один на один</h2>
-    <p class="how">Через Daily: $0,004 за минуту каждого участника, разговор двоих — две минуты за минуту. Первые 10 000 минут в месяц бесплатны (общие на всё, что идёт через Daily; вычитаются в итоге).</p>
+    <p class="how">Основной путь — Daily: $0,004 за минуту каждого участника с видео, разговор двоих — две минуты за минуту. Голосовые у Daily дешевле — до $0,00099 за минуту, если он считает звонок голосовым (проверить в кабинете Daily). Первые 10 000 минут в месяц бесплатны — общие на всё, что идёт через Daily, вычитаются в итоге. Кому Daily не открывается, тот звонит своим путём: напрямую или через наш сервер (TURN) — Daily не платим, тратим наш канал.</p>
     <div class="grid">
       <label class="f">Звонят, % пользователей<input type="number" min="0" max="100" data-k="callPct" value="30"></label>
       <label class="f">Звонков на человека в месяц<input type="number" min="0" data-k="callN" value="10"></label>
       <label class="f">Длительность звонка, мин<input type="number" min="0" data-k="callMin" value="10"></label>
-    </div>
-    <div class="res"><span>Минут участника: <b id="oCallMin"></b></span><span>Стоимость: <b id="oCall"></b></span></div>
-    <p class="note">Сверх 100 000 минут Daily сам снижает цену (до −63 % на больших объёмах) — здесь считаем без скидки, то есть по максимуму.</p>
-    <p class="note">Не через Daily и в этот счёт не входят: групповые звонки (до четырёх человек) и звонки тех, у кого провайдер блокирует Daily, — они идут напрямую между участниками или через наш сервер и оплачиваются только его трафиком, который входит в тариф сервера.</p>
-  </section>
-
-  <!-- 2. Заведения -->
-  <section>
-    <h2><span>2</span>Трансляции заведений</h2>
-    <p class="how">Три варианта.<br>
-      <b>Daily — как сейчас на сайте:</b> каждый зритель камеры — участник комнаты Daily и оплачивается поминутно.<br>
-      <b>Bunny:</b> зрители смотрят поток, как у стримов (задержка 10–15 с), платим за трафик; но камера из браузера и тогда идёт через Daily — $1,14 за час на камеру. Камера по RTMP (OBS, IP-камера) — бесплатно. Каждую камеру пережимает наш сервер (водяной знак), как обычный стрим.<br>
-      <b>Свой сервер (MediaMTX)</b> — программа на нашем сервере: камера из браузера шлёт видео прямо ему, зрители смотрят оттуда же с задержкой меньше секунды. Daily не участвует: платим трафиком сервера, а он входит в тариф Hostinger (сколько — в разделе 5). Видео не пережимается, знак — поверх плеера, процессор почти не нагружен. Трафик сверх тарифа посчитан по цене раздачи Bunny: так раздают многолюдные камеры (задержка 10–15 с). Код своего сервера готов, программа на сервере ещё не установлена; раздача сверх тарифа через Bunny ещё не сделана.</p>
-    <div class="grid">
-      <label class="f">Заведений в эфире<input type="number" min="0" data-k="venN" value="20"></label>
-      <label class="f">Часов в день<input type="number" min="0" max="24" step="0.5" data-k="venH" value="6"></label>
-      <label class="f">Дней в месяц<input type="number" min="0" max="31" data-k="venD" value="30"></label>
-      <label class="f">Зрителей одновременно (в среднем)<input type="number" min="0" data-k="venV" value="20"></label>
-    </div>
-    <div class="seg">
-      <label><input type="radio" name="venMode" value="daily" checked> Как сейчас — Daily</label>
-      <label><input type="radio" name="venMode" value="bunny"> Переезд на Bunny</label>
-      <label><input type="radio" name="venMode" value="mtx"> Свой сервер (MediaMTX)</label>
-      <span style="color:var(--muted)">·</span>
-      <label>Камера на Bunny:
-        <select data-k="venCam" style="font:inherit;padding:3px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--field)">
-          <option value="browser">из браузера (через Daily)</option>
-          <option value="rtmp">OBS / IP-камера (RTMP)</option>
-        </select>
+      <label class="f">С видео, % звонков<input type="number" min="0" max="100" data-k="callVideo" value="50"></label>
+      <label class="f">Голосовые Daily считает
+        <select data-k="audioRate"><option value="video">как видео — $0,004 (по максимуму)</option><option value="audio">как голосовые — $0,00099</option></select>
       </label>
-    </div>
-    <div class="wrap">
-    <table>
-      <thead><tr><th>Вариант</th><th>Объём</th><th>Зрители</th><th>Камеры</th><th>Всего</th></tr></thead>
-      <tbody>
-        <tr id="rowVenDaily"><td>Daily (как сейчас)</td><td id="oVenDailyVol"></td><td id="oVenDailyView"></td><td id="oVenDailyCam"></td><td><b id="oVenDaily"></b></td></tr>
-        <tr id="rowVenBunny"><td>Bunny</td><td id="oVenBunnyVol"></td><td id="oVenBunnyView"></td><td id="oVenBunnyCam"></td><td><b id="oVenBunny"></b></td></tr>
-        <tr id="rowVenMtx"><td>Свой сервер (MediaMTX)</td><td id="oVenMtxVol"></td><td id="oVenMtxView"></td><td>$0</td><td><b id="oVenMtx"></b></td></tr>
-      </tbody>
-    </table>
-    </div>
-    <p class="warn" id="oVenWarn" hidden></p>
-  </section>
-
-  <!-- 3. Стримы -->
-  <section>
-    <h2><span>3</span>Стримы</h2>
-    <p class="how">Зритель получает 720p — около 1,2 ГБ в час, раздаёт Bunny. Если ведущий вещает из браузера (с телефона), сверху Daily — $1,14 за час стрима, от числа зрителей не зависит; из OBS — $0.</p>
-    <div class="grid">
-      <label class="f">Ведут стримы, % пользователей<input type="number" min="0" max="100" data-k="strPct" value="10"></label>
-      <label class="f">Стримов на ведущего в месяц<input type="number" min="0" data-k="strN" value="4"></label>
-      <label class="f">Длительность стрима, ч<input type="number" min="0" step="0.5" data-k="strH" value="1.5"></label>
-      <label class="f">Зрителей одновременно (в среднем)<input type="number" min="0" data-k="strV" value="30"></label>
-      <label class="f">Из браузера, % стримов<input type="number" min="0" max="100" data-k="strWeb" value="70"></label>
-    </div>
-    <p class="how" style="margin-top:4px">Крупные эфиры — отдельно, сверх обычных:</p>
-    <div class="grid">
-      <label class="f">Крупных эфиров в месяц<input type="number" min="0" data-k="bigN" value="2"></label>
-      <label class="f">Зрителей на крупном<input type="number" min="0" step="1000" data-k="bigV" value="10000"></label>
-      <label class="f">Длительность, ч<input type="number" min="0" step="0.5" data-k="bigH" value="2"></label>
-    </div>
-    <div class="seg">
-      <label><input type="radio" name="net" value="std" checked> Сеть Standard (цена по регионам)</label>
-      <label><input type="radio" name="net" value="vol"> Сеть Volume — $0,005 за ГБ везде, но 10 точек раздачи вместо 119</label>
+      <label class="f">Своим путём (Daily закрыт), % звонков<input type="number" min="0" max="100" data-k="ownPct" value="5"></label>
+      <label class="f">Из них через наш сервер, %<input type="number" min="0" max="100" data-k="relayPct" value="40"></label>
     </div>
     <div class="res">
-      <span>Стримов в месяц: <b id="oStrCount"></b></span>
-      <span>Трафик: <b id="oStrTB"></b></span>
-      <span>Раздача: <b id="oStrCdn"></b></span>
-      <span>Daily (из браузера): <b id="oStrDaily"></b></span>
-      <span>Крупные эфиры: <b id="oBig"></b></span>
+      <span>Минут участника в Daily: <b id="oCallMin"></b></span>
+      <span>Daily: <b id="oCall"></b></span>
+      <span>Наш канал: <b id="oCallTraffic"></b></span>
     </div>
-    <p class="note" id="oStrConc"></p>
+    <p class="note" id="oCallConc"></p>
   </section>
 
-  <!-- 4. Хранение -->
+  <!-- 2. Группы -->
   <section>
-    <h2><span>4</span>Хранение и просмотр видео</h2>
-    <p class="how">Хранилище Bunny в Германии: $0,01 за ГБ в месяц за копию. Записи хранятся, пока автор их не удалит, — объём растёт каждый месяц; «Месяц работы» показывает, какой будет счёт через столько месяцев. Просмотр записей и видео — трафик по регионам, ~1,1 ГБ за час.</p>
+    <h2><span>2</span>Групповые звонки до четырёх</h2>
+    <p class="how">Только свой путь: каждый участник соединён с каждым, Daily не участвует и не стоит денег. Через наш сервер идут только те соединения, которые не собрались напрямую (разные мобильные операторы, строгий NAT).</p>
     <div class="grid">
-      <label class="f">Сохраняют запись, % стримов<input type="number" min="0" max="100" data-k="recPct" value="50"></label>
-      <label class="f">Качества записи
-        <select data-k="recQ"><option value="2.0">три — 2,0 ГБ/ч</option><option value="1.45">720 и 360 — 1,45 ГБ/ч</option><option value="1.08">только 720 — 1,08 ГБ/ч</option></select>
-      </label>
+      <label class="f">Звонят группой, % пользователей<input type="number" min="0" max="100" data-k="grpPct" value="5"></label>
+      <label class="f">Групповых звонков на человека в месяц<input type="number" min="0" data-k="grpN" value="4"></label>
+      <label class="f">Длительность, мин<input type="number" min="0" data-k="grpMin" value="20"></label>
+      <label class="f">Участников в среднем<select data-k="grpSize"><option value="3">3</option><option value="4">4</option></select></label>
+    </div>
+    <div class="res"><span>Наш канал: <b id="oGrpTraffic"></b></span><span>Daily: <b>$0</b></span></div>
+    <p class="note" id="oGrpConc"></p>
+  </section>
+
+  <!-- 3. Камеры -->
+  <section>
+    <h2><span>3</span>Камеры заведений</h2>
+    <p class="how">Заведение вещает из браузера на наш сервер; сервер кладёт знак в кадр и режет видео 480p, 15 кадров (~0,8 Мбит/с, 0,36 ГБ за час зрителя); зрители смотрят через Bunny с задержкой 4–8 с. <b>Камера вещает, только пока её смотрят</b> — без зрителей не стоит ничего. Наш канал отдаёт Bunny одну копию на камеру, сколько бы ни было зрителей (с включённым Origin Shield у зоны).</p>
+    <div class="grid">
+      <label class="f">Заведений с камерой<input type="number" min="0" data-k="venN" value="20"></label>
+      <label class="f">Камера включена, часов в день<input type="number" min="0" max="24" step="0.5" data-k="venH" value="12"></label>
+      <label class="f">Дней в месяц<input type="number" min="0" max="31" data-k="venD" value="30"></label>
+      <label class="f">Из этого времени её смотрят, %<input type="number" min="0" max="100" data-k="venWatched" value="50"></label>
+      <label class="f">Зрителей, пока смотрят (в среднем)<input type="number" min="0" data-k="venV" value="5"></label>
+      <label class="f">Копий для Bunny (Origin Shield — 1)<input type="number" min="1" max="10" data-k="venCopies" value="1"></label>
+    </div>
+    <div class="res">
+      <span>Часов показа: <b id="oVenHours"></b></span>
+      <span>Трафик Bunny: <b id="oVenTB"></b></span>
+      <span>Bunny: <b id="oVen"></b></span>
+      <span>Наш канал: <b id="oVenOur"></b></span>
+    </div>
+    <p class="note" id="oVenCompare"></p>
+  </section>
+
+  <!-- 4. Эфиры -->
+  <section>
+    <h2><span>4</span>Эфиры</h2>
+    <p class="how">Эфир идёт в трёх качествах — 720p, 480p, 360p (1,18 / 0,60 / 0,37 ГБ за час зрителя); плеер выбирает сам по сети и размеру окна, телефоны чаще берут меньшее. Раздаёт Bunny. Эфир из браузера (с телефона) идёт через Daily — $1,14 за час эфира, от числа зрителей не зависит; из OBS — $0.</p>
+    <div class="grid">
+      <label class="f">Ведут эфиры, % пользователей<input type="number" min="0" max="100" data-k="strPct" value="10"></label>
+      <label class="f">Эфиров на ведущего в месяц<input type="number" min="0" data-k="strN" value="4"></label>
+      <label class="f">Длительность эфира, ч<input type="number" min="0" step="0.5" data-k="strH" value="1.5"></label>
+      <label class="f">Зрителей одновременно (в среднем)<input type="number" min="0" data-k="strV" value="30"></label>
+      <label class="f">Из браузера, % эфиров<input type="number" min="0" max="100" data-k="strWeb" value="70"></label>
+      <label class="f">Смотрят в 720p, %<input type="number" min="0" max="100" data-k="q720" value="50"></label>
+      <label class="f">в 480p, %<input type="number" min="0" max="100" data-k="q480" value="35"></label>
+      <label class="f">в 360p, %<input type="number" min="0" max="100" data-k="q360" value="15"></label>
+    </div>
+    <h3>Большие эфиры — сверх обычных</h3>
+    <div class="grid">
+      <label class="f">Больших эфиров в месяц<input type="number" min="0" data-k="bigN" value="2"></label>
+      <label class="f">Зрителей на большом<input type="number" min="0" step="1000" data-k="bigV" value="10000"></label>
+      <label class="f">Длительность, ч<input type="number" min="0" step="0.5" data-k="bigH" value="2"></label>
+    </div>
+    <div class="res">
+      <span>Эфиров в месяц: <b id="oStrCount"></b></span>
+      <span>Средний час зрителя: <b id="oStrGBh"></b></span>
+      <span>Трафик Bunny: <b id="oStrTB"></b></span>
+      <span>Раздача обычных: <b id="oStrCdn"></b></span>
+      <span>Раздача больших: <b id="oBig"></b></span>
+      <span>Daily (из браузера): <b id="oStrDaily"></b></span>
+    </div>
+    <p class="warn" id="oQWarn" hidden></p>
+    <p class="note" id="oBigOne"></p>
+  </section>
+
+  <!-- 5. Хранение -->
+  <section>
+    <h2><span>5</span>Хранение и просмотр записей, видео и файлов</h2>
+    <p class="how">Хранилище Bunny: $0,01 за ГБ в месяц в одном регионе, $0,02 — в двух. Записи хранятся, пока автор их не удалит, — объём растёт каждый месяц; «Месяц работы» показывает, какой будет счёт через столько месяцев. Запись эфира — три качества, ~2,0 ГБ за час; загруженное видео — 720p, ~0,8 ГБ за час. Просмотр — через vod.takebana.com, ~0,8 ГБ за час зрителя (плеер тоже выбирает качество).</p>
+    <div class="grid">
+      <label class="f">Сохраняют запись, % эфиров<input type="number" min="0" max="100" data-k="recPct" value="50"></label>
       <label class="f">Загружают видео, % пользователей<input type="number" min="0" max="100" data-k="upPct" value="25"></label>
       <label class="f">Видео на человека в месяц<input type="number" min="0" data-k="upN" value="2"></label>
       <label class="f">Длина видео, мин<input type="number" min="0" data-k="upMin" value="3"></label>
-      <label class="f">Вложения переписки, МБ на пользователя в месяц<input type="number" min="0" data-k="attMb" value="20"></label>
+      <label class="f">Фото и вложения, МБ на пользователя в месяц<input type="number" min="0" data-k="attMb" value="20"></label>
       <label class="f">Месяц работы<input type="number" min="1" max="60" data-k="month" value="12"></label>
       <label class="f">Удалять записи старше, мес (0 — хранить всегда)<input type="number" min="0" max="60" data-k="keep" value="0"></label>
-      <label class="f">Копий в хранилище
-        <select data-k="copies"><option value="1">одна</option><option value="2">две (резерв во втором регионе)</option></select>
+      <label class="f">Регионов хранения
+        <select data-k="copies"><option value="1">один — $0,01/ГБ</option><option value="2">два (резерв) — $0,02/ГБ</option></select>
       </label>
       <label class="f">Смотрят записи и видео, ч на пользователя в месяц<input type="number" min="0" step="0.5" data-k="watchH" value="2"></label>
     </div>
@@ -204,16 +222,43 @@
     </div>
   </section>
 
-  <!-- 5. Постоянные -->
+  <!-- 6. Наш сервер -->
   <section>
-    <h2><span>5</span>Постоянные расходы</h2>
-    <p class="how">Сервер сайта Hostinger оплачен на год вперёд — впишите цену в пересчёте на месяц, чтобы она вошла в подписку. В тариф входит трафик и канал: на них держатся камеры заведений на своём сервере, групповые звонки и запасной путь для тех, у кого не открывается Bunny.</p>
+    <h2><span>6</span>Наш сервер: трафик и процессор</h2>
+    <p class="how">Hostinger KVM 4: 4 ядра, канал 1 Гбит/с, 16 ТБ трафика в месяц. <b>Сверх 16 ТБ Hostinger до конца месяца режет весь сервер до 10 Мбит/с — вместе с сайтом</b>, доплатить нельзя. Поэтому раздачу зрителям держим на Bunny, а здесь считаем, что всё-таки идёт через наш канал. Сколько ушло на деле — плитка «Трафик за месяц» во вкладке «Система» панели.</p>
     <div class="grid">
-      <label class="f">Сервер, $ в месяц<input type="number" min="0" data-k="server" value="0"></label>
-      <label class="f">Трафик в тарифе сервера, ТБ в месяц<input type="number" min="0" data-k="srvTB" value="16"></label>
-      <label class="f">Канал сервера, Мбит/с<input type="number" min="0" step="100" data-k="srvMbit" value="1000"></label>
+      <label class="f">Сервер, $ в месяц<input type="number" min="0" step="0.01" data-k="server" value="0"></label>
+      <label class="f">Трафик в тарифе, ТБ в месяц<input type="number" min="0" data-k="srvTB" value="16"></label>
+      <label class="f">Сайт и API, МБ на пользователя в месяц<input type="number" min="0" data-k="siteMb" value="50"></label>
+      <label class="f">Обход блокировок Bunny: занят потолок (20 Мбит/с), %<input type="number" min="0" max="100" data-k="fbUse" value="10"></label>
+      <label class="f">Вечерний пик — во сколько раз выше среднего<input type="number" min="1" max="10" step="0.5" data-k="peak" value="3"></label>
+      <label class="f">Входящий трафик тоже в лимите
+        <select data-k="countIn"><option value="1">да — считаем с ним (осторожно)</option><option value="0">нет — только исходящий</option></select>
+      </label>
       <label class="f">Прочее (почта, домен…), $ в месяц<input type="number" min="0" data-k="other" value="0"></label>
     </div>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>Что идёт через наш канал</th><th>Исходящий</th><th>Входящий</th></tr></thead>
+      <tbody id="oSrvRows"></tbody>
+    </table>
+    </div>
+    <div style="margin-top:10px">
+      <div class="res"><span>Трафик за месяц: <b id="oSrvTB"></b></span><span>Тарифа занято: <b id="oSrvPct"></b></span></div>
+      <div class="meter"><i id="oSrvBar"></i></div>
+    </div>
+    <p class="warn" id="oSrvWarn" hidden></p>
+    <p class="fine" id="oSrvFine" hidden></p>
+    <h3>Процессор в вечерний пик</h3>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>Кто</th><th>Одновременно</th><th>Ядер</th></tr></thead>
+      <tbody id="oCpuRows"></tbody>
+    </table>
+    </div>
+    <div class="meter"><i id="oCpuBar"></i></div>
+    <p class="warn" id="oCpuWarn" hidden></p>
+    <p class="note" id="oLimits"></p>
   </section>
 
   <!-- Итог -->
@@ -248,90 +293,58 @@
     </div>
   </section>
 
-  <p class="note">Тарифы: bunny.net/pricing (CDN, Storage), daily.co/pricing/video-sdk. Размеры: запись эфира 22 мин в трёх качествах — 758 МБ; живой эфир — 2,5 Мбит/с видео и 128 кбит/с звук.</p>
-
-  <!-- Сводка для заказчика (temp/watermark-options-2026-09-21.html) — перенесена без изменений текста -->
-  <div class="doc">
-  <h1 class="doc-h1">Водяной знак, нагрузка на сервер и лимит Daily</h1>
-
-  <section>
-    <h2><span>1</span>Что сейчас делает сервер с каждым эфиром</h2>
-    <p>Водяной знак Takebana вшит в сам кадр — в эфирах, записях, фото и загруженных видео. Вшить знак в видео можно только одним способом: заново его перекодировать. Для фото и загруженных видео это делается один раз при загрузке и почти ничего не стоит. <b>Эфиры сервер перекодирует непрерывно, пока они идут</b>, — и это самая тяжёлая его работа.</p>
-    <div class="box">
-      Замер на нашем сервере: <b>один эфир — 0,78 ядра процессора</b>. У сервера 4 ядра, и два нужны самому сайту. Сейчас он держит <b>3 эфира</b> в полном качестве (720p), следующие — в облегчённом (480p), и примерно на <b>6–8 одновременных эфирах</b> процессор заканчивается: тормозят и эфиры, и сайт.
-    </div>
-    <p>Для запуска этого хватает. Упрёмся, когда вечером одновременно пойдёт больше 3–4 эфиров — а если камеры заведений переедут с Daily на раздачу через Bunny, каждая камера тоже станет таким эфиром. На своём сервере (MediaMTX) камеры не пережимаются и процессор почти не нагружают — там предел в трафике и канале сервера.</p>
-  </section>
-
-  <section>
-    <h2><span>2</span>Варианты</h2>
+  <!-- Справка -->
+  <section class="doc">
+    <h2>Как устроено и где пределы</h2>
     <div class="wrap">
     <table>
-      <thead><tr><th style="width:21%">Вариант</th><th>Нагрузка и расходы</th><th>Защита видео</th><th>Работы</th></tr></thead>
+      <thead><tr><th>Что</th><th>Как идёт</th><th>Предел сейчас</th></tr></thead>
       <tbody>
-        <tr>
-          <td><b>А. Как сейчас</b><br>знак в кадре везде</td>
-          <td>0,78 ядра на каждый эфир. Рост — покупкой мощности: сервер на 8 ядер (~7–8 эфиров), дальше отдельные серверы только под эфиры (~4–5 эфиров на каждый) или сервер с видеокартой (десятки эфиров, но дорогой)</td>
-          <td class="yes">Знак в любой копии: и при записи экрана, и при прямом скачивании потока</td>
-          <td>Сервер мощнее — смена тарифа, без доработки</td>
-        </tr>
-        <tr>
-          <td><b>Б. Компромисс</b><br>эфир — знак поверх плеера, запись — знак в кадре</td>
-          <td>Живой эфир почти не нагружает процессор — один сервер держит десятки эфиров. Знак вшивается в запись уже после эфира, в фоне, когда сервер свободен</td>
-          <td>Запись защищена полностью. Живой эфир — только от записи экрана; <span class="no">прямое скачивание потока даёт видео без знака</span></td>
-          <td>1 день</td>
-        </tr>
-        <tr>
-          <td><b>В. Только поверх плеера</b><br>нигде не вшиваем</td>
-          <td>Минимальная нагрузка и в эфирах, и в записях</td>
-          <td class="no">Эфиры и записи скачиваются без знака. Знак — только на записи экрана</td>
-          <td>1 день</td>
-        </tr>
+        <tr><td>Звонок 1:1</td><td>Daily; кому Daily закрыт — свой путь (напрямую или через наш TURN)</td><td>Daily — без предела с нашей стороны. Свой путь — ~40 разговоров одновременно (порты TURN; упор пишется в журнал ошибок, расширяется настройкой)</td></tr>
+        <tr><td>Групповой до 4</td><td>Свой путь, каждый с каждым</td><td>~6 групп на четверых одновременно (те же порты TURN)</td></tr>
+        <tr><td>Камера заведения</td><td>Браузер → наш приёмник → знак и HLS 480p/15 → Bunny; вещает только при зрителях</td><td>Зрителей — без предела (Bunny). Процессор — ~0,11 ядра на камеру, которую смотрят</td></tr>
+        <tr><td>Эфир из OBS</td><td>RTMP → наш ffmpeg (знак, 720/480/360) → Bunny</td><td>2 эфира в трёх качествах, дальше — 480p; ~1,12 ядра на эфир</td></tr>
+        <tr><td>Эфир из браузера</td><td>Daily → RTMP → как OBS</td><td>То же + у Daily 20 одновременных выходов на аккаунт (поднимается письмом в поддержку)</td></tr>
+        <tr><td>Записи, видео, файлы</td><td>Хранилище Bunny, раздача vod.takebana.com</td><td>Без предела</td></tr>
+        <tr><td>Кому Bunny закрыт</td><td>Тот же материал с нашего сервера, 360p</td><td>~20 Мбит/с на всех таких зрителей — дальше им отказ (решение 25.09)</td></tr>
       </tbody>
     </table>
     </div>
-
-    <p><b>Почему знак «поверх плеера» слабая защита.</b> Эфир отдаётся зрителю кусками по 2 секунды, адрес этих кусков виден в браузере. Любой, кто может смотреть эфир, может записать его напрямую бесплатной программой — без захвата экрана, в полном качестве. Знак, нарисованный страницей поверх видео, в такую запись не попадает вообще. Он виден только тем, кто снимает экран. Так уже устроены звонки и камеры заведений (и через Daily, и на своём сервере): там знак поверх картинки, потому что вшить его некуда.</p>
-
-    <p><b>Что ещё надо знать про варианты Б и В:</b></p>
-    <ul>
-      <li><b>Трафик.</b> Сейчас перекодирование заодно ограничивает поток до 2,5 Мбит/с — на эту цифру посчитан трафик раздачи. Без перекодирования эфир из OBS уходит зрителям таким, каким его прислал ведущий: 1080p при 6 Мбит/с — это в 2,4 раза больше трафика и денег за раздачу. Эфиров с телефона это не касается: их качество задаём мы.</li>
-      <li><b>Задержка.</b> Без перекодирования эфир режется на куски по ключевым кадрам ведущего. С настройкой OBS «авто» это 8 секунд вместо 2, и задержка у зрителя растёт до 20–30 секунд. Лечится требованием к ведущим (ключевой кадр раз в 2 секунды) — но ведущие его не всегда выполняют.</li>
-      <li><b>Одно качество.</b> Живой эфир и сейчас идёт в одном качестве, так что тут ничего не теряем.</li>
-    </ul>
-
-    <p><b>Можно ли затруднить прямое скачивание.</b> Частично — подписанными ссылками на поток с коротким сроком жизни: чужая ссылка перестаёт работать. Но зритель, который вошёл и смотрит, всё равно может записать свой поток. Это усложняет жизнь случайным людям, а не тем, кто ворует целенаправленно.</p>
-
+    <p class="note">Водяной знак — в кадре у эфиров, записей, камер, фото и загруженных видео: вшивается при перекодировании на нашем сервере. У звонков — поверх картинки. Тарифы: bunny.net/pricing (CDN, Storage), daily.co/pricing/video-sdk; сервер — Hostinger KVM 4.</p>
   </section>
-
-  <section>
-    <h2><span>3</span>Daily: не больше 20 эфиров с телефона одновременно</h2>
-    <p>Это не про деньги, а про работоспособность. У Daily два разных лимита:</p>
-    <ul>
-      <li><b>100 000 комнат</b> — сколько может существовать одновременно. Звонки, камеры заведений, эфиры — у каждого своя комната. До этого предела нам далеко.</li>
-      <li><b>20 одновременных трансляций наружу</b>. Эфир с телефона устроен так: камера ведущего идёт в комнату Daily, Daily пересылает видео на наш сервер, оттуда — зрителям. Такая пересылка у аккаунта — не больше 20 одновременно.</li>
-    </ul>
-    <p><b>Что это значит:</b> одновременно может идти не больше 20 эфиров с телефона на весь сайт. Двадцать первый ведущий получит «Сервис видео не запустил трансляцию». Звонков, камер заведений (через Daily или на своём сервере) и эфиров из OBS это не касается. Если камеры заведений переедут на раздачу через Bunny и будут снимать из браузера — каждая камера тоже займёт одну из 20.</p>
-    <p><b>Что сделать:</b> написать в поддержку Daily и попросить поднять лимит. Код менять не нужно — это настройка аккаунта. Лучше сделать заранее, до того как ведущих станет много.</p>
-
-  </section>
-  </div>
 </main>
 
 <script>
 (function () {
-  // ── Тарифы и объёмы ──
-  var PRICE = { EU: 0.01, NA: 0.01, AS: 0.03, SA: 0.045, VOLUME: 0.005 };
-  var DAILY_MIN = 0.004;       // минута участника
-  var DAILY_RTMP = 0.015;      // минута выхода эфира из комнаты на наш сервер
-  var DAILY_FREE = 10000;      // бесплатных минут участника в месяц
-  var LIVE_GB_H = 1.2;         // зритель эфира, 720p
-  var VOD_GB_H = 1.1;          // просмотр записи или видео
-  var UP_GB_H = 0.8;           // загруженное видео после пережатия
-  var STORE_GB = 0.01;         // хранение, за ГБ в месяц за копию
-  var FULL_TRANSCODES = 3;     // полных транскодов на наш сервер (utils/hls.js)
-  var DAILY_LIVE_LIMIT = 20;   // одновременных выходов из Daily на аккаунт
-  var MBIT_PER_GB_H = 8000 / 3600; // 1 ГБ в час ≈ 2,2 Мбит/с
+  // ── Тарифы (25.09.2026) ──
+  var BUNNY = { EU: 0.01, NA: 0.01, AS: 0.03, SA: 0.045, ME: 0.06, VOLUME: 0.005, MIN: 1 };
+  var STORE_GB = 0.01;          // хранение, за ГБ в месяц за регион
+  var DAILY_VIDEO = 0.004;      // минута участника с видео, без скидок за объём
+  var DAILY_AUDIO = 0.00099;    // минута голосового участника
+  var DAILY_RTMP = 0.015;       // минута выхода эфира из комнаты на наш сервер
+  var DAILY_FREE = 10000;       // бесплатных минут участника в месяц
+
+  // ── Объёмы: ГБ за час ──
+  var GBH = function (mbit) { return mbit * 3600 / 8 / 1000; };
+  var Q = { q720: GBH(2.628), q480: GBH(1.328), q360: GBH(0.828) }; // видео + звук 128 кбит/с
+  var CAM_GBH = GBH(0.8);       // камера заведения, 480p/15 (utils/hls.js, профиль venue)
+  var ORIGIN_GBH = GBH(2.628 + 1.328 + 0.828); // эфир целиком (все качества) — Bunny забирает с нас
+  var STREAM_IN_GBH = GBH(4);   // эфир к нам: OBS 2,5–6 Мбит/с, из Daily 2,6
+  var REC_GBH = 2.0;            // запись в трёх качествах
+  var UP_GBH = 0.8;             // загруженное видео после пережатия
+  var VOD_GBH = 0.8;            // просмотр записи или видео (часть — ниже 720p)
+  var CALL_RELAY_VIDEO = GBH(4); // 1:1 видео через TURN: 2 потока по ~2 Мбит/с в каждую сторону
+  var CALL_RELAY_AUDIO = GBH(0.2);
+  var GROUP_STREAM_MBIT = 1.5;  // поток в сетке группы
+  var FALLBACK_MBIT = 20;       // потолок обхода блокировок (ops/nginx, takebana_fallback)
+
+  // ── Процессор и потолки (замеры 15.09 и 25.09) ──
+  var CORES = 4, SITE_CORES = 1.5;
+  var CORE_FULL = 1.12, CORE_LITE = 0.42, CORE_CAM = 0.11;
+  var FULL_SLOTS = 2;           // эфиров в трёх качествах одновременно (utils/hls.js)
+  var TURN_CALLS = 40, TURN_GROUPS = 6;
+  var DAILY_RTMP_LIMIT = 20;
+  var HOURS = 730;              // часов в месяце
 
   var nf0 = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
   var nf1 = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
@@ -339,140 +352,185 @@
   var usd = function (x) { return '$' + (Math.abs(x) < 100 ? nf2 : nf0).format(x); };
   var num = function (x) { return nf0.format(Math.round(x)); };
   var gb = function (g) { return g >= 1000 ? nf1.format(g / 1000) + ' ТБ' : nf0.format(g) + ' ГБ'; };
+  var pgb = function (p) { return '$' + p.toFixed(4).replace('.', ','); };
   var $ = function (id) { return document.getElementById(id); };
   var set = function (id, text) { $(id).textContent = text; };
+  var show = function (id, text) { $(id).hidden = !text; set(id, text || ''); };
 
   var fields = [].slice.call(document.querySelectorAll('[data-k]'));
-  var radios = [].slice.call(document.querySelectorAll('input[type="radio"]'));
   var defaults = {};
   fields.forEach(function (el) { defaults[el.dataset.k] = el.value; });
-  radios.forEach(function (el) { if (el.checked) defaults[el.name] = el.value; });
 
-  function v(k) { var el = document.querySelector('[data-k="' + k + '"]'); var n = parseFloat(el.value); return isFinite(n) && n > 0 ? n : 0; }
+  function v(k) { var n = parseFloat(document.querySelector('[data-k="' + k + '"]').value); return isFinite(n) && n > 0 ? n : 0; }
   function s(k) { return document.querySelector('[data-k="' + k + '"]').value; }
-  function r(name) { return document.querySelector('input[name="' + name + '"]:checked').value; }
 
   function calc() {
     var users = v('users');
+    var peak = Math.max(1, v('peak'));
 
-    // Аудитория
-    var shares = { EU: v('rEU'), NA: v('rNA'), AS: v('rAS'), SA: v('rSA') };
-    var sum = shares.EU + shares.NA + shares.AS + shares.SA;
-    var blend = sum ? (shares.EU * PRICE.EU + shares.NA * PRICE.NA + shares.AS * PRICE.AS + shares.SA * PRICE.SA) / sum : PRICE.EU;
-    set('oBlend', '$' + blend.toFixed(4).replace('.', ','));
-    $('oRegWarn').hidden = sum === 100;
-    set('oRegWarn', 'Сумма долей — ' + num(sum) + ' %, считаем пропорционально.');
-    var liveGB = r('net') === 'vol' ? PRICE.VOLUME : blend;
+    // 0. Аудитория
+    var sh = { EU: v('rEU'), NA: v('rNA'), AS: v('rAS'), SA: v('rSA'), ME: v('rME') };
+    var sum = sh.EU + sh.NA + sh.AS + sh.SA + sh.ME;
+    var blend = sum ? Object.keys(sh).reduce(function (a, k) { return a + sh[k] * BUNNY[k]; }, 0) / sum : BUNNY.EU;
+    var liveGB = s('liveNet') === 'vol' ? BUNNY.VOLUME : blend;
+    var vodGB = s('vodNet') === 'vol' ? BUNNY.VOLUME : blend;
+    set('oBlend', pgb(blend)); set('oLiveGB', pgb(liveGB)); set('oVodGB', pgb(vodGB));
+    show('oRegWarn', sum === 100 ? '' : 'Сумма долей — ' + num(sum) + ' %, считаем пропорционально.');
 
-    // 1. Звонки
-    var callMin = users * v('callPct') / 100 * v('callN') * v('callMin') * 2;
-    set('oCallMin', num(callMin));
-    set('oCall', usd(callMin * DAILY_MIN));
+    // 1. Звонки 1:1
+    var callsN = users * v('callPct') / 100 * v('callN');
+    var callH = callsN * v('callMin') / 60;
+    var ownShare = v('ownPct') / 100, videoShare = v('callVideo') / 100;
+    var dailyH = callH * (1 - ownShare);
+    var callVideoMin = dailyH * 60 * 2 * videoShare;
+    var callAudioMin = dailyH * 60 * 2 * (1 - videoShare);
+    var audioPrice = s('audioRate') === 'audio' ? DAILY_AUDIO : DAILY_VIDEO;
+    var callDaily = callVideoMin * DAILY_VIDEO + callAudioMin * audioPrice;
+    var relayH = callH * ownShare * v('relayPct') / 100;
+    var callOut = relayH * (videoShare * CALL_RELAY_VIDEO + (1 - videoShare) * CALL_RELAY_AUDIO);
+    set('oCallMin', num(callVideoMin + callAudioMin));
+    set('oCall', usd(callDaily));
+    set('oCallTraffic', gb(callOut) + ' (столько же входящего)');
+    var ownPeak = callH * ownShare / HOURS * peak;
+    set('oCallConc', 'Разговоров своим путём одновременно в вечерний пик: ~' + nf1.format(ownPeak) + ' (потолок ~' + TURN_CALLS + ')' +
+      (ownPeak > TURN_CALLS * 0.8 ? ' — пора расширять порты TURN (одна настройка).' : '.'));
 
-    // 2. Заведения
-    var venHours = v('venN') * v('venH') * v('venD');
-    var venViewH = venHours * v('venV');
-    var dailyVenMin = (venViewH + venHours) * 60;               // зрители + сама камера
-    var venDaily = dailyVenMin * DAILY_MIN;
-    var venTraffic = venViewH * LIVE_GB_H;
-    var venView = venTraffic * liveGB;
-    var camBrowser = s('venCam') === 'browser';
-    var venCamMin = camBrowser ? venHours * 60 : 0;
-    var venCam = venCamMin * (DAILY_MIN + DAILY_RTMP);
-    var venBunny = venView + venCam;
-    // Свой сервер: трафик тот же, что у зрителей Bunny, но уходит с нашего
-    // сервера и входит в тариф. Что не влезло — отдаём через Bunny (MediaMTX
-    // умеет HLS без пережатия) по цене раздачи. Этот переход ещё не сделан.
-    var srvGB = v('srvTB') * 1000;
-    var mtxShare = srvGB ? venTraffic / srvGB : 0;
-    var mtxOverGB = Math.max(0, venTraffic - srvGB);
-    var venMtx = mtxOverGB * liveGB;
-    var peakMbit = v('venN') * v('venV') * LIVE_GB_H * MBIT_PER_GB_H;
-    var venMode = r('venMode');
-    set('oVenDailyVol', num(dailyVenMin) + ' мин участника');
-    set('oVenDailyView', usd(venViewH * 60 * DAILY_MIN));
-    set('oVenDailyCam', usd(venHours * 60 * DAILY_MIN));
-    set('oVenDaily', usd(venDaily));
-    set('oVenBunnyVol', gb(venTraffic));
-    set('oVenBunnyView', usd(venView));
-    set('oVenBunnyCam', camBrowser ? usd(venCam) : '$0 (RTMP)');
-    set('oVenBunny', usd(venBunny));
-    set('oVenMtxVol', gb(venTraffic) + ' — ' + nf0.format(mtxShare * 100) + ' % тарифа');
-    set('oVenMtxView', mtxShare <= 1 ? '$0 (в тарифе)' : gb(mtxOverGB) + ' сверх тарифа — ' + usd(venMtx));
-    set('oVenMtx', usd(venMtx));
-    $('rowVenDaily').className = venMode === 'daily' ? 'on' : 'off';
-    $('rowVenBunny').className = venMode === 'bunny' ? 'on' : 'off';
-    $('rowVenMtx').className = venMode === 'mtx' ? 'on' : 'off';
-    var venWarn = [];
-    if (venMode === 'mtx' && mtxShare > 1)
-      venWarn.push('Трафик камер — ' + gb(venTraffic) + ', а в тарифе сервера ' + gb(srvGB) + '. Всё, что сверх, посчитано по цене раздачи Bunny: многолюдные камеры переводятся на раздачу через Bunny (задержка 10–15 с). Этот переход ещё не сделан — до него столько зрителей свой сервер не потянет.');
-    else if (venMode === 'mtx' && mtxShare > 0.6)
-      venWarn.push('Камеры займут ' + nf0.format(mtxShare * 100) + ' % трафика сервера — а ещё на нём групповые звонки и запасной путь к видео. Запас небольшой.');
-    if (venMode === 'mtx' && peakMbit > v('srvMbit') / 2)
-      venWarn.push('Если все камеры идут разом, сервер отдаёт около ' + num(peakMbit) + ' Мбит/с — больше половины канала (' + num(v('srvMbit')) + ' Мбит/с), который нужен и сайту.');
-    if (venMode === 'bunny' && v('venN') > FULL_TRANSCODES)
-      venWarn.push('На Bunny каждую камеру пережимает наш сервер со знаком: полных транскодов на сервер — ' + FULL_TRANSCODES + ', остальные идут в 480p. Для ' + num(v('venN')) + ' камер одновременно нужны дополнительные серверы.');
-    if (venMode === 'bunny' && camBrowser && v('venN') > DAILY_LIVE_LIMIT)
-      venWarn.push('Выходов из Daily одновременно — не больше ' + DAILY_LIVE_LIMIT + ' на аккаунт; больше — по запросу в Daily.');
-    $('oVenWarn').hidden = !venWarn.length;
-    set('oVenWarn', venWarn.join(' '));
+    // 2. Группы
+    var n = parseInt(s('grpSize'), 10) || 3;
+    var grpH = users * v('grpPct') / 100 * v('grpN') * v('grpMin') / 60 / n; // звонок считают все участники — делим
+    var grpOut = grpH * n * (n - 1) * GBH(GROUP_STREAM_MBIT) * v('relayPct') / 100;
+    set('oGrpTraffic', gb(grpOut) + ' (столько же входящего)');
+    var grpPeak = grpH / HOURS * peak;
+    set('oGrpConc', 'Групп на четверых одновременно в пик: ~' + nf1.format(grpPeak) + ' (потолок ~' + TURN_GROUPS + ')' + (grpPeak > TURN_GROUPS * 0.8 ? ' — пора расширять порты TURN.' : '.'));
 
-    // 3. Стримы
+    // 3. Камеры
+    var camOnH = v('venN') * v('venH') * v('venD');
+    var camWatchedH = camOnH * v('venWatched') / 100;
+    var camViewH = camWatchedH * v('venV');
+    var camCdnGB = camViewH * CAM_GBH;
+    var cam = camCdnGB * liveGB;
+    var camOut = camWatchedH * CAM_GBH * Math.max(1, v('venCopies'));
+    var camIn = camWatchedH * CAM_GBH;
+    set('oVenHours', num(camWatchedH) + ' из ' + num(camOnH));
+    set('oVenTB', gb(camCdnGB));
+    set('oVen', usd(cam));
+    set('oVenOur', gb(camOut) + ' исх. + ' + gb(camIn) + ' вх.');
+    var viaDaily = (camOnH + camViewH) * 60 * DAILY_VIDEO;
+    set('oVenCompare', 'Для сравнения: комнатой Daily (как было до 25.09) этот же сценарий стоил бы ' + usd(viaDaily) +
+      ', мостом через Daily — ' + usd(camWatchedH * 60 * (DAILY_VIDEO + DAILY_RTMP) + cam) + '.');
+
+    // 4. Эфиры
+    var qs = v('q720') + v('q480') + v('q360');
+    var avgGBh = qs ? (v('q720') * Q.q720 + v('q480') * Q.q480 + v('q360') * Q.q360) / qs : Q.q720;
+    show('oQWarn', qs === 100 || !qs ? '' : 'Сумма долей качеств — ' + num(qs) + ' %, считаем пропорционально.');
     var strCount = users * v('strPct') / 100 * v('strN');
-    var strHours = strCount * v('strH');
-    var strTraffic = strHours * v('strV') * LIVE_GB_H;
-    var strCdn = strTraffic * liveGB;
-    var strWebMin = strHours * v('strWeb') / 100 * 60;
-    var strDaily = strWebMin * (DAILY_MIN + DAILY_RTMP);
-    var bigTraffic = v('bigN') * v('bigV') * v('bigH') * LIVE_GB_H;
-    var big = bigTraffic * liveGB;
+    var strH = strCount * v('strH');
+    var strCdnGB = strH * v('strV') * avgGBh;
+    var strCdn = strCdnGB * liveGB;
+    var bigH = v('bigN') * v('bigH');
+    var bigGB = bigH * v('bigV') * avgGBh;
+    var big = bigGB * liveGB;
+    var strWebMin = strH * v('strWeb') / 100 * 60;
+    var strDaily = strWebMin * (DAILY_VIDEO + DAILY_RTMP);
+    var strOut = (strH + bigH) * ORIGIN_GBH;
+    var strIn = (strH + bigH) * STREAM_IN_GBH;
     set('oStrCount', num(strCount));
-    set('oStrTB', gb(strTraffic + bigTraffic));
+    set('oStrGBh', nf2.format(avgGBh) + ' ГБ');
+    set('oStrTB', gb(strCdnGB + bigGB));
     set('oStrCdn', usd(strCdn));
-    set('oStrDaily', usd(strDaily));
     set('oBig', usd(big));
-    var conc = strHours / (30 * 24);
-    set('oStrConc', 'В среднем одновременно идёт ' + nf1.format(conc) + ' стримов; вечером — в 2–3 раза больше. Полных транскодов на наш сервер — ' + FULL_TRANSCODES +
-      (conc * 3 > FULL_TRANSCODES ? ': в пиковые часы понадобятся дополнительные серверы (смета масштабирования).' : ' — укладываемся.'));
+    set('oStrDaily', usd(strDaily));
+    set('oBigOne', v('bigN') ? 'Один большой эфир: ' + num(v('bigV')) + ' зрителей × ' + nf1.format(v('bigH')) + ' ч = ' + gb(v('bigV') * v('bigH') * avgGBh) +
+      ' → ' + usd(v('bigV') * v('bigH') * avgGBh * liveGB) + '. Наш сервер от числа зрителей не зависит: Bunny забирает эфир один раз.' : '');
 
-    // 4. Хранение
-    var recGB = strHours * v('recPct') / 100 * parseFloat(s('recQ'));
-    var upGB = users * v('upPct') / 100 * v('upN') * v('upMin') / 60 * UP_GB_H;
+    // 5. Хранение
+    var recGB = strH * v('recPct') / 100 * REC_GBH;
+    var upGB = users * v('upPct') / 100 * v('upN') * v('upMin') / 60 * UP_GBH;
     var attGB = users * v('attMb') / 1024;
     var addGB = recGB + upGB + attGB;
     var month = Math.max(1, Math.round(v('month')) || 1);
     var keep = Math.round(v('keep'));
     var held = addGB * (keep ? Math.min(month, keep) : month);
-    var copies = parseInt(s('copies'), 10) || 1;
-    var store = held * STORE_GB * copies;
-    var watch = users * v('watchH') * VOD_GB_H * blend;
-    set('oStAdd', gb(addGB));
-    set('oStMonth', String(month));
-    set('oStTotal', gb(held));
-    set('oSt', usd(store));
-    set('oWatch', usd(watch));
+    var store = held * STORE_GB * (parseInt(s('copies'), 10) || 1);
+    var watch = users * v('watchH') * VOD_GBH * vodGB;
+    set('oStAdd', gb(addGB)); set('oStMonth', String(month)); set('oStTotal', gb(held));
+    set('oSt', usd(store)); set('oWatch', usd(watch));
 
-    // Daily: минуты участника — общий котёл с бесплатными 10 000.
-    var dailyPartMin = callMin + (venMode === 'daily' ? dailyVenMin : venMode === 'bunny' ? venCamMin : 0) + strWebMin;
-    var venCost = venMode === 'daily' ? venDaily : venMode === 'bunny' ? venBunny : venMtx;
-    var venLabel = venMode === 'daily' ? 'Трансляции заведений — Daily'
-      : venMode === 'bunny' ? 'Трансляции заведений — Bunny' + (camBrowser ? ' + камеры через Daily' : ', камеры по RTMP')
-      : 'Трансляции заведений — свой сервер' + (mtxShare > 1 ? ' + сверх тарифа через Bunny' : ' (в тарифе)');
-    var free = Math.min(DAILY_FREE, dailyPartMin) * DAILY_MIN;
-
-    var lines = [
-      ['Звонки один на один (Daily)', callMin * DAILY_MIN],
-      [venLabel, venCost],
-      ['Стримы — раздача (Bunny)', strCdn],
-      ['Стримы из браузера (Daily)', strDaily],
-      ['Крупные эфиры — раздача (Bunny)', big],
-      ['Хранение видео, месяц ' + month + ' (Bunny)', store],
-      ['Просмотр записей и видео (Bunny)', watch],
-      ['Бесплатные минуты Daily', -free],
-      ['Сервер и прочее', v('server') + v('other')],
+    // 6. Наш сервер: трафик
+    var siteOut = users * v('siteMb') / 1024;
+    var fbOut = GBH(FALLBACK_MBIT) * HOURS * v('fbUse') / 100;
+    var rows = [
+      ['Эфиры — Bunny забирает все качества', strOut, strIn],
+      ['Камеры — одна копия на камеру, которую смотрят', camOut, camIn],
+      ['Звонки 1:1 через TURN', callOut, callOut],
+      ['Групповые через TURN', grpOut, grpOut],
+      ['Обход блокировок Bunny (/m/, /lf/)', fbOut, fbOut],
+      ['Сайт, API, картинки', siteOut, siteOut * 0.3],
     ];
-    var total = lines.reduce(function (a, l) { return a + l[1]; }, 0);
+    var out = rows.reduce(function (a, r) { return a + r[1]; }, 0);
+    var inn = rows.reduce(function (a, r) { return a + r[2]; }, 0);
+    $('oSrvRows').innerHTML = rows.map(function (r) {
+      return '<tr><td>' + r[0] + '</td><td>' + gb(r[1]) + '</td><td>' + gb(r[2]) + '</td></tr>';
+    }).join('') + '<tr class="total"><td>Всего</td><td>' + gb(out) + '</td><td>' + gb(inn) + '</td></tr>';
+    var counted = out + (s('countIn') === '1' ? inn : 0);
+    var limit = v('srvTB') * 1000;
+    var pct = limit ? counted / limit * 100 : 0;
+    set('oSrvTB', gb(counted)); set('oSrvPct', nf0.format(pct) + ' %');
+    $('oSrvBar').style.width = Math.min(100, pct) + '%';
+    $('oSrvBar').className = pct >= 70 ? 'hot' : '';
+    show('oSrvWarn', pct >= 100 ? 'Выше тарифа: в этом сценарии Hostinger к концу месяца замедлит весь сервер до 10 Мбит/с. Нужен сервер с большим трафиком или вынести камеры и реле на отдельный медиасервер.'
+      : pct >= 70 ? 'Больше 70 % тарифа — запаса мало. Панель предупредит на 70 % и 90 %.' : '');
+    show('oSrvFine', pct < 70 ? 'В тарифе с запасом: зрителей раздаёт Bunny, наш канал почти не зависит от их числа.' : '');
+
+    // 6. Процессор в пик
+    var strConc = (strH / HOURS) * peak;
+    var full = Math.min(strConc, FULL_SLOTS), lite = Math.max(0, strConc - FULL_SLOTS);
+    var camConc = v('venN') * v('venWatched') / 100;
+    var relayMbit = (callOut + grpOut) / HOURS * peak / GBH(1);
+    var cpu = [
+      ['Сайт, база, nginx', '—', SITE_CORES],
+      ['Эфиры в трёх качествах', nf1.format(full), full * CORE_FULL],
+      ['Эфиры сверх того (480p)', nf1.format(lite), lite * CORE_LITE],
+      ['Камеры, которые смотрят', nf1.format(camConc), camConc * CORE_CAM],
+      ['Реле звонков (TURN)', num(relayMbit) + ' Мбит/с', relayMbit / 700],
+    ];
+    var cores = cpu.reduce(function (a, r) { return a + r[2]; }, 0);
+    $('oCpuRows').innerHTML = cpu.map(function (r) {
+      return '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td>' + nf2.format(r[2]) + '</td></tr>';
+    }).join('') + '<tr class="total"><td>Всего из ' + CORES + '</td><td></td><td>' + nf2.format(cores) + '</td></tr>';
+    $('oCpuBar').style.width = Math.min(100, cores / CORES * 100) + '%';
+    $('oCpuBar').className = cores >= 3 ? 'hot' : '';
+    var cw = [];
+    if (cores >= CORES) cw.push('Процессора не хватит: в пик тормозят и эфиры, и сайт. Нужен сервер мощнее (8 ядер) или отдельный сервер под перекодирование.');
+    else if (cores >= 3) cw.push('Близко к пределу процессора — панель пишет об этом в журнал ошибок (hls.cpu).');
+    var webPeak = strConc * v('strWeb') / 100;
+    if (webPeak > DAILY_RTMP_LIMIT * 0.8) cw.push('Эфиров из браузера в пик ~' + nf1.format(webPeak) + ' — у Daily 20 одновременных выходов на аккаунт, пора просить поднять.');
+    show('oCpuWarn', cw.join(' '));
+    set('oLimits', 'Пик — среднее, умноженное на «вечерний пик». Эфиров одновременно в пик: ~' + nf1.format(strConc) + '; камер, которые смотрят: ~' + nf1.format(camConc) + '.');
+
+    // Итог
+    var dailyMin = callVideoMin + callAudioMin + strWebMin;
+    var free = Math.min(DAILY_FREE, dailyMin) * DAILY_VIDEO;
+    var bunnyAll = cam + strCdn + big + store + watch;
+    var lines = [
+      ['Daily', null],
+      ['Звонки один на один', callDaily],
+      ['Эфиры из браузера (ведущий и выход)', strDaily],
+      ['Бесплатные минуты Daily', -free],
+      ['Bunny', null],
+      ['Камеры заведений — раздача', cam],
+      ['Эфиры — раздача', strCdn],
+      ['Большие эфиры — раздача', big],
+      ['Хранение, месяц ' + month, store],
+      ['Просмотр записей и видео', watch],
+      ['Минимальный платёж Bunny', Math.max(0, BUNNY.MIN - bunnyAll)],
+      ['Свои', null],
+      ['Сервер и прочее', v('server') + v('other')],
+      ['Групповые звонки и свой путь 1:1 (трафик сервера)', 0],
+    ];
+    var total = lines.reduce(function (a, l) { return a + (l[1] || 0); }, 0);
     $('oSum').innerHTML = lines.map(function (l) {
+      if (l[1] === null) return '<tr class="group"><td colspan="2">' + l[0] + '</td></tr>';
       return '<tr><td>' + l[0] + '</td><td>' + (l[1] < 0 ? '−' + usd(-l[1]) : usd(l[1])) + '</td></tr>';
     }).join('') + '<tr class="total"><td>Итого в месяц</td><td>' + usd(total) + '</td></tr>';
 
@@ -488,8 +546,8 @@
     set('oPriceHow', 'Расходы ' + usd(total) + ' + запас ' + nf0.format(reserve * 100) + ' % = ' + usd(total * (1 + reserve)) +
       ' → на платящего ' + usd(payers ? total * (1 + reserve) / payers : 0) + ', плюс комиссия ' + nf1.format(feePct * 100) + ' % и ' + usd(feeFix) + ' за платёж.');
     $('oPayTable').innerHTML = [100, 50, 25, 10, 5].map(function (p) {
-      var n = Math.round(users * p / 100);
-      return '<tr><td>' + p + ' %</td><td>' + num(n) + '</td><td>' + usd(price(n, false)) + '</td><td><b>' + usd(price(n, true)) + '</b></td></tr>';
+      var k = Math.round(users * p / 100);
+      return '<tr><td>' + p + ' %</td><td>' + num(k) + '</td><td>' + usd(price(k, false)) + '</td><td><b>' + usd(price(k, true)) + '</b></td></tr>';
     }).join('');
 
     saveHash();
@@ -499,23 +557,18 @@
   function saveHash() {
     var out = [];
     fields.forEach(function (el) { if (el.value !== defaults[el.dataset.k]) out.push(el.dataset.k + '=' + encodeURIComponent(el.value)); });
-    radios.forEach(function (el) { if (el.checked && el.value !== defaults[el.name]) out.push(el.name + '=' + el.value); });
     history.replaceState(null, '', out.length ? '#' + out.join('&') : location.pathname);
   }
   function loadHash() {
     location.hash.slice(1).split('&').forEach(function (pair) {
       var i = pair.indexOf('='); if (i < 1) return;
-      var k = pair.slice(0, i), val = decodeURIComponent(pair.slice(i + 1));
-      var el = document.querySelector('[data-k="' + k + '"]');
-      if (el) el.value = val;
-      var rd = document.querySelector('input[name="' + k + '"][value="' + val + '"]');
-      if (rd) rd.checked = true;
+      var el = document.querySelector('[data-k="' + pair.slice(0, i) + '"]');
+      if (el) el.value = decodeURIComponent(pair.slice(i + 1));
     });
   }
 
   $('reset').addEventListener('click', function () {
     fields.forEach(function (el) { el.value = defaults[el.dataset.k]; });
-    radios.forEach(function (el) { el.checked = defaults[el.name] === el.value; });
     calc();
   });
   $('copy').addEventListener('click', function () {

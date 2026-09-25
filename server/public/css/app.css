@@ -1102,7 +1102,6 @@ body.tk-app {
 }
 
 .tk-thumb:hover .tk-thumb__del,
-.tk-shots__item:hover .tk-thumb__del,
 .tk-thumb__del:focus-visible { opacity: 1; }
 .tk-thumb__del:hover { background: var(--tk-accent); }
 

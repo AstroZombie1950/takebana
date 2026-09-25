@@ -1,0 +1,155 @@
+<%#
+  Страница фото галереи (/photo/:id, решение заказчика 25.09.2026) — как
+  пост в Инстаграме: снимок, автор, «нравится», подпись, комментарии.
+  Стрелки (и пальцем, и с клавиатуры) — к соседним фото того же человека,
+  новые сверху. Маршрут — общий с записью и видео (routes/watch.js, вид
+  photo), поведение — /tk-watch.js, вид — css/watch.css и css/photo.css.
+
+  Просмотров и дизлайка у фото нет. Автор правит подпись и удаляет фото;
+  комментарии под ним удаляют он, их авторы и модератор.
+%>
+<%
+  var nextUrl = encodeURIComponent(base);
+  var when = date(rec.createdAt, { day: 'numeric', month: 'long', year: 'numeric' });
+  var headTitle = rec.caption ? rec.caption.replace(/\s+/g, ' ').slice(0, 70) : ta('photo.titleBy', { name: author.displayName, date: when });
+  var alt = rec.caption ? rec.caption.slice(0, 125) : ta('photo.alt', { name: author.displayName });
+  var commentsN = plural(rec.comments || 0, 'rec.comments');
+  var liked = myReaction === 1;
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: (rec.caption || '').slice(0, 160), seo: { path: base, type: 'article', image: rec.url, imageAlt: alt, robots: rec.userId.banned ? 'noindex, follow' : '',
+         jsonld: ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [ta('gallery.photos'), author.url + '/photos'], [headTitle, base]]) } }) %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/watch.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/photo.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-watch tk-watch--photo" id="watch"
+         data-base="<%= base %>"
+         data-k="<%= k %>"
+         data-owner="<%= isOwner ? '1' : '' %>"
+         data-user="<%= currentUser ? currentUser._id : '' %>"
+         data-back="<%= back %>"
+         data-prev="<%= around.prev %>"
+         data-next="<%= around.next %>">
+
+      <div class="tk-watch__stage tk-photo__stage" id="photoStage">
+        <img class="tk-photo__img" src="<%= rec.url %>" alt="<%= alt %>" decoding="async">
+        <% if (around.prev) { %>
+        <a class="tk-photo__nav tk-photo__nav--prev" href="<%= around.prev %>" aria-label="<%= ta('user.photoPrev') %>" data-i18n-aria="user.photoPrev">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        </a>
+        <% } %>
+        <% if (around.next) { %>
+        <a class="tk-photo__nav tk-photo__nav--next" href="<%= around.next %>" aria-label="<%= ta('user.photoNext') %>" data-i18n-aria="user.photoNext">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+        </a>
+        <% } %>
+        <% if (around.total > 1) { %><span class="tk-photo__count"><%= around.n %> / <%= around.total %></span><% } %>
+      </div>
+
+      <div class="tk-watch__main tk-photo__main">
+        <div class="tk-watch__bar tk-photo__head">
+          <div class="tk-live__author tk-watch__author">
+            <a href="<%= author.url %>" class="tk-live__avatar"<% if (!author.avatarStyle.url) { %> data-bg="<%= author.avatarStyle.gradient %>"<% } %>>
+              <% if (author.avatarStyle.url) { %><img src="<%= author.avatarStyle.url %>" alt=""><% } else { %><%= author.avatarStyle.initial %><% } %>
+            </a>
+            <div class="tk-live__author-body">
+              <a href="<%= author.url %>" class="tk-live__author-name"><%= author.displayName %><% if (author.official) { %><%- include('partials/official') %><% } %></a>
+              <a href="<%= author.url %>/photos" class="tk-photo__all" data-i18n="gallery.photos"><%- t('gallery.photos') %></a>
+            </div>
+          </div>
+        </div>
+
+        <div class="tk-watch__acts tk-photo__acts">
+          <%# «Нравится» — сердечком; гостю — ссылка на вход с возвратом сюда. %>
+          <<%- currentUser ? 'button type="button"' : 'a' %> class="tk-watch__pill tk-photo__like"<% if (currentUser) { %> data-rate="1" aria-pressed="<%= liked %>"<% } else { %> href="/login?next=<%= nextUrl %>"<% } %> aria-label="<%= ta(currentUser ? 'photo.like' : 'rec.loginToRate') %>" data-i18n-aria="<%= currentUser ? 'photo.like' : 'rec.loginToRate' %>">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5l-1.4-1.3C5.4 14.5 2 11.4 2 7.6 2 4.5 4.4 2 7.5 2c1.7 0 3.4.8 4.5 2.1C13.1 2.8 14.8 2 16.5 2 19.6 2 22 4.5 22 7.6c0 3.8-3.4 6.9-8.6 11.6z"/></svg>
+            <span class="tk-watch__count" id="likes"><%= num(rec.likes) %></span>
+          </<%- currentUser ? 'button' : 'a' %>>
+
+          <a class="tk-watch__pill" href="#comments" aria-label="<%= ta('rec.commentPh') %>" data-i18n-aria="rec.commentPh">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 4.5h17v12h-11l-6 4z"/></svg>
+            <span class="tk-watch__count" data-comments-count><%= num(rec.comments) %></span>
+          </a>
+
+          <button type="button" class="tk-watch__pill" id="shareRecording">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 4l7 7-7 7M21 11H9a6 6 0 00-6 6v3"/></svg>
+            <span data-i18n="rec.share"><%- t('rec.share') %></span>
+          </button>
+
+          <% if (currentUser && !isOwner) { %>
+          <button type="button" class="tk-watch__pill" data-report="photo" data-report-id="<%= rec._id %>" data-report-name="<%= author.displayName %>">
+            <span data-i18n="common.report"><%- t('common.report') %></span>
+          </button>
+          <% } %>
+        </div>
+
+        <div class="tk-watch__about" id="about">
+          <% if (rec.caption) { %>
+          <p class="tk-watch__desc" id="recDesc"><%= rec.caption %></p>
+          <button type="button" class="tk-watch__more" id="descMore" hidden data-i18n="rec.more"><%- t('rec.more') %></button>
+          <% } else if (isOwner) { %>
+          <p class="tk-watch__desc tk-watch__desc--empty" id="recDesc" data-i18n="photo.noDesc"><%- t('photo.noDesc') %></p>
+          <% } %>
+          <p class="tk-watch__meta"><time datetime="<%= new Date(rec.createdAt).toISOString() %>"><%= when %></time></p>
+
+          <% if (isOwner) { %>
+          <div class="tk-watch__owner">
+            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="editRecording" data-i18n="photo.edit"><%- t('photo.edit') %></button>
+            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="deleteRecording" data-i18n="photo.delete"><%- t('photo.delete') %></button>
+          </div>
+
+          <form class="tk-watch__edit" id="editForm" hidden>
+            <label class="tk-form__label" for="editDesc" data-i18n="photo.caption"><%- t('photo.caption') %></label>
+            <textarea id="editDesc" name="caption" class="tk-field" rows="5" maxlength="<%= limits.caption %>" placeholder="<%= ta('photo.captionPh') %>" data-i18n-placeholder="photo.captionPh"><%= rec.caption %></textarea>
+            <div class="tk-watch__edit-acts">
+              <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="editCancel" data-i18n="common.cancel"><%- t('common.cancel') %></button>
+            </div>
+          </form>
+          <% } %>
+        </div>
+
+        <section class="tk-watch__comments" id="comments" aria-labelledby="commentsTitle">
+          <h2 class="tk-watch__h2" id="commentsTitle" data-count="<%= rec.comments || 0 %>" data-i18n="<%= commentsN.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(rec.comments) }) %>'><%= commentsN.text %></h2>
+
+          <%# Автор закрыл комментарии для этого зрителя (utils/privacy.js). %>
+          <% if (commentsClosed) { %>
+          <p class="tk-note" data-i18n="rec.commentsClosed.<%= commentsClosed %>"><%- t('rec.commentsClosed.' + commentsClosed) %></p>
+          <% } else if (currentUser) { %>
+          <form class="tk-watch__form" id="commentForm">
+            <textarea id="commentText" class="tk-field" rows="1" maxlength="<%= limits.comment %>" placeholder="<%= ta('rec.commentPh') %>" data-i18n-placeholder="rec.commentPh" aria-label="<%= ta('rec.commentPh') %>" data-i18n-aria="rec.commentPh"></textarea>
+            <div class="tk-watch__form-acts" hidden>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="commentCancel" data-i18n="common.cancel"><%- t('common.cancel') %></button>
+              <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="rec.commentSend"><%- t('rec.commentSend') %></button>
+            </div>
+          </form>
+          <% } else { %>
+          <a class="tk-btn tk-btn--outline tk-btn--sm tk-watch__login" href="/login?next=<%= nextUrl %>" data-i18n="rec.commentLogin"><%- t('rec.commentLogin') %></a>
+          <% } %>
+
+          <p class="tk-note" id="commentsEmpty"<% if (comments.length || commentsClosed) { %> hidden<% } %><% if (commentsClosed) { %> data-closed="1"<% } %> data-i18n="rec.commentsEmpty"><%- t('rec.commentsEmpty') %></p>
+          <ol class="tk-watch__list" id="commentList"></ol>
+          <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-watch__load" id="commentsMore"<% if (!moreComments) { %> hidden<% } %> data-i18n="rec.commentsMore"><%- t('rec.commentsMore') %></button>
+          <%# Первая порция — данными: ленту рисует один шаблон в tk-watch.js. %>
+          <script type="application/json" id="commentsData"><%- JSON.stringify(comments).replace(/</g, '\\u003c') %></script>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script defer src="<%= asset('/tk-watch.js') %>"></script>
+</body>
+</html>

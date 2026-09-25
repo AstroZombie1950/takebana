@@ -1,8 +1,9 @@
-// Страницы просмотра: запись эфира (/recording/:id) и, с 23.09.2026, видео
-// галереи (/video/:id). У обоих одно и то же: плеер, просмотры, оценки,
-// комментарии, правка названия и описания, удаление, «Смотрите также» —
-// поэтому обработчики одни, а различия собраны в KINDS. Оценки, комментарии
-// и просмотры лежат в общих коллекциях (utils/engagement.js).
+// Страницы просмотра: запись эфира (/recording/:id), с 23.09.2026 видео
+// галереи (/video/:id) и с 25.09.2026 фото галереи (/photo/:id). У всех
+// одно и то же: оценки, комментарии, правка, удаление; у записи и видео
+// ещё плеер, просмотры и «Смотрите также» — поэтому обработчики одни,
+// а различия собраны в KINDS. Оценки, комментарии и просмотры лежат
+// в общих коллекциях (utils/engagement.js).
 //
 // Запись сохраняет завершение эфира (routes/streaming/streams.js), склеивает
 // и выгружает utils/recording.js. Видео принимает страница загрузки
@@ -19,6 +20,7 @@ const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
+const GalleryPhoto = require('../models/GalleryPhoto');
 const RecordingReaction = require('../models/RecordingReaction');
 const RecordingComment = require('../models/RecordingComment');
 const RecordingView = require('../models/RecordingView');
@@ -29,6 +31,7 @@ const { validate } = require('../middleware/validate');
 const { commonDataMiddleware } = require('./streaming/shared');
 const recording = require('../utils/recording');
 const galleryVideo = require('../utils/galleryVideo');
+const galleryPhotos = require('../utils/galleryPhotos');
 const recommend = require('../utils/recommend');
 const userView = require('../utils/userView');
 const { profileUrl } = require('../utils/profileUrl');
@@ -41,15 +44,27 @@ const { TITLE_MAX, DESCRIPTION_MAX } = galleryVideo;
 const COMMENT_MAX = 2000;
 
 // kind — имя в жалобах (models/Report.js), подборке и журнале; i18n —
-// префикс строк страницы (rec.* или video.*); back — куда уйти после удаления.
+// префикс строк страницы (rec.*, video.* или photo.*); back — куда уйти
+// после удаления; view — шаблон страницы; edit — что правит автор.
+//
+// У фото (25.09) нет статуса обработки, просмотров, дизлайка и подборки:
+// лента фото — как в Инстаграме, сердечко и комментарии.
+const TEXT_EDIT = (titleRequired) => ({
+  schema: {
+    title: { type: 'string', required: titleRequired, allowEmpty: !titleRequired, max: TITLE_MAX, label: 'Название' },
+    description: { type: 'string', max: DESCRIPTION_MAX, allowEmpty: true, label: 'Описание' },
+  },
+  set: (body) => ({ title: body.title || '', description: body.description || '' }),
+});
+
 const KINDS = {
   recording: {
     Model: Recording,
     i18n: 'rec',
+    view: 'watch',
     notFound: 'Запись не найдена',
-    // У записи без названия не бывает: его даёт эфир.
-    titleRequired: true,
-    back: (userId) => `/userPage/${userId}#recordings`,
+    edit: TEXT_EDIT(true), // у записи без названия не бывает: его даёт эфир
+    back: (user) => profileUrl(user) + '#recordings',
     // Пока запись склеивается, удалять нечего: файлов ещё нет, а склейка
     // допишет документ.
     busy: (doc) => (doc.status === 'processing' ? 'Запись ещё сохраняется, удалить можно после' : ''),
@@ -60,9 +75,10 @@ const KINDS = {
   video: {
     Model: GalleryVideo,
     i18n: 'video',
+    view: 'watch',
     notFound: 'Видео не найдено',
-    titleRequired: false,
-    back: (userId) => `/userPage/${userId}/gallery`,
+    edit: TEXT_EDIT(false),
+    back: (user) => profileUrl(user) + '/videos',
     // Пока видео пережимается, удалить можно: обработка увидит, что записи
     // нет, и уберёт выгруженное за собой (utils/galleryVideo.js).
     busy: () => '',
@@ -70,7 +86,44 @@ const KINDS = {
     src: (doc) => doc.video.url,
     date: (doc) => doc.createdAt,
   },
+  photo: {
+    Model: GalleryPhoto,
+    i18n: 'photo',
+    view: 'photo',
+    notFound: 'Фото не найдено',
+    photo: true,
+    edit: {
+      schema: { caption: { type: 'string', max: galleryPhotos.CAPTION_MAX, allowEmpty: true, label: 'Подпись' } },
+      set: (body) => ({ caption: body.caption || '' }),
+    },
+    back: (user) => profileUrl(user) + '/photos',
+    busy: () => '',
+    remove: (doc) => galleryPhotos.remove(doc),
+    date: (doc) => doc.createdAt,
+  },
 };
+
+// Фото всегда готово: обрабатывать его нечего.
+const isReady = (K, doc) => K.photo || doc.status === 'ready';
+
+// Соседи фото в ленте человека (новые сверху): «назад» — новее, «вперёд» —
+// старше. Листание на странице фото, стрелками и пальцем.
+async function neighbours(photo) {
+  const q = (cmp, dir) => GalleryPhoto.findOne({ userId: photo.userId._id, createdAt: { [cmp]: photo.createdAt } })
+    .sort({ createdAt: dir }).select('_id').lean();
+  const [newer, older, index, total] = await Promise.all([
+    q('$gt', 1),
+    q('$lt', -1),
+    GalleryPhoto.countDocuments({ userId: photo.userId._id, createdAt: { $gt: photo.createdAt } }),
+    GalleryPhoto.countDocuments({ userId: photo.userId._id }),
+  ]);
+  return {
+    prev: newer ? `/photo/${newer._id}` : '',
+    next: older ? `/photo/${older._id}` : '',
+    n: index + 1,
+    total,
+  };
+}
 
 // Комментарии: 10 в минуту с человека — живому разговору хватает, спам-циклу нет.
 const commentLimiter = rateLimit({
@@ -124,7 +177,7 @@ function mount(kind) {
   // и просмотров. Чужое незаконченное — «нет такого».
   async function readyItem(req, res) {
     const item = await K.Model.findById(req.params.id).select('userId status isAdult title').lean();
-    if (!item || item.status !== 'ready') {
+    if (!item || !isReady(K, item)) {
       res.status(404).json({ message: K.notFound });
       return null;
     }
@@ -156,7 +209,7 @@ function mount(kind) {
       : null;
     const me = req.session.userId;
     const isOwner = !!item && !!item.userId && String(item.userId._id) === String(me);
-    if (!item || !item.userId || (item.status !== 'ready' && !isOwner)) {
+    if (!item || !item.userId || (!isReady(K, item) && !isOwner)) {
       return res.status(404).render('streamNotFound');
     }
     // Видео, которое ещё грузится или ждёт «Опубликовать», живёт на странице загрузки.
@@ -174,31 +227,33 @@ function mount(kind) {
     // для этого зрителя — вместо поля ввода строка почему; гостю — только
     // когда закрыто для всех, иначе ему по-прежнему «Войти».
     const commentsRule = privacy.of(item.userId).comments;
-    const [moderator, mine, comments, related, commentGate] = await Promise.all([
+    const [moderator, mine, comments, related, commentGate, around] = await Promise.all([
       isModerator(req),
       me ? RecordingReaction.findOne({ recordingId: item._id, userId: me }).select('value').lean() : null,
       commentsPage(item._id),
-      recommend.forItem(item, kind, { adultOk: !!(current && current.adultConfirmedAt) }),
+      K.photo ? [] : recommend.forItem(item, kind, { adultOk: !!(current && current.adultConfirmedAt) }),
       me && !isOwner ? privacy.decide('comments', item.userId._id, me) : { ok: me || commentsRule !== 'nobody' },
+      K.photo ? neighbours(item) : null,
     ]);
 
     const displayName = userView.displayName(item.userId);
-    const ready = item.status === 'ready';
-    res.render('watch', {
+    const ready = isReady(K, item);
+    res.render(K.view, {
       kind,
       k: K.i18n,
       base: `/${kind}/${item._id}`,
-      back: K.back(item.userId._id),
+      back: K.back(item.userId),
       rec: item,
       ready,
-      src: ready ? K.src(item) : '',
+      src: ready && K.src ? K.src(item) : '',
+      around,
       at: K.date(item),
       isOwner,
       myReaction: mine ? mine.value : 0,
       comments: comments.slice(0, COMMENTS_PAGE).map((c) => commentView(c, me, item.userId._id, moderator)),
       moreComments: comments.length > COMMENTS_PAGE,
       related,
-      limits: { title: TITLE_MAX, description: DESCRIPTION_MAX, comment: COMMENT_MAX },
+      limits: { title: TITLE_MAX, description: DESCRIPTION_MAX, caption: galleryPhotos.CAPTION_MAX, comment: COMMENT_MAX },
       commentsClosed: commentGate.ok ? '' : commentsRule,
       author: { official: privacy.isOfficial(item.userId), _id: item.userId._id, url: profileUrl(item.userId), displayName, avatarStyle: userView.avatarStyle(item.userId, displayName) },
     });
@@ -207,7 +262,7 @@ function mount(kind) {
   // Просмотр: плеер шлёт его, когда ролик действительно смотрят (tk-watch.js).
   // Раз в сутки на зрителя; свои просмотры автор не накручивает. Гость —
   // хеш адреса и браузера: сам адрес в базе не хранится.
-  router.post(`${path}/view`, checkId, async (req, res) => {
+  if (!K.photo) router.post(`${path}/view`, checkId, async (req, res) => {
     const item = await readyItem(req, res);
     if (!item) return;
     const me = req.session.userId;
@@ -226,9 +281,10 @@ function mount(kind) {
   });
 
   // Оценка: 1 — нравится, -1 — не нравится, 0 — снять. Повтор той же оценки
-  // с клиента приходит как 0 (кнопка отжимается). Дизлайки в ответе — только автору.
+  // с клиента приходит как 0 (кнопка отжимается). Дизлайки в ответе — только
+  // автору. У фото дизлайка нет.
   router.post(`${path}/reaction`, requireAuthApi, requireNotBanned, checkId, validate({
-    value: { type: 'int', required: true, values: [1, -1, 0], label: 'Оценка' },
+    value: { type: 'int', required: true, values: K.photo ? [1, 0] : [1, -1, 0], label: 'Оценка' },
   }), async (req, res) => {
     const item = await readyItem(req, res);
     if (!item) return;
@@ -258,14 +314,12 @@ function mount(kind) {
     });
   });
 
-  // Название и описание — правит автор (и администратор, как у удаления).
-  router.patch(path, requireAuth, checkId, requireOwner(K.Model, { field: 'userId' }), validate({
-    title: { type: 'string', required: K.titleRequired, allowEmpty: !K.titleRequired, max: TITLE_MAX, label: 'Название' },
-    description: { type: 'string', max: DESCRIPTION_MAX, allowEmpty: true, label: 'Описание' },
-  }), async (req, res) => {
-    const set = { title: req.body.title || '', description: req.body.description || '' };
+  // Название и описание (у фото — подпись) — правит автор (и администратор,
+  // как у удаления).
+  router.patch(path, requireAuth, checkId, requireOwner(K.Model, { field: 'userId' }), validate(K.edit.schema), async (req, res) => {
+    const set = K.edit.set(req.body);
     await K.Model.updateOne({ _id: req.resource._id }, { $set: set });
-    audit(req, `${kind}.edit`, { targetType: kind, target: req.resource, meta: { title: set.title } });
+    audit(req, `${kind}.edit`, { targetType: kind, target: req.resource, meta: set.title !== undefined ? { title: set.title } : {} });
     res.json({ success: true, ...set });
   });
 

@@ -140,8 +140,8 @@
               <span class="tk-prof__num"><%= recordings.length %></span>
               <span class="tk-prof__lbl" data-i18n="user.recordingsStat"><%- t('user.recordingsStat') %></span>
             </a>
-            <a href="<%= user.url %>/gallery" class="tk-prof__stat">
-              <span class="tk-prof__num" data-gallery-count><%= shotsCount %></span>
+            <a href="#gallery" class="tk-prof__stat">
+              <span class="tk-prof__num"><%= counts.photos + counts.videos %></span>
               <span class="tk-prof__lbl" data-i18n="user.gallery"><%- t('user.gallery') %></span>
             </a>
             <% } %>
@@ -274,31 +274,60 @@
         <% } %>
       </section>
 
-      <!-- Фото и видео: начало ленты (utils/gallery.js), целиком — на
-           /@ник/gallery. Плитка — partials/galleryTile.ejs,
-           поведение — public/gallery.js. -->
+      <!-- Галерея — вкладками «Фото» и «Видео» (решение заказчика 25.09.2026):
+           начало каждой, целиком — на /@ник/photos и /@ник/videos. Фото —
+           partials/galleryPhoto.ejs, видео — partials/galleryVideo.ejs,
+           переключение и ролики в работе — public/gallery.js. -->
       <section class="tk-prof__gal" id="gallery"<% if (isSelf) { %> data-own<% } %>>
         <div class="tk-prof__gal-head">
-          <h2 class="tk-prof__gal-title"><a href="<%= user.url %>/gallery" class="tk-kicker" data-i18n="user.gallery"><%- t('user.gallery') %></a></h2>
-          <span class="tk-note" id="galleryCount"><%= shotsCount %></span>
+          <h2 class="tk-kicker tk-prof__gal-title" data-i18n="user.gallery"><%- t('user.gallery') %></h2>
         </div>
 
-        <div class="tk-shots" id="galleryShots">
-          <% shots.forEach(function (item, i) { %><%- include('partials/galleryTile', { item: item, n: i + 1, owner: user.displayName, isSelf: isSelf }) %><% }); %>
+        <%# Вкладки — кнопками: обе уже на странице, переключение без перехода.
+            Какая открыта — помнит адрес (#photos, #videos). %>
+        <div class="tk-tabs tk-tabs--gal" role="tablist">
+          <% [['photos', 'gallery.photos', counts.photos], ['videos', 'gallery.videos', counts.videos]].forEach(function (tb, i) { %>
+          <button type="button" class="tk-tabs__item<%= i === 0 ? ' tk-tabs__item--on' : '' %>" role="tab" id="galTab-<%= tb[0] %>" aria-controls="galPane-<%= tb[0] %>" aria-selected="<%= i === 0 %>" data-gal-tab="<%= tb[0] %>">
+            <span data-i18n="<%= tb[1] %>"><%- t(tb[1]) %></span><span class="tk-tabs__num"><%= tb[2] %></span>
+          </button>
+          <% }); %>
         </div>
-        <p class="tk-note tk-note--center" id="galleryEmpty" data-i18n="user.galleryEmpty"<% if (shots.length) { %> hidden<% } %>><%- t('user.galleryEmpty') %></p>
 
-        <%# Под снимками, по центру: «Все» — если в превью влезло не всё;
-            «Добавить» ведёт на страницу загрузки (/upload, 21.09) — там
-            выбор файлов, докачка, правка видео и «Опубликовать». %>
-        <% if (shotsMore || isSelf) { %>
+        <div class="tk-gal__pane" role="tabpanel" id="galPane-photos" aria-labelledby="galTab-photos">
+          <% if (photos.length) { %>
+          <div class="tk-pics">
+            <% photos.forEach(function (p, i) { %><%- include('partials/galleryPhoto', { p: p, n: i + 1, owner: user.displayName }) %><% }); %>
+          </div>
+          <% } else { %>
+          <p class="tk-note tk-note--center" data-i18n="gallery.photosEmpty"><%- t('gallery.photosEmpty') %></p>
+          <% } %>
+          <% if (counts.photos > preview.photos) { %>
+          <div class="tk-prof__gal-add">
+            <a href="<%= user.url %>/photos" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.allPhotos" data-i18n-vars='<%= JSON.stringify({ n: counts.photos }) %>'><%- t('gallery.allPhotos', { n: counts.photos }) %></a>
+          </div>
+          <% } %>
+        </div>
+
+        <div class="tk-gal__pane" role="tabpanel" id="galPane-videos" aria-labelledby="galTab-videos" hidden>
+          <% if (videos.length) { %>
+          <div class="tk-recs">
+            <% videos.forEach(function (v) { %><%- include('partials/galleryVideo', { v: v }) %><% }); %>
+          </div>
+          <% } else { %>
+          <p class="tk-note tk-note--center" data-i18n="gallery.videosEmpty"><%- t('gallery.videosEmpty') %></p>
+          <% } %>
+          <% if (counts.videosListed > preview.videos) { %>
+          <div class="tk-prof__gal-add">
+            <a href="<%= user.url %>/videos" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.allVideos" data-i18n-vars='<%= JSON.stringify({ n: counts.videos }) %>'><%- t('gallery.allVideos', { n: counts.videos }) %></a>
+          </div>
+          <% } %>
+        </div>
+
+        <%# «Добавить» — под обеими вкладками, по центру: ведёт на страницу
+            загрузки (/upload), там и фото с подписью, и видео. %>
+        <% if (isSelf) { %>
         <div class="tk-prof__gal-add">
-          <% if (shotsMore) { %>
-          <a href="<%= user.url %>/gallery" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.all" data-i18n-vars='<%= JSON.stringify({ n: shotsCount }) %>'><%- t('gallery.all', { n: shotsCount }) %></a>
-          <% } %>
-          <% if (isSelf) { %>
-          <a href="/upload" class="tk-btn tk-btn--outline tk-btn--xs" id="galleryAdd" data-i18n="user.galleryAdd"><%- t('user.galleryAdd') %></a>
-          <% } %>
+          <a href="/upload" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="user.galleryAdd"><%- t('user.galleryAdd') %></a>
         </div>
         <% } %>
       </section>

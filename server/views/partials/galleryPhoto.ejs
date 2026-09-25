@@ -1,0 +1,15 @@
+<%#
+  Плитка фото — квадратом, как в Инстаграме (решение заказчика 25.09.2026).
+  Ведёт на страницу фото /photo/:id: снимок, подпись, «нравится»,
+  комментарии, листание к соседним. Поверх — сколько лайков и комментариев
+  (на компьютере — при наведении, на телефоне не видно).
+  Параметры: p — фото (utils/gallery.js), n — номер для подписи,
+  owner — имя хозяина для alt (поиск по картинкам).
+%>
+<a class="tk-pic" href="/photo/<%= p._id %>" aria-label="<%= p.caption ? p.caption.slice(0, 100) : ta('user.photoN', { n: n }) %>"<% if (!p.caption) { %> data-i18n-aria="user.photoN" data-i18n-vars='{"n": <%= n %>}'<% } %>>
+  <img src="<%= p.url %>" alt="<%= p.caption ? p.caption.slice(0, 125) : ta('user.photoOf', { name: owner, n: n }) %>" loading="lazy" decoding="async">
+  <span class="tk-pic__stats" aria-hidden="true">
+    <span><svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 20.5l-1.4-1.3C5.4 14.5 2 11.4 2 7.6 2 4.5 4.4 2 7.5 2c1.7 0 3.4.8 4.5 2.1C13.1 2.8 14.8 2 16.5 2 19.6 2 22 4.5 22 7.6c0 3.8-3.4 6.9-8.6 11.6z" fill="currentColor"/></svg><%= num(p.likes || 0) %></span>
+    <span><svg viewBox="0 0 24 24" width="16" height="16"><path d="M3.5 4.5h17v12h-11l-6 4z" fill="currentColor"/></svg><%= num(p.comments || 0) %></span>
+  </span>
+</a>

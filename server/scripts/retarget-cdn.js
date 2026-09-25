@@ -40,6 +40,7 @@ const TARGETS = [
   { collection: 'messages', array: 'attachments', keys: ['url', 'preview'] },
   { collection: 'recordings', scalar: ['video.url', 'thumb.url', 'hls.url'] },
   { collection: 'galleryvideos', scalar: ['video.url', 'poster.url'] },
+  { collection: 'galleryphotos', scalar: ['url'] },
 ];
 
 function die(message) {

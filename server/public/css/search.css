@@ -40,51 +40,7 @@
   color: var(--tk-beige);
 }
 
-/* ── Вкладки ──────────────────────────────────────────────────────────────
- * Активная помечена киноварной линейкой снизу — тем же приёмом, что раздел
- * в левой панели. Ниже 640 строка вкладок прокручивается вбок сама, чтобы
- * не переносить их в два этажа и не растить шапку страницы.
- */
-.tk-tabs {
-  display: flex;
-  gap: 4px;
-  margin: 28px 0 0;
-  border-bottom: 1px solid var(--tk-rule);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.tk-tabs::-webkit-scrollbar { display: none; }
-
-.tk-tabs__item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  font-family: Oswald, sans-serif;
-  font-size: 14px;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--tk-beige);
-  transition: color .18s ease, border-color .18s ease;
-}
-
-.tk-tabs__item:hover { color: var(--tk-paper); }
-
-.tk-tabs__item--on {
-  border-bottom-color: var(--tk-accent);
-  color: var(--tk-paper);
-}
-
-.tk-tabs__num {
-  font-size: 12px;
-  color: var(--tk-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.tk-tabs__item--on .tk-tabs__num { color: var(--tk-accent); }
+/* Вкладки (.tk-tabs) — в profile.css: ими пользуются и галерея профиля. */
 
 /* ── Группа результатов ── */
 .tk-search__sec { margin-top: 40px; }

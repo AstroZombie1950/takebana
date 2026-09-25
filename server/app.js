@@ -111,13 +111,17 @@ const options = readTlsOptions();
 // HLS, который пишет ffmpeg (utils/hls.js). На проде его отдаёт nginx с диска
 // и сюда запросы не доходят; здесь — для локального запуска, с теми же
 // заголовками кэша и CORS, что в ops/nginx/takebana.conf.
-app.use('/live', express.static(HLS_ROOT, {
+// /lf/live — тот же HLS для тех, кому закрыт CDN (utils/mediaFallback.js);
+// потолок скорости у него только в nginx.
+const liveStatic = express.static(HLS_ROOT, {
   index: false,
   setHeaders(res, file) {
     res.setHeader('Cache-Control', file.endsWith('.m3u8') ? 'public, max-age=1' : 'public, max-age=3600');
     res.setHeader('Access-Control-Allow-Origin', '*');
   },
-}));
+});
+app.use('/live', liveStatic);
+app.use('/lf/live', liveStatic);
 // Подложка карты заведений — плитки, шрифты, значки (ops/basemap/fetch.sh).
 // На проде, как и /live, её отдаёт nginx; здесь — для локального запуска.
 app.use('/basemap', express.static(path.join(__dirname, 'media', 'basemap'), { index: false, maxAge: '1d' }));
@@ -248,10 +252,16 @@ require('./jobs/streamCleanup').startStreamCleanup();
 require('./utils/recording').sweep();
 // Видео галереи, чьё пережатие оборвал перезапуск, — в «не вышло».
 require('./utils/galleryVideo').sweep();
+// Фото галереи из строк User.gallery — в документы (25.09.2026), один раз.
+require('./utils/galleryPhotos').start();
 // Готовые записи без нескольких качеств — в очередь пережатия (utils/recordingHls.js).
 require('./utils/recordingHls').resume();
 // Файл замера для страницы /check — на диск и в хранилище CDN записей.
 require('./utils/netCheck').prepare();
+// Трафик сервера за месяц против лимита тарифа — «Система» в панели.
+require('./utils/traffic').start();
+// Камеры заведений, начавшие вещать до перезапуска, — снова в HLS.
+require('./utils/venueCam').resume();
 // Аккаунтам, заведённым до ников (18.09.2026), — ник из имени или почты.
 require('./utils/nickname').ensureAll(require('./models/User')).catch((e) => require('./utils/errorLog').server(e, 'nickname.ensureAll'));
 // Почта аккаунтов, заведённых до 24.09.2026, — в нижний регистр.

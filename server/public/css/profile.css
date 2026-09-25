@@ -348,6 +348,68 @@
   margin-top: 18px;
 }
 
+/* ── Вкладки: поиск, галерея профиля и её страницы ─────────────────────────
+ * Здесь, а не в search.css: галерея (25.09.2026) их тоже берёт, а profile.css
+ * подключают все три страницы. Активная помечена киноварной линейкой снизу — тем же приёмом, что раздел
+ * в левой панели. Ниже 640 строка вкладок прокручивается вбок сама, чтобы
+ * не переносить их в два этажа и не растить шапку страницы.
+ */
+.tk-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 28px 0 0;
+  border-bottom: 1px solid var(--tk-rule);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tk-tabs::-webkit-scrollbar { display: none; }
+
+.tk-tabs__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.tk-tabs__item:hover { color: var(--tk-paper); }
+
+.tk-tabs__item--on {
+  border-bottom-color: var(--tk-accent);
+  color: var(--tk-paper);
+}
+
+.tk-tabs__num {
+  font-size: 12px;
+  color: var(--tk-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-tabs__item--on .tk-tabs__num { color: var(--tk-accent); }
+
+/* Вкладка-кнопка (галерея в профиле переключается без перехода). */
+button.tk-tabs__item {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+button.tk-tabs__item.tk-tabs__item--on { border-bottom-color: var(--tk-accent); }
+
+/* Галерея: вкладки сразу под заголовком, отступ до содержимого — у панели
+ * (профиль) или у самих вкладок (страница вкладки). */
+.tk-tabs--gal { margin: 0; }
+.tk-gal > .tk-tabs--gal { margin-bottom: 24px; }
+
 /* ── Записи эфиров ── */
 .tk-recs {
   display: grid;

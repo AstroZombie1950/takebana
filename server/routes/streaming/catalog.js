@@ -184,12 +184,15 @@ async function byNick(req, res, select) {
   return null;
 }
 
-router.get(['/userPage/:id', '/userPage/:id/gallery'], commonDataMiddleware, async (req, res) => {
+// Старые адреса профиля и галереи. /gallery — общая лента до 25.09.2026,
+// теперь её место заняла вкладка «Фото».
+router.get(['/userPage/:id', '/userPage/:id/:tab(gallery|photos|videos)'], commonDataMiddleware, async (req, res) => {
   const user = /^[a-f\d]{24}$/i.test(req.params.id) ? await User.findById(req.params.id).select('nickname').lean() : null;
   // Без ника — «не найдено», а не 301 на самого себя.
   if (!user || !user.nickname) return notFound(req, res);
   const qs = req.originalUrl.indexOf('?');
-  res.redirect(301, profileUrl(user) + (req.path.endsWith('/gallery') ? '/gallery' : '') + (qs === -1 ? '' : req.originalUrl.slice(qs)));
+  const tab = req.params.tab === 'videos' ? '/videos' : req.params.tab ? '/photos' : '';
+  res.redirect(301, profileUrl(user) + tab + (qs === -1 ? '' : req.originalUrl.slice(qs)));
 });
 
 router.get('/@:nick', commonDataMiddleware, async (req, res) => {
@@ -250,9 +253,12 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
     .sort({ createdAt: -1 })
     .select('title status duration thumb isAdult createdAt views')
     .lean();
-  // Фото и видео одной лентой (utils/gallery.js): в профиле — начало,
-  // целиком — на /@ник/gallery. Владельцу видны и ролики в работе.
-  const shots = restricted ? { list: [], count: 0 } : await gallery.feed(user, isSelf);
+  // Галерея — вкладками «Фото» и «Видео» (utils/gallery.js): в профиле —
+  // начало каждой, целиком — на /@ник/photos и /@ник/videos. Владельцу
+  // видны и ролики в работе.
+  const [photos, videos, counts] = restricted
+    ? [[], [], { photos: 0, videos: 0, videosListed: 0 }]
+    : await Promise.all([gallery.photos(userId), gallery.videos(userId, isSelf), gallery.counts(userId, isSelf)]);
 
   res.locals.pageOwner = { id: String(userId), scope: 'profile', access: restricted ? 'them' : iRestricted ? 'me' : '' };
 
@@ -262,7 +268,7 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
   // меня в поиске» касается только поиска по сайту и подборок — не
   // поисковиков (решение Ивана 25.09.2026: убрать из Google можно руками).
   const indexable = !user.banned
-    && (!!activeStream || shots.count > 0 || recordings.some((r) => r.status === 'ready'));
+    && (!!activeStream || counts.photos + counts.videos > 0 || recordings.some((r) => r.status === 'ready'));
 
   // Передача данных в шаблон
   res.render('userPage', {
@@ -270,9 +276,10 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
     // Карточка для мессенджеров с CDN или null — общая обложка (utils/ogImage.js).
     ogImage: ogImage.forProfile(user),
     recordings,
-    shots: shots.list.slice(0, gallery.PREVIEW),
-    shotsMore: shots.list.length > gallery.PREVIEW,
-    shotsCount: shots.count,
+    photos,
+    videos,
+    counts,
+    preview: gallery.PREVIEW,
     restricted,
     iRestricted,
     inContacts,
@@ -304,41 +311,53 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
     }
   });
 });
-// Вся галерея человека: фото и видео одной лентой, новые сверху, по
-// gallery.PAGE на страницу (?page=N). Ограничение доступа — как у профиля.
-router.get('/@:nick/gallery', commonDataMiddleware, async (req, res) => {
-  const user = await byNick(req, res, 'nickname login email avatar gallery banned');
+// Прежняя общая лента — на вкладку «Фото», с тем же номером страницы.
+router.get('/@:nick/gallery', (req, res) => {
+  const qs = req.originalUrl.indexOf('?');
+  res.redirect(301, `/@${req.params.nick}/photos` + (qs === -1 ? '' : req.originalUrl.slice(qs)));
+});
+
+// Вкладка галереи целиком: фото сеткой или видео карточками, новые сверху,
+// по gallery.PAGE на страницу (?page=N). Ограничение доступа — как у профиля.
+router.get('/@:nick/:tab(photos|videos)', commonDataMiddleware, async (req, res) => {
+  const tab = req.params.tab;
+  const user = await byNick(req, res, 'nickname login email avatar banned');
   if (!user) return;
   const userId = String(user._id);
 
   const me = req.session.userId;
-  const isSelf = String(userId) === String(me);
+  const isSelf = userId === String(me);
   const restricted = !!me && !isSelf && await restriction.isRestricted(userId, me);
-  res.locals.pageOwner = { id: String(userId), scope: 'profile', access: restricted ? 'them' : '' };
+  res.locals.pageOwner = { id: userId, scope: 'profile', access: restricted ? 'them' : '' };
 
-  const shots = restricted ? { list: [], count: 0 } : await gallery.feed(user, isSelf);
-  // У каждой страницы листалки один адрес: ?page=1 — это сама галерея,
+  const counts = restricted ? { photos: 0, videos: 0, videosListed: 0 } : await gallery.counts(userId, isSelf);
+  const total = tab === 'photos' ? counts.photos : counts.videosListed;
+  // У каждой страницы листалки один адрес: ?page=1 — это сама вкладка,
   // номер за пределами или не число — «не найдено», а не последняя
   // страница под чужим адресом.
   const asked = req.query.page;
-  const pg = gallery.page(shots.list, parseInt(asked, 10));
+  const pg = gallery.page(total, parseInt(asked, 10));
+  const base = `${profileUrl(user)}/${tab}`;
   if (asked !== undefined) {
-    if (asked === '1') return res.redirect(301, `${profileUrl(user)}/gallery`);
+    if (asked === '1') return res.redirect(301, base);
     if (asked !== String(pg.page) || pg.page === 1) return notFound(req, res);
   }
-  const displayName = userView.displayName(user);
+  const range = { skip: pg.skip, limit: gallery.PAGE };
+  const items = restricted ? [] : tab === 'photos' ? await gallery.photos(userId, range) : await gallery.videos(userId, isSelf, range);
+
   res.render('gallery', {
-    owner: { _id: user._id, displayName, url: profileUrl(user) },
+    tab,
+    owner: { _id: user._id, displayName: userView.displayName(user), url: profileUrl(user) },
     isSelf,
     restricted,
-    // Не больше gallery.PREVIEW — всё уже есть в профиле, страница-дубль.
-    indexable: !user.banned && shots.count > gallery.PREVIEW,
-    shots: pg.items,
-    count: shots.count,
+    // Не больше того, что уже есть в профиле, — страница-дубль, вне индекса.
+    indexable: !user.banned && total > gallery.PREVIEW[tab],
+    items,
+    counts,
     page: pg.page,
     pages: pg.pages,
     // Номер первой плитки страницы — для подписей «Фото N».
-    offset: (pg.page - 1) * gallery.PAGE,
+    offset: pg.skip,
   });
 });
 

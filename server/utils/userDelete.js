@@ -143,8 +143,9 @@ async function removeUser(user, io) {
 
   unlinkUpload(user.avatar, 'avatars');
   if (user.ogCard && user.ogCard.key) await storage.remove(user.ogCard.key).catch(() => {});
-  // Фото галереи — из Bunny и из папки на сервере (загруженные до переезда).
-  await galleryPhotos.removeAll(idStr, user.gallery);
+  // Фото галереи — из Bunny и из папки на сервере (загруженные до переезда),
+  // с комментариями и оценками под ними.
+  await galleryPhotos.removeAll(idStr);
 
   await User.deleteOne({ _id: id });
   forget(idStr);

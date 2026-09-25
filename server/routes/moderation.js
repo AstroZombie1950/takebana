@@ -16,6 +16,7 @@ const { stopCamera } = require('./venueLive');
 const ChatMessage = require('../models/ChatMessage');
 const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
+const GalleryPhoto = require('../models/GalleryPhoto');
 const RecordingComment = require('../models/RecordingComment');
 const liveSignal = require('../utils/liveSignal');
 
@@ -26,6 +27,7 @@ const TARGET_MODELS = {
     message: ChatMessage,
     recording: Recording,
     video: GalleryVideo,
+    photo: GalleryPhoto,
     comment: RecordingComment,
 };
 
@@ -74,7 +76,7 @@ router.param('id', (req, res, next, id) => (
 ));
 
 const REASONS = ['spam', 'abuse', 'adult', 'violence', 'copyright', 'other'];
-const TARGETS = ['stream', 'user', 'message', 'recording', 'video', 'comment'];
+const TARGETS = ['stream', 'user', 'message', 'recording', 'video', 'photo', 'comment'];
 
 // ── Подача жалобы ────────────────────────────────────────────────────────────
 //

@@ -24,7 +24,8 @@ var commentInput = document.getElementById('reportComment');
 var sendButton = document.getElementById('sendReport');
 
 var KINDS = { stream: 'report.onStream', user: 'report.onUser', message: 'report.onMessage',
-              recording: 'report.onRecording', video: 'report.onVideo', comment: 'report.onComment' };
+              recording: 'report.onRecording', video: 'report.onVideo', photo: 'report.onPhoto',
+              comment: 'report.onComment' };
 
 var current = null;
 

@@ -1,16 +1,10 @@
-<%# Окно просмотра фото: профиль (и аватар в нём) и страница галереи.
-    Поведение — public/gallery.js, вид — css/lightbox.css. %>
+<%# Окно просмотра аватара в профиле. Фото галереи с 25.09.2026 открываются
+    своей страницей /photo/:id. Поведение — public/gallery.js, вид —
+    css/lightbox.css. %>
 <div id="lightbox" class="tk-lightbox hidden">
   <button type="button" class="tk-lightbox__btn tk-lightbox__close" id="lightboxClose" aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
   </button>
-  <button type="button" class="tk-lightbox__btn tk-lightbox__prev" id="lightboxPrev" aria-label="<%= ta('user.photoPrev') %>" data-i18n-aria="user.photoPrev">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
-  </button>
-  <button type="button" class="tk-lightbox__btn tk-lightbox__next" id="lightboxNext" aria-label="<%= ta('user.photoNext') %>" data-i18n-aria="user.photoNext">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
-  </button>
-  <span class="tk-lightbox__count" id="lightboxCounter">1 / 1</span>
   <%# Без src: пустая строка — это адрес текущей страницы, браузер честно идёт
       за ней и получает битую картинку. Адрес подставляет gallery.js при открытии. %>
   <img id="lightboxImg" alt="">

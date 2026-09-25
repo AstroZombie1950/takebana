@@ -1,23 +1,15 @@
-// Свой приём видео: MediaMTX рядом с приложением (ops/mediamtx/).
+// Свой приёмник видео: MediaMTX рядом с приложением (ops/mediamtx/).
 //
-// Зачем. Камера заведения была комнатой Daily на двоих: вещатель отдавал
-// картинку каждому зрителю отдельно, и каждая его минута стоила денег.
-// Расчёт 23.09 по нашему калькулятору: двадцать камер по шесть часов
-// в день — $18 144 в месяц против $864, если камера становится потоком,
-// а поток принимаем мы сами. Мост через Daily (его выход RTMP) не годится:
-// он стоит $1,14 в час независимо от числа зрителей, то есть на старте,
-// с десятком зрителей, выходит дороже нынешнего.
-//
-// Как устроено. Браузер заведения отдаёт картинку по WHIP (это обычный
-// RTCPeerConnection и один POST с SDP), MediaMTX раздаёт её по WHEP
-// и, когда зрителей станет больше, чем тянет наш канал, — по HLS.
-// Перекодирования нет ни в одном из путей: браузер отдаёт H.264 сразу
-// в нужном виде, и двадцать камер не упираются в процессор.
+// Камера заведения была комнатой Daily: каждая минута каждого зрителя
+// стоила денег. С 23.09 заведение вещает по WHIP сюда. С 25.09 (вариант А,
+// utils/venueCam.js) MediaMTX — только приёмник: зрителям он не отдаёт
+// ничего, поток с петли забирает наш ffmpeg и режет HLS для Bunny. Наш
+// канал (16 ТБ в месяц) на раздачу не тратится.
 //
 // Права. MediaMTX сам никого не знает, поэтому на каждое подключение
 // спрашивает нас (authHTTPAddress → routes/venueLive.js, /api/mtx/auth).
-// Разрешение — одноразовый ключ на пять минут, выданный владельцу
-// на публикацию или гостю на просмотр.
+// Вещать — одноразовый ключ на пять минут, выданный владельцу. Читать —
+// только нашему ffmpeg по RTSP с петли.
 
 const errorLog = require('./errorLog');
 const { randomBytes } = require('crypto');
@@ -44,7 +36,7 @@ function sweep() {
   for (const [key, grant] of keys) if (grant.expires < now) keys.delete(key);
 }
 
-// Разрешение на одно подключение: публиковать (владелец) или смотреть (гость).
+// Разрешение на одно подключение: публиковать (владелец).
 function grant(path, action, userId) {
   sweep();
   const key = randomBytes(16).toString('hex');
@@ -69,32 +61,26 @@ function url(path, kind, key) {
   return `${process.env.MTX_PUBLIC.replace(/\/$/, '')}/${path}/${kind}?key=${key}`;
 }
 
-// Состояние потока в MediaMTX: идёт ли он и сколько человек смотрит.
-// Ошибку не поднимаем выше: камера не должна ломаться из-за того, что
-// не ответил счётчик.
-async function state(path) {
-  if (!configured()) return { live: false, readers: 0 };
+// Откуда ffmpeg забирает поток: RTSP слушает только петлю (ops/mediamtx/).
+const readUrl = (path) => `rtsp://127.0.0.1:8554/${path}`;
+
+// Какие камеры сейчас вещают — после перезапуска приложения (venueCam.resume).
+// ready — у MediaMTX 1.21 это «поток можно читать».
+async function livePaths() {
+  if (!configured()) return [];
   try {
-    const res = await fetch(`${process.env.MTX_API.replace(/\/$/, '')}/v3/paths/get/${encodeURIComponent(path)}`, {
-      signal: AbortSignal.timeout(3000),
-    });
-    if (res.status === 404) return { live: false, readers: 0 };
+    const res = await fetch(`${process.env.MTX_API.replace(/\/$/, '')}/v3/paths/list`, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    // ready появляется на секунду позже, чем подключился вещатель: приёмник
-    // ждёт, пока соберутся дорожки. Для «идёт ли камера» довольно и того,
-    // что источник уже есть, — иначе гость, нажавший «смотреть» сразу
-    // за включением, получал бы «камера выключена».
-    return { live: !!(data.ready || data.source), readers: Array.isArray(data.readers) ? data.readers.length : 0 };
+    const { items } = await res.json();
+    return (items || []).filter((p) => p.ready && /^venue_/.test(p.name)).map((p) => p.name);
   } catch (e) {
-    errorLog.external(e, 'mediamtx.state', { path });
-    return { live: false, readers: 0, unknown: true };
+    errorLog.external(e, 'mediamtx.livePaths');
+    return [];
   }
 }
 
-// Выключить камеру: закрываем того, кто вещает, — вместе с ним отваливаются
-// и зрители. Нужно, когда владелец нажал «выключить» не на той вкладке,
-// откуда вещал.
+// Выключить камеру: закрываем того, кто вещает. Нужно, когда владелец
+// нажал «выключить» не на той вкладке, откуда вещал, и при бане.
 async function kick(path) {
   if (!configured()) return;
   try {
@@ -110,4 +96,4 @@ async function kick(path) {
   }
 }
 
-module.exports = { configured, pathOf, grant, allowed, url, state, kick };
+module.exports = { configured, pathOf, grant, allowed, url, readUrl, livePaths, kick };

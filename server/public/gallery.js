@@ -1,218 +1,110 @@
-/* Галерея: превью в профиле (userPage.ejs) и страница /userPage/:id/gallery
- * (gallery.ejs). Плитки — partials/galleryTile.ejs. Здесь — крестик
- * владельца, ролики в работе и окно просмотра фото (и аватара в профиле).
- * До 23.09.2026 жило в profile.js; видео тогда открывалось в окне, теперь
- * у него своя страница /video/:id.
+/* Галерея: вкладки «Фото» и «Видео» в профиле (userPage.ejs) и страницы
+ * /@ник/photos и /@ник/videos (gallery.ejs). Разметка — partials/galleryPhoto
+ * и partials/galleryVideo. Здесь — переключение вкладок профиля, ролики
+ * владельца в работе и окно просмотра аватара.
+ *
+ * С 25.09.2026 фото открывается своей страницей /photo/:id (подпись,
+ * «нравится», комментарии, листание), а удаляют фото и видео на их
+ * страницах — крестиков на плитках больше нет.
  */
 
 document.addEventListener('DOMContentLoaded', function () {
-  // Подписи — из общего словаря (public/tk-i18n.js).
-  var pt = function (key, vars) { return window.t ? window.t(key, vars) : ''; };
+  // ── Вкладки профиля ─────────────────────────────────────────────────────
+  // Обе вкладки уже на странице. Открытая — в адресе (#photos, #videos):
+  // «назад» со страницы видео возвращает на ту же вкладку.
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-gal-tab]'));
+  var pick = function (name, remember) {
+    tabs.forEach(function (b) {
+      var on = b.getAttribute('data-gal-tab') === name;
+      b.classList.toggle('tk-tabs__item--on', on);
+      b.setAttribute('aria-selected', String(on));
+      document.getElementById(b.getAttribute('aria-controls')).hidden = !on;
+    });
+    if (remember) history.replaceState(null, '', '#' + name);
+  };
+  if (tabs.length) {
+    tabs.forEach(function (b) {
+      b.addEventListener('click', function () { pick(b.getAttribute('data-gal-tab'), true); });
+    });
+    if (location.hash === '#videos' || location.hash === '#photos') {
+      pick(location.hash.slice(1), false);
+      document.getElementById('gallery').scrollIntoView();
+    }
+  }
 
-  // ── Своя галерея: удаление и ролики в работе ───────────────────────────
-  // Добавляют со страницы загрузки (/upload, public/upload.js): «Добавить»
-  // ведёт туда. Здесь — удаление и то, что ещё в работе: загружается
-  // (проценты приходят от фоновой загрузки, public/tk-upload.js),
+  // ── Свои ролики в работе ────────────────────────────────────────────────
+  // Грузится (проценты приходят от фоновой загрузки, public/tk-upload.js),
   // ждёт публикации, пережимается.
   var gallery = document.getElementById('gallery');
   if (gallery && gallery.hasAttribute('data-own')) {
-    var shots = document.getElementById('galleryShots');
-    var countEl = document.getElementById('galleryCount');
-    var empty = document.getElementById('galleryEmpty');
+    var card = function (id) { return gallery.querySelector('.tk-recard[data-video-id="' + CSS.escape(id) + '"]'); };
+    var state = function (el) { return el.querySelector('.tk-recard__state'); };
 
-    var json = function (url, options) {
-      options.headers = { Accept: 'application/json' };
-      return fetch(url, options).then(function (r) {
-        return r.json().catch(function () { return {}; }).then(function (d) {
-          if (!r.ok || d.success === false) throw new Error(d.message || 'HTTP ' + r.status);
-          return d;
-        });
-      });
-    };
-
-    // Счётчик — то, что можно смотреть: без роликов, которые ещё грузятся,
-    // пережимаются или не вышли. Плиток на экране меньше (превью, страница
-    // ленты), поэтому число не пересчитывается, а сдвигается.
-    var ready = function (el) { return !/ is-/.test(' ' + el.className); };
-    var bump = function (d) {
-      var n = String(Math.max(0, (Number(countEl.textContent) || 0) + d));
-      countEl.textContent = n;
-      // И счётчик в полосе шапки профиля (views/userPage.ejs).
-      document.querySelectorAll('[data-gallery-count]').forEach(function (el) { el.textContent = n; });
-      empty.hidden = shots.children.length > 0;
-    };
-
-    var PLAY = '<span class="tk-shot__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5.5v13L20 12z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>';
-    var clock = function (s) { s = Math.round(s || 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
-
-    var videoInner = function (v) {
+    // Ролик готов или не вышел — карточка без перезагрузки страницы.
+    var paint = function (el, v) {
+      el.className = 'tk-recard' + (v.status !== 'ready' ? ' is-' + v.status : '');
+      el.href = '/video/' + encodeURIComponent(v.id);
+      var thumb = el.querySelector('.tk-recard__thumb');
       if (v.status === 'ready') {
-        return '<a class="tk-shot tk-shot--video" href="/video/' + encodeURIComponent(v.id) + '" aria-label="' + escapeHtml(pt('user.videoPlay')) + '">' +
-          (v.thumb ? '<img src="' + escapeHtml(v.thumb) + '" alt="" loading="lazy" decoding="async">' : '') + PLAY +
-          '<span class="tk-shot__len">' + clock(v.duration) + '</span></a>';
+        if (v.thumb && !thumb.querySelector('img')) thumb.insertAdjacentHTML('afterbegin', '<img src="' + escapeHtml(v.thumb) + '" alt="">');
+        var s = Math.round(v.duration || 0);
+        state(el).outerHTML = '<span class="tk-recard__len">' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '</span>';
+        return;
       }
-      var key = v.status === 'failed' ? (v.error === 'long' ? 'user.videoLong' : 'user.videoFailed') : 'user.videoProcessing';
-      return '<div class="tk-shot tk-shot--state"><span data-i18n="' + key + '">' + escapeHtml(pt(key)) + '</span></div>';
-    };
-
-    var paintVideo = function (el, v) {
-      var was = ready(el);
-      el.className = 'tk-shots__item' + (v.status !== 'ready' ? ' is-' + v.status : '');
-      el.firstElementChild.outerHTML = videoInner(v);
-      bump(ready(el) - was);
+      window.tkText(state(el), v.status === 'failed' ? (v.error === 'long' ? 'user.videoLong' : 'user.videoFailed') : 'user.videoProcessing');
     };
 
     // Пока ролик пережимается — спрашиваем раз в 4 секунды.
     var watch = function (el, id) {
       setTimeout(function () {
         if (!el.isConnected) return;
-        json('/profile/gallery/video/' + encodeURIComponent(id), { method: 'GET' })
+        fetch('/profile/gallery/video/' + encodeURIComponent(id), { headers: { Accept: 'application/json' } })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
           .then(function (d) {
             if (d.video.status === 'processing') return watch(el, id);
-            paintVideo(el, d.video);
+            paint(el, d.video);
           })
           .catch(function () { watch(el, id); });
       }, 4000);
     };
-    shots.querySelectorAll('.tk-shots__item.is-processing[data-video-id]').forEach(function (el) {
+    gallery.querySelectorAll('.tk-recard.is-processing[data-video-id]').forEach(function (el) {
       watch(el, el.getAttribute('data-video-id'));
     });
 
-    // Фоновая загрузка сообщает проценты с любой страницы (tk-upload.js).
-    // Доехало и опубликовано — дальше плитка ждёт пережатия, как обычно.
     document.addEventListener('tk:upload', function (e) {
       var d = e.detail;
-      var el = shots.querySelector('.tk-shots__item[data-video-id="' + CSS.escape(d.id) + '"]');
+      var el = card(d.id);
       if (!el) return;
       var label = el.querySelector('[data-upload-pct]');
       if (d.status === 'uploading' && label) {
         window.tkText(label, 'user.videoUploading', { p: Math.floor(d.received / d.size * 100) });
       } else if (d.status === 'processing' && !el.classList.contains('is-processing')) {
-        paintVideo(el, { status: 'processing' });
+        if (label) label.removeAttribute('data-upload-pct');
+        paint(el, { id: d.id, status: 'processing' });
         watch(el, d.id);
       } else if (d.status === 'draft' && el.classList.contains('is-uploading')) {
-        location.reload(); // плитка черновика рисуется сервером
+        location.reload(); // карточка черновика рисуется сервером
       }
-    });
-
-    shots.addEventListener('click', function (e) {
-      var vdel = e.target.closest('[data-video-del]');
-      if (vdel) {
-        var tile = vdel.closest('.tk-shots__item');
-        var vid = tile.getAttribute('data-video-id');
-        if (!vid) return; // ещё грузится — удалить нечего
-        var d = -ready(tile);
-        confirmDialog(pt('user.videoDeleteQ'), { okText: pt('common.delete') }).then(function (yes) {
-          if (!yes) return;
-          tile.classList.add('is-busy');
-          return json('/video/' + encodeURIComponent(vid), { method: 'DELETE' })
-            .then(function () { tile.remove(); bump(d); })
-            .catch(function (err) {
-              tile.classList.remove('is-busy');
-              toast(window.t('app.deleteError', { message: err.message }), 'error');
-            });
-        });
-        return;
-      }
-      var del = e.target.closest('[data-name]');
-      if (!del) return;
-      var item = del.closest('.tk-shots__item');
-      confirmDialog(pt('user.galleryDeleteQ'), { okText: pt('common.delete') }).then(function (yes) {
-        if (!yes) return;
-        item.classList.add('is-busy');
-        return json('/profile/gallery/' + encodeURIComponent(del.getAttribute('data-name')), { method: 'DELETE' })
-          .then(function () { item.remove(); bump(-1); })
-          .catch(function (err) {
-            item.classList.remove('is-busy');
-            toast(window.t('app.deleteError', { message: err.message }), 'error');
-          });
-      });
     });
   }
 
-  // ── Просмотр фотографии ─────────────────────────────────────────────────
+  // ── Просмотр аватара ────────────────────────────────────────────────────
   var box = document.getElementById('lightbox');
   if (!box) return;
-
   var img = document.getElementById('lightboxImg');
-  var prev = document.getElementById('lightboxPrev');
-  var next = document.getElementById('lightboxNext');
-  var counter = document.getElementById('lightboxCounter');
-
-  // Список снимков собирается при открытии, а не один раз при загрузке:
-  // владелец добавляет и удаляет фото, не уходя со страницы.
-  var photos = [];
-  var collect = function () {
-    photos = Array.prototype.map.call(
-      document.querySelectorAll('img[data-photo-url]'),
-      function (el) { return el.getAttribute('data-photo-url'); }
-    );
-  };
-  var index = 0;
-
-  function isOpen() { return !box.classList.contains('hidden'); }
-
-  function show(i) {
-    if (i < 0 || i >= photos.length) return;
-    index = i;
-    img.src = photos[index];
-    counter.textContent = (index + 1) + ' / ' + photos.length;
-    var many = photos.length > 1;
-    prev.classList.toggle('hidden', !many);
-    next.classList.toggle('hidden', !many);
-    counter.classList.remove('hidden');
-  }
-
-  function open(i) {
-    show(i);
-    box.classList.remove('hidden');
-  }
-
-  function close() {
-    box.classList.add('hidden');
-    // src не сбрасываем: снимок остаётся в кэше и открывается мгновенно
-  }
+  var close = function () { box.classList.add('hidden'); };
 
   document.addEventListener('click', function (e) {
-    var photo = e.target.closest('img[data-photo-url]');
-    if (photo) {
-      collect();
-      var i = photos.indexOf(photo.getAttribute('data-photo-url'));
-      if (i !== -1) open(i);
-      return;
-    }
-
-    // Аватар открывается тем же окном, но без перелистывания
     var avatar = e.target.closest('img[data-avatar-url]');
-    if (avatar) {
-      img.src = avatar.getAttribute('data-avatar-url');
-      counter.classList.add('hidden');
-      prev.classList.add('hidden');
-      next.classList.add('hidden');
-      box.classList.remove('hidden');
-    }
+    if (!avatar) return;
+    img.src = avatar.getAttribute('data-avatar-url');
+    box.classList.remove('hidden');
   });
-
   document.getElementById('lightboxClose').addEventListener('click', close);
-
-  prev.addEventListener('click', function (e) {
-    e.stopPropagation();
-    show(index > 0 ? index - 1 : photos.length - 1);
-  });
-
-  next.addEventListener('click', function (e) {
-    e.stopPropagation();
-    show(index < photos.length - 1 ? index + 1 : 0);
-  });
-
   box.addEventListener('click', function (e) {
     if (e.target === box || e.target === img) close();
   });
-
   document.addEventListener('keydown', function (e) {
-    if (!isOpen()) return;
-    if (e.key === 'Escape') close();
-    else if (e.key === 'ArrowLeft') show(index > 0 ? index - 1 : photos.length - 1);
-    else if (e.key === 'ArrowRight') show(index < photos.length - 1 ? index + 1 : 0);
+    if (e.key === 'Escape' && !box.classList.contains('hidden')) close();
   });
 });

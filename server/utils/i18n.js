@@ -43,6 +43,8 @@ const EN = {
     'Ответ': 'Reply',
     // Описание и ссылки профиля (utils/profileLinks.js)
     'Описание': 'Description',
+    // Подпись к фото галереи (routes/watch.js)
+    'Подпись': 'Caption',
     'Ссылки': 'Links',
     'Индексировать': 'Index',
     // Группы (routes/groups.js)
@@ -134,7 +136,6 @@ const EN = {
     'Пароль успешно обновлен': 'Password updated',
     'Файл не передан': 'No file received',
     'Лимит 100 фото уже достигнут': 'The 100 photo limit has been reached',
-    'Некорректное имя файла': 'Invalid file name',
     'Только изображения JPEG, PNG или WebP.': 'Only JPEG, PNG or WebP images.',
     'Файл слишком большой': 'The file is too large',
     'Ошибка загрузки файла': 'File upload failed',

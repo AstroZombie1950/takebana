@@ -52,12 +52,23 @@
 .tk-up__photos[hidden] { display: none; }
 .tk-up__photos .tk-up__bar { align-self: stretch; }
 
+/* Фото строками: снимок и подпись к нему рядом (25.09.2026). На широком
+ * экране — в две колонки. */
 .tk-up__shots {
   align-self: stretch;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+  gap: 12px;
 }
+
+.tk-up__photo {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.tk-up__caption { width: 100%; min-height: 96px; resize: vertical; font-size: 14px; }
 
 .tk-up__shot { position: relative; aspect-ratio: 1; background: #000; }
 .tk-up__shot img { width: 100%; height: 100%; object-fit: cover; display: block; }

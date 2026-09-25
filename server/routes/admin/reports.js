@@ -18,11 +18,12 @@ const ChatMessage = require('../../models/ChatMessage');
 const Recording = require('../../models/Recording');
 const RecordingComment = require('../../models/RecordingComment');
 const GalleryVideo = require('../../models/GalleryVideo');
+const GalleryPhoto = require('../../models/GalleryPhoto');
 const { requireModerator, paging, list, period, namesFor, csvRoute, nameOf } = require('./shared');
 
 const STATUSES = ['new', 'resolved', 'rejected'];
 const REASONS = ['spam', 'abuse', 'adult', 'violence', 'copyright', 'other'];
-const TARGETS = ['stream', 'user', 'message', 'recording', 'video', 'comment'];
+const TARGETS = ['stream', 'user', 'message', 'recording', 'video', 'photo', 'comment'];
 
 async function loadReports(req) {
   const p = paging(req);
@@ -39,15 +40,16 @@ async function loadReports(req) {
     Report.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
   ]);
 
-  const ids = { user: [], stream: [], message: [], recording: [], video: [], comment: [] };
+  const ids = { user: [], stream: [], message: [], recording: [], video: [], photo: [], comment: [] };
   for (const r of reports) ids[r.targetType].push(r.targetId);
 
-  const [users, streams, messages, recordings, videos, comments, names, sameTarget] = await Promise.all([
+  const [users, streams, messages, recordings, videos, photos, comments, names, sameTarget] = await Promise.all([
     ids.user.length ? User.find({ _id: { $in: ids.user } }).select('nickname login email banned role').lean() : [],
     ids.stream.length ? Stream.find({ _id: { $in: ids.stream } }).select('title isActive userId stoppedByModeration isAdult').lean() : [],
     ids.message.length ? ChatMessage.find({ _id: { $in: ids.message } }).select('message userId streamId').lean() : [],
     ids.recording.length ? Recording.find({ _id: { $in: ids.recording } }).select('title userId').lean() : [],
     ids.video.length ? GalleryVideo.find({ _id: { $in: ids.video } }).select('title userId createdAt').lean() : [],
+    ids.photo.length ? GalleryPhoto.find({ _id: { $in: ids.photo } }).select('caption userId').lean() : [],
     ids.comment.length ? RecordingComment.find({ _id: { $in: ids.comment } }).select('text userId recordingId').lean() : [],
     namesFor([...reports.map((r) => r.reporter), ...reports.map((r) => r.resolvedBy)]),
     // Сколько всего жалоб на те же объекты: одна жалоба и двадцатая на один
@@ -58,10 +60,12 @@ async function loadReports(req) {
     ]),
   ]);
 
-  // Комментарий висит под записью или под видео — панели нужен адрес.
-  const videoParents = comments.length
-    ? new Set((await GalleryVideo.distinct('_id', { _id: { $in: comments.map((c) => c.recordingId) } })).map(String))
-    : new Set();
+  // Комментарий висит под записью, видео или фото — панели нужен адрес.
+  const parentIds = comments.map((c) => c.recordingId);
+  const [videoParents, photoParents] = comments.length
+    ? await Promise.all([GalleryVideo, GalleryPhoto].map((M) => M.distinct('_id', { _id: { $in: parentIds } }).then((l) => new Set(l.map(String)))))
+    : [new Set(), new Set()];
+  const parentHref = (id) => (videoParents.has(id) ? '/video/' : photoParents.has(id) ? '/photo/' : '/recording/') + id;
 
   const target = new Map();
   for (const u of users) target.set(String(u._id), { kind: 'user', title: u.nickname || u.login || u.email || '', banned: !!u.banned, role: u.role, ownerId: String(u._id) });
@@ -69,9 +73,10 @@ async function loadReports(req) {
   for (const m of messages) target.set(String(m._id), { kind: 'message', title: m.message, ownerId: String(m.userId), streamId: m.streamId ? String(m.streamId) : null });
   for (const r of recordings) target.set(String(r._id), { kind: 'recording', title: r.title, ownerId: String(r.userId) });
   for (const v of videos) target.set(String(v._id), { kind: 'video', title: v.title || '', ownerId: String(v.userId) });
+  for (const p of photos) target.set(String(p._id), { kind: 'photo', title: p.caption || '', ownerId: String(p.userId) });
   for (const c of comments) {
     const parent = String(c.recordingId);
-    target.set(String(c._id), { kind: 'comment', title: c.text, ownerId: String(c.userId), recordingId: parent, href: (videoParents.has(parent) ? '/video/' : '/recording/') + parent });
+    target.set(String(c._id), { kind: 'comment', title: c.text, ownerId: String(c.userId), recordingId: parent, href: parentHref(parent) });
   }
 
   const total4 = new Map(sameTarget.map((t) => [String(t._id), t.n]));

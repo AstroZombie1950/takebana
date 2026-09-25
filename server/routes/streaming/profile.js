@@ -13,9 +13,9 @@ const { requireAuth } = require('../../middleware/auth');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
 const { UPLOADS, uploadAvatar, uploadGallery } = require('./uploads');
 const GalleryVideo = require('../../models/GalleryVideo');
+const GalleryPhoto = require('../../models/GalleryPhoto');
 const { saveImage, BadImageError } = require('../../utils/image');
 const galleryPhotos = require('../../utils/galleryPhotos');
-const errorLog = require('../../utils/errorLog');
 const { commonDataMiddleware } = require('./shared');
 const bcrypt = require('bcrypt');
 const { PASSWORD_PROVIDER, PASSWORD_MAX } = require('../../utils/password');
@@ -131,70 +131,54 @@ router.delete('/profile/avatar', requireAuth, async (req, res) => {
   res.json({ success: true, avatar: avatarOf(user) });
 });
 
-// Загрузка фотографий в галерею (до 100 суммарно, за раз — до PHOTOS_PER_REQUEST).
-// Файлы multer держит в памяти, поэтому сколько принять, решается до него:
-// раньше до 100 файлов по 10 МБ читались целиком и только потом упирались
-// в лимит «100 фото». Больше остатка multer не примет — 400.
+// Загрузка фотографий в галерею (до MAX_PER_USER суммарно, за раз — до
+// PER_REQUEST). Файлы multer держит в памяти, поэтому сколько принять,
+// решается до него: раньше до 100 файлов по 10 МБ читались целиком и только
+// потом упирались в лимит. Больше остатка multer не примет — 400.
 // requireAuth перед multer — см. комментарий у /profile/avatar.
-const PHOTOS_MAX = 100;
-const PHOTOS_PER_REQUEST = 20;
+//
+// Подписи (25.09) — полем captions, JSON-массивом в порядке файлов: у формы
+// с файлами тело не JSON, и validate() до него не дотягивается.
+const { MAX_PER_USER: PHOTOS_MAX, PER_REQUEST: PHOTOS_PER_REQUEST, CAPTION_MAX } = galleryPhotos;
+
+function captionsOf(raw, n) {
+  let list = [];
+  try { list = JSON.parse(raw || '[]'); } catch (e) { list = []; }
+  if (!Array.isArray(list)) list = [];
+  return Array.from({ length: n }, (_, i) => String(list[i] == null ? '' : list[i]).trim().slice(0, CAPTION_MAX));
+}
+
 router.post('/profile/gallery', requireAuth, async (req, res, next) => {
-  const user = await User.findById(req.session.userId).select('gallery').lean();
-  if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
-  const left = PHOTOS_MAX - (Array.isArray(user.gallery) ? user.gallery.length : 0);
+  const left = PHOTOS_MAX - await GalleryPhoto.countDocuments({ userId: req.session.userId });
   if (left <= 0) return res.status(400).json({ success: false, message: 'Лимит 100 фото уже достигнут' });
   uploadGallery.array('photos', Math.min(left, PHOTOS_PER_REQUEST))(req, res, next);
 }, async (req, res) => {
-  const user = await User.findById(req.session.userId);
-  if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
-
+  const userId = req.session.userId;
   // Параллельная загрузка могла занять место, пока шёл этот запрос.
-  const left = PHOTOS_MAX - (Array.isArray(user.gallery) ? user.gallery.length : 0);
+  const left = PHOTOS_MAX - await GalleryPhoto.countDocuments({ userId });
   if (left <= 0) return res.status(400).json({ success: false, message: 'Лимит 100 фото уже достигнут' });
-  req.files = (req.files || []).slice(0, left);
+  const files = (req.files || []).slice(0, left);
+  const captions = captionsOf(req.body.captions, files.length);
 
-  // Сжатие и выгрузка в Bunny — utils/galleryPhotos.js.
+  // Сжатие, знак и выгрузка в Bunny — utils/galleryPhotos.js.
   let urls;
   try {
-    urls = await galleryPhotos.save(req.session.userId, req.files || []);
+    urls = await galleryPhotos.save(userId, files);
   } catch (e) {
     if (!(e instanceof BadImageError)) throw e;
     return res.status(400).json({ success: false, message: e.message });
   }
 
-  user.gallery = [...(user.gallery || []), ...urls];
-  await user.save();
+  // Время — с шагом в миллисекунду: пачка выбрана в одном порядке и в нём же
+  // должна лечь в ленту (новые сверху, первое выбранное — самое новое).
+  const now = Date.now();
+  const photos = await GalleryPhoto.insertMany(urls.map((url, i) => ({
+    userId, url, caption: captions[i], createdAt: new Date(now + urls.length - i),
+  })));
+  const total = await GalleryPhoto.countDocuments({ userId });
 
-  audit(req, 'profile.gallery.add', { targetType: 'user', target: user, meta: { added: urls.length, total: user.gallery.length } });
-  return res.json({ success: true, urls: urls, total: user.gallery.length });
-});
-
-// Удаление фото из галереи
-router.delete('/profile/gallery/:name', requireAuth, async (req, res) => {
-  const user = await User.findById(req.session.userId);
-  if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
-
-  const fileName = req.params.name; // ожидается имя файла, без папок
-
-  // Express раскодирует %2F в параметре маршрута, поэтому сюда приходило
-  // `../../app.js`, и unlinkSync сносил любой файл, до которого дотягивался
-  // процесс. Воспроизводилось обычным пользователем.
-  if (!isPlainFileName(fileName)) {
-    return res.status(400).json({ success: false, message: 'Некорректное имя файла' });
-  }
-
-  // Только своё фото: адрес ищется в галерее этого человека — на CDN
-  // или, у загруженных до переезда в Bunny, на сервере.
-  const fullUrl = galleryPhotos.find(req.session.userId, user.gallery, fileName);
-  if (!fullUrl) return res.status(404).json({ success: false, message: 'Фото не найдено' });
-
-  user.gallery = user.gallery.filter(u => u !== fullUrl);
-  await user.save();
-  await galleryPhotos.remove(req.session.userId, fullUrl)
-    .catch((e) => errorLog.external(e, 'gallery.photo.remove', { url: fullUrl }));
-
-  audit(req, 'profile.gallery.delete', { targetType: 'user', target: user, meta: { file: fileName } });
-  return res.json({ success: true });
+  audit(req, 'profile.gallery.add', { targetType: 'user', targetId: userId, meta: { added: photos.length, total } });
+  return res.json({ success: true, photos: photos.map((p) => ({ id: String(p._id), url: p.url })), total });
 });
 
 // ── Видео в галерее ──────────────────────────────────────────────────────

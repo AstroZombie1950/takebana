@@ -128,9 +128,9 @@
 
           <form class="tk-watch__edit" id="editForm" hidden>
             <label class="tk-form__label" for="editTitle" data-i18n="rec.fieldTitle"><%- t('rec.fieldTitle') %></label>
-            <input type="text" id="editTitle" class="tk-field" maxlength="<%= limits.title %>"<% if (kind === 'recording') { %> required<% } %> value="<%= rec.title %>"<% if (kind === 'video') { %> placeholder="<%= untitled(rec) %>"<% } %>>
+            <input type="text" id="editTitle" name="title" class="tk-field" maxlength="<%= limits.title %>"<% if (kind === 'recording') { %> required<% } %> value="<%= rec.title %>"<% if (kind === 'video') { %> placeholder="<%= untitled(rec) %>"<% } %>>
             <label class="tk-form__label" for="editDesc" data-i18n="rec.fieldDesc"><%- t('rec.fieldDesc') %></label>
-            <textarea id="editDesc" class="tk-field" rows="6" maxlength="<%= limits.description %>"><%= rec.description %></textarea>
+            <textarea id="editDesc" name="description" class="tk-field" rows="6" maxlength="<%= limits.description %>"><%= rec.description %></textarea>
             <div class="tk-watch__edit-acts">
               <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>
               <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="editCancel" data-i18n="common.cancel"><%- t('common.cancel') %></button>

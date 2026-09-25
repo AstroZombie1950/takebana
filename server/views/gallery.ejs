@@ -1,33 +1,34 @@
 <%#
-  Вся галерея человека: /@ник/gallery?page=N. Фото и видео одной
-  лентой, новые сверху (utils/gallery.js), по странице — маршрут в
-  routes/streaming/catalog.js. Плитка — partials/galleryTile.ejs, вид —
-  css/gallery.css, поведение (крестик владельца, ролики в работе, просмотр
-  фото) — public/gallery.js, общий с профилем.
+  Вкладка галереи целиком: /@ник/photos (фото сеткой) и /@ник/videos
+  (видео карточками), ?page=N — маршрут в routes/streaming/catalog.js.
+  До 25.09.2026 здесь была одна лента вперемешку (/@ник/gallery — теперь
+  переадресация на фото). Фото — partials/galleryPhoto.ejs, видео —
+  partials/galleryVideo.ejs, вид — css/gallery.css, ролики в работе —
+  public/gallery.js, общий с профилем.
 %>
 <%
-  var base = owner.url;
-  var pageHref = function (p) { return base + '/gallery' + (p > 1 ? '?page=' + p : ''); };
+  var base = owner.url + '/' + tab;
+  var pageHref = function (p) { return base + (p > 1 ? '?page=' + p : ''); };
   // Номера вокруг текущей, первая и последняя всегда; пропуски — «…».
   var nums = [];
   for (var p = 1; p <= pages; p++) {
     if (p === 1 || p === pages || Math.abs(p - page) <= 2) nums.push(p);
     else if (nums[nums.length - 1] !== 0) nums.push(0);
   }
+  var tabKey = 'gallery.' + tab;
 %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%# Каждая страница листалки — canonical на себя. До gallery.PREVIEW штук
-    галерея целиком повторяет блок профиля — вне индекса (indexable). %>
-<%- include('partials/tkHead', { titleKey: 'page.gallery.title', titleVars: { name: owner.displayName }, seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow',
-         jsonld: ld.crumbs([['Takebana', '/'], [owner.displayName, owner.url], [ta('user.gallery'), pageHref(1)]]) } }) %>
+<%# Каждая страница листалки — canonical на себя. Пока всё помещается
+    в профиль, вкладка его повторяет — вне индекса (indexable). %>
+<%- include('partials/tkHead', { titleKey: 'page.' + tab + '.title', titleVars: { name: owner.displayName }, seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow',
+         jsonld: ld.crumbs([['Takebana', '/'], [owner.displayName, owner.url], [ta(tabKey), pageHref(1)]]) } }) %>
 <% if (page > 1) { %><link rel="prev" href="<%= pageHref(page - 1) %>"><% } %>
 <% if (page < pages) { %><link rel="next" href="<%= pageHref(page + 1) %>"><% } %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/profile.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/gallery.css') %>">
-<link rel="stylesheet" href="<%= asset('/css/lightbox.css') %>">
 </head>
 <body class="tk-app">
 
@@ -39,7 +40,7 @@
   <main class="tk-app-main">
     <div class="tk-gal" id="gallery"<% if (isSelf) { %> data-own<% } %>>
 
-      <a href="<%= base %>" class="tk-page__back">
+      <a href="<%= owner.url %>" class="tk-page__back">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
         <span data-i18n="user.backToProfile"><%- t('user.backToProfile') %></span>
       </a>
@@ -48,11 +49,19 @@
       <div class="tk-gal__head">
         <%# Имя — отдельным узлом с экранированием, как на странице подписчиков. %>
         <h1 class="tk-gal__h1"><%= owner.displayName %></h1>
-        <span class="tk-note" id="galleryCount"><%= count %></span>
         <% if (isSelf) { %>
         <a href="/upload" class="tk-btn tk-btn--outline tk-btn--sm tk-gal__add" data-i18n="user.galleryAdd"><%- t('user.galleryAdd') %></a>
         <% } %>
       </div>
+
+      <%# Вкладки — ссылками: у каждой свой адрес и своя листалка. %>
+      <nav class="tk-tabs tk-tabs--gal" aria-label="<%= ta('user.gallery') %>" data-i18n-aria="user.gallery">
+        <% [['photos', counts.photos], ['videos', counts.videos]].forEach(function (tb) { %>
+        <a href="<%= owner.url %>/<%= tb[0] %>" class="tk-tabs__item<%= tb[0] === tab ? ' tk-tabs__item--on' : '' %>"<% if (tb[0] === tab) { %> aria-current="page"<% } %>>
+          <span data-i18n="gallery.<%= tb[0] %>"><%- t('gallery.' + tb[0]) %></span><span class="tk-tabs__num"><%= tb[1] %></span>
+        </a>
+        <% }); %>
+      </nav>
 
       <% if (restricted) { %>
       <section class="tk-panel--prof">
@@ -61,13 +70,19 @@
           <p data-i18n="restricted.text"><%- t('restricted.text') %></p>
         </div>
       </section>
-      <% } else { %>
-      <div class="tk-shots tk-shots--wide" id="galleryShots">
-        <% shots.forEach(function (item, i) { %><%- include('partials/galleryTile', { item: item, n: offset + i + 1, owner: owner.displayName, isSelf: isSelf }) %><% }); %>
+      <% } else if (!items.length) { %>
+      <p class="tk-note tk-note--center" data-i18n="gallery.<%= tab %>Empty"><%- t('gallery.' + tab + 'Empty') %></p>
+      <% } else if (tab === 'photos') { %>
+      <div class="tk-pics">
+        <% items.forEach(function (p, i) { %><%- include('partials/galleryPhoto', { p: p, n: offset + i + 1, owner: owner.displayName }) %><% }); %>
       </div>
-      <p class="tk-note tk-note--center" id="galleryEmpty" data-i18n="user.galleryEmpty"<% if (shots.length) { %> hidden<% } %>><%- t('user.galleryEmpty') %></p>
+      <% } else { %>
+      <div class="tk-recs">
+        <% items.forEach(function (v) { %><%- include('partials/galleryVideo', { v: v }) %><% }); %>
+      </div>
+      <% } %>
 
-      <% if (pages > 1) { %>
+      <% if (!restricted && pages > 1) { %>
       <nav class="tk-pager" aria-label="<%= ta('gallery.pages') %>" data-i18n-aria="gallery.pages">
         <% if (page > 1) { %><a href="<%= pageHref(page - 1) %>" class="tk-btn tk-btn--outline tk-btn--sm" rel="prev" data-i18n="user.listPrev"><%- t('user.listPrev') %></a><% } %>
         <% nums.forEach(function (p) { %>
@@ -78,13 +93,11 @@
         <% if (page < pages) { %><a href="<%= pageHref(page + 1) %>" class="tk-btn tk-btn--outline tk-btn--sm" rel="next" data-i18n="user.listNext"><%- t('user.listNext') %></a><% } %>
       </nav>
       <% } %>
-      <% } %>
 
     </div>
   </main>
 </div>
 
-<%- include('partials/lightbox') %>
-<script defer src="<%= asset('/gallery.js') %>"></script>
+<% if (isSelf && tab === 'videos') { %><script defer src="<%= asset('/gallery.js') %>"></script><% } %>
 </body>
 </html>

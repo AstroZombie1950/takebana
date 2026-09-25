@@ -1,17 +1,19 @@
-// Оценки, комментарии и просмотры — общие у записи эфира и видео галереи
-// (routes/watch.js): одни коллекции, recordingId указывает на любое из двух.
+// Оценки, комментарии и просмотры — общие у записи эфира, видео и (с 25.09)
+// фото галереи (routes/watch.js): одни коллекции, recordingId указывает
+// на любое из трёх.
 // Здесь — уборка за ними, когда уходит предмет или человек.
 
 const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
+const GalleryPhoto = require('../models/GalleryPhoto');
 const RecordingReaction = require('../models/RecordingReaction');
 const RecordingComment = require('../models/RecordingComment');
 const RecordingView = require('../models/RecordingView');
 const Report = require('../models/Report');
 
-// Запись или видео удалены: оценки, комментарии, отметки просмотров
+// Запись, видео или фото удалены: оценки, комментарии, отметки просмотров
 // и жалобы на сам предмет и его комментарии — следом, у них нет предмета.
-// targetType — 'recording' или 'video', как в models/Report.js.
+// targetType — 'recording', 'video' или 'photo', как в models/Report.js.
 async function forgetTarget(id, targetType) {
   const commentIds = await RecordingComment.distinct('_id', { recordingId: id });
   await Promise.all([
@@ -25,10 +27,10 @@ async function forgetTarget(id, targetType) {
   ]);
 }
 
-// Удаление аккаунта: его оценки и комментарии под чужими записями и видео
-// уходят, а счётчики у них уменьшаются на столько же. Какой коллекции
-// принадлежит id, не выясняем: одни и те же операции идут в обе, лишние
-// просто ничего не находят.
+// Удаление аккаунта: его оценки и комментарии под чужими записями, видео
+// и фото уходят, а счётчики у них уменьшаются на столько же. Какой коллекции
+// принадлежит id, не выясняем: одни и те же операции идут во все три,
+// лишние просто ничего не находят.
 async function forgetUser(userId) {
   const [reactions, comments] = await Promise.all([
     RecordingReaction.find({ userId }).select('recordingId value').lean(),
@@ -43,6 +45,7 @@ async function forgetUser(userId) {
   await Promise.all([
     ops.length ? Recording.bulkWrite(ops, { ordered: false }) : null,
     ops.length ? GalleryVideo.bulkWrite(ops, { ordered: false }) : null,
+    ops.length ? GalleryPhoto.bulkWrite(ops, { ordered: false }) : null,
     RecordingReaction.deleteMany({ userId }),
     RecordingComment.deleteMany({ userId }),
     Report.deleteMany({ targetType: 'comment', targetId: { $in: commentIds } }),

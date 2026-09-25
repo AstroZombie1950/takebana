@@ -1,7 +1,8 @@
-/* Страница просмотра — запись эфира или видео галереи: плеер, просмотр,
- * оценки, «Поделиться», правка и удаление автором, комментарии. Разметка —
- * views/watch.ejs, маршруты — routes/watch.js. Адрес ролика — data-base,
- * префикс строк, разных у двух видов, — data-k (rec или video).
+/* Страница просмотра — запись эфира, видео или (с 25.09.2026) фото
+ * галереи: плеер, просмотр, оценки, «Поделиться», правка и удаление
+ * автором, комментарии, у фото — листание к соседним. Разметка —
+ * views/watch.ejs и views/photo.ejs, маршруты — routes/watch.js. Адрес —
+ * data-base, префикс строк, разных у видов, — data-k (rec, video, photo).
  */
 (function () {
   var watch = document.getElementById('watch');
@@ -101,6 +102,34 @@
       .then(function () { toast(t('rec.linkCopied'), 'ok'); }, function () { prompt('', url); });
   });
 
+  // ── Фото: к соседним стрелками клавиатуры и пальцем ──
+  // Адреса соседей — data-prev (новее) и data-next (старше), ставит сервер.
+  var go = function (dir) {
+    var url = watch.dataset[dir];
+    if (url) location.href = url;
+  };
+  if (watch.dataset.prev || watch.dataset.next) {
+    document.addEventListener('keydown', function (e) {
+      if (e.altKey || e.ctrlKey || e.metaKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+      if (e.key === 'ArrowLeft') go('prev');
+      else if (e.key === 'ArrowRight') go('next');
+    });
+    // Свайп — горизонтальный и уверенный: вертикальная прокрутка его не будит.
+    var stage = $('photoStage');
+    var x0 = null, y0 = 0;
+    stage.addEventListener('touchstart', function (e) {
+      x0 = e.touches.length === 1 ? e.touches[0].clientX : null;
+      y0 = x0 === null ? 0 : e.touches[0].clientY;
+    }, { passive: true });
+    stage.addEventListener('touchend', function (e) {
+      if (x0 === null) return;
+      var dx = e.changedTouches[0].clientX - x0;
+      var dy = e.changedTouches[0].clientY - y0;
+      x0 = null;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx > 0 ? 'prev' : 'next');
+    }, { passive: true });
+  }
+
   // ── Описание: длинное свёрнуто ──
   var desc = $('recDesc');
   var more = $('descMore');
@@ -128,7 +157,7 @@
       owner.hidden = on;
       if (desc) desc.hidden = on;
       if (more) more.hidden = on || !desc.classList.contains('is-clamped');
-      if (on) $('editTitle').focus();
+      if (on) form.querySelector('[name]').focus();
     };
     editBtn.addEventListener('click', function () { showForm(true); });
     $('editCancel').addEventListener('click', function () { showForm(false); });
@@ -136,20 +165,27 @@
       e.preventDefault();
       var submit = form.querySelector('[type="submit"]');
       submit.disabled = true;
-      send('PATCH', base, { title: $('editTitle').value, description: $('editDesc').value }).then(function (r) {
-        // Пустое название у видео — подпись датой, как рисует сервер.
-        var shown = r.title || $('editTitle').placeholder;
-        $('recTitle').textContent = shown;
-        document.title = shown + ' — Takebana';
+      // Поля формы — по именам: у записи и видео название и описание,
+      // у фото — подпись.
+      var body = {};
+      form.querySelectorAll('[name]').forEach(function (el) { body[el.name] = el.value; });
+      send('PATCH', base, body).then(function (r) {
+        if (r.title !== undefined) {
+          // Пустое название у видео — подпись датой, как рисует сервер.
+          var shown = r.title || $('editTitle').placeholder;
+          $('recTitle').textContent = shown;
+          document.title = shown + ' — Takebana';
+        }
+        var text = r.description !== undefined ? r.description : r.caption;
         if (!desc) {
           desc = document.createElement('p');
           desc.id = 'recDesc';
           form.parentNode.insertBefore(desc, owner);
         }
-        desc.className = 'tk-watch__desc' + (r.description ? '' : ' tk-watch__desc--empty');
-        if (r.description) {
+        desc.className = 'tk-watch__desc' + (text ? '' : ' tk-watch__desc--empty');
+        if (text) {
           desc.removeAttribute('data-i18n');
-          desc.textContent = r.description;
+          desc.textContent = text;
         } else {
           tkText(desc, k + '.noDesc');
         }
@@ -188,6 +224,8 @@
     count = Math.max(0, n);
     title.dataset.count = count;
     setCounted(title, count, 'rec.comments');
+    // У фото число стоит ещё и на кнопке рядом с сердечком.
+    document.querySelectorAll('[data-comments-count]').forEach(function (el) { el.textContent = num(count); });
     empty.hidden = list.children.length > 0 || !!empty.dataset.closed; // закрыто — «напишите первым» ни к чему
   }
 

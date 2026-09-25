@@ -1,6 +1,7 @@
 /* Страница загрузки фото и видео в галерею (/upload, 21.09.2026).
  *
- * Фото: выбрали — видны снимки, «Опубликовать фото» отправляет их пачками
+ * Фото: выбрали — видны снимки, у каждого поле подписи (25.09.2026; потом
+ * её правят на странице фото), «Опубликовать фото» отправляет их пачками
  * по 20 (POST /profile/gallery, сжатие и знак — на сервере).
  *
  * Видео: выбрали — сразу поехало в фоне (tk-upload.js), а на карточке можно
@@ -20,6 +21,7 @@
 
   var PHOTO_MB = 10;
   var PHOTOS_AT_ONCE = 100;
+  var CAPTION_MAX = D.captionMax || 2200; // utils/galleryPhotos.js
   var MIN_LEN = 1;          // короче секунды обрезать нельзя (сервер проверяет то же)
 
   function json(url, options) {
@@ -94,7 +96,7 @@
   });
 
   // ── Фото ──────────────────────────────────────────────────────────────
-  var photos = [];          // { file, url }
+  var photos = [];          // { file, url, caption }
   var shots = $('upShots');
   var photoSend = $('upPhotoSend');
   var photoBar = $('upPhotoBar');
@@ -102,9 +104,11 @@
   function paintPhotos() {
     $('upPhotos').hidden = !photos.length;
     shots.innerHTML = photos.map(function (p, i) {
-      return '<div class="tk-up__shot"><img src="' + p.url + '" alt="">' +
+      return '<div class="tk-up__photo"><div class="tk-up__shot"><img src="' + p.url + '" alt="">' +
         '<button type="button" class="tk-thumb__del" data-photo="' + i + '" aria-label="' + escapeHtml(t('common.delete')) + '">' +
-        '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg></button></div>';
+        '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg></button></div>' +
+        '<textarea class="tk-field tk-up__caption" rows="3" maxlength="' + CAPTION_MAX + '" data-caption="' + i + '"' +
+        ' placeholder="' + escapeHtml(t('photo.captionPh')) + '" aria-label="' + escapeHtml(t('photo.caption')) + '">' + escapeHtml(p.caption) + '</textarea></div>';
     }).join('');
     window.tkText(photoSend, 'upload.photosPublish', { n: photos.length });
   }
@@ -115,9 +119,16 @@
       toast(t('user.galleryTooMany', { n: PHOTOS_AT_ONCE }), 'error');
       list = list.slice(0, PHOTOS_AT_ONCE - photos.length);
     }
-    list.forEach(function (f) { photos.push({ file: f, url: URL.createObjectURL(f) }); });
+    list.forEach(function (f) { photos.push({ file: f, url: URL.createObjectURL(f), caption: '' }); });
     paintPhotos();
   }
+
+  // Подпись живёт в списке, а не в поле: список перерисовывается целиком,
+  // когда фото убирают или отправляют пачкой.
+  shots.addEventListener('input', function (e) {
+    var i = e.target.getAttribute('data-caption');
+    if (i !== null && photos[i]) photos[i].caption = e.target.value;
+  });
 
   shots.addEventListener('click', function (e) {
     var b = e.target.closest('[data-photo]');
@@ -146,6 +157,8 @@
       var part = photos.slice(0, PHOTOS_PER_REQUEST);
       var form = new FormData();
       part.forEach(function (p) { form.append('photos', p.file); });
+      // Подписи — одним полем в порядке файлов (routes/streaming/profile.js).
+      form.append('captions', JSON.stringify(part.map(function (p) { return p.caption.trim(); })));
       var size = bytes(part);
       var xhr = new XMLHttpRequest();
       xhr.open('POST', '/profile/gallery');

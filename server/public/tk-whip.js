@@ -1,18 +1,20 @@
-/* Камера заведения через свой приём: публикация по WHIP, просмотр по WHEP.
+/* Камера заведения: публикация по WHIP на наш приёмник (MediaMTX).
  *
- * Зачем. До 23.09.2026 камера была комнатой Daily на двоих: вещатель
- * отдавал картинку каждому зрителю отдельно, и каждая зрительская минута
- * стоила денег. Теперь заведение вещает один раз на наш MediaMTX
- * (ops/mediamtx/), а зрителей он обслуживает сам — платим только за трафик.
+ * Зачем. До 23.09.2026 камера была комнатой Daily: каждая зрительская
+ * минута стоила денег. Теперь заведение вещает один раз на наш MediaMTX
+ * (ops/mediamtx/), а зрители смотрят HLS через Bunny — его режет наш
+ * ffmpeg со знаком (server/utils/venueCam.js). Смотреть по WHEP больше
+ * некому: с 25.09 MediaMTX — только приёмник.
  *
  * Почему это короткий файл. Вся сложная часть WebRTC — согласование ролей,
  * повторы, перезапуск ICE — нужна в звонке, где две равные стороны
  * (public/tk-peer.js). Здесь сигналинг — один POST с описанием сессии
- * и ответ на него: WHIP и WHEP этим и хороши.
+ * и ответ на него: WHIP этим и хорош. Камеру и микрофон держит страница
+ * (public/tk-venue-live.js): они живут дольше публикации — вещание идёт,
+ * только пока камеру смотрят, а своя картинка у владельца есть всегда.
  *
  * Разрешение на подключение — одноразовый ключ в адресе, его выдаёт
- * server/routes/venueLive.js, а спрашивает MediaMTX у нас же
- * (server/utils/mediamtx.js).
+ * server/routes/venueLive.js, а спрашивает MediaMTX у нас же.
  */
 (function () {
   function noop() {}
@@ -60,127 +62,75 @@
       });
   }
 
-  // Общая часть публикации и просмотра: соединение, состояния, уход.
-  // opts: onState('connecting' | 'live' | 'ended'), onMediaError
-  function session(url, opts, build) {
+  // Потолок видео: 480p и 15 кадров просит страница у камеры, а битрейт —
+  // здесь. Больше сервер всё равно не отдаст (профиль venue, utils/hls.js),
+  // а лишнее — входящий трафик нашего канала.
+  var VIDEO = { maxBitrate: 800000, maxFramerate: 15 };
+
+  // Вещание: дорожки stream уходят на сервер. Дорожки — страницы, публикация
+  // их не останавливает. opts: onState('connecting' | 'live' | 'ended'),
+  // onError(e). Возвращает { pc, leave(), replaceTrack(track) }.
+  function publish(url, stream, opts) {
+    opts = opts || {};
     var closed = false;
     var place = '';
     var pc = new RTCPeerConnection({ bundlePolicy: 'max-bundle' });
 
-    function emit(name) { if (opts[name]) opts[name].apply(null, [].slice.call(arguments, 1)); }
+    function emit(name, v) { if (opts[name]) opts[name](v); }
 
     pc.onconnectionstatechange = function () {
       if (closed) return;
       if (pc.connectionState === 'connected') emit('onState', 'live');
-      // Разорвалось и не вернулось само — показ кончился. Пересобирать
-      // соединение здесь незачем: страница просто включает камеру заново.
+      // Разорвалось и не вернулось само — публикация кончилась. Пересобирать
+      // соединение здесь незачем: страница попросит новую, если камеру ещё смотрят.
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') leave('ended');
     };
 
     function leave(why) {
-      if (closed) return Promise.resolve();
+      if (closed) return;
       closed = true;
       pc.close();
       if (place) fetch(place, { method: 'DELETE', keepalive: true }).catch(noop);
       if (why) emit('onState', why);
-      return Promise.resolve();
     }
 
+    // Кодек выбирает браузер (сегодня VP8): ffmpeg на сервере переводит
+    // в H.264 сам. Ставить H.264 первым пробовали 23.09 — видео пропадало
+    // совсем: браузер соглашался в согласовании, а закодировать не мог.
+    stream.getTracks().forEach(function (t) {
+      var tr = pc.addTransceiver(t, { direction: 'sendonly', streams: [stream], sendEncodings: t.kind === 'video' ? [VIDEO] : undefined });
+      if (t.kind !== 'video') return;
+      // При слабом канале — меньше кадров, но не меньше кадр. По умолчанию
+      // браузер первые секунды шлёт 320×180, пока оценивает канал (зонд
+      // 25.09), а зрителю вид зала нужен резким, плавность — дело второе.
+      try {
+        var p = tr.sender.getParameters();
+        p.degradationPreference = 'maintain-resolution';
+        tr.sender.setParameters(p).catch(noop);
+      } catch (e) { /* браузер без этой настройки — пусть решает сам */ }
+    });
+
     emit('onState', 'connecting');
-    var ready = Promise.resolve(build(pc))
-      .then(function () { return exchange(url, pc); })
-      .then(function (location) {
-        if (closed) return leave();
-        place = location;
-      })
-      .catch(function (e) {
-        if (closed) return;
-        emit('onError', e);
-        leave('ended');
-      });
-
-    return { pc: pc, ready: ready, leave: leave };
-  }
-
-  // Вещание: камера и микрофон заведения уходят на сервер.
-  function publish(url, opts) {
-    opts = opts || {};
-    var tracks = [];
-    var s = session(url, opts, function (pc) {
-      return navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: true,
-      }).then(function (stream) {
-        tracks = stream.getTracks();
-        // Кодек выбирает браузер. Ставить H.264 первым мы пробовали
-        // (23.09) — и видео пропадало совсем: браузер соглашался на него
-        // в согласовании, а закодировать не мог, и на сервер приходил один
-        // звук. Сегодня это и не нужно: WHEP отдаёт что пришло, а ветку
-        // HLS — ей H.264 обязателен — включим отдельно и с проверкой
-        // на живых устройствах (docs/ROADMAP.md, очередь HLS).
-        tracks.forEach(function (t) { pc.addTransceiver(t, { direction: 'sendonly', streams: [stream] }); });
-        if (opts.onLocal) opts.onLocal(stream);
-      }).catch(function (e) {
-        if (opts.onMediaError) opts.onMediaError(e);
-        throw e;
-      });
+    exchange(url, pc).then(function (location) {
+      if (closed) return leave();
+      place = location;
+    }).catch(function (e) {
+      if (closed) return;
+      emit('onError', e);
+      leave('ended');
     });
-    var leave = s.leave;
-    s.leave = function (why) {
-      tracks.forEach(function (t) { t.stop(); });
-      return leave(why);
+
+    return {
+      pc: pc,
+      leave: function () { leave(); },
+      // Другая камера: новая дорожка встаёт на место прежней в том же
+      // соединении — сервер и зрители ничего не замечают.
+      replaceTrack: function (track) {
+        var sender = pc.getSenders().filter(function (x) { return x.track && x.track.kind === track.kind; })[0];
+        return sender ? sender.replaceTrack(track) : Promise.resolve();
+      },
     };
-    // Микрофон — выключением дорожки: соединение и согласование те же.
-    s.setMic = function (on) {
-      tracks.forEach(function (t) { if (t.kind === 'audio') t.enabled = !!on; });
-    };
-    // Другая камера (страница камеры заведения, 24.09): новая дорожка встаёт
-    // на место прежней в том же соединении — зрители не переподключаются.
-    // Прежнюю гасим до запроса: телефон двух камер разом не открывает.
-    // Телефон переключаем по стороне (фронтальная ↔ задняя), компьютер —
-    // по кругу устройств.
-    s.switchCamera = function () {
-      var cur = tracks.filter(function (t) { return t.kind === 'video'; })[0];
-      var sender = s.pc.getSenders().filter(function (x) { return x.track === cur; })[0];
-      if (!cur || !sender) return Promise.resolve();
-      var set = cur.getSettings();
-      return navigator.mediaDevices.enumerateDevices().then(function (list) {
-        var cams = list.filter(function (d) { return d.kind === 'videoinput'; });
-        var want = { width: { ideal: 1280 }, height: { ideal: 720 } };
-        if (set.facingMode) want.facingMode = { exact: set.facingMode === 'environment' ? 'user' : 'environment' };
-        else if (cams.length > 1) {
-          var i = cams.map(function (d) { return d.deviceId; }).indexOf(set.deviceId);
-          want.deviceId = { exact: cams[(i + 1) % cams.length].deviceId };
-        } else return;
-        cur.stop();
-        return navigator.mediaDevices.getUserMedia({ video: want }).then(function (ns) {
-          var next = ns.getVideoTracks()[0];
-          next.enabled = true;
-          tracks = tracks.map(function (t) { return t === cur ? next : t; });
-          return sender.replaceTrack(next).then(function () {
-            if (opts.onLocal) opts.onLocal(new MediaStream(tracks));
-          });
-        });
-      });
-    };
-    return s;
   }
 
-  // Просмотр: с сервера приходят звук и видео, отправлять нам нечего.
-  function view(url, opts) {
-    opts = opts || {};
-    var media = new MediaStream();
-    var s = session(url, opts, function (pc) {
-      pc.addTransceiver('video', { direction: 'recvonly' });
-      pc.addTransceiver('audio', { direction: 'recvonly' });
-      pc.ontrack = function (e) {
-        media.addTrack(e.track);
-        if (opts.onStream) opts.onStream(media, e.track);
-      };
-    });
-    s.stream = media;
-    return s;
-  }
-
-  window.TKWhip = { publish: publish, view: view };
+  window.TKWhip = { publish: publish };
 })();

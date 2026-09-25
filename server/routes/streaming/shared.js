@@ -32,7 +32,7 @@ const commonDataMiddleware = async (req, res, next) => {
       const me = new mongoose.Types.ObjectId(String(currentUserId));
       const [currentUser, subscribedUsers, unreadNotificationsCount, missedCalls, unreadMessages] = await Promise.all([
         User.findById(currentUserId)
-          .select('nickname login email avatar gallery streamKey banned banReason adultConfirmedAt lang')
+          .select('nickname login email avatar streamKey banned banReason adultConfirmedAt lang')
           .lean(),
         Subscription.aggregate([
           { $match: { subscriberId: me } },
@@ -90,7 +90,6 @@ const commonDataMiddleware = async (req, res, next) => {
           displayName: currentUserDisplayName,
           email: currentUser.email || '',
           avatarStyle: currentUserAvatarStyle,
-          gallery: Array.isArray(currentUser.gallery) ? currentUser.gallery : [],
           // Модерация: гейт 18+ и ограничение аккаунта
           adultConfirmedAt: currentUser.adultConfirmedAt || null,
           banned: !!currentUser.banned,

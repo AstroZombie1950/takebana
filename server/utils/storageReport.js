@@ -19,6 +19,7 @@ const storage = require('./storage');
 const errorLog = require('./errorLog');
 const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
+const GalleryPhoto = require('../models/GalleryPhoto');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const Stream = require('../models/Stream');
@@ -57,11 +58,12 @@ async function references() {
   const refs = new Map();
   const add = (key, group, kind, link = '') => { if (key) refs.set(key, [group, kind, link]); };
 
-  const [recs, videos, users, messages, streams, venues] = await Promise.all([
+  const [recs, videos, photos, users, messages, streams, venues] = await Promise.all([
     Recording.find({}, 'video thumb hls.files').lean(),
     GalleryVideo.find({}, 'video thumb').lean(),
-    User.find({ $or: [{ 'gallery.0': { $exists: true } }, { avatar: /^\/uploads\// }, { 'streamDefaults.thumbnail': /^\/uploads\// }] },
-      'gallery avatar streamDefaults.thumbnail').lean(),
+    GalleryPhoto.find({}, 'url').lean(),
+    User.find({ $or: [{ avatar: /^\/uploads\// }, { 'streamDefaults.thumbnail': /^\/uploads\// }] },
+      'avatar streamDefaults.thumbnail').lean(),
     Message.find({ 'attachments.0': { $exists: true } }, 'attachments.kind attachments.key attachments.previewKey').lean(),
     Stream.find({ thumbnail: /^\/uploads\// }, 'thumbnail').lean(),
     Establishments.find({ 'photos.0': { $exists: true } }, 'photos').lean(),
@@ -80,14 +82,14 @@ async function references() {
     add(fileKey(v.video), 'gallery', 'video', `/video/${v._id}`);
     add(fileKey(v.thumb), 'gallery', 'cover', `/video/${v._id}`);
   }
+  // Фото — на CDN или, загруженные до переезда, у нас: ключ в обоих
+  // случаях начинается с gallery/ (utils/galleryPhotos.js).
+  for (const p of photos) {
+    const i = p.url.indexOf('/gallery/');
+    if (i !== -1) add(p.url.slice(i + 1), 'gallery', 'photo', `/photo/${p._id}`);
+  }
   for (const u of users) {
     const page = `/userPage/${u._id}`;
-    // Фото — на CDN или, загруженные до переезда, у нас: ключ в обоих
-    // случаях начинается с gallery/ (utils/galleryPhotos.js).
-    for (const url of u.gallery || []) {
-      const i = url.indexOf('/gallery/');
-      if (i !== -1) add(url.slice(i + 1), 'gallery', 'photo', page + '/gallery');
-    }
     add(localKey(u.avatar), 'avatars', 'file', page);
     add(localKey(u.streamDefaults && u.streamDefaults.thumbnail), 'covers', 'file', page);
   }

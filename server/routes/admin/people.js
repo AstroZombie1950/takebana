@@ -22,6 +22,7 @@ const ChatMessage = require('../../models/ChatMessage');
 const Call = require('../../models/Call');
 const AuditLog = require('../../models/AuditLog');
 const Stream = require('../../models/Stream');
+const GalleryPhoto = require('../../models/GalleryPhoto');
 const { audit } = require('../../utils/audit');
 const { validate } = require('../../middleware/validate');
 const { PASSWORD_PROVIDER, PASSWORD_MIN, PASSWORD_MAX, hashPassword } = require('../../utils/password');
@@ -105,7 +106,7 @@ router.get('/users/:id', requireModerator, async (req, res) => {
   const isAdmin = req.userRole === 'admin';
 
   const [streams, recordings, venues, reportsOn, reportsBy, subscribers, subscriptions,
-         messagesSent, messagesGot, chatMessages, calls, sessions, live, journal] = await Promise.all([
+         messagesSent, messagesGot, chatMessages, calls, sessions, live, journal, photos] = await Promise.all([
     // Эфиры: часы, пик, средний зритель. Один проход по отрезкам вместо
     // десятка счётчиков.
     StreamSession.aggregate([
@@ -165,6 +166,7 @@ router.get('/users/:id', requireModerator, async (req, res) => {
     Stream.findOne({ userId: id, isActive: true }).select('title startedAt viewers streamProvider isAdult').lean(),
     // Лента действий — только администратору: в ней адреса и почты.
     isAdmin ? AuditLog.find({ actor: id }).sort({ at: -1 }).limit(30).lean() : [],
+    GalleryPhoto.countDocuments({ userId: id }),
   ]);
 
   const one = (rows) => (rows && rows[0]) || {};
@@ -183,7 +185,7 @@ router.get('/users/:id', requireModerator, async (req, res) => {
       adultConfirmedAt: user.adultConfirmedAt || null,
       // Ключ вещания не показываем никому: по нему пишут в чужой эфир.
       hasStreamKey: !!user.streamKey,
-      gallery: (user.gallery || []).length,
+      gallery: photos,
       banReason: user.banReason || '',
       bannedAt: user.bannedAt || null,
       bannedBy: user.bannedBy ? String(user.bannedBy) : null,

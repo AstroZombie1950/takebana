@@ -14,6 +14,7 @@ const daily = require('../utils/daily');
 const callLog = require('../utils/callLog');
 const errorLog = require('../utils/errorLog');
 const turn = require('../utils/turn');
+const venueCam = require('../utils/venueCam');
 const userView = require('../utils/userView');
 const restriction = require('../utils/restrict');
 const privacy = require('../utils/privacy');
@@ -137,25 +138,16 @@ function registerSockets(io) {
 
   // Камера заведения (страница /venue/:id/live, с 24.09): в комнате
   // venue:<id> все, кто открыл страницу, — чат и смена состояния камеры
-  // приходят туда. Зрители — вошедшие, кроме владельца: гостю картинку
-  // не показывают (routes/venueLive.js). Рассылка — не чаще раза в COUNT_MS.
-  function venueViewers(venueId) {
-    const room = io.sockets.adapter.rooms.get(`venue:${venueId}`);
-    if (!room) return 0;
-    const users = new Set();
-    for (const id of room) {
-      const s = io.sockets.sockets.get(id);
-      if (s && s.data.userId && s.data.venueOwn !== venueId) users.add(s.data.userId);
-    }
-    return users.size;
-  }
-
+  // приходят туда. Счёт зрителей — utils/venueCam.js: по нему же камера
+  // вещает, только пока её смотрят. Рассылка — не чаще раза в COUNT_MS.
   function announceVenue(venueId) {
     const key = 'venue:' + venueId;
     if (countTimers.has(key)) return;
     countTimers.set(key, setTimeout(() => {
       countTimers.delete(key);
-      io.to(key).emit('venue:viewers', { venueId, count: venueViewers(venueId) });
+      const count = venueCam.count(venueId);
+      io.to(key).emit('venue:viewers', { venueId, count });
+      venueCam.viewers(venueId, count).catch((e) => errorLog.server(e, 'venueCam.viewers', { venueId }));
     }, COUNT_MS).unref());
   }
 
@@ -461,7 +453,8 @@ function registerSockets(io) {
       currentVenue = venueId;
       socket.join(`venue:${venueId}`);
       announceVenue(venueId);
-      done({ success: true, count: venueViewers(venueId) });
+      // Владельцу — просят ли камеру прямо сейчас (venue:demand).
+      done({ success: true, count: venueCam.count(venueId), demand: venueCam.wanted(venueId) });
     });
 
     // Вход в комнату эфира: чат, счётчик зрителей, смена типа эфира.
@@ -507,6 +500,7 @@ function registerSockets(io) {
       // Сокет уже вышел из комнат — счётчик пересчитается без него.
       if (currentStreamKey) announceViewers(currentStreamKey);
       if (currentVenue) announceVenue(currentVenue);
+      if (socket.data.venueOwn) venueCam.ownerLeft(socket.data.venueOwn);
 
       try {
         const userId = socket.data.userId;

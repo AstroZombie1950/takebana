@@ -45,22 +45,58 @@ const PLAYLIST_SEGMENTS = 6;   // ~12 секунд в плейлисте: мен
 const RESTART_DELAY_MS = 2000;
 const MAX_RESTARTS = 5;        // дальше молчим: чинить надо не перезапуском
 
-// Транскод 1080p60 → 720p30 на vCPU сервера (KVM 4) — 0,78 ядра на один эфир,
-// три одновременно — 2,04 ядра, все в реальном времени (замер 15.09.2026).
-// Три эфира оставляют Node, Mongo и nginx два ядра из четырёх.
+// Транскод 1080p60 → 720p30 на vCPU сервера (KVM 4) — 0,78 ядра на один эфир
+// (замер 15.09.2026).
+//
+// Несколько качеств (решение 25.09.2026): 720p, 480p и 360p одним ffmpeg,
+// плеер выбирает сам — телефон и слабая сеть берут меньшее, и трафик CDN
+// падает. Нижние кодируются быстрее (superfast). Замер 25.09 на одном
+// видео, в долях от одного 720p: 720/480/360 одним пресетом — 1,60, с
+// быстрыми нижними — 1,44, 720+360 — 1,17. Взяли 1,44: на сервере это
+// ~1,12 ядра на эфир. Поэтому полных эфиров одновременно два, а не три,
+// как было с одним качеством: 2 × 1,12 ≈ 3 × 0,78, Node, Mongo и nginx
+// по-прежнему остаются два ядра из четырёх.
 //
 // Сверх этого числа видео раньше копировалось. Так больше нельзя: копия идёт
 // мимо фильтров, то есть без водяного знака, а знак обязателен на всяком
-// видео (требование по товарному знаку, 17.09.2026). Поэтому четвёртый и
-// дальнейшие эфиры кодируются облегчённо — 480p и меньше битрейт: хуже
-// картинка, но знак на месте и сервер жив. Цена профиля на сервере
-// не замерена, замер — вместе со следующим нагрузочным прогоном.
-const MAX_FULL_TRANSCODES = 3;
+// видео (требование по товарному знаку, 17.09.2026). Поэтому дальнейшие
+// эфиры кодируются облегчённо — одно качество 480p: хуже картинка, но знак
+// на месте и сервер жив. По тому же замеру 0,54 от 720p, ~0,42 ядра.
+const MAX_FULL_TRANSCODES = 2;
 
+// Качество — подпапка /live/<ключ>/<высота>/, index.m3u8 в корне эфира —
+// общий плейлист со списком качеств: адрес для плеера прежний.
 const PROFILES = {
-    full: { height: 720, bitrate: '2500k', preset: 'veryfast', watermarkHeight: 54 },
-    lite: { height: 480, bitrate: '1200k', preset: 'ultrafast', watermarkHeight: 38 },
+    full: {
+        watermarkHeight: 54,
+        renditions: [
+            { height: 720, bitrate: 2500, preset: 'veryfast' },
+            { height: 480, bitrate: 1200, preset: 'superfast' },
+            { height: 360, bitrate: 700, preset: 'superfast' },
+        ],
+    },
+    lite: {
+        watermarkHeight: 38,
+        renditions: [{ height: 480, bitrate: 1200, preset: 'ultrafast' }],
+    },
+    // Камера заведения (utils/venueCam.js): без записи, 15 кадров — это
+    // вид зала, а не эфир. Из VP8 браузера — 0,14 от одного 720p эфира
+    // (замер 25.09), ~0,11 ядра, и только пока камеру смотрят.
+    venue: {
+        watermarkHeight: 38,
+        fps: 15,
+        exact: true,
+        renditions: [{ height: 480, bitrate: 800, preset: 'superfast' }],
+    },
 };
+
+// Сколько ядер ест конвейер каждого вида — по замерам выше. Сумма больше
+// CPU_WARN — пишем в журнал: Node, Mongo и nginx остаются без процессора,
+// тормозят и эфиры, и сайт. Повтор — только после спада ниже CPU_CALM.
+const CORES = { full: 1.12, lite: 0.42, venue: 0.11 };
+const CPU_WARN = 3;
+const CPU_CALM = 2.5;
+let cpuWarned = false;
 
 // Знак — готовый PNG с прозрачностью, собран из public/img/logo.svg. Кладём
 // в кадр при кодировании: наложение поверх плеера снималось бы вместе
@@ -79,16 +115,21 @@ function dirFor(streamKey) {
 // Чистим только своё: плейлист и сегменты. Каталог не удаляем — его может
 // держать открытым отдающий процесс.
 function clean(dir) {
-    let files;
+    let entries;
     try {
-        files = fs.readdirSync(dir);
+        entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {
         return;
     }
-    for (const name of files) {
-        if (!name.endsWith('.ts') && !name.endsWith('.m3u8')) continue;
+    for (const e of entries) {
+        // Подпапки качеств (720, 480, 360) — внутрь, но только их.
+        if (e.isDirectory()) {
+            if (/^\d+$/.test(e.name)) clean(path.join(dir, e.name));
+            continue;
+        }
+        if (!e.name.endsWith('.ts') && !e.name.endsWith('.m3u8')) continue;
         try {
-            fs.unlinkSync(path.join(dir, name));
+            fs.unlinkSync(path.join(dir, e.name));
         } catch { /* уже удалён или занят — не мешает */ }
     }
 }
@@ -140,19 +181,42 @@ function fitScale(short) {
     return `scale='if(gt(iw,ih),-2,min(${short},iw))':'if(gt(iw,ih),min(${short},ih),-2)'`;
 }
 
+// Ровно short по короткой стороне, и вверх тоже. Для камеры заведения:
+// браузер меняет размер кадра на ходу, пока оценивает канал (320×180 в
+// первые секунды, зонд 25.09), и без этого зритель получал бы то крошечную
+// картинку, то плейлист, где размер скачет посреди потока.
+function exactScale(short) {
+    return `scale='if(gt(iw,ih),-2,${short})':'if(gt(iw,ih),${short},-2)'`;
+}
+
+// Знак кладётся один раз, в верхнее качество, — нижние уменьшаются уже
+// вместе с ним, как у записей (utils/recordingHls.js). setsar=1: без него
+// 1280×720 → 854×480 выходит с неквадратным пикселем (SAR 1280/1281) —
+// так было и у облегчённого 480p до 25.09.
+// Ключи кодека с номером потока (-b:v:1) — по одному на качество.
 function videoArgs(profile) {
-    const p = PROFILES[profile];
-    return [
+    const { renditions, watermarkHeight, exact } = PROFILES[profile];
+    let graph = `[0:v]${(exact ? exactScale : fitScale)(renditions[0].height)},setsar=1[v];` +
+        `[1:v]scale=-1:${watermarkHeight}[wm];` +
+        `[v][wm]overlay=W-w-${WATERMARK_MARGIN}:${WATERMARK_MARGIN}`;
+    if (renditions.length === 1) {
+        graph += '[v0]';
+    } else {
+        graph += `,split=${renditions.length}[v0]` + renditions.slice(1).map((_, i) => `[s${i + 1}]`).join('');
+        graph += renditions.slice(1).map((r, i) => `;[s${i + 1}]${fitScale(r.height)},setsar=1[v${i + 1}]`).join('');
+    }
+    const args = [
         '-i', WATERMARK,
-        '-filter_complex',
-        `[0:v]${fitScale(p.height)}[v];` +
-        `[1:v]scale=-1:${p.watermarkHeight}[wm];` +
-        `[v][wm]overlay=W-w-${WATERMARK_MARGIN}:${WATERMARK_MARGIN}[out]`,
-        '-fpsmax', '30',
-        '-c:v', 'libx264', '-preset', p.preset, '-tune', 'zerolatency', '-pix_fmt', 'yuv420p',
-        '-b:v', p.bitrate, '-maxrate', p.bitrate, '-bufsize', String(parseInt(p.bitrate, 10) * 2) + 'k',
+        '-filter_complex', graph,
+        '-fpsmax', String(PROFILES[profile].fps || 30),
+        '-c:v', 'libx264', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p',
         '-force_key_frames', `expr:gte(t,n_forced*${SEGMENT_SECONDS})`, '-sc_threshold', '0',
     ];
+    renditions.forEach((r, i) => args.push(
+        `-preset:v:${i}`, r.preset,
+        `-b:v:${i}`, `${r.bitrate}k`, `-maxrate:v:${i}`, `${r.bitrate}k`, `-bufsize:v:${i}`, `${r.bitrate * 2}k`,
+    ));
+    return args;
 }
 
 // Выход — tee: один раз закодированный поток уходит и в HLS, и в кусок
@@ -167,15 +231,42 @@ function videoArgs(profile) {
 // (браузер, CDN), и с нуля новый эфир или перезапуск ffmpeg писали бы
 // seg00000.ts под тем же адресом — зритель получал бы кусок прошлого эфира.
 // Номер в плейлисте заодно только растёт.
-function ffmpegArgs(streamKey, dir, profile, part) {
+//
+// Качества — var_stream_map: у каждого своя подпапка и свой звук (сборка
+// hls.js у зрителя — light, отдельных звуковых дорожек не понимает),
+// master_pl_name — общий index.m3u8 в корне эфира. Запись — только верхнее
+// качество (select), нижние для неё делает utils/recordingHls.js.
+//
+// Двоеточие внутри значения — разделитель настроек tee, его экранируем.
+// Дважды: tee снимает слой экранирования, деля выходы по «|», и ещё один —
+// разбирая настройки выхода. Проверено на 4.4.8 (как на сервере) и 9.
+//
+// audio: false — у публикации нет звука (бывает у самодельных кодировщиков).
+// Без звука карта «v:0,a:0» ломает запуск, поэтому сначала пробуем со звуком,
+// а по отказу ffmpeg перезапускаем без него (spawnFfmpeg ниже).
+const teeValue = (v) => v.replace(/:/g, '\\\\:');
+
+// input — откуда брать: эфир — с нашего RTMP, камера заведения — RTSP
+// MediaMTX с петли (по TCP: UDP-порты RTSP у него выключены).
+function inputArgs(streamKey, input) {
+    if (input) return ['-rtsp_transport', 'tcp', '-i', input];
+    return ['-i', `rtmp://127.0.0.1:1935/live/${streamKey}`];
+}
+
+function ffmpegArgs(streamKey, dir, profile, part, audio, input) {
+    const { renditions } = PROFILES[profile];
+    const variants = renditions.map((r, i) => `v:${i}${audio ? `,a:${i}` : ''},name:${r.height}`).join(' ');
     const hlsOut = '[f=hls' +
         `:hls_time=${SEGMENT_SECONDS}` +
         `:hls_list_size=${PLAYLIST_SEGMENTS}` +
         ':hls_flags=delete_segments+omit_endlist+independent_segments' +
         ':hls_start_number_source=epoch' +
         ':hls_segment_type=mpegts' +
-        `:hls_segment_filename=${path.join(dir, 'seg%05d.ts')}]` +
-        path.join(dir, 'index.m3u8');
+        ':master_pl_name=index.m3u8' +
+        `:var_stream_map=${teeValue(variants)}` +
+        `:hls_segment_filename=${path.join(dir, '%v', 'seg%05d.ts')}]` +
+        path.join(dir, '%v', 'index.m3u8');
+    const recordOut = `[select=${teeValue(audio ? 'v:0,a:0' : 'v:0')}:f=mpegts:onfail=ignore]${part}`;
 
     return [
         // warning, а не error: именно на этом уровне ffmpeg говорит о разъезде
@@ -185,7 +276,7 @@ function ffmpegArgs(streamKey, dir, profile, part) {
         // Разбор и отсев — в spawnFfmpeg ниже.
         '-nostdin', '-hide_banner', '-loglevel', 'warning',
         '-fflags', 'nobuffer',
-        '-i', `rtmp://127.0.0.1:1935/live/${streamKey}`,
+        ...inputArgs(streamKey, input),
 
         ...videoArgs(profile),
         '-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-af', AUDIO_SYNC,
@@ -199,12 +290,19 @@ function ffmpegArgs(streamKey, dir, profile, part) {
         '-max_muxing_queue_size', '1024',
 
         // tee сам потоки не выбирает: без -map ffmpeg не знает, что ему отдать.
-        // Видео берём с выхода фильтра — там оно уже со знаком.
-        '-map', '[out]', '-map', '0:a?',
+        // Видео берём с выходов фильтра — там оно уже со знаком; звук — по
+        // копии на качество.
+        ...renditions.flatMap((_, i) => ['-map', `[v${i}]`]),
+        ...(audio ? renditions.flatMap(() => ['-map', '0:a']) : []),
         '-f', 'tee',
-        part ? `${hlsOut}|[f=mpegts:onfail=ignore]${part}` : hlsOut,
+        part ? `${hlsOut}|${recordOut}` : hlsOut,
     ];
 }
+
+// Так ffmpeg отказывает, когда -map 0:a нечего взять: 4.4 пишет
+// «Stream map '0:a'…», 9 — «Stream map ''…». Другим картам пустыми
+// не бывать — видео берётся с выходов фильтра.
+const NO_AUDIO = /Stream map '[^']*' matches no streams/i;
 
 // Строки ffmpeg, по которым видно, что звук и картинка разъезжаются.
 // Порядок важен: срабатывает первое совпадение.
@@ -226,8 +324,8 @@ const TIMING = [
 function spawnFfmpeg(streamKey, job) {
     const dir = dirFor(streamKey);
     // Каждый запуск — новый кусок записи: после паузы и перезапуска тоже.
-    const part = recording.newPart(streamKey);
-    const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.profile, part), { stdio: ['ignore', 'ignore', 'pipe'] });
+    const part = job.input ? null : recording.newPart(streamKey);
+    const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.profile, part, job.audio, job.input), { stdio: ['ignore', 'ignore', 'pipe'] });
     job.proc = proc;
     // О каких видах разъезда уже сказали в этом запуске — чтобы не повторяться.
     job.warned = new Set();
@@ -236,6 +334,10 @@ function spawnFfmpeg(streamKey, job) {
         const text = String(chunk).trim();
         if (!text) return;
         console.error(`[hls ${streamKey}] ${text}`);
+
+        // Публикация без звука: карта 0:a пуста, ffmpeg не стартует.
+        // Перезапуск без звука — сразу и не в счёт обрывов (close ниже).
+        if (job.audio && NO_AUDIO.test(text)) job.audio = false;
 
         // Про метки времени ffmpeg говорит строками, а не кодом выхода, и
         // повторяет их сотнями раз за эфир. В журнал — по одной на эфир
@@ -265,6 +367,13 @@ function spawnFfmpeg(streamKey, job) {
             return;
         }
 
+        if (!job.audio && !job.silent) {
+            job.silent = true;
+            console.warn(`[hls ${streamKey}] в публикации нет звука — эфир без звуковой дорожки`);
+            spawnFfmpeg(streamKey, job);
+            return;
+        }
+
         // Эфир идёт, а ffmpeg вышел — обрыв связи с RTMP или сбой кодека.
         if (job.restarts >= MAX_RESTARTS) {
             errorLog.media(new Error(`ffmpeg падает подряд ${MAX_RESTARTS} раз, транскод остановлен`), 'hls.restarts', { streamKey, code });
@@ -278,14 +387,36 @@ function spawnFfmpeg(streamKey, job) {
         // это пять секунд без картинки у всех зрителей сразу: зритель уходит,
         // ведущий уверен, что «сайт лагает», и никто об этом не говорит.
         // Раньше запись появлялась только после третьего подряд.
-        errorLog.media(new Error(`ffmpeg вышел посреди эфира (code=${code} signal=${signal}), перезапуск ${job.restarts}/${MAX_RESTARTS}`),
-            'hls.restart', { streamKey, code, signal, restart: job.restarts });
+        // Камера заведения: вещатель ушёл — ffmpeg видит конец потока раньше,
+        // чем MediaMTX скажет об этом (venueCam.unavailable гасит и повтор).
+        // Каждый такой уход — не сбой, в журнал только «падает подряд».
+        if (!job.input) {
+            errorLog.media(new Error(`ffmpeg вышел посреди эфира (code=${code} signal=${signal}), перезапуск ${job.restarts}/${MAX_RESTARTS}`),
+                'hls.restart', { streamKey, code, signal, restart: job.restarts });
+        }
         job.timer = setTimeout(() => spawnFfmpeg(streamKey, job), RESTART_DELAY_MS);
     });
 }
 
-// Запускается на postPublish, то есть после проверки подписи и ключа.
-function start(streamKey) {
+function cpuCheck() {
+    let cores = 0;
+    const count = {};
+    for (const j of jobs.values()) {
+        if (j.stopping) continue;
+        cores += CORES[j.profile];
+        count[j.profile] = (count[j.profile] || 0) + 1;
+    }
+    if (cores < CPU_CALM) cpuWarned = false;
+    if (cpuWarned || cores < CPU_WARN) return;
+    cpuWarned = true;
+    errorLog.media(new Error(`Перекодирование близко к пределу процессора: ~${cores.toFixed(1)} ядра из 4 (эфиров ${(count.full || 0) + (count.lite || 0)}, камер ${count.venue || 0})`),
+        'hls.cpu', { cores, ...count });
+}
+
+// Эфир — на postPublish, то есть после проверки подписи и ключа.
+// Камера заведения — по готовности потока в MediaMTX (utils/venueCam.js):
+// opts.input — его адрес, opts.profile — 'venue'.
+function start(streamKey, opts = {}) {
     if (!isPlainFileName(streamKey)) {
         console.error(`[hls] некорректный streamKey, транскод не запущен: ${streamKey}`);
         return;
@@ -312,13 +443,14 @@ function start(streamKey) {
     // Останавливаемый конвейер уже не в счёте: его ffmpeg выходит до 5 с.
     let full = 0;
     for (const j of jobs.values()) if (j.profile === 'full' && !j.stopping) full++;
-    const profile = full < MAX_FULL_TRANSCODES ? 'full' : 'lite';
+    const profile = opts.profile || (full < MAX_FULL_TRANSCODES ? 'full' : 'lite');
 
-    const job = { proc: null, restarts: 0, stopping: false, timer: null, profile };
+    const job = { proc: null, restarts: 0, stopping: false, timer: null, profile, input: opts.input || null, audio: true, silent: false };
     job.done = new Promise((resolve) => { job.resolve = resolve; });
     jobs.set(streamKey, job);
     spawnFfmpeg(streamKey, job);
-    console.log(`[hls ${streamKey}] транскод ${PROFILES[profile].height}p со знаком${profile === 'lite' ? ' (лимит полных транскодов)' : ''} → /live/${streamKey}/index.m3u8`);
+    cpuCheck();
+    console.log(`[hls ${streamKey}] транскод ${PROFILES[profile].renditions.map((r) => r.height + 'p').join('/')} со знаком${profile === 'lite' ? ' (лимит полных транскодов)' : profile === 'venue' ? ' (камера заведения)' : ''} → /live/${streamKey}/index.m3u8`);
 }
 
 function stop(streamKey) {

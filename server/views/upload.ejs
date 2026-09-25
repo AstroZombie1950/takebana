@@ -38,7 +38,7 @@
         <span class="tk-note" data-i18n="<%= limitsKey %>"><%- t(limitsKey) %></span>
       </label>
 
-      <%# Фото: снимки выбора и одна кнопка на все. %>
+      <%# Фото: снимки выбора с подписью у каждого и одна кнопка на все. %>
       <section class="tk-up__photos" id="upPhotos" hidden>
         <p class="tk-panel__title" data-i18n="upload.photos"><%- t('upload.photos') %></p>
         <div class="tk-up__shots" id="upShots"></div>
@@ -121,6 +121,7 @@
   window.TK_UPLOAD = {
     drafts: <%- JSON.stringify(drafts).replace(/</g, '\\u003c') %>,
     maxSeconds: <%- JSON.stringify(maxSeconds) %>,
+    captionMax: <%- JSON.stringify(limits.caption) %>,
     videoEnabled: <%- JSON.stringify(videoEnabled) %>
   };
 </script>

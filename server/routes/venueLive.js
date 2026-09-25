@@ -1,16 +1,13 @@
-// Камера заведения на карте: владелец включает её в кабинете, гости на карте
-// смотрят. Звук и видео идут в одну сторону.
+// Камера заведения: владелец включает её на странице камеры, гости смотрят.
+// Звук и видео идут в одну сторону.
 //
-// Два движка. Свой приём (MediaMTX, utils/mediamtx.js): заведение вещает
-// по WHIP один раз, зрители забирают по WHEP, платим только за трафик.
-// Запасной — комната Daily, как было до 23.09: каждый зритель считается
-// участником и стоит денег, зато работает без своей установки. Что именно
-// включено, решают переменные окружения MTX_PUBLIC и MTX_API; браузеру
-// движок называется в ответе полем engine, и он просто идёт, куда сказали.
-//
-// До Daily это шло через публичный облачный сервер PeerJS напрямую между
-// браузерами. Без ретранслятора такое соединение за NAT мобильного оператора
-// часто не собирается — отсюда «связь через раз».
+// Два движка. Свой приём (utils/venueCam.js, решение 25.09.2026): заведение
+// вещает по WHIP на наш MediaMTX, ffmpeg режет HLS со знаком, зрители
+// смотрят через Bunny — наш канал не тратится на раздачу, и вещает камера,
+// только пока её смотрят. Запасной — комната Daily, как было до 23.09:
+// каждый зритель — участник и стоит денег, зато без своей установки.
+// Какой включён, решают переменные MTX_PUBLIC и MTX_API; браузеру движок
+// называется в ответе полем engine.
 
 const express = require('express');
 const rateLimit = require('express-rate-limit');
@@ -25,6 +22,8 @@ const restriction = require('../utils/restrict');
 const userView = require('../utils/userView');
 const daily = require('../utils/daily');
 const mediamtx = require('../utils/mediamtx');
+const venueCam = require('../utils/venueCam');
+const { hlsBase } = require('../utils/hls');
 const Establishments = require('../models/Establishments');
 const User = require('../models/User');
 const { audit } = require('../utils/audit');
@@ -49,6 +48,7 @@ async function stopCamera(venueId) {
   await Establishments.updateOne({ _id: venueId }, { $set: { online: false } });
   const io = require('../utils/io').get();
   if (io) io.to(`venue:${venueId}`).emit('venue:state', { venueId: String(venueId), online: false });
+  venueCam.switchedOff(venueId);
   await Promise.all([
     mediamtx.kick(mediamtx.pathOf(venueId)),
     daily.configured() && daily.deleteRoom(roomName(venueId))
@@ -68,46 +68,53 @@ function dailyFailure(res, err) {
 
 const ownVenue = requireOwner(Establishments, { param: 'id', field: 'owner' });
 
-// ── Свой приём: разрешения для MediaMTX ──
-// Он спрашивает нас на каждое подключение: кого пускать вещать и кого
-// смотреть. Вопрос приходит с петли (authHTTPAddress в ops/mediamtx/),
-// поэтому и отвечаем только петле: снаружи этот адрес не нужен никому.
+// ── Свой приём: MediaMTX спрашивает и сообщает ──
+// Вопрос приходит с петли (authHTTPAddress, runOnAvailable в ops/mediamtx/),
+// поэтому и отвечаем только петле: снаружи эти адреса не нужны никому.
 // Одной петли мало: за nginx с 127.0.0.1 приходит всё. Запрос через nginx
 // узнаём по X-Forwarded-For — MediaMTX ходит напрямую и его не ставит.
-// Снаружи адрес закрыт и в самом nginx (ops/nginx/takebana.conf).
+// Снаружи /api/mtx/ закрыт и в самом nginx (ops/nginx/takebana.conf).
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+const fromMtx = (req) => LOOPBACK.has(req.socket.remoteAddress) && !req.headers['x-forwarded-for'];
 
+// Вещать — по одноразовому ключу владельца. Читать — только нашему ffmpeg:
+// RTSP у MediaMTX слушает одну петлю, WebRTC-чтение (WHEP) не выдаём никому.
 router.post('/api/mtx/auth', express.json({ limit: '4kb' }), (req, res) => {
-  if (!LOOPBACK.has(req.socket.remoteAddress) || req.headers['x-forwarded-for']) return res.status(401).end();
-  const { path, action, query } = req.body || {};
+  if (!fromMtx(req)) return res.status(401).end();
+  const { path, action, query, protocol, ip } = req.body || {};
   if (typeof path !== 'string' || typeof action !== 'string') return res.status(401).end();
-  // Разрешение — одноразовый ключ, выданный маршрутами ниже.
-  if (!mediamtx.allowed({ path, action, query })) return res.status(401).end();
+  if (action === 'read' && protocol === 'rtsp' && LOOPBACK.has(ip)) return res.status(204).end();
+  if (action === 'publish' && mediamtx.allowed({ path, action, query })) return res.status(204).end();
+  res.status(401).end();
+});
+
+// Публикация пошла и кончилась (runOnAvailable / runOnUnavailable):
+// запустить и погасить нарезку HLS.
+router.post('/api/mtx/available', (req, res) => {
+  if (!fromMtx(req)) return res.status(401).end();
+  venueCam.available(String(req.query.path || ''));
+  res.status(204).end();
+});
+router.post('/api/mtx/unavailable', (req, res) => {
+  if (!fromMtx(req)) return res.status(401).end();
+  venueCam.unavailable(String(req.query.path || ''));
   res.status(204).end();
 });
 
-// Сколько человек смотрит камеру — владельцу в кабинет. Тот же вопрос
-// к MediaMTX отвечает и на «а идёт ли она вообще».
-router.get('/api/venues/:id/viewers', requireAuth, ownVenue, async (req, res) => {
-  if (!mediamtx.configured()) return res.json({ engine: 'daily', viewers: null });
-  const { live, readers } = await mediamtx.state(mediamtx.pathOf(req.params.id));
-  res.json({ engine: 'whip', live, viewers: readers });
-});
-
-// Включить камеру. Комната пересоздаётся на каждый запуск: у прежней мог
-// выйти срок, в ней могли остаться подключения прошлого показа.
+// Включить камеру. Свой приём: отметка «в эфире» — да, видео — нет:
+// оно пойдёт по venue:demand, когда на странице появятся зрители.
+// Daily: комната пересоздаётся на каждый запуск — у прежней мог выйти
+// срок, в ней могли остаться подключения прошлого показа.
 router.post('/api/venues/:id/live', requireAuth, requireNotBanned, ownVenue, async (req, res) => {
-  // Свой приём: комнату поднимать не нужно — достаточно разрешения
-  // на публикацию. Поток заводится в момент, когда браузер начнёт вещать.
   if (mediamtx.configured()) {
-    const path = mediamtx.pathOf(req.params.id);
     // Прошлый вещатель мог остаться висеть — например, вкладку закрыли
     // в метро. Новый показ начинается с чистого листа.
-    await mediamtx.kick(path);
+    await mediamtx.kick(mediamtx.pathOf(req.params.id));
     await Establishments.updateOne({ _id: req.params.id }, { $set: { online: true } });
     audit(req, 'venue.live.on', { targetType: 'venue', target: req.resource });
     announceState(req, req.params.id, true);
-    return res.json({ engine: 'whip', url: mediamtx.url(path, 'whip', mediamtx.grant(path, 'publish', req.session.userId)) });
+    venueCam.switchedOn(req.params.id, venueCam.count(req.params.id));
+    return res.json({ engine: 'whip', demand: venueCam.wanted(req.params.id) });
   }
 
   const name = roomName(req.params.id);
@@ -130,8 +137,8 @@ router.delete('/api/venues/:id/live', requireAuth, ownVenue, async (req, res) =>
   await Establishments.updateOne({ _id: req.params.id }, { $set: { online: false } });
   audit(req, 'venue.live.off', { targetType: 'venue', target: req.resource });
   announceState(req, req.params.id, false);
-  // Свой приём: закрываем вещателя — зрители отваливаются вместе с ним.
   if (mediamtx.configured()) {
+    venueCam.switchedOff(req.params.id);
     await mediamtx.kick(mediamtx.pathOf(req.params.id));
     return res.json({ ok: true });
   }
@@ -145,8 +152,9 @@ router.delete('/api/venues/:id/live', requireAuth, ownVenue, async (req, res) =>
 
 const offline = (res) => res.status(409).json({ message: 'Заведение сейчас не показывает камеру' });
 
-// Гость: токен только на просмотр, в списке участников его нет.
-// Владелец приходит сюда же после обрыва и получает право вещать: вернуться
+// Гость: свой приём — адрес HLS на CDN, Daily — токен только на просмотр.
+// Владелец приходит сюда за правом вещать: на своём приёме — каждый раз,
+// когда камеру попросили (venue:demand), в Daily — после обрыва: вернуться
 // через /live значило бы пересоздать комнату и выкинуть всех гостей.
 // Ограниченному владельцу права вещать нет и здесь: /live закрыт
 // requireNotBanned, а повторный вход — вторая дверь в ту же комнату.
@@ -159,20 +167,18 @@ router.post('/api/venues/:id/watch', requireAuth, async (req, res) => {
   const isOwner = String(venue.owner) === String(userId)
     && !(await User.exists({ _id: userId, banned: true }));
 
-  // Свой приём: гостю — разрешение на просмотр, владельцу после обрыва —
-  // снова на публикацию. Поток не идёт (вкладка вещателя умерла, не успев
-  // сказать) — снимаем отметку, как это делалось с комнатой Daily.
   if (mediamtx.configured()) {
     const path = mediamtx.pathOf(req.params.id);
-    const { live, unknown } = await mediamtx.state(path);
-    if (!live && !unknown && !isOwner) {
+    if (isOwner) return res.json({ engine: 'whip', url: mediamtx.url(path, 'whip', mediamtx.grant(path, 'publish', userId)) });
+    // Вещать можно только со страницы камеры: владельца на ней нет —
+    // вкладка умерла, не успев сказать, — камера на деле выключена.
+    if (!venueCam.ownerHere(req.params.id)) {
       await Establishments.updateOne({ _id: req.params.id }, { $set: { online: false } });
       announceState(req, req.params.id, false);
       return offline(res);
     }
-    return res.json(isOwner
-      ? { engine: 'whip', url: mediamtx.url(path, 'whip', mediamtx.grant(path, 'publish', userId)) }
-      : { engine: 'whep', url: mediamtx.url(path, 'whep', mediamtx.grant(path, 'read', userId)) });
+    // Адрес CDN; у кого Bunny закрыт — его подменит utils/mediaFallback.js.
+    return res.json({ engine: 'hls', url: `${hlsBase}/live/${venueCam.hlsKey(req.params.id)}/index.m3u8` });
   }
 
   try {

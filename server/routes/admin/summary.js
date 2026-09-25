@@ -189,8 +189,9 @@ router.get('/system', requireAdmin, async (req, res) => {
     // Папки может не быть на свежей машине — это не повод ронять вкладку.
   }
 
-  const [sessions, collections] = await Promise.all([
+  const [sessions, traffic, collections] = await Promise.all([
     mongoose.connection.collection('mySessions').countDocuments(),
+    require('../../utils/traffic').summary(),
     Promise.all([
       ['Люди', User], ['Эфиры и черновики', Stream], ['Отрезки эфиров', StreamSession],
       ['Записи', Recording], ['Жалобы', Report], ['Заведения', Establishments],
@@ -216,6 +217,7 @@ router.get('/system', requireAdmin, async (req, res) => {
       sessions,
     },
     disk,
+    traffic,
     env: ENV_FLAGS.map(([keys, title]) => {
       const missing = keys.filter((k) => !process.env[k]);
       return { key: keys[0], title, set: !missing.length, missing: missing.length < keys.length ? missing : [] };

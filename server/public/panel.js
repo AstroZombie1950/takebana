@@ -604,7 +604,7 @@ const REASONS = {
   spam: 'спам', abuse: 'оскорбления', adult: 'контент 18+',
   violence: 'насилие', copyright: 'права на контент', other: 'другое',
 };
-const TARGETS = { stream: 'эфир', user: 'пользователь', message: 'сообщение чата', recording: 'запись эфира', video: 'видео галереи', comment: 'комментарий' };
+const TARGETS = { stream: 'эфир', user: 'пользователь', message: 'сообщение чата', recording: 'запись эфира', video: 'видео галереи', photo: 'фото галереи', comment: 'комментарий' };
 
 VIEWS.reports = {
   title: 'Жалобы',
@@ -649,6 +649,10 @@ VIEWS.reports = {
         if (r.targetType === 'video' && t) {
           acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/video/' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
                   '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="video-delete" data-id="' + esc(r.targetId) + '">Удалить видео</button>';
+        }
+        if (r.targetType === 'photo' && t) {
+          acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/photo/' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
+                  '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="photo-delete" data-id="' + esc(r.targetId) + '">Удалить фото</button>';
         }
         if (r.targetType === 'comment' && t) {
           acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="' + esc(t.href) + '#c-' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
@@ -1129,6 +1133,16 @@ VIEWS.system = {
     if (d.disk) {
       const share = Math.round((1 - d.disk.free / d.disk.total) * 100);
       html += tile('Свободно на диске', bytes(d.disk.free), 'занято ' + share + '% из ' + bytes(d.disk.total) + ' — сюда пишутся эфиры');
+    }
+    // Сверх лимита Hostinger режет весь сервер до 10 Мбит/с (utils/traffic.js).
+    if (d.traffic) {
+      const t = d.traffic;
+      const tb = (n) => (n / 1e12).toFixed(2) + ' ТБ';
+      const share = Math.round(((t.rx + t.tx) / t.limit) * 100);
+      html += tile('Трафик за месяц', tb(t.rx + t.tx) + ' · ' + share + '%',
+        'из ' + tb(t.limit) + '; исходящий ' + tb(t.tx) + ', входящий ' + tb(t.rx) +
+        '. К концу месяца ≈ ' + tb(t.forecast) + (t.forecast > t.limit ? ' — <b>выше лимита</b>' : '') +
+        (new Date(t.since).getUTCDate() > 1 && t.month === new Date(t.since).toISOString().slice(0, 7) ? '. Счёт с ' + when(t.since) : ''));
     }
     html += '</div>';
 
@@ -1637,6 +1651,13 @@ view.addEventListener('click', async (e) => {
       if (!await confirmDialog('Удалить видео? Файл уйдёт из хранилища навсегда.', { okText: 'Удалить' })) return;
       await send('DELETE', '/video/' + id);
       toast('Видео удалено', 'ok');
+      return show();
+    }
+
+    if (act === 'photo-delete') {
+      if (!await confirmDialog('Удалить фото? Файл уйдёт из хранилища навсегда.', { okText: 'Удалить' })) return;
+      await send('DELETE', '/photo/' + id);
+      toast('Фото удалено', 'ok');
       return show();
     }
 

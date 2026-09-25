@@ -1,0 +1,107 @@
+/* Страница фото (/photo/:id, 25.09.2026) — поверх css/watch.css: общие
+ * у записи, видео и фото кнопки, описание и комментарии берутся оттуда.
+ * Разметка — views/photo.ejs.
+ *
+ * Широкий экран: снимок слева на тёмном поле, справа колонка — автор,
+ * сердечко, подпись, комментарии; снимок липнет к верху при прокрутке
+ * комментариев. Телефон и планшет — одна колонка, снимок от края до края.
+ */
+
+.tk-watch--photo {
+  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-rows: auto;
+  grid-template-areas: "stage main";
+  max-width: 1440px;
+}
+
+.tk-photo__stage {
+  position: sticky;
+  top: calc(var(--tk-head-h) + 20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  background: #000;
+  border: 1px solid var(--tk-rule);
+  /* Свайп обрабатывает tk-watch.js; вертикальную прокрутку оставляем. */
+  touch-action: pan-y;
+}
+
+.tk-photo__img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - var(--tk-head-h) - 60px);
+  max-height: calc(100dvh - var(--tk-head-h) - 60px);
+  object-fit: contain;
+}
+
+/* Стрелки к соседним фото — по краям снимка. */
+.tk-photo__nav {
+  position: absolute;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  background: rgba(10, 10, 10, .6);
+  border: 1px solid var(--tk-rule);
+  color: var(--tk-beige);
+  transition: color .15s ease, border-color .15s ease;
+}
+
+.tk-photo__nav:hover,
+.tk-photo__nav:focus-visible { color: var(--tk-paper); border-color: var(--tk-accent); }
+.tk-photo__nav--prev { left: 12px; }
+.tk-photo__nav--next { right: 12px; }
+
+/* Слева: справа сверху на снимке — водяной знак (utils/watermark.js). */
+.tk-photo__count {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  padding: 3px 8px;
+  background: rgba(10, 10, 10, .72);
+  font: 400 12px/1.4 Oswald, sans-serif;
+  letter-spacing: .06em;
+  color: var(--tk-paper);
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-photo__head { margin-top: 0; }
+
+/* «Фото» под именем — ссылка на всю вкладку автора. */
+.tk-photo__all {
+  font: 400 12px/1.4 Oswald, sans-serif;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--tk-muted);
+  text-decoration: none;
+}
+
+.tk-photo__all:hover { color: var(--tk-paper); }
+
+.tk-photo__acts { margin-top: 14px; }
+
+/* Сердечко нажато — залито киноварью, а не полупрозрачно, как оценки видео. */
+.tk-photo__like[aria-pressed="true"] { color: var(--tk-accent); background: none; }
+.tk-photo__like[aria-pressed="true"] svg { fill: currentColor; fill-opacity: 1; }
+
+@media (max-width: 1279px) {
+  .tk-watch--photo { grid-template-columns: minmax(0, 1fr) 340px; }
+}
+
+/* ── Телефон и планшет: одна колонка ── */
+@media (max-width: 1023px) {
+  .tk-watch--photo {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "stage" "main";
+  }
+
+  .tk-photo__stage { position: relative; top: auto; border: 0; min-height: 0; }
+  .tk-photo__img { max-height: 80vh; max-height: 80dvh; }
+  .tk-photo__nav { width: 34px; height: 34px; }
+  .tk-photo__nav--prev { left: calc(8px + var(--tk-safe-l)); }
+  .tk-photo__nav--next { right: calc(8px + var(--tk-safe-r)); }
+}

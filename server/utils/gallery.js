@@ -1,52 +1,51 @@
-// Галерея человека одной лентой: фото (строками в User.gallery, utils/
-// galleryPhotos.js) и видео (models/GalleryVideo.js) вперемешку, новые
-// сверху. Нужна превью в профиле и странице /userPage/:id/gallery
-// (routes/streaming/catalog.js).
-//
-// Даты у фото отдельно не хранятся, но имя файла начинается с метки времени
-// загрузки (utils/image.js, newName) — по ней и сортируем. Фото и видео
-// у человека не больше 130 (100 и 30), поэтому лента собирается в памяти
-// целиком, а страница — срез.
+// Галерея человека — две вкладки (решение заказчика 25.09.2026): «Фото»
+// (models/GalleryPhoto.js) и «Видео» (models/GalleryVideo.js), новые сверху.
+// До 25.09 это была одна лента вперемешку. Нужны профилю (начало каждой
+// вкладки) и страницам /@ник/photos и /@ник/videos (routes/streaming/catalog.js),
+// а ещё карте сайта (routes/seo.js).
 
+const GalleryPhoto = require('../models/GalleryPhoto');
 const GalleryVideo = require('../models/GalleryVideo');
 
-const PREVIEW = 12;
+// В профиле — сетка фото 3×4 и шесть видео; на странице вкладки — по PAGE.
+const PREVIEW = { photos: 12, videos: 6 };
 const PAGE = 24;
 
-const photoTime = (url) => {
-  const m = /\/(\d{13})-[0-9a-f]+\.webp$/.exec(url);
-  return m ? Number(m[1]) : 0;
-};
+const PHOTO_FIELDS = 'url caption likes comments createdAt';
+const VIDEO_FIELDS = 'status error duration thumb upload title views likes comments createdAt';
 
-// Лента из готовых данных — фото из User.gallery и ролики: ею же карта
-// сайта раскладывает фото по страницам галереи (routes/seo.js), не спрашивая
-// базу на каждого человека.
-function arrange(photos, videos) {
-  return [
-    ...videos.map((v) => ({ type: 'video', at: +v.createdAt, i: 0, video: v })),
-    // i — порядок в массиве: старые фото без метки идут в конце, но тоже
-    // от новых к старым.
-    ...photos.map((url, i) => ({ type: 'photo', at: photoTime(url), i, url })),
-  ].sort((a, b) => b.at - a.at || b.i - a.i);
+// Номер страницы в пределах: за пределами — последняя.
+function page(total, n) {
+  const pages = Math.max(1, Math.ceil(total / PAGE));
+  const current = Math.min(Math.max(1, n || 1), pages);
+  return { page: current, pages, skip: (current - 1) * PAGE };
+}
+
+// Фото: skip/limit — срез ленты.
+function photos(userId, { skip = 0, limit = PREVIEW.photos } = {}) {
+  return GalleryPhoto.find({ userId }).sort({ createdAt: -1 }).skip(skip).limit(limit).select(PHOTO_FIELDS).lean();
 }
 
 // self — смотрит владелец: ему видны и ролики, которые ещё грузятся,
 // ждут публикации, пережимаются или не вышли.
-async function feed(user, self) {
-  const videos = await GalleryVideo.find({ userId: user._id, ...(self ? {} : { status: 'ready' }) })
-    .select('status error duration thumb upload title views createdAt')
-    .lean();
-  const photos = user.gallery || [];
-  // Число в заголовке — то, что можно смотреть: без роликов в работе.
-  const count = photos.length + videos.filter((v) => v.status === 'ready').length;
-  return { list: arrange(photos, videos), count };
+function videoFilter(userId, self) {
+  return { userId, ...(self ? {} : { status: 'ready' }) };
 }
 
-// Страница ленты: page с 1, за пределами — последняя.
-function page(list, n) {
-  const pages = Math.max(1, Math.ceil(list.length / PAGE));
-  const current = Math.min(Math.max(1, n || 1), pages);
-  return { items: list.slice((current - 1) * PAGE, current * PAGE), page: current, pages };
+function videos(userId, self, { skip = 0, limit = PREVIEW.videos } = {}) {
+  return GalleryVideo.find(videoFilter(userId, self)).sort({ createdAt: -1 }).skip(skip).limit(limit).select(VIDEO_FIELDS).lean();
 }
 
-module.exports = { PREVIEW, PAGE, arrange, feed, page };
+// Числа на вкладках — то, что можно смотреть: без роликов в работе.
+// listed — сколько карточек у владельца всего, вместе с незаконченными:
+// по нему листалка и «Все видео».
+async function counts(userId, self) {
+  const [photosN, videosN, listed] = await Promise.all([
+    GalleryPhoto.countDocuments({ userId }),
+    GalleryVideo.countDocuments({ userId, status: 'ready' }),
+    self ? GalleryVideo.countDocuments({ userId }) : null,
+  ]);
+  return { photos: photosN, videos: videosN, videosListed: listed === null ? videosN : listed };
+}
+
+module.exports = { PREVIEW, PAGE, page, photos, videos, counts };

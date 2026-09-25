@@ -1,5 +1,5 @@
-/* Окно просмотра во весь экран: фото и видео галереи профиля (profile.js),
- * картинки и видео из переписки (chats.js). */
+/* Окно просмотра во весь экран: аватар в профиле (gallery.js), видео
+ * из переписки (chats.js). */
 
 .tk-lightbox {
   position: fixed;
@@ -23,12 +23,9 @@
   display: block;
 }
 
-/* См. выше: display отдельно, иначе .hidden не спрячет стрелки, когда
- * в галерее одно фото или открыт аватар. */
-.tk-lightbox__btn:not(.hidden) { display: flex; }
-
 .tk-lightbox__btn {
   position: absolute;
+  display: flex;
   width: 44px;
   height: 44px;
   align-items: center;
@@ -48,21 +45,8 @@
 }
 
 /* Окно во весь экран, поверх него — системные панели: крестик держим ниже
- * чёлки, стрелки — правее и левее скруглённых углов. */
+ * чёлки. */
 .tk-lightbox__close { top: calc(20px + var(--tk-safe-t)); right: calc(20px + var(--tk-safe-r)); }
-.tk-lightbox__prev { left: calc(20px + var(--tk-safe-l)); }
-.tk-lightbox__next { right: calc(20px + var(--tk-safe-r)); }
-
-.tk-lightbox__count {
-  position: absolute;
-  bottom: calc(20px + var(--tk-safe-b));
-  left: 50%;
-  transform: translateX(-50%);
-  font-family: Oswald, sans-serif;
-  font-size: 13px;
-  letter-spacing: .1em;
-  color: var(--tk-beige);
-}
 
 /* Видео: плеер 16:9 по ширине окна. */
 .tk-videobox__stage {
@@ -74,6 +58,4 @@
 @media (max-width: 767px) {
   .tk-lightbox__btn { width: 38px; height: 38px; }
   .tk-lightbox__close { top: calc(12px + var(--tk-safe-t)); right: calc(12px + var(--tk-safe-r)); }
-  .tk-lightbox__prev { left: calc(8px + var(--tk-safe-l)); }
-  .tk-lightbox__next { right: calc(8px + var(--tk-safe-r)); }
 }

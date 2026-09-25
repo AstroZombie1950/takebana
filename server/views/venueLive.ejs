@@ -33,9 +33,10 @@
       <div class="tk-live__grid" id="stage">
         <section class="tk-live__col">
           <div class="tk-live__player" id="player">
-            <%# У владельца — своя камера без звука (иначе эхо), у гостя —
-                картинка заведения со знаком поверх: кадр собирает браузер,
-                положить знак в сам кадр нечем (app.css, .tk-wm). %>
+            <%# У владельца — своя камера без звука (иначе эхо). У гостя —
+                картинка заведения: на своём приёме знак уже в кадре (HLS,
+                utils/hls.js), в комнате Daily — поверх (app.css, .tk-wm):
+                кадр там собирает браузер. %>
             <video id="venueVideo" class="video-fit-contain" autoplay playsinline<% if (isOwner) { %> muted<% } %> hidden></video>
             <% if (!isOwner) { %><span class="tk-wm" id="venueWm" aria-hidden="true" hidden></span><% } %>
 
@@ -134,9 +135,11 @@
   </main>
 </div>
 
-<%# Движок камеры называет сервер: свой приём (tk-whip.js) или комната
+<%# Движок камеры называет сервер: свой приём — владелец вещает по WHIP
+    (tk-whip.js), гость смотрит HLS через CDN (tk-hls.js); или комната
     Daily (tk-daily.js — её грузит шапка вошедшему). %>
-<% if (currentUser && !restricted) { %><script defer src="<%= asset('/tk-whip.js') %>"></script><% } %>
+<% if (isOwner) { %><script defer src="<%= asset('/tk-whip.js') %>"></script><% } %>
+<% if (currentUser && !restricted && !isOwner) { %><script defer src="<%= asset('/tk-hls.js') %>"></script><% } %>
 <script defer src="<%= asset('/tk-venue-live.js') %>"></script>
 </body>
 </html>

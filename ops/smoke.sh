@@ -287,6 +287,8 @@ expect "client-error: 20 КБ отбиты"      "413"     POST /api/client-erro
 # Права для MediaMTX — только ему, с петли: снаружи адреса нет (nginx — 404),
 # напрямую в приложение — 401 (аудит 23.09, п. 3.9).
 expect "POST /api/mtx/auth снаружи"      "401|404" POST /api/mtx/auth "${JSON[@]}" -d '{"path":"x","action":"publish"}'
+# События MediaMTX (25.09): петля без X-Forwarded-For — это он сам; с ним — чужой.
+expect "POST /api/mtx/available снаружи" "401|404" POST "/api/mtx/available?path=venue_000000000000000000000000" -H 'X-Forwarded-For: 203.0.113.5'
 
 step "Удалённые маршруты: их не должно быть"
 expect "/stream"        "404" GET /stream

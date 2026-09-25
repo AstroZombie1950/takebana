@@ -22,6 +22,7 @@ const sharp = require('sharp');
 const { USER_PIXELS } = require('../../utils/watermark');
 const GalleryVideo = require('../../models/GalleryVideo');
 const galleryVideo = require('../../utils/galleryVideo');
+const galleryPhotos = require('../../utils/galleryPhotos');
 const { requireAuth, requireAuthApi, requireNotBanned } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validate');
 const { commonDataMiddleware } = require('./shared');
@@ -72,7 +73,7 @@ router.get('/upload', requireAuth, commonDataMiddleware, async (req, res) => {
     drafts: drafts.map(draftView),
     videoEnabled: galleryVideo.enabled,
     maxSeconds: galleryVideo.MAX_SECONDS,
-    limits: { title: galleryVideo.TITLE_MAX, description: galleryVideo.DESCRIPTION_MAX },
+    limits: { title: galleryVideo.TITLE_MAX, description: galleryVideo.DESCRIPTION_MAX, caption: galleryPhotos.CAPTION_MAX },
   });
 });
 
