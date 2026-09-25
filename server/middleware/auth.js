@@ -186,4 +186,4 @@ function wrap(handler) {
     };
 }
 
-module.exports = { safeNext, loginUrl, requireAuth, requireAuthApi, requireOwner, canModerate, requireModerator, requireAdmin, requireNotBanned, signIn, wrap };
+module.exports = { safeNext, requireAuth, requireAuthApi, requireOwner, canModerate, requireModerator, requireAdmin, requireNotBanned, signIn, wrap };

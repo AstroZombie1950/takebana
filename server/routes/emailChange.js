@@ -35,10 +35,15 @@ const TOKEN = /^[\w-]{43}$/; // 32 байта в base64url
 
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
+// В HTML-версии подстановки экранируются: адрес почты проходит лишь грубую
+// проверку и может содержать <…>. Ссылка — наша, собирается siteUrl.
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
 function letter(lang, subject, paragraphs, vars) {
   const text = paragraphs.map((p) => tr(lang, p, vars)).join('\n\n');
+  const safe = Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, esc(v)]));
   const html = paragraphs.map((p) => '<p>' + tr(lang, p, {
-    ...vars, link: vars.link ? `<a href="${vars.link}">${vars.link}</a>` : '',
+    ...safe, link: vars.link ? `<a href="${safe.link}">${safe.link}</a>` : '',
   }) + '</p>').join('');
   return { subject: tr(lang, subject), text, html };
 }

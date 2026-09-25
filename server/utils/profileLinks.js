@@ -11,6 +11,11 @@
 // на отдельные ролики и посты — нет: куда они ведут, не проверить.
 // Свой сайт — одна ссылка целиком, http или https.
 
+// Ссылки выключены по просьбе заказчика (25.09.2026): их нет ни в настройках,
+// ни на странице профиля, ни в JSON-LD. Сохранённые значения в базе не
+// трогаем, панель их по-прежнему видит. Вернуть — true.
+const ENABLED = false;
+
 const KINDS = ['site', 'youtube', 'instagram', 'tiktok', 'telegram', 'whatsapp'];
 // Названия сетей — собственные имена, не переводятся. У сайта подпись из словаря.
 const NAMES = { youtube: 'YouTube', instagram: 'Instagram', tiktok: 'TikTok', telegram: 'Telegram', whatsapp: 'WhatsApp' };
@@ -150,4 +155,4 @@ function list(links) {
   return KINDS.filter((k) => links && links[k]).map((k) => ({ kind: k, name: NAMES[k] || '', url: url(k, links[k]), display: display(k, links[k]) }));
 }
 
-module.exports = { KINDS, NAMES, parse, list };
+module.exports = { ENABLED, KINDS, NAMES, parse, list };

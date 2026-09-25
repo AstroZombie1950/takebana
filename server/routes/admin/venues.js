@@ -16,6 +16,7 @@ const { validate } = require('../../middleware/validate');
 const { audit } = require('../../utils/audit');
 const { HOURS, LOCATION, CITY, TYPE } = require('../../utils/venueFields');
 const { removeVenue } = require('../../utils/userDelete');
+const { stopCamera } = require('../venueLive');
 const { requireAdmin, paging, list, needle, namesFor, csvRoute, nameOf } = require('./shared');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -130,6 +131,8 @@ router.put('/venues/:id/status', requireAdmin, byId, validate({
 }), async (req, res) => {
   const venue = await Establishments.findByIdAndUpdate(req.params.id, { status: req.body.status }, { returnDocument: 'after' });
   if (!venue) return res.status(404).json({ message: 'Заведение не найдено' });
+  // Снятое с одобрения заведение не вещает: камера гаснет у всех.
+  if (!venue.status && venue.online) await stopCamera(venue._id);
 
   audit(req, 'venue.status', { targetType: 'venue', target: venue, meta: { status: !!req.body.status } });
   res.json({ ok: true, status: !!venue.status });

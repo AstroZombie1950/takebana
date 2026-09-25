@@ -30,7 +30,12 @@ function size(w, h) {
 
 const cache = new Map();
 async function mark(height) {
-  if (!cache.has(height)) cache.set(height, sharp(WATERMARK).resize({ height }).png().toBuffer({ resolveWithObject: true }));
+  if (!cache.has(height)) {
+    // Отказ не запоминаем: одна ошибка sharp иначе ломала знак этого
+    // размера до перезапуска процесса.
+    cache.set(height, sharp(WATERMARK).resize({ height }).png().toBuffer({ resolveWithObject: true })
+      .catch((e) => { cache.delete(height); throw e; }));
+  }
   return cache.get(height);
 }
 

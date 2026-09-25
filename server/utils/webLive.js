@@ -60,8 +60,8 @@ function launch(room, rtmpUrl, portrait) {
   });
 }
 
-// Ведущий уже в комнате: без звонка Daily выход не запустит. Хост — тот,
-// на котором открыт пульт, как у адреса приёма для OBS (streamPages.js).
+// Ведущий уже в комнате: без звонка Daily выход не запустит. Хост — как
+// у адреса приёма для OBS (utils/site.js, publicHost).
 async function start({ streamKey, dailyRoomName, portrait }, host) {
   const rtmpUrl = ingestUrl(host, streamKey);
   for (let attempt = 1; ; attempt++) {

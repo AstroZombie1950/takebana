@@ -83,8 +83,10 @@
         <!-- О себе и ссылки: одной кнопкой (/settings/about). Ссылку сети
              сервер собирает сам по логину (utils/profileLinks.js); под полем —
              что получилось, чтобы проверить переходом. -->
-        <section class="tk-panel tk-set__about">
-          <p class="tk-panel__title" data-i18n="settings.about"><%- t('settings.about') %></p>
+        <%# Пока ссылки выключены (utils/profileLinks.js, ENABLED) — только описание. %>
+        <% var aboutKey = linksOn ? 'settings.about' : 'settings.aboutBio'; %>
+        <section class="tk-panel tk-set__about<% if (!linksOn) { %> tk-set__about--bio<% } %>">
+          <p class="tk-panel__title" data-i18n="<%= aboutKey %>"><%- t(aboutKey) %></p>
           <form class="tk-form tk-set__form" id="aboutForm" novalidate>
             <div class="tk-set__about-cols">
               <div class="tk-set__bio">
@@ -92,6 +94,7 @@
                 <textarea id="profileBio" class="tk-field" maxlength="300" rows="7" placeholder="<%= ta('settings.bioPh') %>" data-i18n-placeholder="settings.bioPh"><%= profile.bio %></textarea>
                 <p class="tk-note tk-set__count" id="bioCount" aria-live="polite"><%= profile.bio.length %>/300</p>
               </div>
+              <% if (linksOn) { %>
               <div class="tk-set__nets">
                 <p class="tk-form__label" data-i18n="settings.links"><%- t('settings.links') %></p>
                 <% linkKinds.forEach(function (k) { var l = profile.links[k]; %>
@@ -108,6 +111,7 @@
                 <% }) %>
                 <p class="tk-note" data-i18n="settings.linksHint"><%- t('settings.linksHint') %></p>
               </div>
+              <% } %>
             </div>
             <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>
           </form>

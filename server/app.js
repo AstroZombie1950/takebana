@@ -86,11 +86,8 @@ if (process.env.START_SERVER === 'prod') {
 
 const path = require('path');
 
-
-
+// Медиасервер (RTMP на 1935) поднимается самим подключением модуля.
 const mediaServer = require('./mediaServer');
-
-// media server is initialized by requiring it above
 
 // ── Сборка приложения ────────────────────────────────────────────────────────
 //
@@ -133,6 +130,33 @@ app.use(['/panel', '/api/admin'], (req, res, next) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   next();
 });
+// Статика — до сессий: иначе каждый файл, который nginx не перехватывает
+// (/map/*.json, манифест, локально — всё), читал сессию из Mongo. Имена
+// файлов public/ с маршрутами не совпадают, и старшинство не меняется.
+// Шрифты стоят отдельным монтажом до общей статики только ради кэша: файл под
+// своим именем не меняется никогда, поэтому год и immutable — браузер не пойдёт
+// даже за 304. На проде их отдаёт nginx, здесь это для локальной разработки.
+app.use('/fonts', express.static(path.join(__dirname, 'public', 'fonts'), {
+    maxAge: '1y',
+    immutable: true,
+}));
+
+app.use(express.static(path.join(__dirname, 'public'), {
+    // Папка без косой на конце — не редирект на «папку/», а мимо, к маршрутам:
+    // /map — страница карты, а public/map — стили подложки (tk-map.js).
+    redirect: false,
+    // Сжатые копии в /min/ несут хеш в имени, исходники — в ?v=
+    // (utils/assets.js): при правке файла меняется сам адрес, поэтому
+    // кэшировать можно навсегда. Без версии — ETag и перепроверка. На проде
+    // то же делает nginx (ops/nginx/takebana.conf), здесь — для локального
+    // запуска и чтобы правило жило рядом с раздачей.
+    setHeaders(res) {
+        const req = res.req;
+        if (req && (req.path.startsWith('/min/') || req.query.v)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+    },
+}));
 app.use(sessionMiddleware);
 app.use(keepAlive);
 
@@ -213,31 +237,7 @@ app.set('view engine', 'ejs');
 // Установка пути к папке с шаблонами
 app.set('views', path.join(__dirname, '/views'));
 
-// Шрифты стоят отдельным монтажом до общей статики только ради кэша: файл под
-// своим именем не меняется никогда, поэтому год и immutable — браузер не пойдёт
-// даже за 304. На проде их отдаёт nginx, здесь это для локальной разработки.
-app.use('/fonts', express.static(path.join(__dirname, 'public', 'fonts'), {
-    maxAge: '1y',
-    immutable: true,
-}));
-
-app.use(express.static(path.join(__dirname, 'public'), {
-    // Папка без косой на конце — не редирект на «папку/», а мимо, к маршрутам:
-    // /map — страница карты, а public/map — стили подложки (tk-map.js).
-    redirect: false,
-    // Сжатые копии в /min/ несут хеш в имени, исходники — в ?v=
-    // (utils/assets.js): при правке файла меняется сам адрес, поэтому
-    // кэшировать можно навсегда. Без версии — ETag и перепроверка. На проде
-    // то же делает nginx (ops/nginx/takebana.conf), здесь — для локального
-    // запуска и чтобы правило жило рядом с раздачей.
-    setHeaders(res) {
-        const req = res.req;
-        if (req && (req.path.startsWith('/min/') || req.query.v)) {
-            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        }
-    },
-}));
-// /uploads/... раздаётся строкой выше из public/uploads. Отдельный монтаж
+// /uploads/... раздаётся общей статикой выше, из public/uploads. Отдельный монтаж
 // express.static('uploads') убран: путь считался от рабочего каталога процесса,
 // а не от папки проекта, и такой папки в проекте нет — фото заведений теперь
 // тоже лежат в public/uploads/establishments.
@@ -318,9 +318,13 @@ async function startServer() {
   //
   // tryAllTransports — чтобы после неудачного вебсокета была вторая попытка
   // опросом, а не бесконечный connect_error (socket.io 4.8+).
+  // CORS: на бою — только свой сайт (PUBLIC_URL). Сейчас от чужих страниц
+  // защищает SameSite=Lax у cookie сессии, но звёздочка — лишняя дверь.
+  // Локально — любой источник: сайт открывают по 127.0.0.1 и адресу в сети.
+  const { PUBLIC_URL } = require('./utils/site');
   const io = new Server(server, {
     cors: {
-      origin: '*',
+      origin: process.env.START_SERVER === 'prod' && PUBLIC_URL ? PUBLIC_URL : '*',
       methods: ['GET', 'POST']
     },
     transports: ['websocket', 'polling'],
@@ -365,10 +369,16 @@ async function startServer() {
   }
 
   const PORT = process.env.PORT || 3000;
-  server.listen(PORT, "0.0.0.0", () => {
+  // На бою — только петля: снаружи ходят через nginx. На 0.0.0.0 до Node
+  // дотягивались через свой же TURN (coturn ретранслирует на публичный
+  // адрес сервера, ufw такое соединение с lo пропускает) и подделывали
+  // X-Forwarded-For, а с ним — лимиты по адресу. Локально — вся сеть,
+  // чтобы открыть сайт с телефона. HOST — для особых случаев.
+  const HOST = process.env.HOST || (process.env.START_SERVER === 'prod' ? '127.0.0.1' : '0.0.0.0');
+  server.listen(PORT, HOST, () => {
     console.log(`🚀 Server is running on port ${PORT}`);
     console.log(`📱 Local: http://localhost:${PORT}`);
-    console.log(`🌐 Network: http://0.0.0.0:${PORT}`);
+    console.log(`🌐 Network: http://${HOST}:${PORT}`);
     if (process.env.START_SERVER === 'local' && options) {
       console.log(`🔒 HTTPS: https://localhost:${PORT}`);
     }

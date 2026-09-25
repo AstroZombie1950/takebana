@@ -87,12 +87,24 @@ function setPrefs(userId, endpoint, patch) {
   return PushSubscription.findOneAndUpdate({ endpoint, user: userId }, { $set: set }, { returnDocument: 'after' }).lean();
 }
 
-// Есть ли у человека хоть одна открытая вкладка. Комнаты user:<id> ведут
-// сокеты (sockets/index.js); спрашиваем адаптер напрямую, а не userRooms
-// из app.set: журнал звонков и начало эфира случаются там, где запроса нет.
-function online(userId) {
+// Смотрит ли человек на сайт прямо сейчас: есть ли у него вкладка на экране.
+// Живого сокета для этого мало (правка 25.09): приложение с иконки айфон
+// сворачивает вместе с соединением, и сервер ещё секунды до тайм-аута пинга
+// считал человека на связи — звонок и эфир в это окно не будили телефон
+// вовсе, а сообщение ждало полминуты. Свёрнутую, спрятанную или
+// заблокированную вкладку страница отмечает сама (public/tk-app.js,
+// tk:away), и такой сокет здесь не в счёт.
+// Комнаты user:<id> ведут сокеты (sockets/index.js); спрашиваем адаптер
+// напрямую: журнал звонков и начало эфира случаются там, где запроса нет.
+function onScreen(userId) {
   const server = io.get();
-  return !!(server && server.sockets.adapter.rooms.has('user:' + String(userId)));
+  const ids = server && server.sockets.adapter.rooms.get('user:' + String(userId));
+  if (!ids) return false;
+  for (const id of ids) {
+    const socket = server.sockets.sockets.get(id);
+    if (socket && !socket.data.away) return true;
+  }
+  return false;
 }
 
 // Заголовок: имя человека как есть или строка словаря с ним внутри
@@ -185,4 +197,4 @@ async function sendMany(userIds, note) {
   };
 }
 
-module.exports = { pushConfigured, publicKey: PUBLIC, subscribe, unsubscribe, setPrefs, send, sendMany, online, short };
+module.exports = { pushConfigured, publicKey: PUBLIC, subscribe, unsubscribe, setPrefs, send, sendMany, onScreen, short };

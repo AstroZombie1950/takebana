@@ -26,6 +26,7 @@ const { randomUUID: uuidv4 } = require('crypto');
 const errorLog = require('../../utils/errorLog');
 const liveSignal = require('../../utils/liveSignal');
 const liveNotify = require('../../utils/liveNotify');
+const { publicHost } = require('../../utils/site');
 
 router.get('/stream-status/:streamId', async (req, res) => {
   if (!/^[a-f\d]{24}$/i.test(req.params.streamId)) return res.status(404).json({ message: 'Стрим не найден' });
@@ -171,10 +172,6 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
 }), async (req, res) => {
   const { streamKey } = req.body;
 
-  if (!streamKey) {
-    return res.status(400).json({ message: 'streamKey обязателен' });
-  }
-
   // userId в фильтре обязателен: streamKey знают и зрители (по нему идёт
   // подписка на комнату сокета), поэтому без него любой вошедший мог
   // включать и гасить чужой эфир. Чужой стрим просто не найдётся — 404.
@@ -199,7 +196,7 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
       return res.status(409).json({ message: 'Комната эфира не создана' });
     }
     try {
-      await webLive.start({ ...current, portrait }, req.hostname);
+      await webLive.start({ ...current, portrait }, publicHost(req));
     } catch (err) {
       errorLog.external(err, 'webLive.start', { stream: String(current._id) });
       return res.status(502).json({ message: 'Сервис видео не запустил трансляцию, попробуйте ещё раз' });
@@ -251,16 +248,12 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
   });
 });
 
-// // Роут для деактивации стрима (isActive: false)
+// Роут для деактивации стрима (isActive: false)
 router.post('/set-inactive', requireAuth, validate({
   streamKey: { type: 'key', required: true, label: 'Ключ трансляции' },
   portrait: { type: 'bool', label: 'Вертикальная камера' },
 }), async (req, res) => {
   const { streamKey } = req.body;
-
-  if (!streamKey) {
-    return res.status(400).json({ message: 'streamKey обязателен' });
-  }
 
   // Находим стрим по streamKey и обновляем isActive на false, сбрасываем время начала.
   // userId в фильтре — чтобы гасить можно было только свой эфир (см. /set-active).

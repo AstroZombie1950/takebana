@@ -181,10 +181,12 @@ const EN = {
     'Не указан ID получателя': 'No recipient given',
     'Диалог не найден': 'Conversation not found',
     'Выберите, кому переслать': 'Choose who to forward to',
+    'Слишком много сразу: выберите меньше сообщений или адресатов': 'Too many at once: choose fewer messages or recipients',
     'Сообщение не найдено': 'Message not found',
     'Сообщение успешно отправлено и сохранено': 'Message sent',
     'На себя подписаться нельзя': 'You cannot subscribe to yourself',
     'Слишком много сообщений. Подождите минуту.': 'Too many messages. Wait a minute.',
+    'Слишком много запросов поиска. Подождите минуту.': 'Too many searches. Wait a minute.',
     'Слишком много звонков. Подождите минуту.': 'Too many calls. Wait a minute.',
 
     // Эфиры

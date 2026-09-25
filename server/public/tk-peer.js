@@ -102,6 +102,32 @@
   var RESTART_MS = 3000;
   var STATS_MS = 3000;
 
+  // ── Потолок нашего TURN ──
+  // Портов реле в coturn 240, а звонок своим путём держит 6 из них всё
+  // время разговора, даже если пошёл напрямую (замер 25.09.2026): потолок —
+  // около 40 разговоров. Расширять заранее не стали (решение 25.09), поэтому
+  // упор должен быть виден: coturn отвечает 508, и браузер получает его в
+  // icecandidateerror (проверено на стенде). Сервер предупреждает раньше,
+  // по своей оценке (sockets/index.js, turnLoad), а это — сам факт отказа.
+  // Один отчёт со страницы: в группе соединений несколько, и отказ у всех один.
+  var FULL = { 486: 'квота на пользователя (user-quota)', 508: 'нет свободных портов реле' };
+  var fullSent = false;
+  function turnFull(code) {
+    if (fullSent) return;
+    fullSent = true;
+    fetch('/api/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        page: location.pathname,
+        name: 'TurnFull',
+        message: 'Потолок TURN: ' + FULL[code] + ' (' + code + ') — новым звонкам своим путём реле не достаётся',
+        details: ['ops/coturn/turnserver.conf: min-port/max-port, total-quota, user-quota; решение 25.09 — docs/STATUS.md'],
+      }),
+      keepalive: true
+    }).catch(noop);
+  }
+
   // opts: как у TKDaily.connect, плюс
   //   ice      — iceServers от сервера (ключи TURN)
   //   offerer  — эта сторона делает предложение (звонящий)
@@ -225,7 +251,10 @@
       count(found.mine, kind(e.candidate.candidate) + (e.candidate.relayProtocol ? ' через ' + e.candidate.relayProtocol : ''));
       send({ t: 'ice', c: e.candidate.toJSON() });
     };
-    pc.onicecandidateerror = function (e) { count(found.errors, e.errorCode + ' ' + (e.url || '') + ' ' + (e.errorText || '')); };
+    pc.onicecandidateerror = function (e) {
+      count(found.errors, e.errorCode + ' ' + (e.url || '') + ' ' + (e.errorText || ''));
+      if (FULL[e.errorCode]) turnFull(e.errorCode);
+    };
 
     function offer(restart) {
       return pc.createOffer({ iceRestart: !!restart }).then(function (o) {

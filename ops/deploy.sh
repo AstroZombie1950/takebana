@@ -12,6 +12,11 @@
 #   bash ops/deploy.sh              обычный деплой из origin/main
 #   bash ops/deploy.sh --no-fetch   перезапуск того, что уже лежит (правка .env)
 #   bash ops/deploy.sh --rollback   вернуть предыдущий коммит вручную
+#   FORCE=1 bash ops/deploy.sh      не спрашивать про идущие эфиры и звонки
+#
+# Эфиры, звонки и сокеты живут в памяти единственного процесса: перезапуск
+# их обрывает. Поэтому до перезапуска деплой смотрит в базу и, если что-то
+# идёт, спрашивает (без терминала — останавливается; FORCE=1 — не спрашивает).
 #
 # Пользовательский контент (server/public/uploads) не трогается: git reset
 # не удаляет неотслеживаемые файлы, а git clean здесь не вызывается никогда.
@@ -31,6 +36,7 @@ ok()   { printf '  %s✓%s %s\n' "$c_ok" "$c_off" "$*"; }
 warn() { printf '  %s!%s %s\n' "$c_warn" "$c_off" "$*"; }
 die()  { printf '\n%sОстановлено:%s %s\n' "$c_err" "$c_off" "$*" >&2; exit 1; }
 
+FORCE="${FORCE:-0}"
 MODE=deploy
 case "${1:-}" in
   --no-fetch) MODE=nofetch ;;
@@ -69,6 +75,28 @@ preflight() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Что сейчас оборвётся. Эфиры — по базе; звонки — отвеченные и не
+# законченные за последние четыре часа (после падения процесса бывают
+# «вечные», их не считаем).
+live_check() {
+  step "Идущие эфиры и звонки"
+  if [[ "$FORCE" == 1 ]]; then ok "FORCE=1 — не проверяем"; return; fi
+  command -v mongosh >/dev/null || { warn "mongosh не найден — проверить нечем"; return; }
+  local uri; uri=$(grep -E '^MONGODB_URI=' "$APP_DIR/server/.env" | tail -1 | cut -d= -f2- | tr -d '"'\''' | xargs || true)
+  local counts; counts=$(mongosh --quiet "${uri:-mongodb://127.0.0.1:27017/webcabar}" --eval '
+    const since = new Date(Date.now() - 4 * 3600e3);
+    print(db.streams.countDocuments({ isActive: true }) + " " +
+          db.calls.countDocuments({ status: "answered", endedAt: null, answeredAt: { $gt: since } }));' 2>/dev/null || true)
+  local streams=${counts%% *} calls=${counts##* }
+  if [[ -z "$counts" ]]; then warn "база не ответила — проверить нечем"; return; fi
+  if (( streams == 0 && calls == 0 )); then ok "ничего не идёт"; return; fi
+  warn "сейчас идёт эфиров: ${streams}, звонков: ${calls} — перезапуск их оборвёт"
+  [[ -t 0 ]] || die "без терминала не спрашиваю. Подождать или FORCE=1 bash ops/deploy.sh"
+  local answer; read -r -p "  Продолжить? [y/N] " answer
+  [[ "$answer" == [yYдД]* ]] || die "отменено: дождитесь конца эфиров"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 fetch_code() {
   step "Код"
 
@@ -90,17 +118,34 @@ fetch_code() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-install_deps() {
-  step "Зависимости"
-  cd "$APP_DIR/server"
-
+# Зависимости ставятся в стороне и подменяются переименованием: npm ci
+# прямо в server/node_modules стирал их под работающим процессом, и
+# ленивый require в эти секунды падал. Не менялся package-lock.json —
+# не ставим вовсе (отпечаток — в node_modules/.lock-sha).
+deps() {
+  local lock="$APP_DIR/server/package-lock.json" mods="$APP_DIR/server/node_modules"
+  local sha; sha=$(sha256sum "$lock" | cut -d' ' -f1)
+  if [[ -f "$mods/.lock-sha" && "$(cat "$mods/.lock-sha")" == "$sha" ]]; then
+    ok "package-lock.json не менялся — npm ci не нужен"
+    return 0
+  fi
+  local next="$APP_DIR/.deps-next" old="$APP_DIR/.deps-old"
+  rm -rf "$next" "$old" && mkdir -p "$next"
+  cp "$APP_DIR/server/package.json" "$lock" "$next/"
   # npm ci, а не install: ставит ровно package-lock.json, без сюрпризов от ^.
   # --omit=dev: nodemon на проде не нужен.
-  if npm ci --omit=dev --no-audit --no-fund 2>&1 | tail -3 | sed 's/^/    /'; then
-    ok "npm ci"
-  else
-    die "npm ci упал"
-  fi
+  (cd "$next" && npm ci --omit=dev --no-audit --no-fund 2>&1 | tail -3 | sed 's/^/    /'; exit "${PIPESTATUS[0]}") || return 1
+  echo "$sha" > "$next/node_modules/.lock-sha"
+  [[ -d "$mods" ]] && mv "$mods" "$old"
+  mv "$next/node_modules" "$mods"
+  rm -rf "$next" "$old"
+  ok "npm ci"
+}
+
+install_deps() {
+  step "Зависимости"
+  deps || die "npm ci упал"
+  cd "$APP_DIR/server"
 
   local vuln; vuln=$(npm audit --omit=dev --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const v=JSON.parse(s).metadata.vulnerabilities;console.log(`${v.critical} critical, ${v.high} high, ${v.moderate} moderate`)}catch(e){console.log("")}})' || true)
   [[ -n "$vuln" ]] && printf '    npm audit: %s\n' "$vuln"
@@ -150,7 +195,7 @@ rollback_to() {
   local sha="$1"
   step "Откат на ${sha:0:7}"
   git reset --hard "$sha"
-  (cd "$APP_DIR/server" && npm ci --omit=dev --no-audit --no-fund >/dev/null 2>&1) || warn "npm ci при откате не прошёл"
+  deps >/dev/null || warn "npm ci при откате не прошёл"
   pm2 startOrReload "$APP_DIR/ops/ecosystem.config.js" --env production --update-env >/dev/null 2>&1 || true
   if health; then
     warn "откат удался: работает предыдущая версия $(git log -1 --format='%h %s')"
@@ -168,6 +213,7 @@ main() {
   fi
 
   preflight
+  live_check
   [[ "$MODE" == nofetch ]] || fetch_code
   install_deps
   restart_app

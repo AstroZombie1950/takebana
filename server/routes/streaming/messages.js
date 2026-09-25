@@ -124,10 +124,11 @@ const isOnline = (req, userId) => {
   return !!(rooms && rooms.has(String(userId)));
 };
 
-// Сколько ждём, прежде чем будить телефон человека, у которого открыта
-// вкладка. Правило «есть сокет — молчим» было бы неверным: вкладка, забытая
-// открытой на рабочем ноутбуке, навсегда отключила бы пуши на телефон.
-// Поэтому ждём полминуты и смотрим, прочитано ли. Прочитал — будить незачем.
+// Сколько ждём, прежде чем будить телефон человека, у которого вкладка
+// на экране (utils/push.js, onScreen). Правило «на экране — молчим» было бы
+// неверным: вкладка, забытая открытой на рабочем ноутбуке, навсегда
+// отключила бы пуши на телефон. Поэтому ждём полминуты и смотрим, прочитано
+// ли. Прочитал — будить незачем. Свёрнутое приложение не ждёт: пуш сразу.
 const PUSH_WAIT_MS = 30000;
 
 // Что показать в пуше вместо текста, когда текста нет, и когда показывать
@@ -149,7 +150,7 @@ function pushText(m) {
 
 // Пуш о сообщении: на устройства получателя, когда он не читает его прямо
 // сейчас. Ничего не ждёт и ничего не роняет — пуш не важнее сообщения.
-function pushMessage({ message, sender, recipient, online }) {
+function pushMessage({ message, sender, recipient }) {
   const note = Object.assign({
     topic: 'message',
     title: userView.displayName(sender),
@@ -164,7 +165,7 @@ function pushMessage({ message, sender, recipient, online }) {
     .then((fresh) => (fresh && !fresh.readAt ? push.send(recipient._id, note) : null))
     .catch((e) => errorLog.server(e, 'push.message'));
 
-  if (!online) return fire();
+  if (!push.onScreen(recipient._id)) return fire();
   // unref: недоотправленный пуш не повод держать процесс живым при остановке.
   setTimeout(fire, PUSH_WAIT_MS).unref();
 }
@@ -207,7 +208,7 @@ async function deliver(req, { conversation, sender, recipient, content = '', att
   }
   // silent — пересылка пачкой: двадцать писем за секунду это одно действие
   // человека, и будить телефон двадцать раз незачем. Пуш уходит с последним.
-  if (!silent && !request) pushMessage({ message, sender, recipient, online: isOnline(req, recipient._id) });
+  if (!silent && !request) pushMessage({ message, sender, recipient });
   return out;
 }
 
@@ -220,7 +221,10 @@ const DIALOGS_PAGE = 30;
 // Обычный список заявки к себе не показывает.
 async function dialogPage(me, before, { requests = false } = {}) {
   const conversations = await Conversation.find({
-    $or: [{ userOne: me }, { userTwo: me }],
+    // Диалог без сообщений виден только тому, кто его завёл (userOne,
+    // openConversation): «Написать» в профиле незнакомца ставило пустую
+    // строку наверх его списка — мимо папки «Заявки».
+    $or: [{ userOne: me }, { userTwo: me, lastMessage: { $ne: null } }],
     hiddenFor: { $ne: me },
     requestFor: requests ? me : { $ne: me },
     ...(before ? { lastUpdated: { $lt: before } } : {}),
@@ -289,8 +293,12 @@ async function dialogPage(me, before, { requests = false } = {}) {
   const rows = list.concat(requests ? [] : await groupRows(me, before)).sort((a, b) => b.sortAt - a.sortAt);
   const page = rows.slice(0, DIALOGS_PAGE);
   const cut = more || rows.length > DIALOGS_PAGE;
+  // До удаления поля: page[последний] — тот же объект, и before выходил
+  // пустым — список не догружался дальше первой страницы. Страница может
+  // выйти пустой, если все диалоги на ней — с удалёнными аккаунтами.
+  const next = !cut ? null : page.length ? page[page.length - 1].sortAt : conversations[conversations.length - 1].lastUpdated;
   page.forEach((r) => { delete r.sortAt; });
-  return { list: page, more: cut, before: cut ? rows[DIALOGS_PAGE - 1].sortAt : null };
+  return { list: page, more: cut, before: next };
 }
 
 // Строки групп для списка диалогов: последнее видимое мне сообщение с его
@@ -408,7 +416,8 @@ router.post('/start-conversation', requireAuthApi, requireNotBanned, validate({
   if (await refuseRestricted(res, me, recipientId)) return;
 
   // Диалог с тем, кого нет, заводился: аккаунт удалён или id выдуман.
-  if (!(await User.exists({ _id: recipientId }))) {
+  const peer = await User.findById(recipientId).select('nickname login email avatar role').lean();
+  if (!peer) {
     return res.status(404).json({ success: false, message: 'Пользователь не найден' });
   }
   // Закрытую личку видно сразу, по кнопке «Написать», а не после текста.
@@ -424,7 +433,9 @@ router.post('/start-conversation', requireAuthApi, requireNotBanned, validate({
   }
   if (conversation.isModified()) await conversation.save();
 
-  res.json({ success: true, conversationId: conversation._id });
+  // Карточка собеседника — строке диалога, которой у страницы ещё нет
+  // (chats.js, openPeer: ?peer= на диалог старше первой страницы).
+  res.json({ success: true, conversationId: conversation._id, peer: person(peer) });
 });
 
 
@@ -658,7 +669,12 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
 // собеседникам. Подпись «переслано от» — изначальный автор, даже если
 // пересылают пересланное. comment — своё сообщение к пересылке: уходит
 // первым, над пересланными, как подпись к ним.
-router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
+// Пересылка — по тому же лимиту, что отправка, и не больше FORWARD_MAX
+// сообщений за раз: 50 выделенных × 40 адресатов давали 2 000 записей
+// и рассылок одним запросом.
+const FORWARD_MAX = 200;
+
+router.post('/messages/forward', requireAuthApi, requireNotBanned, sendLimiter, validate({
   messageIds: { type: 'array', required: true, max: 50, of: { type: 'objectId' }, label: 'Сообщения' },
   recipientIds: { type: 'array', default: [], max: 20, of: { type: 'objectId' }, label: 'Кому' },
   // Группы, где пересылающий состоит (routes/groups.js).
@@ -694,6 +710,9 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, validate({
   }).sort({ sentAt: 1 }).lean();
   if (!originals.length) {
     return res.status(404).json({ message: 'Сообщение не найдено' });
+  }
+  if ((originals.length + (comment ? 1 : 0)) * (recipientIds.length + targetGroups.length) > FORWARD_MAX) {
+    return res.status(400).json({ message: 'Слишком много сразу: выберите меньше сообщений или адресатов' });
   }
 
   const [sender, recipients] = await Promise.all([

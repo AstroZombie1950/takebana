@@ -232,13 +232,3 @@
     font-size: 19px;
   }
 }
-
-/* Строчка-призыв под текстом: на «О сервисе» это «Нет аккаунта — зарегистрироваться». */
-.tk-prose__cta {
-  margin: 48px 0 0;
-  padding-top: 28px;
-  border-top: 1px solid rgba(10, 10, 10, .18);
-  font-family: Oswald, sans-serif;
-  font-size: 17px;
-  color: var(--tk-ink-soft);
-}

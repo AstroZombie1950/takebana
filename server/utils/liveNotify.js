@@ -71,7 +71,7 @@ async function started(io, stream) {
   const offline = [];
   for (const id of ids) {
     if (io) io.to(`user:${id}`).emit('notification:new');
-    if (!push.online(id)) offline.push(id);
+    if (!push.onScreen(id)) offline.push(id);
   }
 
   const out = await push.sendMany(offline, {
@@ -100,4 +100,4 @@ function quiet(io, stream) {
     .catch((e) => errorLog.server(e, 'liveNotify.started', { stream: String(stream && stream._id) }));
 }
 
-module.exports = { started, quiet, AGAIN_MS };
+module.exports = { started, quiet };

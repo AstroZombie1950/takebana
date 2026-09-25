@@ -353,9 +353,5 @@ function stopped(streamKey) {
     return job ? job.done : Promise.resolve();
 }
 
-function isRunning(streamKey) {
-    return jobs.has(streamKey);
-}
-
 // Знак и отступ — ещё и видео галереи (utils/galleryVideo.js): один знак на всё видео сайта.
-module.exports = { start, stop, stopped, isRunning, HLS_ROOT, hlsBase };
+module.exports = { start, stop, stopped, HLS_ROOT, hlsBase };

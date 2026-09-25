@@ -305,6 +305,10 @@
   gap: 24px;
 }
 
+/* Без ссылок (utils/profileLinks.js, ENABLED) — одно описание во всю ширину. */
+.tk-set__about--bio .tk-set__about-cols { grid-template-columns: minmax(0, 1fr); }
+.tk-set__about--bio .tk-set__bio textarea.tk-field { min-height: 120px; }
+
 .tk-set__bio,
 .tk-set__nets {
   display: flex;

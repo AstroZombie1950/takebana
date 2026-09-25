@@ -24,11 +24,32 @@ const commonDataMiddleware = async (req, res, next) => {
           return next();
       }
 
-      // Получение данных текущего пользователя
-      // (lean/select) чтобы уменьшить нагрузку при каждом F5
-      const currentUser = await User.findById(currentUserId)
-        .select('nickname login email avatar gallery streamKey banned banReason adultConfirmedAt lang')
-        .lean();
+      // Всё — параллельно, одним заходом: страница вошедшего раньше ждала
+      // базу пять раз подряд (пользователь, затем счётчики, затем подписки).
+      // Подписки вместе с их эфирами — одним агрегатом. «В эфире» считаем
+      // по идущим эфирам: поля isStreaming у User нет. Дальше статус ведёт
+      // сокет: author:live (utils/liveSignal.js).
+      const me = new mongoose.Types.ObjectId(String(currentUserId));
+      const [currentUser, subscribedUsers, unreadNotificationsCount, missedCalls, unreadMessages] = await Promise.all([
+        User.findById(currentUserId)
+          .select('nickname login email avatar gallery streamKey banned banReason adultConfirmedAt lang')
+          .lean(),
+        Subscription.aggregate([
+          { $match: { subscriberId: me } },
+          { $limit: 4 },
+          { $lookup: { from: User.collection.name, localField: 'subscribedToId', foreignField: '_id', as: 'user',
+              pipeline: [{ $project: { nickname: 1, login: 1, email: 1, avatar: 1 } }] } },
+          { $unwind: '$user' },
+          { $lookup: { from: Stream.collection.name, localField: 'subscribedToId', foreignField: 'userId', as: 'live',
+              pipeline: [{ $match: { isActive: true } }, { $limit: 1 }, { $project: { _id: 1 } }] } },
+          { $replaceWith: { $mergeObjects: ['$user', { live: { $gt: [{ $size: '$live' }, 0] } }] } },
+        ]),
+        // Сообщения в колокольчик не пишутся — их счётчик у иконки переписки.
+        // Старые уведомления о сообщениях (до 18.09.2026) не считаем.
+        Notification.countDocuments({ recipient: currentUserId, isRead: false, type: { $ne: 'message' } }),
+        callLog.missedCount(currentUserId),
+        unreadTotal(currentUserId), // личные и в группах (utils/groups.js)
+      ]);
       // Пользователя уже нет: он удалил себя сам или его удалил администратор,
       // а вкладка осталась открытой. Это не ошибка сервера — гасим сеанс
       // и показываем страницу гостю, вместо 500 на каждой странице кабинета.
@@ -50,49 +71,14 @@ const commonDataMiddleware = async (req, res, next) => {
       const currentUserDisplayName = userView.displayName(currentUser);
       const currentUserAvatarStyle = userView.avatarStyle(currentUser, currentUserDisplayName);
 
-      // Получение подписок текущего пользователя (ограничиваем 4) + непрочитанные уведомления (параллельно)
-      const [userSubscriptions, unreadNotificationsCount, missedCalls, unreadMessages] = await Promise.all([
-        Subscription.find({ subscriberId: new mongoose.Types.ObjectId(currentUserId) })
-          .select('subscribedToId')
-          .limit(4)
-          .lean(),
-        // Сообщения в колокольчик не пишутся — их счётчик у иконки переписки.
-        // Старые уведомления о сообщениях (до 18.09.2026) не считаем.
-        Notification.countDocuments({ recipient: currentUserId, isRead: false, type: { $ne: 'message' } }),
-        callLog.missedCount(currentUserId),
-        unreadTotal(currentUserId) // личные и в группах (utils/groups.js)
-      ]);
-
-      // Получение данных о подписанных пользователях
-      const subscribedUserIds = (userSubscriptions || []).map(sub => sub.subscribedToId);
-
-      // «В эфире» считаем по идущим эфирам, а не по полю isStreaming: такого
-      // поля нет ни в схеме User, ни в одном документе базы (проверено
-      // 20.09.2026). Из-за него статус подписки всегда выходил «не в эфире»,
-      // а счётчик «N в эфире» над списком — всегда нулём и всегда скрытым.
-      // Дальше статус ведёт сокет: author:live (utils/liveSignal.js).
-      const [subscribedUsers, liveNow] = subscribedUserIds.length
-        ? await Promise.all([
-            User.find({ _id: { $in: subscribedUserIds } })
-              .select('nickname login email avatar')
-              .lean(),
-            Stream.find({ userId: { $in: subscribedUserIds }, isActive: true }).distinct('userId'),
-          ])
-        : [[], []];
-      const live = new Set(liveNow.map(String));
-
-      // Модификация данных о подписках для шаблона
+      // Подписки для левой панели
       const subscriptions = subscribedUsers.map(user => {
           const displayName = userView.displayName(user);
-          const avatarStyle = userView.avatarStyle(user, displayName);
-
-          const status = live.has(String(user._id)) ? 'online' : 'offline';
-
           return {
               id: user._id,
               displayName,
-              avatarStyle,
-              status
+              avatarStyle: userView.avatarStyle(user, displayName),
+              status: user.live ? 'online' : 'offline'
           };
       });
 

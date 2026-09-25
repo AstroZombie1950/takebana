@@ -36,11 +36,18 @@ if (googleOAuthConfigured) {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: process.env.CALLBACKURL,
-      scope: ['profile', 'email']
+      scope: ['profile', 'email'],
+      // state в сессии: без него чужой сайт мог подсунуть свой код Google
+      // и войти человеком в аккаунт злоумышленника (CSRF входа).
+      state: true
     },
     async function(accessToken, refreshToken, profile, done) {
-      const { id, emails, provider } = profile;
-      const email = emails[0].value;
+      const { emails, provider } = profile;
+      const email = emails && emails[0] && emails[0].value;
+      // Неподтверждённая у Google почта — не доказательство, что адрес его:
+      // по ней вошли бы в чужой аккаунт с тем же адресом. done(null, false)
+      // ведёт на /login (failureRedirect ниже).
+      if (!email || String(profile.email_verified) !== 'true') return done(null, false);
 
       let user = await User.findOne({ email: email, provider: provider });
 

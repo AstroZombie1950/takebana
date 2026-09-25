@@ -28,6 +28,7 @@ const { pipeline } = require('stream/promises');
 const storage = require('./storage');
 const errorLog = require('./errorLog');
 const streamLog = require('./streamLog');
+const { resolveWithin } = require('./safePath');
 const Recording = require('../models/Recording');
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
@@ -78,8 +79,10 @@ async function fetchSource(rec, dir) {
   const url = rec.video && rec.video.url;
   if (!url) throw new Error('у записи нет MP4');
   if (url.startsWith('/uploads/')) {
-    const local = path.join(LOCAL_UPLOADS, url.slice('/uploads/'.length));
-    if (!local.startsWith(LOCAL_UPLOADS)) throw new Error('путь вне uploads');
+    // resolveWithin, а не startsWith: тот пропускал соседнюю папку
+    // с тем же началом имени (uploads-old/…).
+    const local = resolveWithin(LOCAL_UPLOADS, url.slice('/uploads/'.length));
+    if (!local) throw new Error('путь вне uploads');
     return local;
   }
   const file = path.join(dir, 'source.mp4');

@@ -42,6 +42,20 @@ function announceState(req, id, online) {
   if (io) io.to(`venue:${id}`).emit('venue:state', { venueId: String(id), online });
 }
 
+// Погасить камеру не кнопкой владельца: бан, удаление заведения, снятие
+// одобрения в панели. Оба движка сразу — раньше гасили только Daily,
+// а вещатель на своём приёме (MediaMTX) продолжал вещать, зрители — смотреть.
+async function stopCamera(venueId) {
+  await Establishments.updateOne({ _id: venueId }, { $set: { online: false } });
+  const io = require('../utils/io').get();
+  if (io) io.to(`venue:${venueId}`).emit('venue:state', { venueId: String(venueId), online: false });
+  await Promise.all([
+    mediamtx.kick(mediamtx.pathOf(venueId)),
+    daily.configured() && daily.deleteRoom(roomName(venueId))
+      .catch((err) => errorLog.external(err, 'daily.deleteRoom', { roomName: roomName(venueId), by: 'venue.stop' })),
+  ]);
+}
+
 // requireOwner ищет заведение по :id — кривой идентификатор ронял бы его в 500.
 router.param('id', (req, res, next, id) => (
   OBJECT_ID.test(id) ? next() : res.status(404).json({ message: 'Заведение не найдено' })
@@ -264,4 +278,4 @@ router.post('/api/venues/:id/chat', requireAuth, requireNotBanned, chatLimiter, 
   res.json({ ok: true });
 });
 
-module.exports = { router, roomName };
+module.exports = { router, roomName, stopCamera };

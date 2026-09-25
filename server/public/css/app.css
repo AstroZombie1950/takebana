@@ -832,20 +832,6 @@ body.tk-app {
   .tk-crop__foot .tk-btn { flex: 1 1 0; }
 }
 
-/* Состояние вместо формы: «у вас уже есть активный стрим». */
-.tk-modal__state {
-  padding: 26px 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  text-align: center;
-  color: var(--tk-beige);
-}
-
-.tk-modal__state svg { color: var(--tk-accent); }
-.tk-modal__state p { margin: 0; font-size: 15px; }
-
 /* ── Формы внутри окон ── */
 .tk-form {
   display: flex;
@@ -1458,10 +1444,29 @@ body.tk-app {
   gap: 12px;
 }
 
-/* Разговор начался: «Отклонить» прячется, а «Принять» становится
- * «Завершить» на всю ширину. Скрытая кнопка остаётся в разметке, поэтому
- * ширину задаём по состоянию контейнера, а не через :only-child. */
-.tk-call__actions:not(.tk-call__actions--pair) .tk-btn { width: 100%; }
+/* Дозвон: единственная «Отменить» — на всю ширину. Скрытые кнопки остаются
+ * в разметке, поэтому ширину задаём по состоянию контейнера, а не через
+ * :only-child. */
+.tk-call__actions:not(.tk-call__actions--pair):not(.tk-call__actions--live) .tk-btn { width: 100%; }
+
+/* Разговор идёт: «Только голос», «Добавить», «Завершить» — одним рядом
+ * поровну (25.09). Прежде это была сетка на две колонки, и третья кнопка
+ * уходила во второй ряд. Подпись длиннее трети ширины переносится второй
+ * строкой внутри кнопки, а не выталкивает кнопку в новый ряд. */
+.tk-call__actions--live {
+  display: flex;
+  gap: 8px;
+}
+
+.tk-call__actions--live .tk-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  /* «Завершить» исходящего — tk-btn--block, ширину здесь решает ряд. */
+  width: auto;
+  padding: 12px 8px;
+  letter-spacing: .06em;
+  line-height: 1.2;
+}
 
 /* Картинка в картинке для окон звонка. Три размера — медиазапросы: при
  * прошлой переверстке их обёртки потерялись, и три правила .pip-local шли
@@ -1811,88 +1816,131 @@ body.tk-app {
     margin: 0;
   }
 
+  /* Кнопки поверх картинки — обычным потоком, прижатые к низу: ряд значков,
+   * под ним «Только голос», «Добавить», «Завершить». Прежде оба ряда стояли
+   * абсолютно, на подобранных отступах, и стоило кнопкам уйти во вторую
+   * строку, как они ложились на значки (жалоба 25.09). В потоке ряды
+   * не налезают друг на друга при любой ширине и на любом языке. */
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__body { justify-content: flex-end; }
+
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__tools,
   .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__actions {
-    position: absolute;
-    left: 16px;
-    right: 16px;
-    bottom: calc(24px + var(--tk-safe-b));
-    z-index: 2;
-    margin: 0;
-    padding: 0;
+    position: relative;
+    z-index: 3;
   }
 
   /* Сетка на телефоне лежит во весь экран, а статус сверху и кнопки снизу
    * — поверх неё. Отступы держат крайние ряды на виду: без них имена нижних
    * плиток уходили под кнопки. */
   .tk-call__grid:not([hidden]) {
-    padding: 104px 0 calc(74px + var(--tk-safe-b));
+    padding: 104px 0 calc(140px + var(--tk-safe-b));
   }
+
+  /* Знак — под шапку: в её углу он ложился на крестик «закрыть». */
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .pip-call-container > .tk-wm { top: 76px; right: 12px; }
 
   /* Своя картинка — над кнопками, а не под ними. */
   .pip-local { bottom: calc(96px + var(--tk-safe-b)); right: 12px; }
-
-  /* Кнопки разговора (23.09) — полосой над «Завершить», поверх картинки.
-   * Своя картинка поднимается ещё выше, иначе легла бы прямо на них. */
-  .tk-modal__card--call { position: relative; }
-
-  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__tools,
-  .tk-modal__card--call.has-chat .tk-call__tools {
-    position: absolute;
-    left: 16px;
-    right: 16px;
-    bottom: calc(74px + var(--tk-safe-b));
-    z-index: 3;
-    margin: 0;
-    padding: 0;
-  }
-
   .tk-modal__card--call:has(.tk-call__tools:not([hidden])) .pip-local {
-    bottom: calc(146px + var(--tk-safe-b));
+    bottom: calc(148px + var(--tk-safe-b));
   }
 
-  /* Переписка на телефоне — снизу, как и просили: шторкой над кнопками,
-   * картинка собеседника остаётся видна над ней. Столбца справа тут быть
-   * не может — окно во весь экран шириной с телефон. */
+  /* Переписка во весь экран по высоте, как и само окно: правило для
+   * компьютера ограничивает её 760px. */
   .tk-modal__card--call.has-chat {
     max-width: none;
-    display: flex;
+    height: 100%;
   }
 
-  .tk-modal__card--call.has-chat .tk-call__actions {
-    position: absolute;
-    left: 16px;
-    right: 16px;
-    bottom: calc(24px + var(--tk-safe-b));
-    z-index: 3;
-    margin: 0;
-    padding: 0;
-  }
-
-  .tk-callchat {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: calc(126px + var(--tk-safe-b));
-    z-index: 2;
-    height: 46%;
-    border-left: 0;
-    border-top: 1px solid var(--tk-rule);
-    background: var(--tk-ink);
-  }
+  .tk-callchat { background: var(--tk-ink); }
+  .tk-callchat__form { padding-bottom: calc(10px + var(--tk-safe-b)); }
 }
 
-/* Телефон боком: кнопки звонка не растягиваем на всю длинную сторону —
- * посередине, до 340px, чтобы своя картинка справа внизу не наезжала на них
- * даже на узком айфоне (667px). */
-@media (max-height: 500px) and (orientation: landscape) {
-  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__actions {
-    max-width: 340px;
-    margin: 0 auto;
-    bottom: calc(16px + var(--tk-safe-b));
+/* Телефон стоя: переписка — шторкой от нижнего края (25.09). Прежде она
+ * висела посередине экрана, между картинкой и кнопками. Ряд значков
+ * остаётся над шторкой — им же переписка и закрывается; «Только голос»,
+ * «Добавить» и «Завершить» на это время прячутся, картинка собеседника
+ * ужимается в верхнюю часть экрана. */
+@media (max-width: 640px) and (orientation: portrait) {
+  .tk-modal__card--call.has-chat { display: flex; }
+  .tk-modal__card--call.has-chat .tk-call__actions { display: none; }
+  .tk-modal__card--call.has-chat .tk-call__body { padding-bottom: 12px; }
+
+  .tk-callchat {
+    position: relative;
+    z-index: 3;
+    flex: none;
+    height: 55%;
+    border-left: 0;
+    border-top: 1px solid var(--tk-rule);
   }
+
+  .tk-modal__card--call.has-chat .tk-call__stage:not(.hidden) { bottom: 55%; }
+  .tk-modal__card--call.has-chat:has(.tk-call__tools:not([hidden])) .pip-local { bottom: 64px; }
+}
+
+/* Телефон боком: места вширь много, в высоту — мало. Значки и кнопки —
+ * одной полосой внизу посередине, значки слева (25.09): двумя рядами они
+ * закрывали половину картинки. Не уместились (узкий айфон, длинные
+ * подписи) — полоса переносится второй строкой, но не налезает. */
+@media (max-height: 500px) and (orientation: landscape) {
   .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__status { top: 60px; }
   .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__timer { top: 84px; }
-  .pip-local { width: 150px; height: 94px; bottom: calc(16px + var(--tk-safe-b)); right: 12px; }
+
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__body {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: flex-end;
+    align-items: center;
+    justify-content: center;
+    gap: 10px 20px;
+    padding-bottom: calc(14px + var(--tk-safe-b));
+  }
+
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__tools,
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__actions { margin: 0; padding: 0; }
+
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__actions--live .tk-btn {
+    flex: none;
+    padding: 12px 18px;
+    white-space: nowrap;
+  }
+
+  .tk-call__grid:not([hidden]) { padding: 96px 0 calc(72px + var(--tk-safe-b)); }
+
+  /* Знак и своя картинка — в правом верхнем углу, под шапкой, друг под
+   * другом: низ занят полосой кнопок. */
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .pip-call-container > .tk-wm { top: 60px; }
+
+  .pip-local,
+  .tk-modal__card--call:has(.tk-call__tools:not([hidden])) .pip-local {
+    width: 150px;
+    height: 94px;
+    top: 104px;
+    bottom: auto;
+    right: 12px;
+  }
+
+  /* Переписка боком — столбцом справа, как на компьютере: шторкой снизу
+   * она закрыла бы весь низкий экран. Картинка, статус и кнопки — слева
+   * от неё: точка отсчёта для них — тело окна, а не всё окно. */
+  .tk-modal__card--call.has-chat {
+    --tk-callchat-w: min(340px, 45%);
+    grid-template-columns: minmax(0, 1fr) var(--tk-callchat-w);
+  }
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)).has-chat { grid-template-rows: minmax(0, 1fr); }
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)).has-chat .tk-modal__head { right: var(--tk-callchat-w); }
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)).has-chat .tk-call__body { position: relative; }
+
+  /* Слева от переписки места вдвое меньше: кнопки — во всю ширину
+   * столбца поровну, подпись при нужде переносится, как стоя. */
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)).has-chat .tk-call__actions--live { flex: 1 1 100%; }
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)).has-chat .tk-call__actions--live .tk-btn {
+    flex: 1 1 0;
+    padding: 10px 6px;
+    white-space: normal;
+  }
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)).has-chat .pip-local { width: 112px; height: 70px; }
 }
 
 /* Бургер по одной из сторон уже пальца. Увеличиваем зону нажатия, не трогая рисунок. */

@@ -590,11 +590,6 @@
   padding: 20px 24px 40px;
 }
 
-.tk-rec__col {
-  border: 1px solid var(--tk-rule);
-  background: var(--tk-ink);
-}
-
 .tk-rec__state {
   position: absolute;
   inset: 0;
@@ -609,19 +604,6 @@
 }
 
 .tk-rec__body { margin-top: 14px; }
-
-.tk-rec__meta {
-  margin: 8px 0 0;
-  font-family: Oswald, sans-serif;
-  font-size: 13px;
-  color: var(--tk-muted);
-}
-
-.tk-rec__acts {
-  margin-top: 14px;
-  display: flex;
-  gap: 8px;
-}
 
 /* ── Полный экран: картинка, кнопки, чат ──────────────────────────────── */
 .tk-live__grid.is-full {
@@ -866,7 +848,6 @@ html.tk-stage-open { overflow: hidden; }
   }
 
   .tk-rec { padding: 0 0 32px; }
-  .tk-rec__col { border: 0; }
 }
 
 /* Телефон горизонтально: по высоте на картинку и чат одной колонкой места

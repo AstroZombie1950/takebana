@@ -77,10 +77,10 @@ async function finished(io, callId, outcome) {
       io.to(`user:${call.callee}`).emit('notification:new');
       io.to(`user:${call.callee}`).emit('call:missed');
     }
-    // Пуш — только тому, у кого вкладки нет: на связи он окно звонка уже
-    // видел и сам решил не брать трубку. Без задержки, в отличие от
+    // Пуш — только тому, у кого вкладки на экране нет: с вкладкой на экране
+    // он окно звонка уже видел и сам решил не брать трубку. Без задержки, в отличие от
     // сообщения: звонок уже кончился, ждать нечего.
-    if (!push.online(call.callee)) quiet(missedPush(call));
+    if (!push.onScreen(call.callee)) quiet(missedPush(call));
   }
   // После call:missed: открытая вкладка звонков, получив запись, перечитывает
   // журнал и гасит счётчик — он должен успеть вырасти до этого.
@@ -190,4 +190,4 @@ async function removeAll(me) {
   return ids;
 }
 
-module.exports = { created, answered, switched, ended, joined, left, missedCount, journal, between, remove, removeAll, MISSED };
+module.exports = { created, answered, switched, ended, joined, left, missedCount, journal, between, remove, removeAll };

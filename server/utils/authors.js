@@ -147,17 +147,32 @@ async function groups({ limit = GROUP_SIZE, viewer = null } = {}) {
 
 // Для витрины: несколько авторов в боковую колонку. Сначала те, кто в эфире,
 // потом популярные, потом новые — и только если есть кого показать.
+//
+// Подборка кэшируется: groups() — это distinct по всем эфирам и записям
+// и выборка всех авторов, а витрину открывает каждый. «В сети» живое и
+// у каждого зрителя своё — его берём свежим и маскируем уже после кэша.
+const FEATURED_TTL_MS = 45 * 1000;
+const featuredCache = new Map(); // limit → { at, list }
+
 async function featured(limit = 3, viewer = null) {
-  const { live, popular, fresh, recorded } = await groups({ limit, viewer });
-  const picked = [];
-  const seen = new Set();
-  for (const person of [...live, ...popular, ...fresh, ...recorded]) {
-    if (seen.has(id(person._id))) continue;
-    seen.add(id(person._id));
-    picked.push(person);
-    if (picked.length === limit) break;
+  let hit = featuredCache.get(limit);
+  if (!hit || Date.now() - hit.at > FEATURED_TTL_MS) {
+    const { live, popular, fresh, recorded } = await groups({ limit });
+    const list = [];
+    const seen = new Set();
+    for (const person of [...live, ...popular, ...fresh, ...recorded]) {
+      if (seen.has(id(person._id))) continue;
+      seen.add(id(person._id));
+      list.push(person);
+      if (list.length === limit) break;
+    }
+    hit = { at: Date.now(), list };
+    featuredCache.set(limit, hit);
   }
-  return picked;
+  if (!hit.list.length) return [];
+  const online = new Set((await User.find({ _id: { $in: hit.list.map((p) => p._id) }, isOnline: true }).select('_id').lean()).map((u) => id(u._id)));
+  const picked = hit.list.map((p) => ({ ...p, isOnline: online.has(id(p._id)) }));
+  return privacy.maskPresence(viewer, picked);
 }
 
-module.exports = { groups, featured, GROUP_SIZE, NEW_AUTHOR_DAYS };
+module.exports = { groups, featured };

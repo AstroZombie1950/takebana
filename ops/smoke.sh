@@ -6,7 +6,8 @@
 #   bash ops/smoke.sh https://takebana.com
 #   bash ops/smoke.sh https://takebana.com 91.2.3.4    проверить НОВЫЙ сервер по домену
 #                                                       до переключения DNS (curl --resolve)
-#   bash ops/smoke.sh http://91.2.3.4:3000              приложение напрямую, мимо nginx
+#   bash ops/smoke.sh http://127.0.0.1:3000             приложение напрямую, мимо nginx
+#                                                       (на самом сервере: Node слушает только петлю)
 #
 # Ключи:
 #   --login       вход настоящим пользователем: главная проверка X-Forwarded-Proto

@@ -26,7 +26,7 @@ async function notifyFollow(io, subscriber, targetId) {
   const link = '/userPage/' + String(subscriber._id);
   await Notification.create({ recipient: targetId, sender: subscriber._id, type: 'follow', link });
   if (io) io.to(`user:${targetId}`).emit('notification:new');
-  if (push.online(targetId)) return;
+  if (push.onScreen(targetId)) return;
   await push.send(targetId, {
     topic: 'follow',
     title: userView.displayName(subscriber),

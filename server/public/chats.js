@@ -423,7 +423,8 @@
   }
 
   function quoteInner(r) {
-    var name = r.gone ? '' : r.sender === ME ? i18nSpan('chats.replyYou') : escapeHtml(peer ? peer.name : '');
+    // Чужое: в личке — собеседник, в группе — автор по участникам группы.
+    var name = r.gone ? '' : r.sender === ME ? i18nSpan('chats.replyYou') : escapeHtml(peer ? peer.name : personOf(r.sender).name);
     var text = r.gone ? i18nSpan('chats.replyGone')
       : r.sealed ? i18nSpan('chats.sealed.' + (r.kind || 'text'))
       : (r.kind ? i18nSpan('chats.att.' + r.kind) + (r.text ? ' · ' : '') : '') + escapeHtml(r.text || '');
@@ -991,7 +992,7 @@
     setTab('messages');
     requestsRows.innerHTML = '';
     $('requestsEmpty').hidden = true;
-    fetch('/api/requests', { headers: { Accept: 'application/json' } })
+    return fetch('/api/requests', { headers: { Accept: 'application/json' } })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (d) {
         d.dialogs.forEach(function (c) {
@@ -1526,7 +1527,7 @@
   var area = document.querySelector('.tk-chat__area');
   var drop = $('dropZone');
   var dragDepth = 0;
-  var hasFiles = function (e) { return peer && e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') !== -1; };
+  var hasFiles = function (e) { return chatKey() && e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') !== -1; };
   area.addEventListener('dragenter', function (e) {
     if (!hasFiles(e)) return;
     e.preventDefault();
@@ -1561,7 +1562,7 @@
   var recBar = $('recBar');
   var recWave = $('recWave');
   var recPause = $('recPause');
-  var rec = null;           // { recorder, stream, chunks, at, ms, timer, send, peerId, meter }
+  var rec = null;           // { recorder, stream, chunks, at, ms, timer, send, chat, meter }
   var voiceAsking = false;  // браузер спрашивает разрешение на микрофон
 
   function say(el, key) {
@@ -1655,15 +1656,15 @@
   // Safari так надёжнее, а голосовое на пять минут — это около мегабайта.
   function startVoice(e) {
     var keyboard = !!e && e.detail === 0;
-    if (rec || voiceAsking || !peer) return;
+    if (rec || voiceAsking || !chatKey()) return;
     var type = voiceType();
     if (type === null || !navigator.mediaDevices) return toast(t('chats.recUnsupported'), 'error');
     voiceAsking = true;
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
       voiceAsking = false;
-      if (!peer || rrec || rec) { stream.getTracks().forEach(function (tr) { tr.stop(); }); return; }
+      if (!chatKey() || rrec || rec) { stream.getTracks().forEach(function (tr) { tr.stop(); }); return; }
       var recorder = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : undefined);
-      var r = { recorder: recorder, stream: stream, chunks: [], at: Date.now(), ms: 0, send: false, peerId: peer.id, meter: meterOn(stream) };
+      var r = { recorder: recorder, stream: stream, chunks: [], at: Date.now(), ms: 0, send: false, chat: chatKey(), meter: meterOn(stream) };
       rec = r;
       recorder.ondataavailable = function (ev) { if (ev.data && ev.data.size) r.chunks.push(ev.data); };
       recorder.onstop = function () { finishVoice(r); };
@@ -1708,7 +1709,7 @@
     if (r.meter) try { r.meter.ctx.close(); } catch (e) {}
     // Меньше полусекунды — промах, а не голосовое.
     if (!r.send || !r.chunks.length || r.sec < 0.5) return;
-    if (!peer || peer.id !== r.peerId) return;
+    if (chatKey() !== r.chat) return;
     var type = r.recorder.mimeType || r.chunks[0].type || 'audio/webm';
     var ext = /mp4/.test(type) ? 'm4a' : 'webm';
     var blob = new Blob(r.chunks, { type: type.split(';')[0] });
@@ -2253,7 +2254,7 @@
   var roundRec = $('roundRec');
   var roundPreview = $('roundPreview');
   var roundPauseBtn = $('roundPause');
-  var rrec = null;          // { recorder, stream, chunks, at, ms, timer, send, peerId }
+  var rrec = null;          // { recorder, stream, chunks, at, ms, timer, send, chat }
 
   function roundSec(r) {
     return (r.ms + (r.recorder.state === 'paused' ? 0 : Date.now() - r.at)) / 1000;
@@ -2278,6 +2279,7 @@
   // Как у голосового: у записи свой объект, обработчики держатся за него.
   function startRound() {
     var type = roundType();
+    if (!chatKey()) return;
     if (type === null || !navigator.mediaDevices) return toast(t('chats.recUnsupported'), 'error');
     if (rrec) return;
     if (rec) cancelVoice();
@@ -2285,9 +2287,9 @@
       video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 } },
       audio: true
     }).then(function (stream) {
-      if (!peer || rrec) { stream.getTracks().forEach(function (tr) { tr.stop(); }); return; }
+      if (!chatKey() || rrec) { stream.getTracks().forEach(function (tr) { tr.stop(); }); return; }
       var recorder = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 1200000 } : undefined);
-      var r = { recorder: recorder, stream: stream, chunks: [], at: Date.now(), ms: 0, send: false, peerId: peer.id };
+      var r = { recorder: recorder, stream: stream, chunks: [], at: Date.now(), ms: 0, send: false, chat: chatKey() };
       rrec = r;
       recorder.ondataavailable = function (e) { if (e.data && e.data.size) r.chunks.push(e.data); };
       recorder.onstop = function () { finishRound(r); };
@@ -2330,7 +2332,7 @@
     }
     r.stream.getTracks().forEach(function (tr) { tr.stop(); });
     if (!r.send || !r.chunks.length || r.sec < 1) return;
-    if (!peer || peer.id !== r.peerId) return;
+    if (chatKey() !== r.chat) return;
     var type = (r.recorder.mimeType || r.chunks[0].type || 'video/webm').split(';')[0];
     var blob = new Blob(r.chunks, { type: type });
     queueFiles([new File([blob], 'round.' + (/mp4/.test(type) ? 'mp4' : 'webm'), { type: type })], 'round');
@@ -2863,7 +2865,7 @@
     // (/start-conversation), строка встанет в общий список.
     if (requestPeers[p.id]) { delete requestPeers[p.id]; paintRequests(); }
     post('/start-conversation', { recipientId: p.id })
-      .then(function () { select(dialogEl(p.id) || addDialog(p)); })
+      .then(function (d) { select(dialogEl(p.id) || addDialog(d.peer)); })
       .catch(function () { location.href = '/userPage/' + encodeURIComponent(p.id); });
   }
 
@@ -3567,7 +3569,8 @@
   });
 
   var params = new URLSearchParams(location.search);
-  var target = params.get('peer') && dialogEl(params.get('peer'));
+  var peerId = params.get('peer');
+  var target = peerId && dialogEl(peerId);
   var groupId = params.get('group');
   if (groupId && !groupEl(groupId)) {
     fetch('/api/groups/' + encodeURIComponent(groupId)).then(function (r) { return r.ok ? r.json() : null; })
@@ -3578,5 +3581,10 @@
   // предлагать «В контакты» или «Убрать из контактов».
   loadContacts(onContactsTab);
   if (target) select(target);
+  // Диалога нет на первой странице списка (он старше) — открываем его так
+  // же, как «Сообщение» на странице человека. Заявку — в её папке: открыть
+  // по ссылке не значит принять.
+  else if (peerId && requestPeers[peerId]) openRequests().then(function () { var el = requestEl(peerId); if (el) select(el); });
+  else if (peerId && /^[a-f\d]{24}$/i.test(peerId) && peerId !== ME) openPeer({ id: peerId });
   else if (params.get('tab') === 'calls') loadJournal();
 })();

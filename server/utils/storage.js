@@ -110,7 +110,10 @@ async function remove(key) {
   if (!key) return;
   if (driver === 'bunny') {
     await checked(await fetch(objectUrl(key), { method: 'DELETE', headers: { AccessKey: bunny.key }, signal: AbortSignal.timeout(15000) }), 'DELETE');
-    await purge(key);
+    // Файла уже нет — сбой сброса кэша только в журнал. Раньше он уходил
+    // наверх: DELETE /recording/:id отвечал 500, а документ оставался
+    // со ссылкой на удалённый файл.
+    await purge(key).catch((e) => errorLog.external(e, 'bunny.purge', { key }));
   } else if (driver === 'local') {
     await fs.promises.rm(path.join(LOCAL_ROOT, key), { force: true });
   }

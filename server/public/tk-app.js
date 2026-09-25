@@ -444,9 +444,14 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     // совсем без живых обновлений и молча: connect_error повторялся бы
     // бесконечно, а tk:reconnect не срабатывал бы ни разу — он приходит
     // только после первого удачного подключения.
+    // away — вкладка не на экране: свёрнута, спрятана, экран заблокирован.
+    // По нему сервер решает, будить ли телефон пушем (utils/push.js,
+    // onScreen). Функцией, а не объектом: зовётся на каждом подключении.
+    const away = () => document.visibilityState !== 'visible';
     const socket = io(window.location.origin, {
       transports: ['websocket', 'polling'],
       tryAllTransports: true,
+      auth: (cb) => cb({ away: away() }),
     });
     window.callSocket = socket;
     console.log('[client] socket init');
@@ -574,6 +579,15 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
         document.dispatchEvent(new CustomEvent('tk:wake'));
       });
     }
+    // Свернули приложение — сказать серверу сразу, пока айфон не заморозил
+    // страницу: иначе до тайм-аута пинга он считал человека на экране,
+    // и пуш о звонке не уходил вовсе, а о сообщении — через полминуты.
+    // Без связи не копим: при подключении состояние едет в рукопожатии.
+    function tellAway() {
+      if (socket.connected) socket.emit('tk:away', away());
+    }
+    document.addEventListener('visibilitychange', tellAway);
+    window.addEventListener('pagehide', () => { if (socket.connected) socket.emit('tk:away', true); });
     document.addEventListener('visibilitychange', wake);
     window.addEventListener('pageshow', (e) => { if (e.persisted) wake(); });
     window.addEventListener('online', wake);
@@ -975,7 +989,8 @@ document.addEventListener('DOMContentLoaded', function(){
     // Позвать третьего можно из любого идущего разговора — и из видео,
     // и из голосового.
     s.add.classList.remove('hidden');
-    s.actions.classList.add('tk-call__actions--pair');
+    s.actions.classList.remove('tk-call__actions--pair');
+    s.actions.classList.add('tk-call__actions--live');
     // Ряд кнопок разговора: микрофон всегда, камера — при видео (paintVideo),
     // динамик — только там, где браузер даёт им управлять.
     s.tools.hidden = false;
@@ -1315,7 +1330,10 @@ document.addEventListener('DOMContentLoaded', function(){
 
     function place(left, top, w) {
       const b = box.getBoundingClientRect();
-      const floor = Math.min(b.bottom, s.actions.getBoundingClientRect().top - 8) - b.top;
+      // Ниже верхнего ряда кнопок не опускается: значки стоят над «Завершить»,
+      // а при открытой переписке на телефоне «Завершить» спрятана вовсе.
+      const bar = s.tools.hidden ? s.actions : s.tools;
+      const floor = Math.min(b.bottom, bar.getBoundingClientRect().top - 8) - b.top;
       const width = Math.max(MIN, Math.min(w, b.width * 0.7, (floor * from.w) / from.h));
       const height = (width * from.h) / from.w;
       const cx = left + w / 2;
@@ -1370,6 +1388,9 @@ document.addEventListener('DOMContentLoaded', function(){
     window.tkCallSize = null;
     if (window._call) { window._call.leave(); window._call = null; }
     if (window.TKNotify) window.TKNotify.talking(false);
+    // Звук у уха не должен пережить разговор: эфиры и записи на странице
+    // играли бы в разговорный динамик (routeAudio).
+    try { if (navigator.audioSession) navigator.audioSession.type = 'auto'; } catch (e) {}
     clearInterval(window._callTick);
     [OUT, IN].forEach((s) => {
       [s.remoteVideo, s.localVideo, s.remoteAudio].forEach((el) => TKDaily.attach(el, null));
@@ -1407,23 +1428,35 @@ document.addEventListener('DOMContentLoaded', function(){
     return coarse && !!(navigator.audioSession || s.remoteAudio.setSinkId);
   }
 
-  // Куда вести звук разговора. Айфон решает это по типу звуковой сессии:
-  // 'play-and-record' — разговорный динамик у уха, 'playback' — громкая
-  // связь. Часть сборок Safari сессию не отдаёт, поэтому следом пробуем
-  // выбрать устройство вывода по имени: на телефоне заказчика браузер
-  // показывал их оба — «Speaker, Receiver» (отчёт CallAudio 23.09).
+  // Куда вести звук разговора. Айфон решает это типом звуковой сессии.
+  // 'auto' — выбор самого Safari: при живом микрофоне это видеосвязь, звук
+  // идёт в громкий динамик — именно так разговор и звучит по умолчанию.
+  // 'play-and-record', заданный страницей явно, — разговорный динамик у уха.
+  //
+  // Правка 25.09 (жалоба: «выключаю громкую связь — остаётся громкая»).
+  // Прежде громкой связи соответствовал 'playback' — тип «только
+  // воспроизведение», которого при захвате микрофона Safari не даёт.
+  // И новый тип, судя по всему, вступает в силу, только когда Safari
+  // пересчитывает сессию — на запуске или остановке звука страницы, а не
+  // в момент присваивания. Поэтому следом перезапускаем элементы звука
+  // собеседника: пауза и сразу play — на слух короткий щелчок.
+  // Проверяется только на живом айфоне.
   function routeAudio(s, loud) {
+    const els = [s.remoteAudio, ...s.grid.querySelectorAll('audio')].filter((el) => el.srcObject);
     try {
-      if (navigator.audioSession) navigator.audioSession.type = loud ? 'playback' : 'play-and-record';
+      if (navigator.audioSession) {
+        navigator.audioSession.type = loud ? 'auto' : 'play-and-record';
+        els.forEach((el) => { el.pause(); el.play().catch(() => {}); });
+      }
     } catch (e) {}
-    const el = s.remoteAudio;
-    if (!el || !el.setSinkId || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    // Там, где браузер отдаёт устройства вывода (Android), — выбор по имени.
+    if (!HTMLMediaElement.prototype.setSinkId || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
     navigator.mediaDevices.enumerateDevices().then((list) => {
       const outs = list.filter((d) => d.kind === 'audiooutput');
       const ear = outs.find((d) => /receiver|earpiece/i.test(d.label || ''));
       const loudspeaker = outs.find((d) => /speaker/i.test(d.label || '')) || outs[0];
       const pick = loud ? loudspeaker : ear;
-      if (pick) el.setSinkId(pick.deviceId).catch(() => {});
+      if (pick) els.forEach((el) => el.setSinkId(pick.deviceId).catch(() => {}));
     }).catch(() => {});
   }
 
@@ -1556,7 +1589,7 @@ document.addEventListener('DOMContentLoaded', function(){
     renderAvatar(outAvatar, opts && opts.avatarUrl || '', displayName);
     resetSide(OUT);
     OUT.peerId = opts && opts.userId ? String(opts.userId) : '';
-    OUT.actions.classList.remove('tk-call__actions--pair');
+    OUT.actions.classList.remove('tk-call__actions--pair', 'tk-call__actions--live');
     tkText(outCancel, 'call.cancel');
     outCancel.classList.remove('tk-btn--mute');
     outCancel.classList.add('tk-btn--danger');
@@ -1591,6 +1624,7 @@ document.addEventListener('DOMContentLoaded', function(){
     resetSide(IN);
     IN.peerId = opts && opts.userId ? String(opts.userId) : '';
     tkText(IN.status, 'call.ringing');
+    IN.actions.classList.remove('tk-call__actions--live');
     IN.actions.classList.add('tk-call__actions--pair');
     inAccept.disabled = false;
     tkText(inAccept, 'call.accept');

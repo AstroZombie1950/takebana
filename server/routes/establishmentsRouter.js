@@ -9,7 +9,7 @@ asyncify(router); // ошибки async-обработчиков уходят в
 
 const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
-const { removeVenue } = require('../utils/userDelete');
+const { removeVenue, unlinkUpload } = require('../utils/userDelete');
 const { readVenueFilters } = require('../utils/venueFilters');
 const multer = require('multer');
 const path = require('path');
@@ -28,10 +28,13 @@ const ESTABLISHMENT_UPLOAD_DIR = path.join(__dirname, '..', 'public', 'uploads',
 const { saveImages, BadImageError } = require('../utils/image');
 
 const ALLOWED_PHOTO = /^image\/(jpeg|png|webp)$/;
+const MAX_PHOTOS = 6;
 
+// Файлов — не больше, чем фото у заведения: всё прочитанное multer держит
+// в памяти, и сотня файлов по 10 МБ перезапускала процесс вместе с эфирами.
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024, files: MAX_PHOTOS },
   fileFilter(req, file, cb) {
     if (ALLOWED_PHOTO.test(file.mimetype)) return cb(null, true);
     cb(Object.assign(new Error('Только изображения JPEG, PNG или WebP.'), { status: 400, expose: true }));
@@ -176,7 +179,7 @@ router.get('/user-establishments', requireAuth, wrap(async (req, res) => {
 }));
 
 // validate стоит после multer: до разбора multipart тела ещё нет.
-router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments), upload.array('newPhotos'), validate({
+router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments), upload.array('newPhotos', MAX_PHOTOS), validate({
     name: { type: 'string', max: 200, label: 'Название' },
     type: TYPE,
     country: { type: 'string', max: 100, label: 'Страна' },
@@ -192,15 +195,18 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
     // Только свои файлы: без образца владелец записывал в photos любую строку —
     // чужой адрес картинки, а с появлением удаления заведения ещё и путь
     // с «..», по которому удалялся бы посторонний файл.
-    uploadedPhotos: { type: 'array', json: true, max: 6, default: [],
+    uploadedPhotos: { type: 'array', json: true, max: MAX_PHOTOS, default: [],
         of: { type: 'string', max: 300, pattern: PHOTO_URL }, label: 'Фотографии' },
 }), wrap(async (req, res) => {
+    const venue = req.resource; // requireOwner уже нашёл документ
+    // Оставляем только фото этого заведения: образец пути пропускал и файл
+    // чужого, а при удалении своего заведения он стирался. Новых — сколько
+    // осталось места, до записи на диск, а не после.
+    const had = new Set(venue.photos || []);
+    const kept = [...new Set(req.body.uploadedPhotos)].filter((u) => had.has(u));
+    const files = req.files.slice(0, MAX_PHOTOS - kept.length);
 
-    if (req.files.length > 6) {
-        req.files = req.files.slice(0, 6);
-    }
-
-    const { name, type, country, city, address, email, phone, weekdayHours, weekendHours, location, uploadedPhotos } = req.body;
+    const { name, type, country, city, address, email, phone, weekdayHours, weekendHours, location } = req.body;
     const { lat, lng } = location || {};
 
     // Пустое тело после разбора и означает «обновлять нечего». Три JSON.parse
@@ -211,7 +217,7 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
 
     let newPhotoNames;
     try {
-        newPhotoNames = await saveImages(req.files, 'establishment', ESTABLISHMENT_UPLOAD_DIR);
+        newPhotoNames = await saveImages(files, 'establishment', ESTABLISHMENT_UPLOAD_DIR);
     } catch (e) {
         if (!(e instanceof BadImageError)) throw e;
         return res.status(400).json({ message: e.message });
@@ -232,10 +238,12 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
         // Абсолютный URL от корня сайта. file.path раньше давал относительный
         // 'uploads/имя.jpg', и на вложенных страницах вида /userPage/:id браузер
         // искал его по /userPage/uploads/... — картинка не находилась.
-        photos: uploadedPhotos.concat(newPhotoNames.map(name => `/uploads/establishments/${name}`)).slice(0, 6)
+        photos: kept.concat(newPhotoNames.map(name => `/uploads/establishments/${name}`))
     };
 
     const updatedEstablishment = await Establishments.findByIdAndUpdate(req.params.id, establishment, { returnDocument: 'after' });
+    // Убранные из списка — с диска, иначе они оставались сиротами.
+    for (const url of had) if (!kept.includes(url)) unlinkUpload(url, 'establishments');
     audit(req, 'venue.update', { targetType: 'venue', target: updatedEstablishment, meta: { fields: Object.keys(establishment) } });
     res.json(updatedEstablishment);
 }));

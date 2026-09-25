@@ -125,7 +125,7 @@ if (mailConfigured) {
     await user.save();
     await loginGuard.forget(user.email);
 
-    // Сессии хранит connect-mongodb-session в коллекции mySessions (config/session.js).
+    // Сессии лежат в коллекции mySessions (config/session.js).
     await mongoose.connection.collection('mySessions').deleteMany({ 'session.userId': user._id.toString() });
 
     await signIn(req, user);

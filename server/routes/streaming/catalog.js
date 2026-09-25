@@ -258,7 +258,9 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
 
   // В поиск — только профиль, где есть что смотреть: запись, фото, видео
   // или идущий эфир. Пустых («зарегистрировался и ушёл») тысячи одинаковых,
-  // забаненный из выдачи выпадает (docs/seo/DECISIONS.md).
+  // забаненный из выдачи выпадает (docs/seo/DECISIONS.md). «Показывать
+  // меня в поиске» касается только поиска по сайту и подборок — не
+  // поисковиков (решение Ивана 25.09.2026: убрать из Google можно руками).
   const indexable = !user.banned
     && (!!activeStream || shots.count > 0 || recordings.some((r) => r.status === 'ready'));
 
@@ -285,7 +287,8 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
       bio: user.bio || '',
       // Значки ссылок (utils/profileLinks.js). Сайт без nofollow — только
       // у тех, кому это включил администратор (User.linksFollow).
-      links: profileLinks.list(user.links),
+      // Пока ссылки выключены (profileLinks.ENABLED) — пусто: ни значков, ни sameAs.
+      links: profileLinks.ENABLED ? profileLinks.list(user.links) : [],
       linksFollow: !!user.linksFollow,
       followersCount,
       followingCount,

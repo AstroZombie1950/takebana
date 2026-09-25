@@ -56,6 +56,12 @@ const GROUP_MAX = 4;
 // звонка (routes/calls.js).
 const INVITE_MS = 30000;
 
+// Потолок нашего TURN (решение 25.09.2026): порты реле не расширяли —
+// звонков своим путём мало, трафик в основном идёт через Daily. Зато упор
+// должен быть виден заранее: с этой доли занятых портов — запись в журнал
+// ошибок. Сам отказ coturn (508) сообщает браузер (public/tk-peer.js).
+const TURN_WARN_SHARE = 0.8;
+
 // Возвращает общие хранилища, чтобы app.js положил их в app.set(...):
 // маршрут /api/calls/create достаёт их оттуда.
 function registerSockets(io) {
@@ -195,6 +201,25 @@ function registerSockets(io) {
     for (const userId of call.members.keys()) {
       io.to(`user:${userId}`).emit(event, { callId, ...ownAccess(call, userId) });
     }
+    turnLoad();
+  }
+
+  // Оценка занятых портов TURN по идущим разговорам своим путём (utils/turn.js).
+  // Пишем, когда перешли порог, и снова — только когда нагрузка спадала
+  // ниже половины: иначе каждый звонок около порога давал бы запись.
+  let turnWarned = false;
+  function turnLoad() {
+    let ports = 0, calls = 0;
+    for (const call of activeCalls.values()) {
+      if (call.engine !== 'own') continue;
+      calls++;
+      ports += turn.portsFor(call.members.size);
+    }
+    if (ports < turn.PORTS / 2) turnWarned = false;
+    if (turnWarned || ports < turn.PORTS * TURN_WARN_SHARE) return;
+    turnWarned = true;
+    errorLog.media(new Error(`TURN близко к потолку: занято ~${ports} портов реле из ${turn.PORTS} (разговоров своим путём: ${calls})`),
+      'turn.capacity', { ports, of: turn.PORTS, calls });
   }
 
   // Комнату звонка удаляем сразу: иначе она жила бы до своего exp,
@@ -236,6 +261,7 @@ function registerSockets(io) {
     if (call.members.size >= GROUP_MAX) return socket.emit('call:full', { callId });
     call.members.set(userId, { joinedAt: Date.now() });
     callLog.joined(callId, userId);
+    turnLoad();
 
     const cards = new Map();
     for (const id of call.members.keys()) cards.set(id, await peerCard(id));
@@ -323,6 +349,21 @@ function registerSockets(io) {
     const forwarded = String(socket.handshake.headers['x-forwarded-for'] || '').split(',').pop().trim();
     socket.data.ip = forwarded || socket.handshake.address;
 
+    // Все обработчики — через on(). Socket.IO зовёт их без перехвата, и
+    // исключение уходило в uncaughtException, где процесс выходит: одним
+    // пакетом 42["call:decline",null] гость ронял сервер со всеми эфирами.
+    // Здесь и синхронная ошибка, и отказ промиса только пишутся в журнал.
+    const on = (event, fn) => socket.on(event, (...args) => {
+      try {
+        const r = fn(...args);
+        if (r && typeof r.catch === 'function') r.catch((e) => errorLog.server(e, 'socket.' + event));
+      } catch (e) {
+        errorLog.server(e, 'socket.' + event);
+      }
+    });
+    // У звонков аргумент — объект; null, строка, число, массив — пустой.
+    const onCall = (event, fn) => on(event, (d, ...rest) => fn(d && typeof d === 'object' && !Array.isArray(d) ? d : {}, ...rest));
+
     // Presence connect (только для аутентифицированных)
     try {
       const userId = socket.data.userId;
@@ -356,7 +397,7 @@ function registerSockets(io) {
     // (шапка собирает их из [data-presence-user]), и получает только их.
     // Кто скрыл «в сети» от этого человека (utils/privacy.js), в комнату
     // не попадает: его событий тот не получит вовсе.
-    socket.on('presence:subscribe', async (ids) => {
+    on('presence:subscribe', async (ids) => {
       if (!Array.isArray(ids)) return;
       // Потолок на всякий случай: список приходит от клиента, а комнаты стоят памяти.
       const wanted = ids.slice(0, PRESENCE_SUBSCRIBE_LIMIT).filter((id) => typeof id === 'string' && OBJECT_ID.test(id));
@@ -372,17 +413,25 @@ function registerSockets(io) {
     // ей, когда состав эфиров меняется: кто-то вышел или ушёл. Открыто всем,
     // включая гостей, — витрина и так открыта без входа, а в комнату уходит
     // только «состав изменился», без единого названия и ключа.
-    socket.on('live:watch', () => socket.join(LIVE_ROOM));
-    socket.on('live:unwatch', () => socket.leave(LIVE_ROOM));
+    on('live:watch', () => socket.join(LIVE_ROOM));
+    on('live:unwatch', () => socket.leave(LIVE_ROOM));
 
     // «Ты живой?» от вернувшейся вкладки (public/tk-app.js, wake). Телефон
     // замораживает страницу вместе с соединением, и браузер об этом не знает:
     // сокет числится подключённым, а на деле не доставит уже ничего. Само
     // соединение заметит разрыв только по таймауту пинга — до двадцати секунд
     // молчания, за которые человек успеет решить, что сайт не работает.
-    socket.on('tk:alive', (ack) => { if (typeof ack === 'function') ack(); });
+    on('tk:alive', (ack) => { if (typeof ack === 'function') ack(); });
 
-    socket.on('presence:unsubscribe', (ids) => {
+    // Вкладка ушла с экрана или вернулась (public/tk-app.js). Пуши смотрят
+    // на это, а не на живой сокет (utils/push.js, onScreen): свёрнутое
+    // приложение держит соединение ещё секунды, а человек уже не смотрит.
+    // Первое значение — из рукопожатия: страница может подключиться,
+    // будучи в фоне.
+    socket.data.away = !!(socket.handshake.auth && socket.handshake.auth.away === true);
+    on('tk:away', (away) => { socket.data.away = away === true; });
+
+    on('presence:unsubscribe', (ids) => {
       if (!Array.isArray(ids)) return;
       for (const id of ids.slice(0, PRESENCE_SUBSCRIBE_LIMIT)) {
         if (typeof id === 'string' && OBJECT_ID.test(id)) socket.leave(`presence:${id}`);
@@ -393,7 +442,7 @@ function registerSockets(io) {
     let currentVenue = null;
 
     // Страница камеры заведения. Комната у сокета одна, как и у эфира.
-    socket.on('venue:join', async (venueId, callback) => {
+    on('venue:join', async (venueId, callback) => {
       const done = typeof callback === 'function' ? callback : () => {};
       if (typeof venueId !== 'string' || !OBJECT_ID.test(venueId)) return done({ error: 'Invalid venue' });
       let venue;
@@ -420,15 +469,23 @@ function registerSockets(io) {
     // существующего эфира: раньше годилась любая строка любой длины, и один
     // сокет вступал в тысячи мусорных комнат. Комната у сокета одна —
     // прежняя покидается.
-    socket.on('join-stream-room', async (streamKey, callback) => {
+    on('join-stream-room', async (streamKey, callback) => {
       const done = typeof callback === 'function' ? callback : () => {};
       if (typeof streamKey !== 'string' || !STREAM_KEY.test(streamKey)) {
         return done({ error: 'Invalid streamKey' });
       }
       try {
-        if (!(await Stream.exists({ streamKey }))) return done({ error: 'Unknown stream' });
+        const stream = await Stream.findOne({ streamKey }).select('userId isAdult').lean();
+        if (!stream) return done({ error: 'Unknown stream' });
+        // Те же ворота, что у чата по HTTP (streamChat.js, chatStream):
+        // ограниченный автором и не подтвердивший 18+ читали чат сокетом.
+        const me = socket.data.userId;
+        if (String(stream.userId) !== String(me)) {
+          if (me && await restriction.isRestricted(stream.userId, me)) return done({ error: 'Restricted' });
+          if (stream.isAdult && !(me && await User.exists({ _id: me, adultConfirmedAt: { $ne: null } }))) return done({ error: 'Adult' });
+        }
         // Ключ эфира — ключ пользователя: вкладку ведущего узнаём по нему.
-        socket.data.ownStreamKey = socket.data.userId && await User.exists({ _id: socket.data.userId, streamKey })
+        socket.data.ownStreamKey = me && await User.exists({ _id: me, streamKey })
           ? streamKey : null;
       } catch (e) {
         errorLog.server(e, 'socket.joinStream');
@@ -446,7 +503,7 @@ function registerSockets(io) {
       done({ success: true, count: viewersIn(roomName, streamKey) });
     });
 
-    socket.on('disconnect', async () => {
+    on('disconnect', async () => {
       // Сокет уже вышел из комнат — счётчик пересчитается без него.
       if (currentStreamKey) announceViewers(currentStreamKey);
       if (currentVenue) announceVenue(currentVenue);
@@ -488,7 +545,7 @@ function registerSockets(io) {
 
     // own — браузер принявшего помнит, что Daily у него не соединялся.
     // Хоть у одного из двоих так — звонок сразу идёт через свой сервер.
-    socket.on('call:accept', async ({ callId, own } = {}) => {
+    onCall('call:accept', async ({ callId, own }) => {
       // Приглашение в идущий разговор: звонок уже активен, человек в нём
       // числится приглашённым (call:invite ниже).
       const running = activeCalls.get(callId);
@@ -543,7 +600,7 @@ function registerSockets(io) {
       }
     });
 
-    socket.on('call:decline', ({ callId } = {}) => {
+    onCall('call:decline', ({ callId }) => {
       // Отказ от приглашения в идущий разговор: сам разговор продолжается,
       // пригласившему — только строка «не берёт трубку».
       const running = activeCalls.get(callId);
@@ -578,7 +635,7 @@ function registerSockets(io) {
       socket.to(`user:${call.calleeId}`).emit('call:canceled', { callId });
     });
 
-    socket.on('call:cancel', ({ callId } = {}) => {
+    onCall('call:cancel', ({ callId }) => {
       const call = pendingCalls.get(callId);
       if (!call || call.callerId !== socket.data.userId) return;
       pendingCalls.delete(callId);
@@ -587,7 +644,7 @@ function registerSockets(io) {
     });
 
     // «Завершить» у себя: вдвоём это конец звонка, в группе — уход одного.
-    socket.on('call:end', ({ callId } = {}) => {
+    onCall('call:end', ({ callId }) => {
       const userId = socket.data.userId;
       const active = activeCalls.get(callId);
       if (active && active.members.size > 2 && active.members.has(userId)) return leaveCall(callId, userId);
@@ -601,7 +658,7 @@ function registerSockets(io) {
     //
     // Daily в группах не участвует: разговор сначала переходит на свой путь
     // (сетка на нашем TURN), и только потом входит третий.
-    socket.on('call:invite', async ({ callId, userId: guestId } = {}) => {
+    onCall('call:invite', async ({ callId, userId: guestId }) => {
       const me = socket.data.userId;
       const call = activeCalls.get(callId);
       if (!call || !call.members.has(me)) return;
@@ -648,7 +705,7 @@ function registerSockets(io) {
 
     // Повторный вход после обрыва: Daily выкинул участника, а звонок жив.
     // Токен выдаётся заново, только участнику и только пока звонок активен.
-    socket.on('call:token', async ({ callId } = {}, ack) => {
+    onCall('call:token', async ({ callId }, ack) => {
       if (typeof ack !== 'function') return;
       const call = activeCalls.get(callId);
       const userId = socket.data.userId;
@@ -665,7 +722,7 @@ function registerSockets(io) {
     // Daily у одного из двоих не соединился (tk-daily.js, onStuck): оба
     // переходят на свой сервер. Повтор от второго участника не нужен —
     // звонок уже там. Без TURN переходить некуда: Daily пробует дальше.
-    socket.on('call:fallback', ({ callId, reason } = {}) => {
+    onCall('call:fallback', ({ callId, reason }) => {
       const call = activeCalls.get(callId);
       if (!isParty(call, socket.data.userId) || call.engine !== 'daily' || !turn.configured()) return;
       const room = call.roomName;
@@ -679,7 +736,7 @@ function registerSockets(io) {
     // проверяет только, что шлёт участник звонка, идущего этим путём, и что
     // адресат — тоже участник. В разговоре на двоих адресата можно не
     // называть: он один.
-    socket.on('call:signal', ({ callId, to, data } = {}) => {
+    onCall('call:signal', ({ callId, to, data }) => {
       const call = activeCalls.get(callId);
       const userId = socket.data.userId;
       if (!isParty(call, userId) || call.engine !== 'own' || !data || typeof data !== 'object') return;

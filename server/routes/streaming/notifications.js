@@ -5,15 +5,12 @@ const express = require('express');
 const router = express.Router();
 const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
+const { requireAuthApi } = require('../../middleware/auth');
 const Notification = require('../../models/Notification');
 const { displayName } = require('../../utils/userView');
 
-router.get('/api/notifications', async (req, res) => {
+router.get('/api/notifications', requireAuthApi, async (req, res) => {
   const userId = req.session.userId;
-
-  if (!userId) {
-    return res.status(401).json({ message: 'Необходима авторизация' });
-  }
 
   // Последние десять, от новых к старым; прочитанные тоже — они просто
   // не подсвечены. Отправитель — с _id: строка ведёт в переписку с ним.
@@ -33,22 +30,16 @@ router.get('/api/notifications', async (req, res) => {
 });
 
 // Список открыт — всё в нём прочитано: точка на колокольчике гаснет.
-router.put('/api/notifications/read', async (req, res) => {
+router.put('/api/notifications/read', requireAuthApi, async (req, res) => {
   const userId = req.session.userId;
-  if (!userId) {
-    return res.status(401).json({ message: 'Необходима авторизация' });
-  }
   await Notification.updateMany({ recipient: userId, isRead: false, type: { $ne: 'message' } }, { isRead: true });
   res.json({ success: true });
 });
 
 // Очистить ленту. Строки о сообщениях не трогаем: их в ленте и нет, а снимает
 // их вход в диалог (messages.js).
-router.delete('/api/notifications', async (req, res) => {
+router.delete('/api/notifications', requireAuthApi, async (req, res) => {
   const userId = req.session.userId;
-  if (!userId) {
-    return res.status(401).json({ message: 'Необходима авторизация' });
-  }
   await Notification.deleteMany({ recipient: userId, type: { $ne: 'message' } });
   res.json({ success: true });
 });

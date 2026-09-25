@@ -5,16 +5,25 @@
 // собирает его дважды.
 
 var session = require('express-session');
-var MongoDBStore = require('connect-mongodb-session')(session);
+var mongoose = require('mongoose');
+var { MongoStore } = require('connect-mongo');
 
-var store = new MongoDBStore({
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/webcabar',
-    collection: 'mySessions'
-});
-
-// Catch errors
-store.on('error', function(error) {
-    console.log(error);
+// Хранилище — на клиенте mongoose: connect-mongodb-session тянул свой
+// драйвер (mongodb 4, вне поддержки) со своим пулом соединений к той же
+// базе. Формат строк прежний — объект, не JSON-строка (stringify: false):
+// по session.userId сеансы ищут сброс пароля и удаление аккаунта.
+// touch express-session зовёт на каждом запросе — с touchAfter он пишет
+// в базу не чаще раза в сутки, как и keepAlive ниже.
+// Модуль грузится раньше db.js, поэтому клиента ждём по событию open:
+// asPromise() до mongoose.connect отдаёт соединение без клиента.
+var connected = mongoose.connection.readyState === 1
+    ? Promise.resolve()
+    : new Promise((resolve) => mongoose.connection.once('open', resolve));
+var store = MongoStore.create({
+    clientPromise: connected.then(() => mongoose.connection.getClient()),
+    collectionName: 'mySessions',
+    stringify: false,
+    touchAfter: 24 * 60 * 60
 });
 
 // В prod пустой SESSION_SECRET — это подделываемые сессии, поэтому падаем сразу,
@@ -48,10 +57,9 @@ const sessionMiddleware = session({
 
 // Продление сессии раз в сутки. Cookie раньше не продлевалась вовсе:
 // человек вылетал через неделю после входа, даже заходя каждый день, —
-// особенно неприятно в PWA на iPhone. rolling у express-session тут не
-// годится: у connect-mongodb-session нет touch, и cookie продлевалась бы,
-// а строка в базе — нет. Поэтому раз в сутки сессию меняем: изменённую
+// особенно неприятно в PWA на iPhone. Раз в сутки сессию меняем: изменённую
 // express-session сохраняет сам, с новым сроком и в базе, и в cookie.
+// rolling не нужен: он слал бы Set-Cookie в каждом ответе.
 const DAY = 24 * 60 * 60 * 1000;
 function keepAlive(req, res, next) {
   const s = req.session;

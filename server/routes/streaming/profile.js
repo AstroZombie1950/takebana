@@ -67,6 +67,7 @@ router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
       // Ссылки — как их показать в полях: kind → { display, url }.
       links: Object.fromEntries(profileLinks.list(user.links).map((l) => [l.kind, l])),
     },
+    linksOn: profileLinks.ENABLED,
     linkKinds: profileLinks.KINDS,
     linkNames: profileLinks.NAMES,
   });
@@ -170,9 +171,6 @@ router.post('/profile/gallery', requireAuth, async (req, res, next) => {
 
 // Удаление фото из галереи
 router.delete('/profile/gallery/:name', requireAuth, async (req, res) => {
-  if (!req.session || !req.session.userId) {
-    return res.status(401).json({ success: false, message: 'Необходима авторизация' });
-  }
   const user = await User.findById(req.session.userId);
   if (!user) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
 

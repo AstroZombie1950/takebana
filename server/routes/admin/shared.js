@@ -94,8 +94,13 @@ async function namesFor(ids) {
 // Столбцы — пары [заголовок, значение из строки]; функцией, если набор
 // зависит от прав.
 
+// Строка, начинающаяся с = + - @ (или с табуляции и перевода строки перед
+// ними), — формула для Excel. В выгрузки попадает то, что пишет кто угодно:
+// почта неудачного входа, текст ошибки браузера, User-Agent, комментарий
+// жалобы. Апостроф впереди делает её текстом. Числа не трогаем: −5 — число.
 const cell = (v) => {
-  const s = v == null ? '' : v instanceof Date ? v.toISOString() : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  let s = v == null ? '' : v instanceof Date ? v.toISOString() : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  if (typeof v === 'string' && /^\s*[=+\-@]/.test(s)) s = "'" + s;
   return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 };
 

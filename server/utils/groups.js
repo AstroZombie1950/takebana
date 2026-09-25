@@ -130,7 +130,7 @@ async function deliver(req, group, sender, { content = '', attachments: files, f
     if (loud.length) io.to(loud.map((m) => 'user:' + m.user)).emit('group:message', { ...payload, muted: false });
     if (quiet.length) io.to(quiet.map((m) => 'user:' + m.user)).emit('group:message', { ...payload, muted: true });
   }
-  if (!silent) require('./groupPush').send(req, group, message, sender);
+  if (!silent) require('./groupPush').send(group, message, sender);
   return out;
 }
 
@@ -183,13 +183,22 @@ async function unread(me) {
 //
 // Заявки на переписку (utils/privacy.js) в число не входят: незнакомый
 // не должен зажигать значок тому, кто от незнакомых закрылся.
+//
+// Считает на каждую страницу вошедшего, поэтому одним проходом: личные
+// и групповые — ветками одного $or (у каждой свой индекс), а не четыре
+// запроса друг за другом.
 async function unreadTotal(me) {
-  const requests = await Conversation.find({ requestFor: me }).distinct('_id');
-  const [direct, groups] = await Promise.all([
-    Message.countDocuments({ recipient: me, readAt: null, deletedFor: { $ne: me }, ...(requests.length ? { conversationId: { $nin: requests } } : {}) }),
-    unread(me),
+  const [requests, mine] = await Promise.all([
+    Conversation.find({ requestFor: me }).distinct('_id'),
+    Group.find({ 'members.user': me }).select({ 'members.$': 1 }).lean(),
   ]);
-  return direct + groups.total;
+  const direct = { recipient: oid(me), readAt: null, ...(requests.length ? { conversationId: { $nin: requests } } : {}) };
+  const inGroups = mine.map((g) => ({ conversationId: g._id, sentAt: { $gt: g.members[0].readAt }, sender: { $ne: oid(me) }, system: { $exists: false } }));
+  const [row] = await Message.aggregate([
+    { $match: { $or: [direct, ...inGroups], deletedFor: { $ne: oid(me) } } },
+    { $count: 'n' },
+  ]);
+  return row ? row.n : 0;
 }
 
 // Аккаунт удаляется (utils/userDelete.js): из всех групп он уходит молча,

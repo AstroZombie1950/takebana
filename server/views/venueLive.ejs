@@ -104,7 +104,8 @@
             <dl class="tk-vl__facts">
               <% if (meta) { %><div><dt data-i18n="vlive.kind"><%- t('vlive.kind') %></dt><dd><%= meta %></dd></div><% } %>
               <% if (venue.address) { %><div><dt data-i18n="venues.address"><%- t('venues.address') %></dt><dd><%= venue.address %></dd></div><% } %>
-              <% if (hours && hours.open && hours.close) { %><div><dt data-i18n="vlive.hours"><%- t('vlive.hours') %></dt><dd data-i18n="venues.today" data-i18n-vars='<%= JSON.stringify({ from: hours.open, to: hours.close }) %>'><%- t('venues.today', { from: hours.open, to: hours.close }) %></dd></div><% } %>
+              <%# Формат сверяется и здесь: записи до 25.09 не проверялись. %>
+              <% if (hours && /^\d{2}:\d{2}$/.test(hours.open) && /^\d{2}:\d{2}$/.test(hours.close)) { %><div><dt data-i18n="vlive.hours"><%- t('vlive.hours') %></dt><dd data-i18n="venues.today" data-i18n-vars='<%= JSON.stringify({ from: hours.open, to: hours.close }) %>'><%- t('venues.today', { from: hours.open, to: hours.close }) %></dd></div><% } %>
             </dl>
             <a href="/map?venue=<%= venue._id %>" class="tk-btn tk-btn--outline tk-btn--xs tk-vl__map" data-i18n="vlive.onMap"><%- t('vlive.onMap') %></a>
           </div>

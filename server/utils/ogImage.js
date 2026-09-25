@@ -45,6 +45,8 @@ async function render(src, out) {
 // Собрать и выгрузить для нынешнего аватара; прежнюю — удалить. Один
 // человек — одна сборка за раз.
 const building = new Set();
+const failedAt = new Map(); // id → когда не вышло
+const FAIL_PAUSE_MS = 10 * 60 * 1000;
 async function refresh(user) {
   const User = require('../models/User');
   const id = String(user._id);
@@ -67,7 +69,9 @@ async function refresh(user) {
     const url = await storage.put(tmp, key, 'image/jpeg');
     await User.updateOne({ _id: id }, { $set: { ogCard: { url, key, v } } });
     if (old && old !== key) await storage.remove(old).catch(() => {});
+    failedAt.delete(id);
   } catch (e) {
+    failedAt.set(id, Date.now());
     errorLog.media(e, 'og.profile', { user: id });
   } finally {
     building.delete(id);
@@ -81,7 +85,10 @@ function forProfile(user) {
   const src = avatarFile(user.avatar);
   const card = user.ogCard;
   if (src && card && card.v === path.parse(src).name) return card.url;
-  if (src || card) refresh(user);
+  // Не вышло — из профиля пробуем снова не раньше чем через FAIL_PAUSE_MS:
+  // иначе каждое открытие гоняло sharp и выгрузку, пока хранилище лежит.
+  // Смена аватара (profile.js) зовёт refresh сама, без паузы.
+  if ((src || card) && !(Date.now() - (failedAt.get(String(user._id)) || 0) < FAIL_PAUSE_MS)) refresh(user);
   return null;
 }
 

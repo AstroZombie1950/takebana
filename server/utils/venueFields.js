@@ -11,9 +11,13 @@
 
 const { CITY_NAME, VENUE_TYPE_NAME } = require('../config/catalog');
 
+// Часы — только «ЧЧ:ММ»: строка уходит в разметку страницы камеры
+// подстановкой словаря, а там innerHTML. Прежде проходило любое в пять
+// знаков, и «<!--» закомментировал бы остаток страницы.
+const TIME = /^\d{2}:\d{2}$/;
 const HOURS = { type: 'object', json: true, schema: {
-    open: { type: 'string', max: 5 },
-    close: { type: 'string', max: 5 },
+    open: { type: 'string', max: 5, pattern: TIME },
+    close: { type: 'string', max: 5, pattern: TIME },
 } };
 
 // lat и lng не обязательные: пустое поле формы админки уезжает в JSON как

@@ -21,6 +21,7 @@ const { randomUUID } = require('crypto');
 const userView = require('../../utils/userView');
 const { profileUrl } = require('../../utils/profileUrl');
 const { buildObsStreamKey, getSignExpiry } = require('../../utils/rtmpAuth');
+const { publicHost } = require('../../utils/site');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
@@ -57,9 +58,9 @@ function renderConsole(req, res, { stream, user, defaults, streamKey }) {
     // Ключ вместе с подписью — то, что вставляют в OBS. Видит только владелец.
     obsStreamKey: buildObsStreamKey(streamKey),
     obsKeyExpiresAt: getSignExpiry(),
-    // Приём — на том же хосте, где открыт пульт: зашитый домен вёл OBS
+    // Приём — на хосте этого сайта (utils/site.js): зашитый домен вёл OBS
     // на боевой сервер с любого стенда.
-    rtmpUrl: `rtmp://${req.hostname}:1935/live`,
+    rtmpUrl: `rtmp://${publicHost(req)}:1935/live`,
   });
 }
 

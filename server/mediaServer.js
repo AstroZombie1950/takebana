@@ -1,5 +1,4 @@
 const NodeMediaServer = require('node-media-server');
-require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env', quiet: true });
 
 const { isPublishAuthEnabled, getSecret } = require('./utils/rtmpAuth');
 const hls = require('./utils/hls');
@@ -15,8 +14,8 @@ const liveNotify = require('./utils/liveNotify');
 // плейлиста `/live/<streamKey>/index.m3u8`, без него плеер поток не найдёт.
 // Значит, сам по себе ключ ничего не защищает. Формат подписи — utils/rtmpAuth.js.
 //
-// play намеренно оставлен открытым: RTMP-воспроизведение забирает наш ffmpeg
-// с 127.0.0.1, а закрывать раздачу зрителям надо подписанными ссылками CDN.
+// Подписи у play нет: RTMP-воспроизведение нужно только нашему ffmpeg
+// с 127.0.0.1 (utils/hls.js), остальных отбивает prePlay ниже.
 const publishAuth = isPublishAuthEnabled();
 
 if (!publishAuth && (process.env.START_SERVER === 'prod' || process.env.NODE_ENV === 'production')) {
@@ -217,6 +216,14 @@ async function rejectUnknownStreamKey(id, streamKey) {
         return true;
     }
 }
+
+// Смотреть по RTMP — только с петли. Ключ эфира публичен (он в адресе
+// плейлиста), и rtmp://takebana.com:1935/live/<ключ> отдавал поток любому:
+// мимо CDN, гейта 18+ и «ограничить доступ», по общему с эфирами каналу.
+nms.on('prePlay', (id) => {
+    const session = nms.getSession(id);
+    if (session && !session.isLocal) session.reject();
+});
 
 function dropSession(id, why) {
     console.warn(`[mediaServer] публикация отклонена: ${why}`);

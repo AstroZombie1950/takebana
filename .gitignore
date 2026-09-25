@@ -12,6 +12,9 @@
 
 # Зависимости
 node_modules/
+# ops/deploy.sh ставит их в стороне и подменяет переименованием
+/.deps-next/
+/.deps-old/
 
 # Секреты
 .env

@@ -159,7 +159,7 @@ router.get('/users/:id', requireModerator, async (req, res) => {
         ] } },
       } },
     ]),
-    // Открытые сеансы: их хранит connect-mongodb-session отдельной коллекцией.
+    // Открытые сеансы: отдельная коллекция mySessions (config/session.js).
     mongoose.connection.collection('mySessions')
       .find({ 'session.userId': String(id) }).project({ expires: 1 }).toArray(),
     Stream.findOne({ userId: id, isActive: true }).select('title startedAt viewers streamProvider isAdult').lean(),

@@ -12,7 +12,7 @@ const Stream = require('../models/Stream');
 const Establishments = require('../models/Establishments');
 const { validate } = require('../middleware/validate');
 const daily = require('../utils/daily');
-const { roomName: venueRoom } = require('./venueLive');
+const { stopCamera } = require('./venueLive');
 const ChatMessage = require('../models/ChatMessage');
 const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
@@ -212,13 +212,10 @@ router.post('/api/moderation/users/:id/ban', requireModerator, validate({
         }
     }
 
-    // Камера заведения — тоже вещание, и тоже через Daily: без этого гости
-    // смотрели бы её и после бана владельца.
+    // Камера заведения — тоже вещание: без этого гости смотрели бы её
+    // и после бана владельца.
     const venues = await Establishments.find({ owner: req.params.id, online: true }).select('_id').lean();
-    if (venues.length) {
-        await Establishments.updateMany({ _id: { $in: venues.map(v => v._id) } }, { $set: { online: false } });
-        for (const v of venues) dropDailyRoom(venueRoom(v._id));
-    }
+    await Promise.all(venues.map((v) => stopCamera(v._id)));
 
     audit(req, 'mod.ban', {
         targetType: 'user',

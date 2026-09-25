@@ -16,6 +16,8 @@ const router = express.Router();
 const { asyncify } = require('../../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const fs = require('fs');
+const { Transform } = require('stream');
+const { pipeline } = require('stream/promises');
 const sharp = require('sharp');
 const { USER_PIXELS } = require('../../utils/watermark');
 const GalleryVideo = require('../../models/GalleryVideo');
@@ -120,15 +122,15 @@ router.put('/upload/video/:id', requireAuthApi, async (req, res) => {
   try {
     // Хвост от оборванного куска, которого сервер не засчитал, — прочь.
     await fs.promises.truncate(part, received);
-    await new Promise((resolve, reject) => {
-      const out = fs.createWriteStream(part, { flags: 'a' });
-      req.on('data', (c) => { bytes += c.length; if (bytes > length) req.destroy(new Error('кусок длиннее заявленного')); });
-      req.on('aborted', () => reject(new Error('aborted')));
-      req.on('error', reject);
-      out.on('error', reject);
-      out.on('finish', resolve);
-      req.pipe(out);
-    });
+    // pipeline, а не pipe: при обрыве или лишних байтах он закрывает и
+    // файл. С pipe поток записи оставался открытым до конца жизни процесса —
+    // по дескриптору на каждый оборванный кусок (обычное дело на мобильной сети).
+    await pipeline(req, new Transform({
+      transform(c, enc, cb) {
+        bytes += c.length;
+        cb(bytes > length ? new Error('кусок длиннее заявленного') : null, c);
+      },
+    }), fs.createWriteStream(part, { flags: 'a' }));
   } catch (e) {
     writing.delete(id);
     if (!res.headersSent && !req.destroyed) res.status(400).json({ success: false, received });

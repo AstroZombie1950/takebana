@@ -30,6 +30,8 @@ const Notification = require('../models/Notification');
 const Conversation = require('../models/Conversation');
 const ChatMessage = require('../models/ChatMessage');
 const Call = require('../models/Call');
+const Contact = require('../models/Contact');
+const PushSubscription = require('../models/PushSubscription');
 
 const daily = require('./daily');
 const hls = require('./hls');
@@ -40,7 +42,7 @@ const streamLog = require('./streamLog');
 const errorLog = require('./errorLog');
 const { forget } = require('./audit');
 const { resolveWithin, isPlainFileName } = require('./safePath');
-const { roomName: venueRoom } = require('../routes/venueLive');
+const { stopCamera } = require('../routes/venueLive');
 
 const UPLOADS = path.join(__dirname, '..', 'public', 'uploads');
 
@@ -61,7 +63,7 @@ const dropRoom = (name, why) => name && daily.deleteRoom(name).catch((err) => er
 
 // Заведение: камера, оценки, фотографии, сам документ.
 async function removeVenue(venue) {
-  if (venue.online) await dropRoom(venueRoom(venue._id), 'venue.delete');
+  if (venue.online) await stopCamera(venue._id);
   await Rating.deleteMany({ establishment: venue._id });
   await ChatMessage.deleteMany({ venueId: venue._id });
   for (const url of venue.photos || []) unlinkFile('establishments', path.basename(String(url)));
@@ -133,6 +135,9 @@ async function removeUser(user, io) {
     Rating.deleteMany({ user: id }),
     StreamSession.deleteMany({ user: id }),
     Stream.deleteMany({ userId: id }),
+    // Его контакты и он в чужих контактах; подписки его устройств на пуши.
+    Contact.deleteMany({ $or: [{ owner: id }, { peer: id }] }),
+    PushSubscription.deleteMany({ user: id }),
     mongoose.connection.collection('mySessions').deleteMany({ 'session.userId': idStr }),
   ]);
 
@@ -158,4 +163,4 @@ async function removeUser(user, io) {
   };
 }
 
-module.exports = { removeUser, removeVenue };
+module.exports = { removeUser, removeVenue, unlinkUpload };

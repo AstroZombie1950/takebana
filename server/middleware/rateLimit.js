@@ -87,4 +87,17 @@ const attachLimiter = rateLimit({
     message: { message: 'Слишком много файлов. Попробуйте через несколько минут.' },
 });
 
-module.exports = { authLimiter, registerLimiter, resetLimiter, geocodeLimiter, attachLimiter };
+// Поиск (routes/search.js): открыт гостю, и каждый запрос — до четырёх
+// проходов по коллекциям регулярным выражением. Шапка ищет по мере набора,
+// поэтому потолок щедрый: 90 в минуту. Вошедшего считаем по нему самому —
+// за адресом мобильного оператора сидят сотни людей; гостя — по адресу.
+const searchLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: Number(process.env.RATE_LIMIT_SEARCH) || 90,
+    keyGenerator: (req) => (req.session && req.session.userId ? 'u:' + req.session.userId : rateLimit.ipKeyGenerator(req.ip)),
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { message: 'Слишком много запросов поиска. Подождите минуту.' },
+});
+
+module.exports = { authLimiter, registerLimiter, resetLimiter, geocodeLimiter, attachLimiter, searchLimiter };

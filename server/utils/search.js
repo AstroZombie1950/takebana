@@ -218,4 +218,4 @@ async function counts(rawQuery) {
   return { people, streams, recordings, venues, total: people + streams + recordings + venues };
 }
 
-module.exports = { search, counts, normalize, peopleCards, recordingCards, RECORDING_CARD, TYPES, MIN_QUERY };
+module.exports = { search, counts, normalize, peopleCards, recordingCards, RECORDING_CARD, TYPES };

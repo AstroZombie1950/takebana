@@ -9,6 +9,7 @@ const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const { commonDataMiddleware } = require('./streaming/shared');
 const search = require('../utils/search');
+const { searchLimiter } = require('../middleware/rateLimit');
 
 // Вкладки страницы. all — по нескольку из каждого вида, остальные — один вид
 // целиком. Порядок здесь — порядок вкладок на экране.
@@ -24,14 +25,14 @@ const TAB_LIMIT = 40;
 // Выпадашка: одна строка запроса — один запрос сюда, результат группами.
 // type сужает до одного вида (пересылке сообщения нужны только люди),
 // limit поднимает потолок строк — до десяти, не больше.
-router.get('/api/search', async (req, res) => {
+router.get('/api/search', searchLimiter, async (req, res) => {
   const type = search.TYPES.includes(req.query.type) ? [req.query.type] : search.TYPES;
   const asked = Number(req.query.limit);
   const limit = Number.isInteger(asked) && asked > 0 ? Math.min(asked, 10) : QUICK_LIMIT;
   res.json(await search.search(req.query.q, { limit, types: type, viewer: req.session.userId }));
 });
 
-router.get('/search', commonDataMiddleware, async (req, res) => {
+router.get('/search', searchLimiter, commonDataMiddleware, async (req, res) => {
   const query = search.normalize(req.query.q);
   const tab = TABS.includes(req.query.tab) ? req.query.tab : 'all';
 

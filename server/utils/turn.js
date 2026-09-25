@@ -37,4 +37,15 @@ function iceServers(userId, ttl = TTL_S) {
   ];
 }
 
-module.exports = { configured, iceServers };
+// Порты реле — min-port..max-port в ops/coturn/turnserver.conf, 49160–49400.
+// Поменяли там — поменять и здесь (или TURN_PORTS в .env).
+const PORTS = Number(process.env.TURN_PORTS) || 241;
+
+// Сколько портов держит разговор своим путём. Браузер берёт реле на каждый
+// адрес TURN из iceServers (их три: UDP, TCP, TLS) на каждое соединение
+// и держит до конца звонка — даже когда пошёл напрямую (замер 25.09.2026).
+// Сетка: у n человек n·(n−1) концов соединений. 1:1 — 6, вчетвером — 36.
+// Оценка сверху для IPv4; двухстековая сеть может взять вдвое больше.
+const portsFor = (members) => members * (members - 1) * 3;
+
+module.exports = { configured, iceServers, PORTS, portsFor };

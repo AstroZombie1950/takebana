@@ -1,7 +1,7 @@
 // Пуш о сообщении группы — тем участникам, кто его ещё не прочитал и не
 // выключил звук. Правило ожидания — как у личной переписки
-// (routes/streaming/messages.js, PUSH_WAIT_MS): кто на связи, тому — через
-// полминуты и только если так и не прочитал; кто не на связи — сразу.
+// (routes/streaming/messages.js, PUSH_WAIT_MS): у кого вкладка на экране,
+// тому — через полминуты и только если так и не прочитал; остальным — сразу.
 // Служебные строки («Анна добавила Бориса») не будят никого.
 
 const Group = require('../models/Group');
@@ -11,7 +11,7 @@ const userView = require('./userView');
 
 const PUSH_WAIT_MS = 30000;
 
-function send(req, group, message, sender) {
+function send(group, message, sender) {
   if (message.system && message.system.kind) return;
   const now = new Date();
   const targets = group.members
@@ -42,8 +42,7 @@ function send(req, group, message, sender) {
     })
     .catch((e) => errorLog.server(e, 'push.group'));
 
-  const rooms = req.app.get('userRooms');
-  const online = targets.filter((id) => rooms && rooms.has(id));
+  const online = targets.filter((id) => push.onScreen(id));
   const offline = targets.filter((id) => !online.includes(id));
   if (offline.length) fire(offline);
   // unref: недоотправленный пуш не повод держать процесс живым при остановке.

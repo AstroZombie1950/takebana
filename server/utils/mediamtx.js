@@ -110,4 +110,4 @@ async function kick(path) {
   }
 }
 
-module.exports = { configured, pathOf, grant, allowed, url, state, kick, KEY_TTL_MS };
+module.exports = { configured, pathOf, grant, allowed, url, state, kick };

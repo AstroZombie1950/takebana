@@ -177,4 +177,4 @@ function bunny(from, to) {
   });
 }
 
-module.exports = { daily, bunny, kindOf };
+module.exports = { daily, bunny };

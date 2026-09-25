@@ -47,7 +47,7 @@ function errorHandler(err, req, res, next) {
     // и без него он не поймёт, что именно не так с его файлом.
     // Тексты multer — английские и технические («File too large»), поэтому
     // свои: переводит их общий словарь сообщений (utils/i18n.js).
-    const MULTER = { LIMIT_FILE_SIZE: 'Файл слишком большой', LIMIT_UNEXPECTED_FILE: 'Слишком много файлов за раз' };
+    const MULTER = { LIMIT_FILE_SIZE: 'Файл слишком большой', LIMIT_UNEXPECTED_FILE: 'Слишком много файлов за раз', LIMIT_FILE_COUNT: 'Слишком много файлов за раз' };
     const message = status >= 500 ? 'Ошибка сервера'
         : fromMulter ? (MULTER[err.code] || 'Ошибка загрузки файла')
         : err.expose ? String(err.message)

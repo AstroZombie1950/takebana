@@ -167,15 +167,18 @@ router.post('/settings/about', requireAuthApi, validate({
   bio: { type: 'string', max: 300, allowEmpty: true, default: '', label: 'Описание' },
   links: { type: 'object', default: {}, label: 'Ссылки', schema: Object.fromEntries(profileLinks.KINDS.map((k) => [k, { type: 'string', max: 300, allowEmpty: true, default: '' }])) },
 }), async (req, res) => {
-  const parsed = profileLinks.parse(req.body.links);
-  if (parsed.error) return res.status(400).json({ message: parsed.message, field: parsed.error });
+  // Пока ссылки выключены (profileLinks.ENABLED), сохраняем только описание:
+  // прежние ссылки в базе остаются как были.
+  const parsed = profileLinks.ENABLED ? profileLinks.parse(req.body.links) : null;
+  if (parsed && parsed.error) return res.status(400).json({ message: parsed.message, field: parsed.error });
   // Больше двух пустых строк подряд — просто отступ, не вёрстка.
   const bio = req.body.bio.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n');
-  const user = await User.findByIdAndUpdate(req.session.userId, { $set: { bio, links: parsed.links } }, { returnDocument: 'after' })
+  const set = parsed ? { bio, links: parsed.links } : { bio };
+  const user = await User.findByIdAndUpdate(req.session.userId, { $set: set }, { returnDocument: 'after' })
     .select('bio links nickname login email').lean();
   if (!user) return res.status(401).json({ message: 'Необходима авторизация' });
-  audit(req, 'profile.update', { targetType: 'user', target: user, meta: { bio: bio.length, links: Object.keys(parsed.links) } });
-  res.json({ bio: user.bio, links: profileLinks.list(user.links) });
+  audit(req, 'profile.update', { targetType: 'user', target: user, meta: { bio: bio.length, ...(parsed ? { links: Object.keys(parsed.links) } : {}) } });
+  res.json({ bio: user.bio, links: parsed ? profileLinks.list(user.links) : [] });
 });
 
 // Приватность (utils/privacy.js): поле за полем, сохраняется сразу по
