@@ -219,23 +219,27 @@
   chooseAvatar.addEventListener('click', function () { avatarInput.click(); });
 
   avatarInput.addEventListener('change', function () {
-    var file = avatarInput.files[0];
+    var picked = avatarInput.files[0];
     avatarInput.value = ''; // тот же файл ещё раз — снова change
-    if (!file) return;
-    if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
-      return tkText(avatarHint, 'app.fileBad');
-    }
-    var form = new FormData();
-    form.append('avatar', file);
-    busy(true);
-    tkText(avatarHint, 'app.uploading');
-    send('/profile/avatar', { method: 'POST', body: form })
-      .then(function (data) {
-        paintAvatar(data.avatar);
-        tkText(avatarHint, 'app.photoDone');
-      })
-      .catch(function (err) { avatarHint.removeAttribute('data-i18n'); avatarHint.textContent = t('app.errorShort', { message: err.message }); })
-      .finally(function () { busy(false); });
+    if (!picked) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(picked.type)) return tkText(avatarHint, 'app.fileBad');
+    // Кадр выбирает человек (public/tk-crop.js), а не центр снимка. Предел
+    // 5 МБ — к тому, что уходит: кадр 1024×1024 весит в разы меньше
+    // исходного снимка с телефона.
+    tkCrop(picked, { aspect: 1, max: 1024, alpha: true }).then(function (file) {
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) return tkText(avatarHint, 'app.fileBad');
+      var form = new FormData();
+      form.append('avatar', file);
+      busy(true);
+      tkText(avatarHint, 'app.uploading');
+      return send('/profile/avatar', { method: 'POST', body: form })
+        .then(function (data) {
+          paintAvatar(data.avatar);
+          tkText(avatarHint, 'app.photoDone');
+        })
+        .finally(function () { busy(false); });
+    }).catch(function (err) { avatarHint.removeAttribute('data-i18n'); avatarHint.textContent = t('app.errorShort', { message: err.message }); });
   });
 
   deleteAvatar.addEventListener('click', function () {

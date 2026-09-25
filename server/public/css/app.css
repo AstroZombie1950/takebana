@@ -770,6 +770,68 @@ body.tk-app {
   border-top: 1px solid var(--tk-rule);
 }
 
+/* ── Кадрирование перед загрузкой (public/tk-crop.js) ──
+ * Сцена тёмная, кадр — рамкой посередине, всё вокруг кадра притушено
+ * тенью самой рамки. Картинка лежит в левом верхнем углу сцены и ездит
+ * transform'ом: так двигать её дёшево и на слабом телефоне. */
+.tk-modal__card.tk-crop { max-width: 640px; }
+
+.tk-crop__stage {
+  position: relative;
+  flex: none;
+  height: min(56vh, 420px);
+  overflow: hidden;
+  background: #000;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tk-crop__stage.is-drag { cursor: grabbing; }
+.tk-crop__stage:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: -2px; }
+
+.tk-crop__img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.tk-crop__frame {
+  position: absolute;
+  border: 1px solid var(--tk-paper);
+  box-shadow: 0 0 0 100vmax rgba(10, 10, 10, .62);
+  pointer-events: none;
+}
+
+.tk-crop__body { flex: none; gap: 14px; }
+.tk-crop__body .tk-note { margin: 0; }
+
+.tk-crop__zoom {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-crop__zoom input { flex: 1; accent-color: var(--tk-accent); }
+
+.tk-crop__foot { display: flex; justify-content: flex-end; gap: 10px; }
+
+/* Телефон: окно там во весь экран (правило модалок ниже), и сцена
+ * забирает всё, что осталось от подсказки и кнопок. */
+@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) {
+  .tk-crop__stage { flex: 1 1 auto; height: auto; min-height: 200px; }
+  .tk-crop__foot .tk-btn { flex: 1 1 0; }
+}
+
 /* Состояние вместо формы: «у вас уже есть активный стрим». */
 .tk-modal__state {
   padding: 26px 0;

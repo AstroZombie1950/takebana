@@ -9,8 +9,6 @@ asyncify(router); // ошибки async-обработчиков уходят в
 
 const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
-const daily = require('../utils/daily');
-const { roomName: venueRoomName } = require('./venueLive');
 const { removeVenue } = require('../utils/userDelete');
 const { readVenueFilters } = require('../utils/venueFilters');
 const multer = require('multer');
@@ -51,7 +49,6 @@ const PHOTO_URL = /^\/uploads\/establishments\/[\w.-]+$/;
 // Часы, координаты, город и тип — в utils/venueFields.js: те же схемы
 // нужны админке, и разъезжаться им нельзя.
 const { HOURS, LOCATION, CITY, TYPE } = require('../utils/venueFields');
-const errorLog = require('../utils/errorLog');
 
 // То, что видит любой вошедший: карточка на карте и поиск. Почта, телефон
 // и владелец — только самому владельцу, в /user-establishments.
@@ -242,20 +239,6 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
     audit(req, 'venue.update', { targetType: 'venue', target: updatedEstablishment, meta: { fields: Object.keys(establishment) } });
     res.json(updatedEstablishment);
 }));
-
-
-// Уход владельца с карты гасит камеры всех его заведений. Владелец берётся
-// из сессии: раньше userId приходил в теле, и вошедший переписывал статус
-// чужих заведений. Включение и выключение одной камеры — routes/venueLive.js.
-router.post('/updateEstablishmentsOnlineStatus', requireAuth, async (req, res) => {
-    const userId = req.session.userId;
-    const live = await Establishments.find({ owner: userId, online: true }).select('_id').lean();
-    await Establishments.updateMany({ owner: userId }, { $set: { online: false } });
-    for (const { _id } of live) {
-        daily.deleteRoom(venueRoomName(_id)).catch((err) => errorLog.external(err, 'daily.deleteRoom', { venue: String(_id) }));
-    }
-    res.json({ ok: true });
-});
 
 
 // Удалить заведение. Кнопка была в старой вёрстке, но ни обработчика,

@@ -15,7 +15,9 @@
   var feed = $('feed');
   var list = $('conversationsList');
   var input = $('messageInput');
-  var contactBtn = $('contactToggle');   // «В контакты» в шапке диалога
+  var contactAddBtn = $('contactAdd');       // «В контакты» и «Убрать из
+  var contactRemoveBtn = $('contactRemove'); // контактов» в шапке диалога
+  var peerBlocked = false;                   // ограничение доступа с собеседником
 
   var peer = null;          // { id, name, url, bg, initial }
   // Открытая группа (routes/groups.js) — вместо peer: { id, title, name, url,
@@ -678,7 +680,8 @@
     $('callAudio').hidden = !!who;
     $('callVideo').hidden = !!who;
     // Записать в контакты такого человека сервер тоже не даст (restrict.js).
-    if (contactBtn) contactBtn.hidden = !!who || !peer;
+    peerBlocked = !!who;
+    paintContactBtn();
     if (who) say(note, who === 'me' ? 'chats.blockedMe' : 'chats.blockedThem');
   }
 
@@ -3128,6 +3131,22 @@
     if (longPressed) return;
     if (!menu.hidden && !menu.contains(e.target)) closeMenu();
   });
+  // Escape закрывает открытый диалог или группу (24.09) — когда поверх
+  // ничего нет: меню, окна, просмотра, ответа, выбора, записи, экрана
+  // группы. Смотрим в фазе захвата, раньше остальных обработчиков Escape:
+  // они закрывают своё, и после них одно нажатие закрывало бы ещё и диалог.
+  // Начатый текст не теряем: с ним Escape диалог не закрывает.
+  window.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || e.defaultPrevented || !$('chat').classList.contains('has-peer')) return;
+    var field = e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
+    if ((field && field !== input) || input.value.trim()) return;
+    if (picking || replyTo || rec || rrec) return;
+    if (document.querySelector('.tk-modal:not(.hidden), [role="dialog"]:not(.hidden):not([hidden]), [role="menu"]:not([hidden]), #groupPane:not([hidden]), .tb-dialog')) return;
+    closeDialog();
+    // Фокус оставался на кнопке ушедшего диалога — вернуть его к списку.
+    if (document.activeElement && $('chat').contains(document.activeElement)) document.activeElement.blur();
+  }, true);
+
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if (closeViewers()) return;
@@ -3282,26 +3301,17 @@
   // Одна кнопка на два действия: записанного собеседника она убирает,
   // незаписанного — добавляет. Список контактов страница и так держит
   // у себя (loadContacts при открытии), спрашивать сервер не нужно.
+  // Видна одна из двух: не записан — «В контакты», записан — «Убрать».
+  // Пока список не пришёл, ответа нет — нет и кнопки.
   function paintContactBtn() {
-    if (!contactBtn) return;
-    contactBtn.hidden = !peer;
-    if (!peer) return;
-    var on = !!isContact(peer.id);
-    var key = on ? 'contacts.remove' : 'contacts.add';
-    contactBtn.setAttribute('aria-pressed', String(on));
-    contactBtn.setAttribute('data-i18n-aria', key);
-    contactBtn.setAttribute('data-i18n-title', key);
-    contactBtn.setAttribute('aria-label', t(key));
-    contactBtn.title = t(key);
-    contactBtn.querySelector('[data-icon="add"]').hidden = on;
-    contactBtn.querySelector('[data-icon="remove"]').hidden = !on;
+    var show = !!peer && contactsReady && !peerBlocked;
+    var on = show && !!isContact(peer.id);
+    contactAddBtn.hidden = !show || on;
+    contactRemoveBtn.hidden = !on;
   }
 
-  if (contactBtn) contactBtn.addEventListener('click', function () {
-    if (!peer) return;
-    if (isContact(peer.id)) removeContact(peer);
-    else addContact(peer, 'chat');
-  });
+  contactAddBtn.addEventListener('click', function () { if (peer) addContact(peer, 'chat'); });
+  contactRemoveBtn.addEventListener('click', function () { if (peer) removeContact(peer); });
 
   // ── Меню человека ─────────────────────────────────────────────────────
   // Одно меню на три списка: строка диалога, строка контакта, строка журнала

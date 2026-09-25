@@ -1,0 +1,141 @@
+<%#
+  Камера заведения (routes/venueLive.js, с 24.09). Владельцу — пульт: своя
+  картинка, включить и выключить, микрофон, смена камеры. Гостю — плеер.
+  У обоих — карточка заведения и чат. Раскладка и классы — эфира
+  (stream.css): картинка, под ней кнопки и карточка, справа чат; на телефоне
+  одна колонка. Поведение — public/tk-venue-live.js.
+%>
+<% var photo = venue.photos && venue.photos[0];
+   var day = new Date().getDay(), hours = day === 0 || day === 6 ? venue.weekendHours : venue.weekdayHours;
+   var meta = [venue.type ? t('venue.' + venue.type) : '', venue.city ? t('city.' + venue.city) : ''].filter(Boolean).join(' · '); %>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%# Камера живёт часами и видна только с карты — в индекс не берём. %>
+<%- include('partials/tkHead', { title: venue.name + ' — Takebana', seo: { path: '/venue/' + venue._id + '/live', robots: 'noindex, follow', image: photo, imageAlt: venue.name } }) %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
+</head>
+
+<body class="tk-app tk-app--stage"
+      data-venue-id="<%= venue._id %>"
+      data-user-id="<%= currentUser ? currentUser._id : '' %>"
+      data-owner="<%= isOwner ? '1' : '' %>"
+      data-online="<%= venue.online ? '1' : '' %>">
+
+<%- include('partials/header', { socket: true }) %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-live tk-vl">
+      <div class="tk-live__grid" id="stage">
+        <section class="tk-live__col">
+          <div class="tk-live__player" id="player">
+            <%# У владельца — своя камера без звука (иначе эхо), у гостя —
+                картинка заведения со знаком поверх: кадр собирает браузер,
+                положить знак в сам кадр нечем (app.css, .tk-wm). %>
+            <video id="venueVideo" class="video-fit-contain" autoplay playsinline<% if (isOwner) { %> muted<% } %> hidden></video>
+            <% if (!isOwner) { %><span class="tk-wm" id="venueWm" aria-hidden="true" hidden></span><% } %>
+
+            <%# Заставка вместо картинки: камера выключена, подключаемся,
+                нужен вход, доступ закрыт. Текст меняет скрипт по состоянию. %>
+            <div class="tk-live__hint tk-live__hint--paused" id="venueHint">
+              <% if (photo) { %><img class="tk-live__thumb" src="<%= photo %>" alt=""><% } %>
+              <%# Заголовок коротко, объяснение — обычным текстом. %>
+              <% var hint = restricted ? ['', 'restricted.text']
+                   : isOwner ? (!approved ? ['venues.pending', 'venues.pendingNote'] : venue.online ? ['stream.hintLive', 'vlive.elsewhere'] : ['vlive.offBadge', 'vlive.ownerOff'])
+                   : !venue.online ? ['vlive.offBadge', 'vlive.off']
+                   : !currentUser ? ['stream.hintLive', 'vlive.login'] : ['studio.connecting', '']; %>
+              <p class="tk-live__hint-title" id="venueHintTitle"<% if (hint[0]) { %> data-i18n="<%= hint[0] %>"<% } else { %> hidden<% } %>><%- hint[0] ? t(hint[0]) : '' %></p>
+              <p id="venueHintText"<% if (hint[1]) { %> data-i18n="<%= hint[1] %>"<% } else { %> hidden<% } %>><%- hint[1] ? t(hint[1]) : '' %></p>
+              <% if (!currentUser && venue.online && !restricted) { %>
+              <a href="/login?next=<%= encodeURIComponent(url) %>" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="nav.login"><%- t('nav.login') %></a>
+              <% } %>
+            </div>
+
+            <div class="tk-live__badges">
+              <span class="tk-live__badge<%= venue.online ? ' tk-live__badge--live' : '' %>" id="stateBadge">
+                <i class="stream-indicator"></i><span data-i18n="<%= venue.online ? 'stream.hintLive' : 'vlive.offBadge' %>"><%- t(venue.online ? 'stream.hintLive' : 'vlive.offBadge') %></span>
+              </span>
+              <span class="tk-live__badge viewer-count" id="viewersBadge"<% if (!venue.online) { %> hidden<% } %>>
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>
+                <span class="viewers-number" id="viewersNum">0</span>
+                <span class="viewers-text" id="viewersText" data-i18n="stream.viewerMany"><%- t('stream.viewerMany') %></span>
+              </span>
+            </div>
+
+            <button type="button" class="tk-live__fs" data-fullscreen aria-pressed="false" aria-label="<%= ta('stream.fullscreen') %>" data-i18n-aria="stream.fullscreen" title="<%= ta('stream.fullscreen') %>" data-i18n-title="stream.fullscreen">
+              <svg class="tk-live__fs-on" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M4.5 15v4.5H9M15 19.5h4.5V15"></path></svg>
+              <svg class="tk-live__fs-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 4.5V9H4.5M19.5 9H15V4.5M9 19.5V15H4.5M15 19.5V15h4.5"></path></svg>
+            </button>
+          </div>
+
+          <% if (isOwner) { %>
+          <%# Пульт владельца. Микрофон и смена камеры — пока камера включена. %>
+          <div class="tk-live__bar" id="hostBar">
+            <button type="button" class="tk-live__tool" id="micBtn" aria-pressed="false" aria-label="<%= ta('stream.micOff') %>" data-i18n-aria="stream.micOff" title="<%= ta('stream.micOff') %>" data-i18n-title="stream.micOff" disabled>
+              <svg class="tk-live__mic-on" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0014 0M12 18v3"></path></svg>
+              <svg class="tk-live__mic-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M15 9.5V6a3 3 0 00-6 0v5a3 3 0 004.6 2.5M5 11a7 7 0 0011.3 5.5M19 11a7 7 0 01-.5 2.5M12 18v3M4 4l16 16"></path></svg>
+            </button>
+            <button type="button" class="tk-live__tool" id="cameraBtn" aria-label="<%= ta('stream.switchCamera') %>" data-i18n-aria="stream.switchCamera" title="<%= ta('stream.switchCamera') %>" data-i18n-title="stream.switchCamera" disabled>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M4 7h3l2-3h6l2 3h3v13H4V7Z"></path><path d="M9 13a3 3 0 015-2.2M15 13a3 3 0 01-5 2.2M14 9v2h-2M10 17v-2h2"></path></svg>
+            </button>
+            <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-live__end" id="liveBtn"<% if (!approved) { %> disabled<% } %> data-i18n="venues.startLive"><%- t('venues.startLive') %></button>
+          </div>
+          <% } else if (currentUser && !restricted) { %>
+          <%# Гостю: звук. Браузер запускает видео со звуком не всегда — тогда
+              картинка идёт без звука, а кнопка его включает. %>
+          <div class="tk-live__bar" id="viewerBar" hidden>
+            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="soundBtn" data-i18n="vlive.sound"><%- t('vlive.sound') %></button>
+          </div>
+          <% } %>
+
+          <%# Карточка заведения: название, тип и город, адрес, часы на сегодня,
+              ссылка на место на карте. %>
+          <div class="tk-live__info tk-vl__info" id="streamInfo">
+            <div class="tk-live__title-row">
+              <a href="/map?venue=<%= venue._id %>" class="tk-live__back" aria-label="<%= ta('stream.back') %>" data-i18n-aria="stream.back">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+              </a>
+              <h1 class="tk-live__title"><%= venue.name %></h1>
+            </div>
+            <dl class="tk-vl__facts">
+              <% if (meta) { %><div><dt data-i18n="vlive.kind"><%- t('vlive.kind') %></dt><dd><%= meta %></dd></div><% } %>
+              <% if (venue.address) { %><div><dt data-i18n="venues.address"><%- t('venues.address') %></dt><dd><%= venue.address %></dd></div><% } %>
+              <% if (hours && hours.open && hours.close) { %><div><dt data-i18n="vlive.hours"><%- t('vlive.hours') %></dt><dd data-i18n="venues.today" data-i18n-vars='<%= JSON.stringify({ from: hours.open, to: hours.close }) %>'><%- t('venues.today', { from: hours.open, to: hours.close }) %></dd></div><% } %>
+            </dl>
+            <a href="/map?venue=<%= venue._id %>" class="tk-btn tk-btn--outline tk-btn--xs tk-vl__map" data-i18n="vlive.onMap"><%- t('vlive.onMap') %></a>
+          </div>
+        </section>
+
+        <aside class="tk-live__chat chat__box" aria-labelledby="chatTitle">
+          <h2 class="tk-live__chat-head" id="chatTitle" data-i18n="chat.title"><%- t('chat.title') %></h2>
+          <div class="messeg-box" id="chatBox" aria-live="polite"></div>
+          <%# Закрытому владельцем доступу поля нет вовсе: сервер не примет. %>
+          <% if (currentUser && !restricted) { %>
+          <form class="input__messeng-box" id="chatForm">
+            <textarea class="tk-field input__messeng" rows="1" maxlength="500" data-i18n-placeholder="chats.messagePh" placeholder="<%= ta('chats.messagePh') %>" aria-label="<%= ta('chats.messagePh') %>" data-i18n-aria="chats.messagePh"></textarea>
+            <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm tk-live__send" aria-label="<%= ta('chats.send') %>" data-i18n-aria="chats.send">
+              <span data-i18n="chats.send"><%- t('chats.send') %></span>
+              <svg class="tk-live__send-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"></path></svg>
+            </button>
+          </form>
+          <% } else if (!currentUser) { %>
+          <p class="input__messeng-box tk-live__chat-guest">
+            <a href="/login?next=<%= encodeURIComponent(url) %>" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="chat.loginToWrite"><%- t('chat.loginToWrite') %></a>
+          </p>
+          <% } %>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+
+<%# Движок камеры называет сервер: свой приём (tk-whip.js) или комната
+    Daily (tk-daily.js — её грузит шапка вошедшему). %>
+<% if (currentUser && !restricted) { %><script defer src="<%= asset('/tk-whip.js') %>"></script><% } %>
+<script defer src="<%= asset('/tk-venue-live.js') %>"></script>
+</body>
+</html>

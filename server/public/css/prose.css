@@ -183,8 +183,14 @@
     padding: 44px 20px 56px;
   }
 
+  /* Размер — от ширины экрана: «КОНФИДЕНЦИАЛЬНОСТИ» — восемнадцать
+   * широких заглавных, при 32px слово шире телефона и тянуло страницу
+   * вбок. 6.6vw — это слово целиком от 360 точек; перенос по слогам —
+   * страховка на ещё более узких и длинных словах. */
   .tk-prose__title {
-    font-size: 32px;
+    font-size: clamp(22px, 6.6vw, 32px);
+    hyphens: auto;
+    -webkit-hyphens: auto;
   }
 
   .tk-prose__body h2 {
@@ -192,14 +198,38 @@
     margin-top: 44px;
   }
 
+  /* Таблицы cookie (имя, зачем, срок) — карточками: имя и срок строкой,
+   * описание под ними. Три колонки не влезали в телефон: имена файлов
+   * не делятся, и страница ездила вбок. Шапка таблицы остаётся для
+   * читалок экрана, глазу она здесь не нужна. */
+  .tk-prose__body table,
+  .tk-prose__body tbody,
+  .tk-prose__body td { display: block; }
+
+  .tk-prose__body table { border-top: 1px solid rgba(10, 10, 10, .18); }
+
+  .tk-prose__body thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .tk-prose__body tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(10, 10, 10, .18);
+  }
+
+  .tk-prose__body td { border: 0; padding: 0; }
+  .tk-prose__body td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .tk-prose__body td:nth-child(3) { font-family: Oswald, sans-serif; font-size: 14px; letter-spacing: .06em; text-transform: uppercase; opacity: .7; }
+
   .tk-prose__body h3 {
     font-size: 19px;
-  }
-}
-
-@media (max-width: 374px) {
-  .tk-prose__title {
-    font-size: 27px;
   }
 }
 

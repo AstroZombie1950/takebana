@@ -129,9 +129,11 @@
         <p class="tk-vcard__line" id="venueCardAddr"></p>
         <p class="tk-vcard__line tk-vcard__line--hours" id="venueCardHours"></p>
 
-        <button type="button" class="tk-btn tk-btn--primary tk-btn--block" id="venueWatch">
+        <%# Камера — своей страницей (/venue/:id/live, 24.09): плеер, чат,
+            карточка. Адрес ставит tk-venues.js при открытии карточки. %>
+        <a href="#" class="tk-btn tk-btn--primary tk-btn--block" id="venueWatch">
           <i class="tk-venues__dot" aria-hidden="true"></i><span data-i18n="venues.watch"><%- t('venues.watch') %></span>
-        </button>
+        </a>
         <p class="tk-vcard__offline" id="venueOffline" data-i18n="venues.offline"><%- t('venues.offline') %></p>
 
         <div class="tk-vcard__rating">
@@ -156,24 +158,6 @@
       </div>
     </aside>
   </main>
-</div>
-
-<%# Камера заведения: гость смотрит то, что показывает владелец (routes/venueLive.js). %>
-<div class="tk-modal hidden" id="venueLiveModal">
-  <div class="tk-modal__card tk-modal__card--wide">
-    <div class="tk-modal__head">
-      <h3 class="tk-modal__title" id="venueLiveTitle" data-i18n="venues.live"><%- t('venues.live') %></h3>
-      <button type="button" class="tk-modal__close" data-close aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-      </button>
-    </div>
-    <%# Знак поверх плеера: картинку камеры собирает Daily у зрителя,
-        положить его в кадр, как в эфире, нечем. %>
-    <div class="tk-vlive__box">
-      <video class="tk-vlive" id="venueLiveVideo" autoplay playsinline controls></video>
-      <span class="tk-wm" aria-hidden="true"></span>
-    </div>
-  </div>
 </div>
 
 <%# Фото заведения во весь экран. %>
@@ -293,10 +277,6 @@ window.TKCityCenter = <%- JSON.stringify(catalog.CITY_CENTER) %>;</script>
 <script defer src="<%= asset('/vendor/pmtiles-4.5.0.js') %>"></script>
 <script defer src="<%= asset('/tk-map.js') %>"></script>
 <script defer src="<%= asset('/tk-point.js') %>"></script>
-<%# Камера заведения: свой приём (WHIP/WHEP) или комната Daily — движок
-    называет сервер в ответе (routes/venueLive.js). Оба скрипта маленькие,
-    и какой понадобится, заранее неизвестно. %>
-<script defer src="<%= asset('/tk-whip.js') %>"></script>
 <script defer src="<%= asset('/tk-venues.js') %>"></script>
 </body>
 </html>

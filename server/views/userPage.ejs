@@ -26,17 +26,14 @@
       <% } %>
 
       <!-- Шапка профиля -->
+      <%# Переверстана 24.09: наверху аватар и всё, что о человеке (имя,
+          присутствие, описание, ссылки), ниже — полоса во всю ширину:
+          счётчики слева, действия справа. Прежде числа и кнопки стояли
+          столбиком под именем, уходили ниже аватара, а справа пустовало. %>
       <div class="tk-prof__head">
-        <%# Настройки — иконкой в углу блока, а не кнопкой в общем ряду:
-            на своей странице ряд состоит из неё одной, и она выбивалась
-            из имени с аватаром. %>
-        <% if (isSelf) { %>
-        <a href="/settings" class="tk-prof__gear" aria-label="<%= ta('settings.title') %>" title="<%= ta('settings.title') %>" data-i18n-aria="settings.title" data-i18n-title="settings.title">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"></path></svg>
-        </a>
-        <% } else if (currentUser) { %>
-        <%# Чужой профиль: в том же углу, где у своего шестерёнка, — меню
-            «⋯» с жалобой и ограничением (21.09): в лицо их не ставим. %>
+        <% if (!isSelf && currentUser) { %>
+        <%# Чужой профиль: меню «⋯» с жалобой, контактами и ограничением
+            (21.09) — в углу, в лицо их не ставим. %>
         <div class="tk-prof__more">
           <button type="button" class="tk-prof__gear" id="profMore" aria-haspopup="menu" aria-expanded="false" aria-controls="profMenu" aria-label="<%= ta('user.more') %>" title="<%= ta('user.more') %>" data-i18n-aria="user.more" data-i18n-title="user.more">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>
@@ -67,128 +64,149 @@
         </div>
         <% } %>
 
-        <div class="tk-prof__ava"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
-          <% if (user.avatarStyle.url) { %>
-            <img src="<%= user.avatarStyle.url %>" alt="<%= user.displayName %>" data-avatar-url="<%= user.avatarStyle.url %>">
-          <% } else { %>
-            <%= user.avatarStyle.initial %>
-          <% } %>
+        <div class="tk-prof__top">
+          <div class="tk-prof__ava"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
+            <% if (user.avatarStyle.url) { %>
+              <img src="<%= user.avatarStyle.url %>" alt="<%= user.displayName %>" data-avatar-url="<%= user.avatarStyle.url %>">
+            <% } else { %>
+              <%= user.avatarStyle.initial %>
+            <% } %>
+          </div>
+
+          <%# На телефоне блок растворяется в сетке .tk-prof__top: имя
+              с присутствием (.tk-prof__id) встают рядом с аватаром,
+              описание и ссылки — под ними во всю ширину. %>
+          <div class="tk-prof__main">
+            <div class="tk-prof__id">
+            <h1 class="tk-prof__name"><%= user.displayName %><% if (user.official) { %><%- include('partials/official') %><% } %></h1>
+
+            <%# Класс присутствия — на всей строке: по нему CSS прячет ненужную
+                половину. «Онлайн» и «Последний раз в сети: Сейчас» рядом — одно
+                и то же дважды. Тот же класс проставляет живое обновление
+                (public/tk-app.js). Скрытое «в сети» (utils/privacy.js) — строки
+                нет вовсе: «не в сети» было бы неправдой. %>
+            <% if (!user.presenceHidden) { %>
+            <p class="tk-prof__meta <%= user.isOnline ? 'presence-online' : 'presence-offline' %>" data-presence-user="<%= user._id %>">
+              <span class="presence-dot <%= user.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
+              <span class="tk-prof__meta-live" data-presence-text title="<%= user.lastSeen ? date(user.lastSeen) : '' %>">
+                <% var presenceKey = user.isOnline ? 'common.online' : 'common.offline'; %>
+                <span data-i18n="<%= presenceKey %>"><%- t(presenceKey) %></span>
+              </span>
+              <span class="tk-prof__meta-seen">
+                <span data-i18n="user.lastSeen"><%- t('user.lastSeen') %></span>
+                <%# Дата последнего входа — не словарная строка, поэтому ключ только
+                    у «Сейчас»: иначе перевод затирал бы дату. %>
+                <span data-presence-lastseen-user="<%= user._id %>"<% if (user.isOnline) { %> data-i18n="common.now"<% } %>><%= user.isOnline ? ta('common.now') : (user.lastSeen ? date(user.lastSeen) : ta('common.dash')) %></span>
+              </span>
+            </p>
+            <% } %>
+            </div>
+
+            <%# Описание — текстом, как написано: ссылки в нём не кликаются.
+                Ссылки — только значками (решение 24.09): номер WhatsApp или
+                Telegram не стоит на странице текстом, его видно лишь тому,
+                кто перешёл. Сайт без nofollow — если так решил администратор. %>
+            <% if (user.bio) { %><p class="tk-prof__bio"><%= user.bio %></p><% } %>
+            <% if (user.links.length) { %>
+            <nav class="tk-prof__links" aria-label="<%= ta('user.links') %>" data-i18n-aria="user.links">
+              <% user.links.forEach(function (l) { var label = l.kind === 'site' ? ta('user.linkSite') : l.name; %>
+              <a href="<%= l.url %>" class="tk-prof__link" target="_blank" rel="<%= l.kind === 'site' && user.linksFollow ? 'noopener' : 'nofollow ugc noopener' %>"
+                 aria-label="<%= label %>" title="<%= label %>"<% if (l.kind === 'site') { %> data-i18n-aria="user.linkSite" data-i18n-title="user.linkSite"<% } %>>
+                <%- include('partials/linkIcon', { kind: l.kind }) %>
+              </a>
+              <% }) %>
+            </nav>
+            <% } %>
+          </div>
         </div>
 
-        <div class="tk-prof__main">
-          <h1 class="tk-prof__name"><%= user.displayName %><% if (user.official) { %><%- include('partials/official') %><% } %></h1>
-
-          <%# Активность: строка под именем, а не панель в сетке ниже —
-              это две строчки, целого блока им не нужно. Атрибуты присутствия
-              те же: на них висит живое обновление (public/tk-app.js). %>
-          <%# Класс присутствия — на всей строке: по нему CSS прячет ненужную
-              половину. «Онлайн» и «Последний раз в сети: Сейчас» рядом — одно
-              и то же дважды. Тот же класс проставляет живое обновление. %>
-          <%# Скрытое «в сети» (utils/privacy.js) — строки нет вовсе: «не в сети»
-              было бы неправдой. %>
-          <% if (!user.presenceHidden) { %>
-          <p class="tk-prof__meta <%= user.isOnline ? 'presence-online' : 'presence-offline' %>" data-presence-user="<%= user._id %>">
-            <%# Цвет точки задаёт общий класс из app.css. Прежде страница
-                держала свою пару правил с зашитыми цветами. %>
-            <span class="presence-dot <%= user.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
-
-            <span class="tk-prof__meta-live" data-presence-text title="<%= user.lastSeen ? date(user.lastSeen) : '' %>">
-              <% var presenceKey = user.isOnline ? 'common.online' : 'common.offline'; %>
-              <span data-i18n="<%= presenceKey %>"><%- t(presenceKey) %></span>
-            </span>
-
-            <span class="tk-prof__meta-seen">
-              <span data-i18n="user.lastSeen"><%- t('user.lastSeen') %></span>
-              <%# Дата последнего входа — не словарная строка, поэтому ключ только
-                  у «Сейчас»: иначе перевод затирал бы дату. %>
-              <span data-presence-lastseen-user="<%= user._id %>"<% if (user.isOnline) { %> data-i18n="common.now"<% } %>><%= user.isOnline ? ta('common.now') : (user.lastSeen ? date(user.lastSeen) : ta('common.dash')) %></span>
-            </span>
-          </p>
-          <% } %>
-
-          <%# Описание — текстом, как написано: ссылки в нём не кликаются.
-              Ссылки — только значками (решение 24.09): номер WhatsApp или
-              Telegram не стоит на странице текстом, его видно лишь тому,
-              кто перешёл. Сайт без nofollow — если так решил администратор. %>
-          <% if (user.bio) { %><p class="tk-prof__bio"><%= user.bio %></p><% } %>
-          <% if (user.links.length) { %>
-          <nav class="tk-prof__links" aria-label="<%= ta('user.links') %>" data-i18n-aria="user.links">
-            <% user.links.forEach(function (l) { var label = l.kind === 'site' ? ta('user.linkSite') : l.name; %>
-            <a href="<%= l.url %>" class="tk-prof__link" target="_blank" rel="<%= l.kind === 'site' && user.linksFollow ? 'noopener' : 'nofollow ugc noopener' %>"
-               aria-label="<%= label %>" title="<%= label %>"<% if (l.kind === 'site') { %> data-i18n-aria="user.linkSite" data-i18n-title="user.linkSite"<% } %>>
-              <%- include('partials/linkIcon', { kind: l.kind }) %>
-            </a>
-            <% }) %>
-          </nav>
-          <% } %>
-
-          <%# Оба числа — ссылки на списки (routes/streaming/subscriptions.js).
-              Раньше число подписчиков было просто текстом, а подписки
-              считались, но не показывались. %>
+        <div class="tk-prof__bar">
+          <%# Счётчики — ссылки: на списки (routes/streaming/subscriptions.js),
+              к записям ниже и на всю галерею. Подпись — именем списка, а не
+              формой по числу: число живое (profileSignal), подпись — нет.
+              При ограниченном доступе записей и галереи на странице нет —
+              нет и их счётчиков. %>
           <div class="tk-prof__stats">
             <a href="/userPage/<%= user._id %>/followers" class="tk-prof__stat">
               <span class="tk-prof__num" id="followersCount" data-count-followers="<%= user._id %>"><%= user.followersCount %></span>
-              <span class="tk-prof__lbl" data-i18n="user.subscribers"><%- t('user.subscribers') %></span>
+              <span class="tk-prof__lbl" data-i18n="user.subscribersTab"><%- t('user.subscribersTab') %></span>
             </a>
             <a href="/userPage/<%= user._id %>/following" class="tk-prof__stat">
               <span class="tk-prof__num" data-count-following="<%= user._id %>"><%= user.followingCount %></span>
-              <span class="tk-prof__lbl" data-i18n="user.followingLabel"><%- t('user.followingLabel') %></span>
+              <span class="tk-prof__lbl" data-i18n="user.followingTab"><%- t('user.followingTab') %></span>
             </a>
+            <% if (!restricted) { %>
+            <a href="#recordings" class="tk-prof__stat">
+              <span class="tk-prof__num"><%= recordings.length %></span>
+              <span class="tk-prof__lbl" data-i18n="user.recordingsStat"><%- t('user.recordingsStat') %></span>
+            </a>
+            <a href="<%= user.url %>/gallery" class="tk-prof__stat">
+              <span class="tk-prof__num" data-gallery-count><%= shotsCount %></span>
+              <span class="tk-prof__lbl" data-i18n="user.gallery"><%- t('user.gallery') %></span>
+            </a>
+            <% } %>
           </div>
 
-          <% if (!isSelf && !currentUser) { %>
-          <%# Гостю — те же «Написать» и «Подписаться», но через вход: после него
-              человек вернётся на эту страницу. Звонки и жалоба — только вошедшим. %>
-          <% var loginBack = '/login?next=' + encodeURIComponent(url); %>
-          <div class="tk-prof__acts tk-prof__acts-row">
-            <a href="<%= loginBack %>" class="tk-btn tk-btn--primary tk-btn--sm">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
-              <span data-i18n="user.message"><%- t('user.message') %></span>
+          <% if (isSelf) { %>
+          <%# Своя страница: настройки и эфир — то, зачем сюда приходят чаще
+              всего. Шестерёнка в углу стояла одна и терялась. %>
+          <div class="tk-prof__acts">
+            <a href="/settings" class="tk-btn tk-btn--outline tk-btn--sm tk-prof__settings" aria-label="<%= ta('settings.title') %>" data-i18n-aria="settings.title">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"></path></svg>
+              <span data-i18n="settings.title"><%- t('settings.title') %></span>
             </a>
-            <a href="<%= loginBack %>" class="tk-btn tk-btn--outline tk-btn--sm">
+            <a href="/studio" class="tk-btn tk-btn--primary tk-btn--sm tk-prof__studio">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M15.5 10.5l4.5-2.25v7.5l-4.5-2.25"></path><rect x="3.5" y="6" width="12" height="12"></rect></svg>
+              <span data-i18n="side.ctaButton"><%- t('side.ctaButton') %></span>
+            </a>
+          </div>
+          <% } else if (!currentUser) { %>
+          <%# Гостю — те же «Подписаться» и «Написать», но через вход: после
+              него человек вернётся на эту страницу. Звонки и жалоба — только
+              вошедшим. %>
+          <% var loginBack = '/login?next=' + encodeURIComponent(url); %>
+          <div class="tk-prof__acts">
+            <a href="<%= loginBack %>" class="tk-btn tk-btn--outline tk-btn--sm tk-prof__sub">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
               <span data-i18n="stream.subscribe"><%- t('stream.subscribe') %></span>
             </a>
+            <a href="<%= loginBack %>" class="tk-btn tk-btn--primary tk-btn--sm tk-prof__write">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
+              <span data-i18n="user.message"><%- t('user.message') %></span>
+            </a>
           </div>
-          <% } else if (!isSelf) { %>
-          <%# На виду (решение 21.09): общение — написать и позвонить — и
-              отдельно подписка. Жалоба и ограничение — в меню «⋯» в углу
-              шапки. Ограничение в любую сторону закрывает и общение
-              (utils/restrict.js), поэтому первой группы тогда нет вовсе.
+          <% } else { %>
+          <%# Подписка и общение. Ограничение в любую сторону закрывает общение
+              (utils/restrict.js) — тогда группы «написать и позвонить» нет.
+              Кнопки, которые правила человека не пропустят (utils/privacy.js),
+              не рисуются: отказ после нажатия хуже, чем их отсутствие.
+              Звонки — квадратами со значком: подпись — в title.
               Поведение — profile.js. %>
           <div class="tk-prof__acts">
-            <%# Кнопки, которые правила человека не пропустят (utils/privacy.js),
-                не рисуются: отказ после нажатия хуже, чем их отсутствие. %>
-            <div class="tk-prof__acts-row tk-prof__talk" id="talkActions"<% if (restricted || iRestricted || (!canWrite && !canCall)) { %> hidden<% } %>>
+            <% if (!restricted) { %>
+            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-prof__sub subscribe__button<%= user.isSubscribed ? ' unsubscribe' : '' %>">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
+              <% var subKey = user.isSubscribed ? 'stream.unsubscribe' : 'stream.subscribe'; %>
+              <span data-i18n="<%= subKey %>"><%- t(subKey) %></span>
+            </button>
+            <% } %>
+
+            <div class="tk-prof__talk" id="talkActions"<% if (restricted || iRestricted || (!canWrite && !canCall)) { %> hidden<% } %>>
               <% if (canWrite) { %>
               <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-prof__write" id="message-button" data-user-id="<%= user._id %>">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M21 12a8 8 0 01-11.5 7.2L4 21l1.8-5.5A8 8 0 1121 12Z"></path></svg>
                 <span data-i18n="user.message"><%- t('user.message') %></span>
               </button>
               <% } %>
-
               <% if (canCall) { %>
-              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-prof__call" id="video-call-button" data-user-id="<%= user._id %>" aria-label="<%= ta('user.videoCall') %>" data-i18n-aria="user.videoCall">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M15.5 10.5l4.5-2.25v7.5l-4.5-2.25"></path><rect x="3.5" y="6" width="12" height="12"></rect></svg>
-                <span data-i18n="user.videoCall"><%- t('user.videoCall') %></span>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-prof__call" id="video-call-button" data-user-id="<%= user._id %>" aria-label="<%= ta('user.videoCall') %>" title="<%= ta('user.videoCall') %>" data-i18n-aria="user.videoCall" data-i18n-title="user.videoCall">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M15.5 10.5l4.5-2.25v7.5l-4.5-2.25"></path><rect x="3.5" y="6" width="12" height="12"></rect></svg>
               </button>
-
-              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-prof__call" id="audio-call-button" data-user-id="<%= user._id %>" aria-label="<%= ta('user.audioCall') %>" data-i18n-aria="user.audioCall">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M6.5 3h-2A1.5 1.5 0 003 4.5C3 13 11 21 19.5 21a1.5 1.5 0 001.5-1.5v-2l-4-1.5-1.7 2A14 14 0 018 11.7l2-1.7L8.5 6l-2-3Z"></path></svg>
-                <span data-i18n="user.audioCall"><%- t('user.audioCall') %></span>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-prof__call" id="audio-call-button" data-user-id="<%= user._id %>" aria-label="<%= ta('user.audioCall') %>" title="<%= ta('user.audioCall') %>" data-i18n-aria="user.audioCall" data-i18n-title="user.audioCall">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><path d="M6.5 3h-2A1.5 1.5 0 003 4.5C3 13 11 21 19.5 21a1.5 1.5 0 001.5-1.5v-2l-4-1.5-1.7 2A14 14 0 018 11.7l2-1.7L8.5 6l-2-3Z"></path></svg>
               </button>
               <% } %>
             </div>
-
-            <% if (!restricted) { %>
-            <div class="tk-prof__acts-row tk-prof__chan">
-              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm subscribe__button<%= user.isSubscribed ? ' unsubscribe' : '' %>">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
-                <% var subKey = user.isSubscribed ? 'stream.unsubscribe' : 'stream.subscribe'; %>
-                <span data-i18n="<%= subKey %>"><%- t(subKey) %></span>
-              </button>
-            </div>
-            <% } %>
           </div>
           <% } %>
         </div>

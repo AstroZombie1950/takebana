@@ -669,6 +669,37 @@ html.tk-stage-open { overflow: hidden; }
 .tk-live__grid.is-full:not(.chat-open) { grid-template-columns: minmax(0, 1fr); }
 
 /* ── Телефон и планшет ────────────────────────────────────────────────── */
+/* ── Камера заведения (views/venueLive.ejs, 24.09) ────────────────────────
+ * Раскладка эфира; вместо автора и описания — карточка заведения: тип,
+ * адрес, часы строками «подпись — значение» и ссылка на карту. */
+.tk-vl__facts {
+  margin: 14px 0 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 18px;
+  font-size: 14px;
+}
+
+.tk-vl__facts > div { display: contents; }
+
+.tk-vl__facts dt {
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  line-height: 20px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-vl__facts dd { margin: 0; line-height: 20px; color: var(--tk-beige); overflow-wrap: anywhere; }
+.tk-vl__map { margin-top: 16px; }
+
+/* Знак — в правый нижний угол: верхний правый занят кнопкой «весь экран». */
+.tk-vl .tk-wm { top: auto; bottom: 10px; }
+
+/* Во весь экран разворачивается плеер: картинка — целиком, без полей. */
+.tk-vl .tk-live__player:fullscreen { aspect-ratio: auto; }
+
 @media (max-width: 1023px) {
   /* Шапка сайта на эфире не нужна: картинке и чату важен каждый пиксель.
    * Назад — стрелкой браузера или жестом, меню — с других страниц. */
@@ -710,6 +741,10 @@ html.tk-stage-open { overflow: hidden; }
   .tk-live__obs { max-height: 38dvh; overflow-y: auto; padding: 12px 14px; }
 
   .tk-live__info { padding: 10px 12px; }
+  /* Камера заведения на телефоне: экран — картинке и чату, от карточки
+   * остаётся строка с названием и стрелкой назад на карту. */
+  .tk-vl__facts,
+  .tk-vl__map { display: none; }
 
   .tk-live__title {
     font-size: 16px;

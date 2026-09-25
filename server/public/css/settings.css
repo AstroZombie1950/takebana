@@ -312,10 +312,13 @@
   gap: 10px;
 }
 
-.tk-set__bio textarea {
+/* textarea.tk-field — сильнее .tk-field[rows] из tk.css: иначе уголок
+ * растягивания возвращался оттуда. */
+.tk-set__bio textarea.tk-field {
   flex: 1;
   min-height: 170px;
-  resize: vertical;
+  /* Высоту держит колонка (flex: 1), тянуть её нечем — уголка нет. */
+  resize: none;
   font: inherit;
   line-height: 1.45;
 }

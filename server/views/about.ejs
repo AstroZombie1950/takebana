@@ -161,10 +161,7 @@
     <section class="tk-about__sec tk-about__cta" data-bleed>
       <h2 class="tk-about__cta-h" data-i18n="cta.h2"><%- t('cta.h2') %></h2>
       <div class="tk-about__fill"></div>
-      <div class="tk-about__cta-side">
-        <a href="<%= currentUser ? '/studio' : '/register' %>" class="tk-btn tk-btn--dark tk-about__cta-btn" data-i18n="cta.btn"><%- t('cta.btn') %></a>
-        <span class="tk-about__cta-note" data-i18n="cta.note"><%- t('cta.note') %></span>
-      </div>
+      <a href="<%= currentUser ? '/studio' : '/register' %>" class="tk-btn tk-btn--dark tk-about__cta-btn" data-i18n="cta.btn"><%- t('cta.btn') %></a>
     </section>
 
 </main>

@@ -2144,6 +2144,12 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   color: var(--tk-muted);
 }
 
+/* «Роли участников» (24.09): роль — у правого края строки, два действия
+ * над отмеченными — поровну. */
+.tk-groles .tk-fwd__name { flex: 1; }
+.tk-groles__acts { display: flex; gap: 10px; }
+.tk-groles__acts .tk-btn { flex: 1 1 0; padding-left: 10px; padding-right: 10px; }
+
 .tk-gsec--danger { flex-direction: row; flex-wrap: wrap; }
 .tk-gdanger.tk-btn { color: var(--tk-accent); }
 

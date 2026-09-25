@@ -130,6 +130,39 @@
       tracks.forEach(function (t) { t.stop(); });
       return leave(why);
     };
+    // Микрофон — выключением дорожки: соединение и согласование те же.
+    s.setMic = function (on) {
+      tracks.forEach(function (t) { if (t.kind === 'audio') t.enabled = !!on; });
+    };
+    // Другая камера (страница камеры заведения, 24.09): новая дорожка встаёт
+    // на место прежней в том же соединении — зрители не переподключаются.
+    // Прежнюю гасим до запроса: телефон двух камер разом не открывает.
+    // Телефон переключаем по стороне (фронтальная ↔ задняя), компьютер —
+    // по кругу устройств.
+    s.switchCamera = function () {
+      var cur = tracks.filter(function (t) { return t.kind === 'video'; })[0];
+      var sender = s.pc.getSenders().filter(function (x) { return x.track === cur; })[0];
+      if (!cur || !sender) return Promise.resolve();
+      var set = cur.getSettings();
+      return navigator.mediaDevices.enumerateDevices().then(function (list) {
+        var cams = list.filter(function (d) { return d.kind === 'videoinput'; });
+        var want = { width: { ideal: 1280 }, height: { ideal: 720 } };
+        if (set.facingMode) want.facingMode = { exact: set.facingMode === 'environment' ? 'user' : 'environment' };
+        else if (cams.length > 1) {
+          var i = cams.map(function (d) { return d.deviceId; }).indexOf(set.deviceId);
+          want.deviceId = { exact: cams[(i + 1) % cams.length].deviceId };
+        } else return;
+        cur.stop();
+        return navigator.mediaDevices.getUserMedia({ video: want }).then(function (ns) {
+          var next = ns.getVideoTracks()[0];
+          next.enabled = true;
+          tracks = tracks.map(function (t) { return t === cur ? next : t; });
+          return sender.replaceTrack(next).then(function () {
+            if (opts.onLocal) opts.onLocal(new MediaStream(tracks));
+          });
+        });
+      });
+    };
     return s;
   }
 

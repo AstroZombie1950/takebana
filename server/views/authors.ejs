@@ -63,6 +63,10 @@
       </section>
       <% }); %>
 
+      <%# О странице: для пришедшего из поиска — как у разделов каталога. %>
+      <%- include('partials/aboutBlock', { base: 'authors.about', rows: ['about.who', 'about.follow'], chipsLabel: 'about.sections',
+            chips: Object.keys(catalog.CATEGORIES).map(function (code) { return { href: '/streaming/' + code, i18n: catalog.CATEGORIES[code].i18n }; }) }) %>
+
     </div>
   </main>
 </div>

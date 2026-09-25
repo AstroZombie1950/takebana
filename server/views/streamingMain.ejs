@@ -201,11 +201,10 @@
       <% } %>
 
       <% if (category !== 'popular') { %>
-      <!-- О разделе: для человека, который пришёл из поиска -->
-      <section class="tk-cat__sec tk-cat__about">
-        <h2 class="tk-kicker" data-i18n="cat.<%= category %>AboutTitle"><%- t('cat.' + category + 'AboutTitle') %></h2>
-        <div data-i18n="cat.<%= category %>About"><%- t('cat.' + category + 'About') %></div>
-      </section>
+      <%# О разделе: для человека, который пришёл из поиска. Подразделы —
+          ссылками на фильтр этого же раздела. %>
+      <%- include('partials/aboutBlock', { base: 'cat.' + category + 'About', rows: ['about.how', 'about.after'], chipsLabel: 'about.subs',
+            chips: catalog.CATEGORIES[category].subs.map(function (s) { return { href: '/streaming/' + category + '?sub=' + s.code, i18n: s.i18n }; }) }) %>
       <% } %>
 
     </div>

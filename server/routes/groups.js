@@ -190,6 +190,35 @@ router.post('/api/groups/:id/members/role', requireAuthApi, requireNotBanned, va
   res.json({ group: await groups.info(group, me(req)) });
 });
 
+// Роль нескольким сразу (24.09): администратор или участник, назначает
+// только создатель. Себя, создателя и не состоящих в группе пропускаем;
+// кому роль не меняется — тоже. Служебная строка — на каждого, как при
+// назначении по одному.
+router.post('/api/groups/:id/members/roles', requireAuthApi, requireNotBanned, validate({
+  userIds: { type: 'array', required: true, max: groups.MAX_MEMBERS, of: { type: 'objectId' }, label: 'Участники' },
+  role: { type: 'string', required: true, values: ['admin', 'member'], label: 'Роль' },
+}), async (req, res) => {
+  const group = await mine(req, res);
+  if (!group) return;
+  if (groups.roleOf(group, me(req)) !== 'owner') return res.status(403).json({ message: 'Роли назначает создатель группы' });
+  const role = req.body.role;
+  const targets = [...new Set(req.body.userIds)]
+    .map((id) => groups.memberOf(group, id))
+    .filter((m) => m && m.role !== 'owner' && m.role !== role);
+  if (!targets.length) return res.json({ group: await groups.info(group, me(req)), changed: 0 });
+  targets.forEach((m) => { m.role = role; });
+  await group.save();
+  const [actor, users] = await Promise.all([
+    actorOf(req),
+    User.find({ _id: { $in: targets.map((m) => m.user) } }).select(groups.PEOPLE).lean(),
+  ]);
+  const byId = new Map(users.map((u) => [String(u._id), u]));
+  const kind = role === 'admin' ? 'admin' : 'unadmin';
+  for (const m of targets) await groups.note(req, group, actor, kind, { target: byId.get(String(m.user)) || { _id: m.user } });
+  groups.emit(io(req), group, 'group:updated', { group: groups.brief(group) });
+  res.json({ group: await groups.info(group, me(req)), changed: targets.length });
+});
+
 // Выйти. Уходит создатель — группа переходит старейшему администратору,
 // иначе старейшему участнику; последний ушёл — группы больше нет.
 router.post('/api/groups/:id/leave', requireAuthApi, async (req, res) => {

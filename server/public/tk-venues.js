@@ -47,16 +47,13 @@
   }
 
   // ── Окна ──
-  const modals = ['venueLiveModal', 'venuePhotoModal', 'myVenuesModal', 'venueSettingsModal'].map($).filter(Boolean);
-  const onClose = new Map(); // окно → что сделать при закрытии
+  const modals = ['venuePhotoModal', 'myVenuesModal', 'venueSettingsModal'].map($).filter(Boolean);
 
   function openModal(m) { m.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
   function closeModal(m) {
     if (m.classList.contains('hidden')) return;
     m.classList.add('hidden');
     if (!modals.some((x) => !x.classList.contains('hidden'))) document.body.style.overflow = '';
-    const fn = onClose.get(m);
-    if (fn) fn();
   }
 
   modals.forEach((m) => {
@@ -296,7 +293,7 @@
     const watch = $('venueWatch');
     watch.hidden = !v.online;
     watch.dataset.id = v._id;
-    watch.dataset.name = v.name;
+    watch.href = '/venue/' + encodeURIComponent(v._id) + '/live';
     $('venueOffline').hidden = !!v.online;
 
     const r = v.rating;
@@ -349,86 +346,9 @@
     if (e.key === 'ArrowRight') showPhoto(photoAt + 1);
   });
 
-  // ── Камера заведения: гость ──
-  const liveModal = $('venueLiveModal');
-  const liveVideo = $('venueLiveVideo');
-  let watching = null;
-
-  function stopWatching() {
-    if (watching) { watching.leave(); watching = null; }
-    liveVideo.srcObject = null;
-  }
-  onClose.set(liveModal, stopWatching);
-
-  // Движок называет сервер: whip/whep — свой приём (MediaMTX), daily —
-  // прежняя комната. Браузеру решать нечего, он идёт, куда сказали.
-  const access = (url) => api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-
-  function lost() {
-    closeModal(liveModal);
-    toast(t('venues.noCamera'));
-  }
-
-  function watch(id, name) {
-    if (needLogin()) return;
-    stopWatching();
-    // Название заведения — не словарная строка, поэтому ключ снимаем;
-    // без названия остаётся «Трансляция» из словаря.
-    if (name) {
-      $('venueLiveTitle').removeAttribute('data-i18n');
-      $('venueLiveTitle').textContent = name;
-    } else {
-      tkText($('venueLiveTitle'), 'venues.live');
-    }
-    openModal(liveModal);
-
-    access('/api/venues/' + id + '/watch').then((first) => {
-      if (first.engine === 'whep') {
-        watching = TKWhip.view(first.url, {
-          onStream: (stream) => {
-            liveVideo.srcObject = stream;
-            liveVideo.play().catch(() => {});
-          },
-          onState: (s) => { if (s === 'ended') lost(); },
-          onError: () => lost(),
-        });
-        return;
-      }
-
-      // Комната Daily: первый токен уже получен, повторный вход просит новый.
-      const media = new MediaStream();
-      liveVideo.srcObject = media;
-      let firstAccess = first;
-      watching = TKDaily.connect({
-        send: false,
-        access: () => {
-          if (!firstAccess) return TKDaily.requestAccess('/api/venues/' + id + '/watch');
-          const a = firstAccess;
-          firstAccess = null;
-          return Promise.resolve(a);
-        },
-        onTrack: (track, p, on) => {
-          if (p.local) return;
-          if (on) media.addTrack(track); else media.removeTrack(track);
-          liveVideo.srcObject = media;
-          liveVideo.play().catch(() => {});
-        },
-        onState: (s) => { if (s === 'ended') lost(); },
-      });
-    }).catch((e) => {
-      closeModal(liveModal);
-      toast(e.message || t('venues.noCamera'), 'error');
-    });
-  }
-  $('venueWatch').addEventListener('click', function () { watch(this.dataset.id, this.dataset.name); });
-
   // ── Кабинет владельца: камера и настройки ──
   const mineModal = $('myVenuesModal');
   const mineList = $('myVenuesList');
-  const live = {};      // id заведения → показ, пока камера включена
-  const starting = {};  // id → подключаемся
-  const viewers = {};   // id → сколько человек сейчас смотрит (свой приём)
-  let viewersTimer = null;
   let mine = [];
 
   function loadMine() {
@@ -438,13 +358,9 @@
   function renderMine() {
     if (!mineList) return;
     mineList.innerHTML = mine.map((v) => {
-      const on = !!live[v._id];
-      const busy = !!starting[v._id];
+      const on = !!v.online;
       const approved = v.status === true;
-      const watching = on && typeof viewers[v._id] === 'number'
-        ? t('venues.onAir') + ' · ' + t('venues.watching', { n: viewers[v._id] })
-        : t('venues.onAir');
-      const state = on ? ['is-live', watching]
+      const state = on ? ['is-live', t('venues.onAir')]
         : approved ? ['', t('venues.offlineState')]
         : ['is-pending', t('venues.pending')];
       return `
@@ -458,9 +374,7 @@
             <span class="tk-mine__state ${state[0]}">${state[1]}</span>
           </div>
           <div class="tk-mine__actions">
-            <button type="button" class="tk-btn ${on ? 'tk-btn--outline' : 'tk-btn--primary'} tk-btn--sm" data-live="${esc(v._id)}"${busy || !approved ? ' disabled' : ''}>
-              ${esc(busy ? t('venues.connecting') : on ? t('venues.stopLive') : t('venues.startLive'))}
-            </button>
+            ${approved ? `<a href="/venue/${esc(v._id)}/live" class="tk-btn tk-btn--primary tk-btn--sm">${esc(t('vlive.open'))}</a>` : ''}
             <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" data-settings="${esc(v._id)}">${esc(t('venues.settingsBtn'))}</button>
             <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-mine__del" data-remove="${esc(v._id)}">${esc(t('common.delete'))}</button>
           </div>
@@ -469,99 +383,12 @@
     }).join('');
   }
 
-  function startLive(id) {
-    if (live[id] || starting[id]) return;
-    starting[id] = true;
-    renderMine();
-    access('/api/venues/' + id + '/live').then((first) => {
-      // Свой приём: одно соединение с нашим сервером, зрителей раздаёт он.
-      if (first.engine === 'whip') {
-        live[id] = TKWhip.publish(first.url, {
-          onMediaError: () => toast(t('venues.mediaDenied'), 'error'),
-          onError: () => { toast(t('venues.liveLost'), 'error'); stopLive(id); },
-          onState: (s) => {
-            if (s === 'live') { delete starting[id]; renderMine(); loadVenues(); countViewers(id); }
-            if (s === 'ended' && live[id]) { toast(t('venues.liveLost'), 'error'); stopLive(id); }
-          },
-        });
-        return;
-      }
-
-      let firstAccess = first;
-      live[id] = TKDaily.connect({
-        send: true,
-        video: true,
-        // Повторный вход после обрыва — через /watch: комнату не пересоздаём,
-        // иначе обрыв у владельца выкидывал бы всех гостей.
-        access: () => {
-          if (!firstAccess) return TKDaily.requestAccess('/api/venues/' + id + '/watch');
-          const a = firstAccess;
-          firstAccess = null;
-          return Promise.resolve(a);
-        },
-        onMediaError: () => toast(t('venues.mediaDenied'), 'error'),
-        onState: (s) => {
-          if (s === 'live') { delete starting[id]; renderMine(); loadVenues(); }
-          if (s === 'ended') {
-            toast(t('venues.liveLost'), 'error');
-            stopLive(id);
-          }
-        },
-      });
-    }).catch((err) => {
-      delete starting[id];
-      renderMine();
-      toast(err.message, 'error');
-    });
-  }
-
-  // Сколько человек смотрит камеру — спрашиваем у своего приёмника
-  // (MediaMTX знает своих читателей). У комнаты Daily такого счётчика нет:
-  // сервер отвечает viewers: null, и строка просто не показывает число.
-  function countViewers(id) {
-    if (!live[id]) return;
-    api('/api/venues/' + id + '/viewers')
-      .then((r) => {
-        if (!live[id]) return;
-        viewers[id] = typeof r.viewers === 'number' ? r.viewers : null;
-        renderMine();
-      })
-      .catch(() => {});
-    clearTimeout(viewersTimer);
-    viewersTimer = setTimeout(() => {
-      Object.keys(live).forEach(countViewers);
-    }, 15000);
-  }
-
-  function stopLive(id) {
-    const session = live[id];
-    delete live[id];
-    delete starting[id];
-    delete viewers[id];
-    if (!Object.keys(live).length) clearTimeout(viewersTimer);
-    if (session) session.leave();
-    renderMine();
-    fetch('/api/venues/' + id + '/live', { method: 'DELETE' }).catch(() => {}).then(loadVenues);
-  }
-
-  // Ушли со страницы с включённой камерой — гасим её на сервере, иначе
-  // заведение висело бы «в эфире» с пустой комнатой.
-  window.addEventListener('pagehide', () => {
-    if (Object.keys(live).length) navigator.sendBeacon('/updateEstablishmentsOnlineStatus');
-  });
-
   if (mineModal) {
     $('myVenuesButton').addEventListener('click', () => {
       openModal(mineModal);
       loadMine().catch((e) => toast(e.message, 'error'));
     });
     mineList.addEventListener('click', (e) => {
-      const liveBtn = e.target.closest('[data-live]');
-      if (liveBtn) {
-        const id = liveBtn.dataset.live;
-        if (live[id]) stopLive(id); else startLive(id);
-        return;
-      }
       const setBtn = e.target.closest('[data-settings]');
       if (setBtn) {
         openSettings(setBtn.dataset.settings);
@@ -584,7 +411,6 @@
         button.disabled = true;
         return api('/establishment/' + encodeURIComponent(id), { method: 'DELETE' })
           .then(() => {
-            delete live[id];
             toast(t('venues.deleted'), 'ok');
             return Promise.all([loadMine(), loadVenues()]);
           })
@@ -717,6 +543,6 @@
     if (openId) openCard(openId);
   });
 
-  // Для сквозного теста и зонда (temp/): камера без щелчков по кнопкам и карта.
-  window.TKVenues = { live, startLive, stopLive, watch, openCard, get map() { return map; } };
+  // Для зондов (temp/): карточка и карта без щелчков.
+  window.TKVenues = { openCard, get map() { return map; } };
 })();

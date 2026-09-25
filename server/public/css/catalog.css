@@ -224,14 +224,96 @@
 /* Записи под эфирами: заголовок без подписи — сетке нужен свой отступ. */
 .tk-cat__h2 + .tk-recs { margin-top: 20px; }
 
-/* «О разделе» внизу — текст для пришедшего из поиска, тише основного. */
-.tk-cat__about p {
-  margin: 0 0 14px;
-  max-width: 720px;
-  font-size: 16px;
+/* ── Текст о разделе внизу (partials/aboutBlock.ejs, 24.09) ──
+ * Журнальная полоса во всю ширину между двумя линейками: слева крупный
+ * заголовок и вводка, справа строки «рубрика — текст» через линейки,
+ * последней — плашки-ссылки. Раздел каталога и «Авторы». */
+.tk-about-block {
+  margin-top: 56px;
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  gap: 56px;
+  padding: 44px 0;
+  border-top: 1px solid var(--tk-rule);
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-about-block__h {
+  margin: 0;
+  font-size: 44px;
+  line-height: .95;
+  font-weight: 900;
+  letter-spacing: -.03em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+  text-wrap: balance;
+}
+
+.tk-about-block__h em { font-style: normal; color: var(--tk-accent); }
+
+.tk-about-block__lead {
+  margin: 24px 0 0;
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--tk-paper);
+  text-wrap: pretty;
+}
+
+.tk-about-block__row {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 24px;
+  padding: 22px 0;
+  border-top: 1px solid var(--tk-rule);
+}
+
+.tk-about-block__row:first-child { padding-top: 4px; border-top: 0; }
+.tk-about-block__row:last-child { padding-bottom: 0; }
+
+.tk-about-block__row h3 {
+  margin: 2px 0 0;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-about-block__row p {
+  margin: 0;
+  font-size: 15px;
   line-height: 1.6;
   color: var(--tk-beige);
   text-wrap: pretty;
+}
+
+.tk-about-block__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.tk-about-block__chip {
+  padding: 6px 10px;
+  border: 1px solid var(--tk-rule);
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.tk-about-block__chip:hover,
+.tk-about-block__chip:focus-visible { color: var(--tk-accent); border-color: var(--tk-accent); }
+
+/* Уже: заголовок с вводкой над строками. */
+@media (max-width: 1099px) {
+  .tk-about-block { grid-template-columns: 1fr; gap: 28px; }
+}
+
+@media (max-width: 767px) {
+  .tk-about-block { margin-top: 40px; padding: 32px 0; }
+  .tk-about-block__h { font-size: 32px; }
+  .tk-about-block__lead { margin-top: 18px; font-size: 17px; }
+  .tk-about-block__row { grid-template-columns: 1fr; gap: 10px; padding: 18px 0; }
 }
 
 .tk-cat__h2 {

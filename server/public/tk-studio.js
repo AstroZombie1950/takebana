@@ -144,14 +144,18 @@
     $('coverClear').hidden = !src;
   }
   $('coverPick').addEventListener('click', function () { $('coverInput').click(); });
+  // Кадр 16:9 выбирает ведущий (public/tk-crop.js): сервер режет по центру.
   $('coverInput').addEventListener('change', function (e) {
-    var file = e.target.files[0];
+    var picked = e.target.files[0];
     e.target.value = '';
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) return toast(t('studio.coverHeavy'), 'error');
-    coverFile = file;
-    form.elements.cover.value = 'keep';
-    showCover(URL.createObjectURL(file));
+    if (!picked) return;
+    tkCrop(picked, { aspect: 16 / 9, max: 1920 }).then(function (file) {
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) return toast(t('studio.coverHeavy'), 'error');
+      coverFile = file;
+      form.elements.cover.value = 'keep';
+      showCover(URL.createObjectURL(file));
+    }).catch(function (err) { toast(err.message, 'error'); });
   });
   $('coverClear').addEventListener('click', function () {
     coverFile = null;

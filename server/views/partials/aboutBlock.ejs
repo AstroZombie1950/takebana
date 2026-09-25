@@ -1,0 +1,26 @@
+<%# Текст о разделе внизу страницы — для пришедшего из поиска (решение 24.09,
+    вариант «журнальная полоса»): слева крупный заголовок и вводка, справа
+    строки «рубрика — текст» и плашки-ссылки. Раздел каталога и «Авторы».
+    base — префикс ключей словаря: <base>Title, <base>Lead, <base>How,
+    <base>After. rows — подписи двух строк, chips — ссылки последней:
+    { href, i18n } с подписью chipsLabel. %>
+<section class="tk-about-block" aria-labelledby="aboutBlockTitle">
+  <div class="tk-about-block__main">
+    <h2 class="tk-about-block__h" id="aboutBlockTitle" data-i18n="<%= base %>Title"><%- t(base + 'Title') %></h2>
+    <p class="tk-about-block__lead" data-i18n="<%= base %>Lead"><%- t(base + 'Lead') %></p>
+  </div>
+  <div class="tk-about-block__rows">
+    <% [['How', rows[0]], ['After', rows[1]]].forEach(function (r) { %>
+    <div class="tk-about-block__row">
+      <h3 data-i18n="<%= r[1] %>"><%- t(r[1]) %></h3>
+      <p data-i18n="<%= base + r[0] %>"><%- t(base + r[0]) %></p>
+    </div>
+    <% }); %>
+    <div class="tk-about-block__row">
+      <h3 data-i18n="<%= chipsLabel %>"><%- t(chipsLabel) %></h3>
+      <div class="tk-about-block__chips">
+        <% chips.forEach(function (c) { %><a href="<%= c.href %>" class="tk-about-block__chip" data-i18n="<%= c.i18n %>"><%- t(c.i18n) %></a><% }); %>
+      </div>
+    </div>
+  </div>
+</section>

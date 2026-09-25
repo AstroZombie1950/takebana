@@ -248,16 +248,23 @@
       setCover(c, 'frame');
     });
     q('.tk-upv__coverpick').addEventListener('click', function () { q('.tk-upv__coverfile').click(); });
+    // Своя обложка — в кадр самого видео (public/tk-crop.js): она встаёт
+    // заставкой поверх плеера. Видео с другого устройства, без превью, —
+    // 16:9, как у эфиров.
     q('.tk-upv__coverfile').addEventListener('change', function (e) {
-      var f = e.target.files[0];
+      var picked = e.target.files[0];
       e.target.value = '';
-      if (!f) return;
-      var form = new FormData();
-      form.append('cover', f);
-      json('/upload/video/' + encodeURIComponent(v.id) + '/cover', { method: 'POST', body: form }).then(function () {
-        if (c.img.src) URL.revokeObjectURL(c.img.src);
-        c.img.src = URL.createObjectURL(f);
-        setCover(c, 'own');
+      if (!picked) return;
+      var vw = c.video && c.video.videoWidth, vh = c.video && c.video.videoHeight;
+      tkCrop(picked, { aspect: vw && vh ? vw / vh : 16 / 9, max: 1280 }).then(function (f) {
+        if (!f) return;
+        var form = new FormData();
+        form.append('cover', f);
+        return json('/upload/video/' + encodeURIComponent(v.id) + '/cover', { method: 'POST', body: form }).then(function () {
+          if (c.img.src) URL.revokeObjectURL(c.img.src);
+          c.img.src = URL.createObjectURL(f);
+          setCover(c, 'own');
+        });
       }).catch(function (err) { toast(t('app.errorShort', { message: err.message }), 'error'); });
     });
 

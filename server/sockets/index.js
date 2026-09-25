@@ -8,6 +8,7 @@
 const User = require('../models/User');
 const Message = require('../models/Message');
 const Stream = require('../models/Stream');
+const Establishments = require('../models/Establishments');
 const streamLog = require('../utils/streamLog');
 const daily = require('../utils/daily');
 const callLog = require('../utils/callLog');
@@ -125,6 +126,30 @@ function registerSockets(io) {
       countTimers.delete(streamKey);
       const roomName = `stream:${streamKey}`;
       io.to(roomName).emit('viewers-count-updated', { streamKey, count: viewersIn(roomName, streamKey) });
+    }, COUNT_MS).unref());
+  }
+
+  // Камера заведения (страница /venue/:id/live, с 24.09): в комнате
+  // venue:<id> все, кто открыл страницу, — чат и смена состояния камеры
+  // приходят туда. Зрители — вошедшие, кроме владельца: гостю картинку
+  // не показывают (routes/venueLive.js). Рассылка — не чаще раза в COUNT_MS.
+  function venueViewers(venueId) {
+    const room = io.sockets.adapter.rooms.get(`venue:${venueId}`);
+    if (!room) return 0;
+    const users = new Set();
+    for (const id of room) {
+      const s = io.sockets.sockets.get(id);
+      if (s && s.data.userId && s.data.venueOwn !== venueId) users.add(s.data.userId);
+    }
+    return users.size;
+  }
+
+  function announceVenue(venueId) {
+    const key = 'venue:' + venueId;
+    if (countTimers.has(key)) return;
+    countTimers.set(key, setTimeout(() => {
+      countTimers.delete(key);
+      io.to(key).emit('venue:viewers', { venueId, count: venueViewers(venueId) });
     }, COUNT_MS).unref());
   }
 
@@ -365,6 +390,30 @@ function registerSockets(io) {
     });
 
     let currentStreamKey = null;
+    let currentVenue = null;
+
+    // Страница камеры заведения. Комната у сокета одна, как и у эфира.
+    socket.on('venue:join', async (venueId, callback) => {
+      const done = typeof callback === 'function' ? callback : () => {};
+      if (typeof venueId !== 'string' || !OBJECT_ID.test(venueId)) return done({ error: 'Invalid venue' });
+      let venue;
+      try {
+        venue = await Establishments.findById(venueId).select('owner status').lean();
+      } catch (e) {
+        errorLog.server(e, 'socket.venueJoin');
+        return done({ error: 'Server error' });
+      }
+      if (!venue) return done({ error: 'Unknown venue' });
+      socket.data.venueOwn = socket.data.userId && String(venue.owner) === String(socket.data.userId) ? venueId : null;
+      if (currentVenue && currentVenue !== venueId) {
+        socket.leave(`venue:${currentVenue}`);
+        announceVenue(currentVenue);
+      }
+      currentVenue = venueId;
+      socket.join(`venue:${venueId}`);
+      announceVenue(venueId);
+      done({ success: true, count: venueViewers(venueId) });
+    });
 
     // Вход в комнату эфира: чат, счётчик зрителей, смена типа эфира.
     // Ключ приходит от клиента — только строка формата ключа и только
@@ -400,6 +449,7 @@ function registerSockets(io) {
     socket.on('disconnect', async () => {
       // Сокет уже вышел из комнат — счётчик пересчитается без него.
       if (currentStreamKey) announceViewers(currentStreamKey);
+      if (currentVenue) announceVenue(currentVenue);
 
       try {
         const userId = socket.data.userId;

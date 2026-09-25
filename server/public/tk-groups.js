@@ -214,13 +214,61 @@
         : '') +
 
       '<section class="tk-gsec"><h3 class="tk-kicker">' + escapeHtml(t('groups.members')) + '</h3>' +
-        (manage && g.count < MAX ? '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-gp="add">' + escapeHtml(t('groups.addMembers')) + '</button>' : '') +
+        (manage && g.count < MAX || rolesOpen(g)
+          ? '<div class="tk-panel__actions">' +
+            (manage && g.count < MAX ? '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-gp="add">' + escapeHtml(t('groups.addMembers')) + '</button>' : '') +
+            (rolesOpen(g) ? '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-gp="roles">' + escapeHtml(t('groups.roles')) + '</button>' : '') +
+            '</div>'
+          : '') +
         '<div class="tk-gmembers">' + members + '</div></section>' +
 
       '<section class="tk-gsec tk-gsec--danger">' +
         '<button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" data-gp="leave">' + escapeHtml(t('groups.leave')) + '</button>' +
         (g.myRole === 'owner' ? '<button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-gdanger" data-gp="delete">' + escapeHtml(t('groups.delete')) + '</button>' : '') +
       '</section>');
+  }
+
+  // Роли нескольким сразу (24.09) — у создателя, когда есть кому их дать.
+  function rolesOpen(g) {
+    return g.myRole === 'owner' && g.members.some(function (m) { return m.role !== 'owner'; });
+  }
+
+  // Экран «Роли участников»: отметить людей и одним нажатием сделать всех
+  // администраторами или снять с них права. Создатель в списке не стоит:
+  // его роль передают по одному, из меню участника.
+  function roles(g) {
+    state = { mode: 'roles', group: g, picked: {} };
+    paintRoles();
+  }
+
+  function paintRoles() {
+    var g = state.group;
+    var rows = g.members.filter(function (m) { return m.role !== 'owner'; }).map(function (m) {
+      return '<label class="tk-fwd__row"><input type="checkbox" data-role-pick="' + escapeHtml(m.id) + '"' + (state.picked[m.id] ? ' checked' : '') + '>' +
+        ava('tk-fwd__ava', m) + '<span class="tk-fwd__name">' + escapeHtml(m.displayName) + '</span>' +
+        (ROLE[m.role] ? '<span class="tk-gmember__role">' + escapeHtml(t(ROLE[m.role])) + '</span>' : '') + '</label>';
+    }).join('');
+    show(t('groups.roles'),
+      '<p class="tk-note">' + escapeHtml(t('groups.rolesHint')) + '</p>' +
+      '<p class="tk-form__label"><span data-gp-count>' + escapeHtml(t('groups.pickedN', { n: 0 })) + '</span></p>' +
+      '<div class="tk-gpick__list tk-groles">' + rows + '</div>',
+      '<div class="tk-groles__acts">' +
+        '<button type="button" class="tk-btn tk-btn--primary tk-btn--sm" data-gp="roles-go" data-role="admin" disabled>' + escapeHtml(t('groups.rolesAdmin')) + '</button>' +
+        '<button type="button" class="tk-btn tk-btn--outline tk-btn--sm" data-gp="roles-go" data-role="member" disabled>' + escapeHtml(t('groups.rolesMember')) + '</button>' +
+      '</div>');
+    paintRolesPicked();
+  }
+
+  // Кнопка действия доступна, если среди отмеченных есть кому менять роль:
+  // «сделать администраторами» уже администраторов — пустое нажатие.
+  function paintRolesPicked() {
+    var ids = Object.keys(state.picked);
+    var roleOf = function (id) { var m = state.group.members.find(function (x) { return x.id === id; }); return m && m.role; };
+    pane.querySelector('[data-gp-count]').textContent = t('groups.pickedN', { n: ids.length });
+    pane.querySelectorAll('[data-gp="roles-go"]').forEach(function (b) {
+      var role = b.getAttribute('data-role');
+      b.disabled = !ids.some(function (id) { return roleOf(id) !== role; });
+    });
   }
 
   // Что можно сделать с участником — те же правила, что на сервере.
@@ -291,7 +339,7 @@
     var g = state && state.group;
     var base = g ? '/api/groups/' + encodeURIComponent(g.id) : '';
 
-    if (act === 'close') return state && state.mode === 'add' ? settings(g.id) : close();
+    if (act === 'close') return state && (state.mode === 'add' || state.mode === 'roles') ? settings(g.id) : close();
 
     if (act === 'create') {
       btn.disabled = true;
@@ -326,6 +374,18 @@
         .catch(function (err) { btn.disabled = false; fail(err); });
     }
     if (act === 'add') return addMembers(g);
+    if (act === 'roles') return roles(g);
+    if (act === 'roles-go') {
+      btn.disabled = true;
+      return post(base + '/members/roles', { userIds: Object.keys(state.picked), role: btn.getAttribute('data-role') })
+        .then(function (d) {
+          state = { mode: 'settings', group: d.group };
+          window.TKChats.setGroup(d.group);
+          paintSettings();
+          toast(t('groups.rolesDone', { n: d.changed }), 'ok');
+        })
+        .catch(function (err) { btn.disabled = false; fail(err); });
+    }
     if (act === 'photo') return pane.querySelector('[data-gp-file]').click();
     if (act === 'photo-off') return post(base + '/photo', new FormData()).then(refresh).catch(fail);
     if (act === 'invite-new') return post(base + '/invite', { on: true }).then(function (d) { g.invite = d.invite; paintSettings(); }).catch(fail);
@@ -351,6 +411,11 @@
 
   pane.addEventListener('change', function (e) {
     var box = e.target;
+    if (box.hasAttribute('data-role-pick')) {
+      if (box.checked) state.picked[box.getAttribute('data-role-pick')] = true;
+      else delete state.picked[box.getAttribute('data-role-pick')];
+      return paintRolesPicked();
+    }
     if (box.hasAttribute('data-pick')) {
       var id = box.getAttribute('data-pick');
       if (box.checked) {
@@ -368,9 +433,15 @@
         .catch(function (err) { box.checked = !box.checked; fail(err); });
     }
     if (box.hasAttribute('data-gp-file') && box.files[0]) {
-      var form = new FormData();
-      form.append('photo', box.files[0]);
-      post('/api/groups/' + encodeURIComponent(state.group.id) + '/photo', form).then(refresh).catch(fail);
+      // Квадрат выбирает человек (public/tk-crop.js), как у аватара.
+      var gid = state.group.id;
+      tkCrop(box.files[0], { aspect: 1, max: 1024, alpha: true }).then(function (file) {
+        if (!file) return;
+        var form = new FormData();
+        form.append('photo', file);
+        return post('/api/groups/' + encodeURIComponent(gid) + '/photo', form).then(refresh);
+      }).catch(fail);
+      box.value = '';
     }
   });
 
@@ -422,6 +493,7 @@
   });
   document.addEventListener('tk:lang', function () {
     if (state && state.mode === 'settings') paintSettings();
+    if (state && state.mode === 'roles') paintRoles();
   });
 
   $('newGroupBtn').addEventListener('click', create);

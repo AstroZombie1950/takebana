@@ -13,10 +13,16 @@
 // часто не собирается — отсюда «связь через раз».
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const { requireAuth, requireOwner, requireNotBanned } = require('../middleware/auth');
+const { validate } = require('../middleware/validate');
+const { commonDataMiddleware } = require('./streaming/shared');
+const ChatMessage = require('../models/ChatMessage');
+const restriction = require('../utils/restrict');
+const userView = require('../utils/userView');
 const daily = require('../utils/daily');
 const mediamtx = require('../utils/mediamtx');
 const Establishments = require('../models/Establishments');
@@ -28,6 +34,13 @@ const OBJECT_ID = /^[a-f\d]{24}$/i;
 const DAILY_MAX_PARTICIPANTS = Number(process.env.DAILY_MAX_PARTICIPANTS) || 20;
 
 const roomName = (id) => `venue_${id}`;
+
+// Зрителям страницы камеры (сокет-комната venue:<id>, sockets/index.js):
+// камеру включили или выключили — плеер подключается или гаснет сам.
+function announceState(req, id, online) {
+  const io = req.app.get('io');
+  if (io) io.to(`venue:${id}`).emit('venue:state', { venueId: String(id), online });
+}
 
 // requireOwner ищет заведение по :id — кривой идентификатор ронял бы его в 500.
 router.param('id', (req, res, next, id) => (
@@ -79,6 +92,7 @@ router.post('/api/venues/:id/live', requireAuth, requireNotBanned, ownVenue, asy
     await mediamtx.kick(path);
     await Establishments.updateOne({ _id: req.params.id }, { $set: { online: true } });
     audit(req, 'venue.live.on', { targetType: 'venue', target: req.resource });
+    announceState(req, req.params.id, true);
     return res.json({ engine: 'whip', url: mediamtx.url(path, 'whip', mediamtx.grant(path, 'publish', req.session.userId)) });
   }
 
@@ -93,6 +107,7 @@ router.post('/api/venues/:id/live', requireAuth, requireNotBanned, ownVenue, asy
   }
   await Establishments.updateOne({ _id: req.params.id }, { $set: { online: true } });
   audit(req, 'venue.live.on', { targetType: 'venue', target: req.resource });
+  announceState(req, req.params.id, true);
   res.json({ url: daily.roomUrl(name), token });
 });
 
@@ -100,6 +115,7 @@ router.post('/api/venues/:id/live', requireAuth, requireNotBanned, ownVenue, asy
 router.delete('/api/venues/:id/live', requireAuth, ownVenue, async (req, res) => {
   await Establishments.updateOne({ _id: req.params.id }, { $set: { online: false } });
   audit(req, 'venue.live.off', { targetType: 'venue', target: req.resource });
+  announceState(req, req.params.id, false);
   // Свой приём: закрываем вещателя — зрители отваливаются вместе с ним.
   if (mediamtx.configured()) {
     await mediamtx.kick(mediamtx.pathOf(req.params.id));
@@ -137,6 +153,7 @@ router.post('/api/venues/:id/watch', requireAuth, async (req, res) => {
     const { live, unknown } = await mediamtx.state(path);
     if (!live && !unknown && !isOwner) {
       await Establishments.updateOne({ _id: req.params.id }, { $set: { online: false } });
+      announceState(req, req.params.id, false);
       return offline(res);
     }
     return res.json(isOwner
@@ -150,6 +167,7 @@ router.post('/api/venues/:id/watch', requireAuth, async (req, res) => {
     // а заведение висело на карте «в эфире» до следующего включения.
     if (!(await daily.roomExists(name))) {
       await Establishments.updateOne({ _id: req.params.id }, { $set: { online: false } });
+      announceState(req, req.params.id, false);
       return offline(res);
     }
     const token = await daily.meetingToken(isOwner
@@ -159,6 +177,91 @@ router.post('/api/venues/:id/watch', requireAuth, async (req, res) => {
   } catch (err) {
     dailyFailure(res, err);
   }
+});
+
+// ── Страница камеры (24.09) ──────────────────────────────────────────────────
+// До неё владелец включал камеру кнопкой в «Моих заведениях» и не видел
+// ничего — ни себя, ни зрителей, ни чата, а гость смотрел голое видео
+// в окне поверх карты. Теперь у камеры своя страница: владельцу — пульт
+// (своя картинка, включить и выключить, микрофон, смена камеры), гостю —
+// плеер. У обоих — карточка заведения и чат. Где её найти — на карте:
+// на витрину эфиров камера не выходит (решение 23.09), в индекс тоже.
+// Параметр — venueId, не id: router.param('id') выше отвечает JSON-ом,
+// а здесь кривой адрес должен вести на страницу 404.
+router.get('/venue/:venueId/live', commonDataMiddleware, async (req, res, next) => {
+  if (!OBJECT_ID.test(req.params.venueId)) return next();
+  const venue = await Establishments.findById(req.params.venueId)
+    .select('name type city address weekdayHours weekendHours photos online status owner').lean();
+  const userId = req.session.userId;
+  const mine = !!venue && !!userId && String(venue.owner) === String(userId);
+  // Заведение на проверке видно только владельцу — как и на карте.
+  if (!venue || (venue.status !== true && !mine)) return next();
+  const restricted = !mine && !!userId && await restriction.isRestricted(venue.owner, userId);
+  res.render('venueLive', {
+    venue,
+    // Пульт — владельцу без бана: ограниченному /live всё равно откажет.
+    isOwner: mine && !res.locals.currentUser?.banned,
+    approved: venue.status === true,
+    restricted,
+  });
+});
+
+// ── Чат камеры ──
+// Как у эфира (routes/streaming/streamChat.js): пять сообщений за пять
+// секунд с человека, автор — из сессии, история — последние сто.
+const HISTORY = 100;
+const chatLimiter = rateLimit({
+  windowMs: 5 * 1000,
+  limit: 5,
+  keyGenerator: (req) => String(req.session.userId),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Слишком часто. Подождите пару секунд.' },
+});
+
+// Заведение, чат которого человек вправе видеть: одобренное (своё — любое)
+// и не закрытое от него владельцем (utils/restrict.js).
+async function chatVenue(id, userId) {
+  const venue = await Establishments.findById(id).select('owner status online').lean();
+  const own = !!venue && !!userId && String(venue.owner) === String(userId);
+  if (!venue || (venue.status !== true && !own)) return { status: 404, message: 'Заведение не найдено' };
+  if (!own && userId && await restriction.isRestricted(venue.owner, userId)) {
+    return { status: 403, message: 'Автор ограничил вам доступ к своему каналу' };
+  }
+  return { venue, own };
+}
+
+router.get('/api/venues/:id/chat', async (req, res) => {
+  const access = await chatVenue(req.params.id, req.session.userId);
+  if (!access.venue) return res.status(access.status).json({ message: access.message });
+  const query = { venueId: req.params.id };
+  const since = typeof req.query.since === 'string' && req.query.since ? new Date(req.query.since) : null;
+  if (since && !isNaN(since.getTime())) query.createdAt = { $gt: since };
+  const list = await ChatMessage.find(query).select('userId username message createdAt')
+    .sort({ createdAt: -1 }).limit(HISTORY).lean();
+  res.json(list.reverse());
+});
+
+router.post('/api/venues/:id/chat', requireAuth, requireNotBanned, chatLimiter, validate({
+  message: { type: 'string', required: true, min: 1, max: 500, label: 'Сообщение' },
+}), async (req, res) => {
+  const access = await chatVenue(req.params.id, req.session.userId);
+  if (!access.venue) return res.status(access.status).json({ message: access.message });
+  // Гости пишут, пока камера включена; владелец — всегда.
+  if (!access.own && !access.venue.online) return res.status(409).json({ message: 'Заведение сейчас не показывает камеру' });
+  const author = await User.findById(req.session.userId).select('nickname login email').lean();
+  if (!author) return res.status(401).json({ message: 'Необходима авторизация' });
+  const msg = await ChatMessage.create({
+    venueId: req.params.id, userId: author._id, username: userView.displayName(author), message: req.body.message,
+  });
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`venue:${req.params.id}`).emit('venue:chat', {
+      _id: msg._id, venueId: req.params.id, userId: String(author._id), username: msg.username,
+      message: msg.message, createdAt: msg.createdAt, own: access.own,
+    });
+  }
+  res.json({ ok: true });
 });
 
 module.exports = { router, roomName };

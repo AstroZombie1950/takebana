@@ -35,7 +35,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // ленты), поэтому число не пересчитывается, а сдвигается.
     var ready = function (el) { return !/ is-/.test(' ' + el.className); };
     var bump = function (d) {
-      countEl.textContent = String(Math.max(0, (Number(countEl.textContent) || 0) + d));
+      var n = String(Math.max(0, (Number(countEl.textContent) || 0) + d));
+      countEl.textContent = n;
+      // И счётчик в полосе шапки профиля (views/userPage.ejs).
+      document.querySelectorAll('[data-gallery-count]').forEach(function (el) { el.textContent = n; });
       empty.hidden = shots.children.length > 0;
     };
 

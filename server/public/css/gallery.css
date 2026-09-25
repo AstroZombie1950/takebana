@@ -101,6 +101,10 @@ a.tk-shot--state { cursor: pointer; }
   padding: 40px;
 }
 
+/* «‹ Профиль» над рубрикой: .tk-gal — не колонка с gap, как у других
+ * страниц с этой ссылкой, и рубрика прилипала к ней вплотную. */
+.tk-gal > .tk-page__back { margin-bottom: 28px; }
+
 .tk-gal__head {
   display: flex;
   align-items: baseline;

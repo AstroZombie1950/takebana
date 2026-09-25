@@ -63,6 +63,7 @@ const dropRoom = (name, why) => name && daily.deleteRoom(name).catch((err) => er
 async function removeVenue(venue) {
   if (venue.online) await dropRoom(venueRoom(venue._id), 'venue.delete');
   await Rating.deleteMany({ establishment: venue._id });
+  await ChatMessage.deleteMany({ venueId: venue._id });
   for (const url of venue.photos || []) unlinkFile('establishments', path.basename(String(url)));
   await Establishments.deleteOne({ _id: venue._id });
 }
