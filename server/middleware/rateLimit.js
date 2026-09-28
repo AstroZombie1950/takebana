@@ -100,4 +100,17 @@ const searchLimiter = rateLimit({
     message: { message: 'Слишком много запросов поиска. Подождите минуту.' },
 });
 
-module.exports = { authLimiter, registerLimiter, resetLimiter, geocodeLimiter, attachLimiter, searchLimiter };
+// Просмотр камеры заведения (routes/venueLive.js, /watch): с 28.09 открыт
+// гостю, и каждый запрос — чтение базы, а у пропавшего владельца ещё
+// и запись. Живому зрителю хватает пары запросов, владелец просит право
+// вещать раз в 3–5 секунд, когда камеру смотрят; 60 в минуту — с запасом.
+const watchLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: Number(process.env.RATE_LIMIT_WATCH) || 60,
+    keyGenerator: (req) => (req.session && req.session.userId ? 'u:' + req.session.userId : rateLimit.ipKeyGenerator(req.ip)),
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { message: 'Слишком часто. Подождите минуту.' },
+});
+
+module.exports = { authLimiter, registerLimiter, resetLimiter, geocodeLimiter, attachLimiter, searchLimiter, watchLimiter };

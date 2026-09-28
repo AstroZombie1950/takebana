@@ -106,6 +106,27 @@ body.tk-app {
 }
 
 .tk-ahead__field::placeholder { color: var(--tk-muted); }
+
+/* Крестик очистки поля: у Chrome и Safari он свой, ярко-синий, — здесь
+ * он в цвете подписей, как остальные значки шапки. */
+.tk-ahead__field::-webkit-search-cancel-button,
+.tk-search__field::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-left: 8px;
+  cursor: pointer;
+  background: var(--tk-muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 5l14 14M19 5L5 19' stroke='black' stroke-width='2.4'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 5l14 14M19 5L5 19' stroke='black' stroke-width='2.4'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.tk-ahead__field::-webkit-search-cancel-button:hover,
+.tk-search__field::-webkit-search-cancel-button:hover { background: var(--tk-paper); }
+
+/* Совпадение с запросом в куске описания (utils/search.js, bioMatch). */
+.tk-hit { background: none; color: var(--tk-accent); }
 .tk-ahead__field:focus { border-color: var(--tk-accent); }
 
 /* Лупа — кнопка отправки формы: с ней поиск работает и без скрипта. */
@@ -610,20 +631,16 @@ body.tk-app {
   .tk-ahead__right { gap: 4px; }
 
   /* Выпадашка поиска на телефоне: экранная клавиатура забирает половину
-   * экрана, и 380px списка не во что показывать. */
-  .tk-ahead__results { max-height: 56vh; }
-}
-
-/* Скрипт Tailwind подгружается в рантайме и вставляет свой preflight в конец
- * head — уже после tk.css. Его правило на body перебивает наш шрифт.
- * Пока Tailwind не снят со страниц, задаём гарнитуру прямо на каркасе:
- * так она не зависит от порядка загрузки, а содержимое страниц не трогаем —
- * оно переедет на Golos Text вместе со своей вёрсткой.
- */
-.tk-ahead,
-.tk-aside,
-.tk-modal {
-  font-family: 'Golos Text', Helvetica, sans-serif;
+   * экрана, и 380px списка не во что показывать. Шириной — во весь экран
+   * под шапкой, а не с поле: рядом с бургером и «Войти» поле узкое,
+   * и строки выдачи ломались в четыре строки. */
+  .tk-ahead__results {
+    position: fixed;
+    top: calc(var(--tk-head-h) - 1px);
+    left: calc(8px + var(--tk-safe-l));
+    right: calc(8px + var(--tk-safe-r));
+    max-height: 56vh;
+  }
 }
 
 /* Пульс метки «в эфире». Общий: им помечены карточка в каталоге, строка
@@ -1723,6 +1740,15 @@ body.tk-app {
   font-family: Oswald, sans-serif;
   font-size: 12px;
   color: var(--tk-muted);
+}
+
+/* Кусок описания — текстом в две строки, а не рядом флексов. */
+.tk-found__about {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
 }
 
 .search-result-item svg { flex: none; color: var(--tk-muted); }

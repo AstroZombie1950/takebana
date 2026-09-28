@@ -1,0 +1,25 @@
+<%#
+  Карточка ленты главной (utils/feed.js): запись эфира или видео галереи.
+  Как у YouTube: кадр 16:9 с длительностью, под ним аватар, название
+  в две строки, автор, просмотры и дата. Вся карточка — одна ссылка,
+  поэтому автор внутри — текст, а не вторая ссылка. Стили — css/home.css.
+  Параметр: item.
+%>
+<a href="<%= item.href %>" class="tk-feed__card">
+  <span class="tk-feed__shot">
+    <% if (item.thumb) { %><img src="<%= item.thumb %>" alt="" width="640" height="360" loading="lazy" decoding="async"><% } %>
+    <% if (item.kind === 'recording') { %><span class="tk-feed__kind" data-i18n="feed.recording"><%- t('feed.recording') %></span><% } %>
+    <% if (item.duration) { %><span class="tk-feed__len"><%= clock(item.duration) %></span><% } %>
+  </span>
+  <span class="tk-feed__body">
+    <span class="tk-feed__ava"<% if (!item.author.avatarStyle.url) { %> data-bg="<%= item.author.avatarStyle.gradient %>"<% } %>>
+      <% if (item.author.avatarStyle.url) { %><img src="<%= item.author.avatarStyle.url %>" alt="" width="36" height="36" loading="lazy" decoding="async"><% } else { %><%= item.author.avatarStyle.initial %><% } %>
+    </span>
+    <span class="tk-feed__text">
+      <% if (item.title) { %><span class="tk-feed__title"><%= item.title %></span>
+      <% } else { var d = date(item.at, { day: 'numeric', month: 'long' }); %><span class="tk-feed__title" data-i18n="video.untitled" data-i18n-vars='<%= JSON.stringify({ date: d }) %>'><%- t('video.untitled', { date: d }) %></span><% } %>
+      <span class="tk-feed__who"><%= item.author.displayName %></span>
+      <span class="tk-feed__meta"><% var vv = plural(item.views, 'rec.views'); %><span data-i18n="<%= vv.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(item.views) }) %>'><%= vv.text %></span> · <time datetime="<%= new Date(item.at).toISOString() %>"><%= date(item.at, { day: 'numeric', month: 'short', year: 'numeric' }) %></time></span>
+    </span>
+  </span>
+</a>

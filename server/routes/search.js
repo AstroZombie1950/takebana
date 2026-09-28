@@ -13,7 +13,7 @@ const { searchLimiter } = require('../middleware/rateLimit');
 
 // Вкладки страницы. all — по нескольку из каждого вида, остальные — один вид
 // целиком. Порядок здесь — порядок вкладок на экране.
-const TABS = ['all', 'people', 'streams', 'recordings', 'venues'];
+const TABS = ['all', 'people', 'streams', 'recordings', 'videos', 'venues'];
 
 // Сколько показываем: в выпадашке — три строки на вид, на вкладке «Всё» —
 // по пять, на отдельной вкладке — сорок. Постраничной подгрузки нет: она
@@ -42,8 +42,8 @@ router.get('/search', searchLimiter, commonDataMiddleware, async (req, res) => {
       query: typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '',
       tab: 'all',
       tabs: TABS,
-      results: { people: [], streams: [], recordings: [], venues: [] },
-      counts: { people: 0, streams: 0, recordings: 0, venues: 0, total: 0 },
+      results: { people: [], streams: [], recordings: [], videos: [], venues: [] },
+      counts: { people: 0, streams: 0, recordings: 0, videos: 0, venues: 0, total: 0 },
       tooShort: !!(req.query.q || '').trim(),
     });
   }

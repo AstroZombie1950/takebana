@@ -132,6 +132,18 @@ expect "карта сайта"              "200"     GET /sitemap.xml
 expect "файл Вебмастера"          "200"     GET /yandex_80b052bf060e4036.html
 moved  "адрес страницы без хвостовой косой" /about/ /about
 expect "страница поиска"         "200"     GET "/search?q=ab"
+expect "поиск: вкладка «Видео»"   "200"     GET "/search?q=ab&tab=videos"
+# Лента главной (28.09): следующая страница и она же без скрипта (?before=).
+# Кривой курсор — первая страница, а не 500.
+expect "лента: следующая страница" "200"    GET "/feed?before=2026-01-01T00:00:00.000Z"
+expect "лента: кривой курсор"     "200"     GET "/feed?before=xyz"
+expect "главная с курсором ленты" "200"     GET "/?before=2026-01-01T00:00:00.000Z"
+HOME_HTML=$("${CURL[@]}" "${BASE}/" 2>/dev/null || echo "")
+if [[ "$HOME_HTML" == *'id="feedTitle"'* ]]; then
+  pass "на главной лента"
+else
+  fail "на главной нет ленты" "views/home.ejs не отрисовался — главная снова витрина раздела?"
+fi
 expect "авторы"                  "200"     GET /authors
 expect "переписка без входа"     "302"     GET /chatsPage           # на вход с возвратом
 expect "регистрация"             "200"     GET /register
@@ -218,13 +230,19 @@ step "Закрытые маршруты: аноним не должен прох
 expect "POST /api/create-room"            "401"     POST /api/create-room            -H 'Content-Type: application/json' -d '{}'
 expect "POST /api/get-token"              "401"     POST /api/get-token              -H 'Content-Type: application/json' -d '{}'
 expect "POST /api/venues/:id/live"        "401"     POST /api/venues/000000000000000000000000/live
-expect "POST /api/venues/:id/watch"       "401"     POST /api/venues/000000000000000000000000/watch
+# Смотреть камеру заведения гостю можно с 28.09 (свой приём, HLS через
+# Bunny): аноним получает не 401, а ответ по существу — такого заведения нет.
+expect "POST /api/venues/:id/watch гостю"  "404"     POST /api/venues/000000000000000000000000/watch
+# Обложка камеры (28.09) — только владельцу.
+expect "POST /api/venues/:id/cover"       "401"     POST /api/venues/000000000000000000000000/cover
+expect "DELETE /api/venues/:id/cover"     "401"     DELETE /api/venues/000000000000000000000000/cover
 expect "POST /api/calls/create"           "401"     POST /api/calls/create           -H 'Content-Type: application/json' -d '{}'
 expect "PUT /updateEstablishment/:id"     "401"     PUT  /updateEstablishment/000000000000000000000000
 expect "POST /register-establishment"     "401"     POST /register-establishment     -H 'Content-Type: application/json' -d '{}'
 expect "GET /user-establishments"         "401|302" GET  /user-establishments        -H 'X-Requested-With: XMLHttpRequest'
 expect "POST /profile/gallery"            "401"     POST /profile/gallery
-expect "DELETE /profile/gallery/:name"    "401"     DELETE /profile/gallery/x.jpg
+# Фото галереи с 25.09 — свои записи (models/GalleryPhoto.js), удаление — /photo/:id (routes/watch.js).
+expect "DELETE /photo/:id"                "401"     DELETE /photo/000000000000000000000000
 expect "POST /upload-thumbnail"           "401"     POST /upload-thumbnail
 expect "POST /set-active"                 "401"     POST /set-active                 -H 'Content-Type: application/json' -d '{}'
 expect "POST /set-inactive"               "401"     POST /set-inactive               -H 'Content-Type: application/json' -d '{}'
@@ -259,6 +277,9 @@ expect "POST /chat/slow-mode"             "401|302" POST /chat/slow-mode -H 'X-R
 # и искать можно без входа. Поиск по почте при этом убран (profile.js).
 expect "GET /streaming/:category/grid"    "200"     GET  /streaming/popular/grid
 expect "GET /api/search"                  "200"     GET  "/api/search?q=ab"
+# С 28.09 поиск ищет и видео галерей: в ответе есть их группа.
+SEARCH_JSON=$("${CURL[@]}" "${BASE}/api/search?q=ab" 2>/dev/null || echo "")
+[[ "$SEARCH_JSON" == *'"videos":'* ]] && pass "поиск отдаёт группу видео" || fail "в ответе поиска нет videos" "utils/search.js — TYPES без videos?"
 # Маршрут открыт намеренно — эфир смотрят без входа. Проверяем не код ответа,
 # а то, что в нём нет полей пользователя: populate отдавал сюда email,
 # хеш пароля и streamKey любому желающему.
@@ -279,6 +300,10 @@ expect "GET /api/admin/audit"             "401"     GET  /api/admin/audit
 expect "GET /api/admin/audit.csv"         "401"     GET  /api/admin/audit.csv
 expect "GET /api/admin/system"            "401"     GET  /api/admin/system
 expect "PUT /api/admin/venues/:id"        "401"     PUT  /api/admin/venues/000000000000000000000000
+# Сроки хранения файлов (28.09): общие и личные — только администратору.
+expect "GET /api/admin/retention"         "401"     GET  /api/admin/retention
+expect "PUT /api/admin/retention"         "401"     PUT  /api/admin/retention "${JSON[@]}" -d '{"chat":1}'
+expect "PUT /api/admin/users/:id/retention" "401"   PUT  "/api/admin/users/$OID/retention" "${JSON[@]}" -d '{"chat":1}'
 expect "POST /api/client-error"           "204"     POST /api/client-error           -H 'Content-Type: application/json' -d '{}'
 # Свой предел тела 16 КБ (аудит 23.09, п. 3.10): раньше общий разбор JSON
 # успевал раньше, и действовал его предел в 100 КБ.

@@ -1,4 +1,4 @@
-/* Каталог эфиров: фильтры и плашка гостю.
+/* Каталог эфиров и главная: фильтры, плашка гостю, «Показать ещё» ленты.
  *
  * Фильтры — обычная GET-форма, и без скрипта она работает перезагрузкой
  * страницы. Скрипт перехватывает смену значения и подменяет только сетку:
@@ -97,9 +97,45 @@ document.addEventListener('DOMContentLoaded', function () {
     form.addEventListener('click', function (e) {
       if (!e.target.closest('[data-reset]')) return;
       e.preventDefault();
-      form.querySelectorAll('input[name="sub"]').forEach(function (box) { box.checked = false; });
+      // На главной подкатегории — скрытые поля из старых ссылок /?sub=…
+      form.querySelectorAll('input[name="sub"]').forEach(function (box) {
+        if (box.type === 'hidden') box.remove(); else box.checked = false;
+      });
       form.elements.city.value = '';
       load();
+    });
+  }
+
+  // Лента главной: «Показать ещё» дописывает следующую страницу (/feed),
+  // курсор дальше сервер отдаёт заголовком X-Feed-Next. Без скрипта кнопка —
+  // ссылка на /?before=… с той же выдачей.
+  var feed = document.getElementById('feed');
+  var more = document.getElementById('feedMore');
+  if (feed && more) {
+    more.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (more.getAttribute('aria-busy')) return;
+      more.setAttribute('aria-busy', 'true');
+      fetch('/feed?before=' + encodeURIComponent(more.dataset.next))
+        .then(function (res) {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          var next = res.headers.get('X-Feed-Next');
+          return res.text().then(function (html) { return { html: html, next: next }; });
+        })
+        .then(function (page) {
+          var box = document.createElement('div');
+          box.innerHTML = page.html;
+          box.querySelectorAll('[data-bg]').forEach(function (el) { el.style.background = el.getAttribute('data-bg'); });
+          while (box.firstElementChild) feed.appendChild(box.firstElementChild);
+          if (page.next) {
+            more.dataset.next = page.next;
+            more.href = '/?before=' + encodeURIComponent(page.next) + '#feedTitle';
+            more.removeAttribute('aria-busy');
+          } else {
+            more.remove();
+          }
+        })
+        .catch(function () { location.href = more.href; });
     });
   }
 

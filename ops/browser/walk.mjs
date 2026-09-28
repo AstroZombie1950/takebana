@@ -37,8 +37,9 @@ const PUBLIC = [
   ['главная (витрина)', '/'],
   ['раздел «Бизнес»', '/streaming/business'],
   ['раздел «Развлечения»', '/streaming/entertainment'],
-  ['карта заведений', '/main'],
+  ['карта заведений', '/map'],
   ['поиск', '/search?q=demo'],
+  ['поиск: видео', '/search?q=demo&tab=videos'],
   ['поиск: заведения', '/search?q=bar&tab=venues'],
   ['авторы', '/authors'],
   ['вход', '/login'],
@@ -52,7 +53,7 @@ const PUBLIC = [
 ];
 const PRIVATE = [
   ['витрина вошедшему', '/'],
-  ['карта вошедшему', '/main'],
+  ['карта вошедшему', '/map'],
   ['переписка', '/chatsPage'],
   ['звонки', '/chatsPage?tab=calls'],
   ['контакты', '/chatsPage?tab=contacts'],
@@ -130,26 +131,36 @@ async function check(p, name, url, { status = 200 } = {}) {
   }
 }
 
-// Эфир, автор, запись, видео — переходами по сайту: так проверяется и то,
-// что ссылки на них ведут куда надо.
+// Эфир, автор, запись, видео, камера заведения — переходами по сайту: так
+// проверяется и то, что ссылки на них ведут куда надо. Профиль с 25.09 —
+// /@ник (вкладки /photos и /videos), подписчики — по-прежнему /userPage/<id>.
 async function discover(p) {
   const found = [];
   await p.goto(BASE + '/');
   const stream = await firstLink(p, '^/stream/[a-f0-9]{24}$');
   if (stream) found.push(['эфир', stream]);
+  // Лента главной (28.09): записи эфиров и видео галерей.
+  const feedItem = await firstLink(p, '^/(recording|video)/[a-f0-9]{24}$');
+  if (feedItem) found.push(['из ленты', feedItem]);
   await p.goto(BASE + '/authors');
-  const author = await firstLink(p, '^/userPage/[a-f0-9]{24}$');
+  const author = await firstLink(p, '^/@[^/]+$');
   if (author) {
     found.push(['профиль автора', author]);
     await p.goto(BASE + author);
     const rec = await firstLink(p, '^/recording/[a-f0-9]{24}$');
     if (rec) found.push(['запись', rec]);
-    found.push(['галерея автора', author + '/gallery']);
-    found.push(['подписчики автора', author + '/followers']);
-    await p.goto(BASE + author + '/gallery');
+    const followers = await firstLink(p, '^/userPage/[a-f0-9]{24}/followers$');
+    if (followers) found.push(['подписчики автора', followers]);
+    found.push(['фото автора', author + '/photos']);
+    found.push(['видео автора', author + '/videos']);
+    await p.goto(BASE + author + '/videos');
     const video = await firstLink(p, '^/video/[a-f0-9]{24}$');
     if (video) found.push(['видео', video]);
   }
+  // Камера заведения — гостю открыта с 28.09. Заведение берём у той же
+  // выдачи, что рисует карта: вся Сербия одним прямоугольником.
+  const venue = await p.eval(`fetch('/establishmentsLocation?bl_lat=41&bl_lng=18&tr_lat=47&tr_lng=24').then((r) => r.json()).then((l) => (l[0] || {})._id || '').catch(() => '')`);
+  if (venue) found.push(['камера заведения', '/venue/' + venue + '/live']);
   return found;
 }
 

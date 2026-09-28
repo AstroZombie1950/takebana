@@ -18,6 +18,8 @@
   var ID = data.venueId;
   var ME = data.userId;
   var OWNER = !!data.owner;
+  var RESTRICTED = !!data.restricted;
+  var LOGIN_TO_WATCH = !!data.loginToWatch;
   var online = !!data.online;
 
   var video = $('venueVideo');
@@ -55,6 +57,8 @@
   function say(name) {
     var h = HINTS[name] || ['', ''];
     hint.hidden = !name;
+    var login = $('venueLogin');
+    if (login) login.hidden = name !== 'login';
     [[hintTitle, h[0]], [hintText, h[1]]].forEach(function (p) {
       p[0].hidden = !p[1];
       if (p[1]) tkText(p[0], p[1]);
@@ -140,10 +144,11 @@
   // ── Показ: подключение к камере ────────────────────────────────────────
   var session = null;
 
-  // Гость: смотреть. Нет входа или доступ закрыт — плеера нет вовсе
-  // (движки страница не грузит, views/venueLive.ejs).
-  var canWatch = !OWNER && !!ME && !!window.TKHls;
-  var closedHint = OWNER || canWatch ? '' : ME ? 'restricted' : 'login';
+  // Зритель: смотреть — с 28.09 и без входа. Доступ закрыт владельцем —
+  // плеера нет вовсе (движки страница не грузит, views/venueLive.ejs).
+  // Без входа в комнату Daily не пускают: страница знает это сразу
+  // (data-login-to-watch) и просит войти, а на случай 401 — то же самое.
+  var canWatch = !OWNER && !RESTRICTED && !LOGIN_TO_WATCH && !!window.TKHls;
   var soundBtn = $('soundBtn');
 
   // Со звуком браузер запускает видео не всегда: не вышло — без звука
@@ -182,6 +187,8 @@
     }).catch(function (e) {
       session = null;
       if (e.status === 409) { markOnline(false); say('off'); }
+      else if (e.status === 401) say('login');
+      else if (e.status === 403) say('restricted');
       else say('lost');
     });
   }
@@ -419,6 +426,39 @@
     if (online) { paintOwner('elsewhere'); say('elsewhere'); }
   }
 
+  // ── Обложка камеры (28.09) ─────────────────────────────────────────────
+  // Заставка страницы, пока картинки нет. Кадр 16:9 выбирает владелец
+  // (public/tk-crop.js), на сервер уходит сразу (routes/venueLive.js).
+  var coverImg = $('venueCover');
+  function showCover(src) {
+    var url = src || coverImg.dataset.photo;
+    coverImg.hidden = !url;
+    if (url) coverImg.src = url; else coverImg.removeAttribute('src');
+    $('coverClear').hidden = !src;
+  }
+  if (OWNER) {
+    $('coverBtn').addEventListener('click', function () { $('coverInput').click(); });
+    $('coverInput').addEventListener('change', function (e) {
+      var picked = e.target.files[0];
+      e.target.value = '';
+      if (!picked) return;
+      tkCrop(picked, { aspect: 16 / 9, max: 1920 }).then(function (file) {
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) return toast(t('studio.coverHeavy'), 'error');
+        var body = new FormData();
+        body.append('cover', file);
+        return fetch('/api/venues/' + ID + '/cover', { method: 'POST', headers: { Accept: 'application/json' }, body: body })
+          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status); return d; }); })
+          .then(function (d) { showCover(d.cover); toast(t('vlive.coverSaved'), 'ok'); });
+      }).catch(function (err) { toast(err.message, 'error'); });
+    });
+    $('coverClear').addEventListener('click', function () {
+      json('/api/venues/' + ID + '/cover', 'DELETE')
+        .then(function () { showCover(''); })
+        .catch(function (e) { toast(e.message, 'error'); });
+    });
+  }
+
   // ── Весь экран: картинка ───────────────────────────────────────────────
   // Где браузер даёт полноэкранный режим элементу — берём плеер целиком
   // (со знаком и метками). iPhone даёт его только самому <video>.
@@ -464,7 +504,7 @@
       return say(d.online ? 'elsewhere' : 'ownerOff');
     }
     markOnline(d.online);
-    if (!canWatch) return say(closedHint === 'restricted' || d.online ? closedHint : 'off');
+    if (!canWatch) return say(RESTRICTED ? 'restricted' : d.online ? 'login' : 'off');
     if (d.online) watch(); else unwatch();
   });
 

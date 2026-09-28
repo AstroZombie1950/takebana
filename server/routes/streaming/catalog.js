@@ -1,5 +1,6 @@
-// Витрина: список эфиров по категориям и страница пользователя. «Популярное» —
-// главная сайта (/). Гость смотрит всё это без входа.
+// Витрина: главная сайта (/) — эфиры и лента видео (с 28.09.2026), разделы
+// с эфирами по категориям и страница пользователя. Гость смотрит всё это
+// без входа.
 
 const express = require('express');
 const router = express.Router();
@@ -24,6 +25,7 @@ const nickname = require('../../utils/nickname');
 const { profileUrl } = require('../../utils/profileUrl');
 const profileLinks = require('../../utils/profileLinks');
 const ogImage = require('../../utils/ogImage');
+const feed = require('../../utils/feed');
 
 // Вкладки каталога. popular — все категории разом, остальные совпадают
 // с кодами категорий в config/catalog.js.
@@ -92,12 +94,12 @@ async function findStreams(category, filters) {
   });
 }
 
-// Записи под эфирами — то, что есть на странице, даже когда никто не в эфире
-// (docs/seo/DECISIONS.md). Самые просматриваемые готовые, без 18+ и без
-// забаненных авторов; на главной — из всех разделов.
+// Записи под эфирами раздела — то, что есть на странице, даже когда никто
+// не в эфире (docs/seo/DECISIONS.md). Самые просматриваемые готовые раздела,
+// без 18+ и без забаненных авторов. На главной вместо них — лента.
 const RECORDINGS = 8;
 async function findRecordings(category) {
-  const recordings = await Recording.find({ status: 'ready', isAdult: { $ne: true }, ...(category === 'popular' ? {} : { category }) })
+  const recordings = await Recording.find({ status: 'ready', isAdult: { $ne: true }, category })
     .sort({ views: -1, createdAt: -1 })
     .limit(RECORDINGS * 2) // запас на забаненных
     .populate('userId', 'nickname login email avatar banned')
@@ -133,7 +135,37 @@ async function renderCatalog(req, res, category) {
   });
 }
 
-router.get('/', commonDataMiddleware, (req, res) => renderCatalog(req, res, 'popular'));
+// Главная: эфиры, авторы полосой и лента (views/home.ejs). ?before= — та же
+// лента дальше: так листает кнопка «Показать ещё» без скрипта.
+const HOME_AUTHORS = 12;
+router.get('/', commonDataMiddleware, async (req, res) => {
+  const filters = readFilters('popular', req.query);
+  const viewer = req.session.userId;
+  const [users, totalStreamsCount, streams, items] = await Promise.all([
+    authors.featured(HOME_AUTHORS, viewer),
+    getActiveStreamsCount(),
+    findStreams('popular', filters),
+    feed.page({ before: feed.cursor(req.query.before), viewer }),
+  ]);
+  res.render('home', {
+    filters,
+    filtered: filters.subs.length > 0 || !!filters.city,
+    base: '/',
+    users,
+    streams,
+    totalStreamsCount,
+    feed: items,
+    showIntro: !viewer && !introClosed(req),
+  });
+});
+
+// Следующая страница ленты для catalog.js: карточки без обвязки, курсор
+// дальше — в заголовке (пустой — лента кончилась).
+router.get('/feed', async (req, res) => {
+  const page = await feed.page({ before: feed.cursor(req.query.before), viewer: req.session.userId });
+  res.set('X-Feed-Next', page.next || '');
+  res.render('partials/feedPage', { items: page.items });
+});
 
 // Прежние адреса «Популярного» — на главную, с фильтрами: ими делились ссылками.
 router.get(['/streaming', '/streaming/popular'], (req, res) => {
@@ -162,6 +194,7 @@ router.get('/streaming/:category/grid', async (req, res) => {
     streams: await findStreams(category, filters),
     filtered: filters.subs.length > 0 || !!filters.city,
     base: baseUrl(category),
+    compact: category === 'popular', // сетка главной (views/home.ejs)
   });
 });
 

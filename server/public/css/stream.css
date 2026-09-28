@@ -719,6 +719,10 @@ html.tk-stage-open { overflow: hidden; }
   /* Кнопки эфира — всегда одной строкой: «Продолжить» и «Завершить»
    * с двумя значками на 390 вставали впритык и переносились. */
   .tk-live__bar { padding: 8px 12px; flex-wrap: nowrap; }
+  /* Пульт камеры заведения: с обложкой (28.09) кнопок пять — «Запустить»
+   * переходит на вторую строку во всю ширину, а не вылезает за край. */
+  .tk-vl .tk-live__bar { flex-wrap: wrap; }
+  .tk-vl .tk-live__end { flex: 1 0 auto; }
   .tk-live__bar .tk-btn { padding: 10px 12px; letter-spacing: .06em; white-space: nowrap; }
   .tk-live__obs { max-height: 38dvh; overflow-y: auto; padding: 12px 14px; }
 

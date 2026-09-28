@@ -12,6 +12,7 @@
     { key: 'people',     items: results.people,     i18n: 'search.people' },
     { key: 'streams',    items: results.streams,    i18n: 'search.streams' },
     { key: 'recordings', items: results.recordings, i18n: 'search.recordings' },
+    { key: 'videos',     items: results.videos,     i18n: 'search.videos' },
     { key: 'venues',     items: results.venues,     i18n: 'search.venues' }
   ].filter(function (g) { return tab === 'all' || tab === g.key; });
 
@@ -127,7 +128,7 @@
           <% }); %>
         </div>
 
-        <% } else if (group.key === 'recordings') { %>
+        <% } else if (group.key === 'recordings' || group.key === 'videos') { %>
         <div class="tk-recs">
           <% group.items.forEach(function (rec) { %><%- include('partials/recCard', { rec: rec }) %><% }); %>
         </div>

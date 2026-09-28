@@ -1,13 +1,15 @@
 <%#
-  Карточка записи эфира — поиск и разделы каталога. rec — из
-  recordingCards (utils/search.js). Стили — css/profile.css (.tk-recard).
+  Карточка записи эфира — поиск и разделы каталога; в поиске ею же
+  показаны видео галерей (rec.href — /video/:id). rec — из recordingCards
+  (utils/search.js). Стили — css/profile.css (.tk-recard).
 %>
-<a href="/recording/<%= rec._id %>" class="tk-recard">
+<a href="<%= rec.href || '/recording/' + rec._id %>" class="tk-recard">
   <span class="tk-recard__thumb">
     <% if (rec.thumb) { %><img src="<%= rec.thumb %>" alt="" loading="lazy"><% } %>
     <% if (rec.duration) { %><span class="tk-recard__len"><%= clock(rec.duration) %></span><% } %>
     <% if (rec.isAdult) { %><span class="tk-recard__adult">18+</span><% } %>
   </span>
-  <span class="tk-recard__title"><%= rec.title %></span>
+  <% if (rec.title) { %><span class="tk-recard__title"><%= rec.title %></span>
+  <% } else { var d = date(rec.createdAt, { day: 'numeric', month: 'long' }); %><span class="tk-recard__title" data-i18n="video.untitled" data-i18n-vars='<%= JSON.stringify({ date: d }) %>'><%- t('video.untitled', { date: d }) %></span><% } %>
   <span class="tk-recard__date"><%= rec.author.displayName %> · <%= date(rec.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></span>
 </a>

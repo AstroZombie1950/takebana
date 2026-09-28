@@ -94,13 +94,16 @@ export async function newPage() {
       const exceptions = events
         .filter(e => e.method === 'Runtime.exceptionThrown')
         .map(e => 'ИСКЛЮЧЕНИЕ: ' + (e.params.exceptionDetails.exception?.description || e.params.exceptionDetails.text));
+      // ERR_ABORTED — запрос оборван уходом со страницы: проверка уходит,
+      // не дождавшись, например, замеров страницы /check. Это не поломка.
       const failed = events
-        .filter(e => e.method === 'Network.loadingFailed' && !waiting(urlOf(e.params.requestId)))
+        .filter(e => e.method === 'Network.loadingFailed' && !waiting(urlOf(e.params.requestId))
+                     && e.params.errorText !== 'net::ERR_ABORTED')
         .map(e => 'СЕТЬ: ' + e.params.errorText + ' ' + (e.params.type || ''));
       const http = events
         .filter(e => e.method === 'Network.responseReceived' && e.params.response.status >= 400
                      && !(e.params.response.status === 404 && waiting(e.params.response.url)))
-        .map(e => 'HTTP ' + e.params.response.status + ' ' + e.params.response.url.replace('http://127.0.0.1:3000', ''));
+        .map(e => 'HTTP ' + e.params.response.status + ' ' + e.params.response.url.replace(/^https?:\/\/[^/]+/, ''));
       return { errors, exceptions, failed, http };
     },
     // закрываем и вкладку: иначе её сокет остаётся в комнате и счётчик зрителей врёт

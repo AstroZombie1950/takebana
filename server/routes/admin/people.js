@@ -27,6 +27,7 @@ const { audit } = require('../../utils/audit');
 const { validate } = require('../../middleware/validate');
 const { PASSWORD_PROVIDER, PASSWORD_MIN, PASSWORD_MAX, hashPassword } = require('../../utils/password');
 const { removeUser } = require('../../utils/userDelete');
+const retention = require('../../utils/retention');
 const profileLinks = require('../../utils/profileLinks');
 const { requireModerator, requireAdmin, paging, list, needle, personBrief, csvRoute } = require('./shared');
 
@@ -175,6 +176,9 @@ router.get('/users/:id', requireModerator, async (req, res) => {
   const c = one(calls);
 
   audit(req, 'admin.view', { targetType: 'user', target: user, targetLabel: user.nickname || user.login || user.email || '' });
+  // Сроки хранения файлов — только администратору (routes/admin/retention.js):
+  // общие и личные поверх них.
+  const policy = isAdmin ? await retention.policy() : null;
 
   res.json({
     person: personBrief(user),
@@ -197,6 +201,7 @@ router.get('/users/:id', requireModerator, async (req, res) => {
       links: profileLinks.list(user.links).map((l) => ({ kind: l.kind, url: l.url })),
       linksFollow: !!user.linksFollow,
     },
+    retention: policy ? { all: policy, own: retention.own(user) } : null,
     streams: {
       count: s.count || 0,
       seconds: s.seconds || 0,

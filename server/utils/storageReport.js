@@ -66,7 +66,7 @@ async function references() {
       'avatar streamDefaults.thumbnail').lean(),
     Message.find({ 'attachments.0': { $exists: true } }, 'attachments.kind attachments.key attachments.previewKey').lean(),
     Stream.find({ thumbnail: /^\/uploads\// }, 'thumbnail').lean(),
-    Establishments.find({ 'photos.0': { $exists: true } }, 'photos').lean(),
+    Establishments.find({ $or: [{ 'photos.0': { $exists: true } }, { cover: /^\/uploads\// }] }, 'photos cover').lean(),
   ]);
 
   // Ключ файла, а без него — адрес у нас (так лежат старые и тестовые записи).
@@ -100,7 +100,10 @@ async function references() {
     }
   }
   for (const s of streams) add(localKey(s.thumbnail), 'covers', 'file', `/stream/${s._id}`);
-  for (const v of venues) for (const p of v.photos || []) add(localKey(p), 'venues', 'file');
+  for (const v of venues) {
+    for (const p of v.photos || []) add(localKey(p), 'venues', 'file');
+    add(localKey(v.cover), 'covers', 'file', `/venue/${v._id}/live`);
+  }
   return refs;
 }
 

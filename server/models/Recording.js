@@ -47,5 +47,8 @@ const recordingSchema = new Schema({
 recordingSchema.index({ userId: 1, createdAt: -1 });
 // Рекомендации: готовые записи раздела, популярные сверху.
 recordingSchema.index({ status: 1, category: 1, views: -1 });
+// Лента главной: готовые, новые сверху (utils/feed.js). У видео галереи
+// ту же работу делает индекс уборки { status, createdAt }.
+recordingSchema.index({ status: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Recording', recordingSchema);

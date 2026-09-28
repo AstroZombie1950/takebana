@@ -197,6 +197,7 @@ const EN = {
     'Эфир сейчас не идёт': 'The stream is not live right now',
     'Эфир для 18+: подтвердите возраст': 'This stream is 18+: confirm your age',
     'Слишком часто. Подождите пару секунд.': 'Too fast. Wait a couple of seconds.',
+    'Слишком часто. Подождите минуту.': 'Too many requests. Wait a minute.',
     'Включён медленный режим — подождите': 'Slow mode is on — please wait',
     'Пауза': 'Pause',
     'Ключ меняется, когда эфира нет: сначала завершите его': 'The key can only be changed when there is no stream: end it first',

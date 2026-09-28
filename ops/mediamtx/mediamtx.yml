@@ -37,6 +37,10 @@ rtspAddress: 127.0.0.1:8554
 rtspTransports: [tcp]
 rtmp: no
 srt: no
+# MoQ (Media over QUIC) в 1.21 включён по умолчанию и слушает :8892/:8893
+# на всех адресах, а ключи пытается писать в рабочий каталог — на бою
+# 25.09 это «permission denied». Нам он не нужен.
+moq: no
 # Свой HLS не нужен: ему нужен H.264 из браузера и знак в кадр он не
 # положит — HLS режет наш ffmpeg (server/utils/hls.js, профиль venue).
 hls: no

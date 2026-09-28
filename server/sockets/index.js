@@ -15,6 +15,7 @@ const callLog = require('../utils/callLog');
 const errorLog = require('../utils/errorLog');
 const turn = require('../utils/turn');
 const venueCam = require('../utils/venueCam');
+const ioHolder = require('../utils/io');
 const userView = require('../utils/userView');
 const restriction = require('../utils/restrict');
 const privacy = require('../utils/privacy');
@@ -99,28 +100,10 @@ function registerSockets(io) {
     .then(() => { for (const userId of userConnections.keys()) syncPresence(userId); })
     .catch((e) => errorLog.server(e, 'socket.presenceReset'));
 
-  // Зрители эфира — люди в его комнате, а не сокеты: вошедший считается
-  // один раз, сколько бы вкладок ни открыл; вкладки самого ведущего не
-  // считаются вовсе. Гостя узнать не по чему, кроме адреса, — с одного
-  // адреса считаем не больше GUESTS_PER_ADDRESS: сотня сокетов из скрипта
-  // больше не поднимает эфир на витрине (сортировка по viewers), а бар
-  // с десятком телефонов за одним роутером всё ещё считается.
-  const GUESTS_PER_ADDRESS = 10;
-  function viewersIn(roomName, streamKey) {
-    const room = io.sockets.adapter.rooms.get(roomName);
-    if (!room) return 0;
-    const users = new Set();
-    const guests = new Map();
-    for (const id of room) {
-      const s = io.sockets.sockets.get(id);
-      if (!s || s.data.ownStreamKey === streamKey) continue;
-      if (s.data.userId) users.add(s.data.userId);
-      else guests.set(s.data.ip, Math.min((guests.get(s.data.ip) || 0) + 1, GUESTS_PER_ADDRESS));
-    }
-    let n = users.size;
-    for (const k of guests.values()) n += k;
-    return n;
-  }
+  // Зрители эфира — люди в его комнате (utils/io.js, viewers); вкладки
+  // самого ведущего не считаются.
+  const viewersIn = (roomName, streamKey) =>
+    ioHolder.viewers(io, roomName, (s) => s.data.ownStreamKey === streamKey);
 
   // Счётчик уходит всей комнате, и слать его на каждый вход и выход нельзя:
   // тысяча входов на эфир с тысячей зрителей — миллион сообщений. Не чаще

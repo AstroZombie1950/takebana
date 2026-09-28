@@ -1,0 +1,144 @@
+<%#
+  Главная (/) с 28.09.2026 — лента, как у YouTube: сверху разделы
+  строкой, под ними идущие эфиры, авторы полосой и лента видео — записи
+  эфиров и ролики галерей вперемешку, новые сверху (utils/feed.js).
+  Раньше здесь была витрина раздела: большой заголовок, три рамки
+  подкатегорий и восемь записей внизу — без эфиров страница выглядела
+  пустой. Разделы (/streaming/:category) остались прежними
+  (streamingMain.ejs), подкатегории выбирают там.
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%# В индексе (docs/seo/DECISIONS.md): h1 «Прямые эфиры», под ним лента. %>
+<%- include('partials/tkHead', { titleKey: 'page.home.title', descriptionKey: 'page.home.description', seo: { path: '/', jsonld: ld.site() } }) %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/catalog.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/home.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-cat tk-home">
+
+      <% if (showIntro) { %>
+      <%# Гостю, который пришёл впервые, — что это за сервис. Крестик ставит
+          cookie tk_intro=0 (catalog.js), и сервер плашку больше не рисует. %>
+      <aside class="tk-intro" id="tkIntro" aria-labelledby="tkIntroTitle">
+        <div class="tk-intro__body">
+          <p class="tk-intro__h" id="tkIntroTitle" data-i18n="intro.title"><%- t('intro.title') %></p>
+          <p class="tk-intro__p" data-i18n="intro.text"><%- t('intro.text') %></p>
+        </div>
+        <a href="/about" class="tk-btn tk-btn--primary tk-btn--sm tk-intro__more" data-i18n="intro.more"><%- t('intro.more') %></a>
+        <button type="button" class="tk-intro__close" id="tkIntroClose" aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+        </button>
+      </aside>
+      <% } %>
+
+      <%# Разделы строкой, как тематические фильтры над лентой YouTube.
+          На телефоне строка прокручивается вбок. %>
+      <nav class="tk-home__chips" aria-label="<%= ta('feed.sections') %>" data-i18n-aria="feed.sections">
+        <a href="/" class="tk-home__chip is-on" aria-current="page" data-i18n="search.all"><%- t('search.all') %></a>
+        <% Object.keys(catalog.CATEGORIES).forEach(function (code) { var cat = catalog.CATEGORIES[code]; %>
+        <a href="/streaming/<%= code %>" class="tk-home__chip" data-i18n="<%= cat.i18n %>"><%= ta(cat.i18n, cat.name) %></a>
+        <% }); %>
+        <a href="/authors" class="tk-home__chip" data-i18n="authors.kicker"><%- t('authors.kicker') %></a>
+        <a href="/map" class="tk-home__chip" data-i18n="feed.venues"><%- t('feed.venues') %></a>
+      </nav>
+
+      <%# Идущие эфиры. Фильтры — та же GET-форма, что в разделах: без
+          скрипта уходит перезагрузкой, со скриптом catalog.js подменяет
+          сетку. Подкатегории выбирают в разделе; пришедшие в адресе
+          (старые ссылки /?sub=…) держатся скрытыми полями до сброса. %>
+      <form id="catFilters" action="/" method="get" data-grid="/streaming/popular/grid">
+      <section class="tk-home__sec">
+        <div class="tk-home__head">
+          <%# Счётчик — рядом с h1, а не внутри: заголовок для поисковика —
+              «Прямые эфиры», без «2 в эфире». %>
+          <div class="tk-home__title">
+            <h1 class="tk-home__h1" data-i18n="cat.popularTitle"><%- t('cat.popularTitle') %></h1>
+            <% if (totalStreamsCount) { %><span class="tk-home__count"><%= totalStreamsCount %> <span data-i18n="catalog.liveNow"><%- t('catalog.liveNow') %></span></span><% } %>
+          </div>
+          <div class="tk-home__bar">
+            <% filters.subs.forEach(function (sub) { %><input type="hidden" name="sub" value="<%= sub %>"><% }); %>
+            <select name="city" class="tk-field tk-select" aria-label="<%= ta('common.city') %>" data-i18n-aria="common.city">
+              <option value="" data-i18n="common.allCities"><%- t('common.allCities') %></option>
+              <% catalog.CITIES.forEach(function (city) { %>
+              <option value="<%= city.code %>"<%= filters.city === city.code ? ' selected' : '' %> data-i18n="<%= city.i18n %>"><%= ta(city.i18n, city.name) %></option>
+              <% }); %>
+            </select>
+            <select name="sort" class="tk-field tk-select" aria-label="<%= ta('catalog.sort') %>" data-i18n-aria="catalog.sort">
+              <option value="" data-i18n="catalog.sortViewers"><%- t('catalog.sortViewers') %></option>
+              <option value="new"<%= filters.sort === 'new' ? ' selected' : '' %> data-i18n="catalog.sortNew"><%- t('catalog.sortNew') %></option>
+            </select>
+            <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="common.show"><%- t('common.show') %></button>
+            <a href="/" class="tk-cat__reset" data-reset<%= filtered ? '' : ' hidden' %> data-i18n="common.resetFilters"><%- t('common.resetFilters') %></a>
+          </div>
+        </div>
+
+        <div class="tk-cat__results" id="catResults">
+          <%- include('partials/catalogGrid', { compact: true }) %>
+        </div>
+      </section>
+      </form>
+
+      <% if (users.length) { %>
+      <%# Авторы полосой: сначала те, кто в эфире, потом популярные и новые
+          (utils/authors.js). Остальные — на /authors. %>
+      <section class="tk-home__sec">
+        <div class="tk-home__head">
+          <h2 class="tk-home__h2" data-i18n="authors.kicker"><%- t('authors.kicker') %></h2>
+          <a href="/authors" class="tk-home__more" data-i18n="authors.all"><%- t('authors.all') %></a>
+        </div>
+        <div class="tk-home__authors">
+          <% users.forEach(function (user) { %>
+          <a href="<%= user.stream ? '/stream/' + user.stream._id : user.url %>" class="tk-home__author" data-presence-user="<%= user._id %>">
+            <span class="tk-home__author-ava<%= user.stream ? ' is-live' : '' %>"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
+              <% if (user.avatarStyle.url) { %><img src="<%= user.avatarStyle.url %>" alt="" width="72" height="72" loading="lazy" decoding="async"><% } else { %><%= user.avatarStyle.initial %><% } %>
+              <span class="presence-dot <%= user.isOnline ? 'presence-online' : 'presence-offline' %>"></span>
+            </span>
+            <span class="tk-home__author-name"><%= user.displayName %></span>
+            <% if (user.stream) { %><span class="tk-home__author-live" data-i18n="authors.liveMark"><%- t('authors.liveMark') %></span><% } %>
+          </a>
+          <% }); %>
+        </div>
+      </section>
+      <% } %>
+
+      <%# Лента: записи эфиров и видео галерей, новые сверху. Следующую
+          страницу подгружает catalog.js по кнопке (/feed?before=…); без
+          скрипта кнопка — обычная ссылка на ту же выдачу. %>
+      <section class="tk-home__sec" aria-labelledby="feedTitle">
+        <div class="tk-home__head">
+          <h2 class="tk-home__h2" id="feedTitle" data-i18n="feed.title"><%- t('feed.title') %></h2>
+        </div>
+        <% if (feed.items.length) { %>
+        <div class="tk-feed" id="feed">
+          <% feed.items.forEach(function (item) { %><%- include('partials/feedCard', { item: item }) %><% }); %>
+        </div>
+        <% if (feed.next) { %>
+        <a href="/?before=<%= encodeURIComponent(feed.next) %>#feedTitle" class="tk-btn tk-btn--outline tk-btn--sm tk-feed__more" id="feedMore" data-next="<%= feed.next %>" data-i18n="feed.more"><%- t('feed.more') %></a>
+        <% } %>
+        <% } else { %>
+        <div class="tk-empty">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><rect x="3" y="5" width="18" height="14"></rect><path d="M10 9.5v5l4.5-2.5L10 9.5Z"></path></svg>
+          <p class="tk-empty__h" data-i18n="feed.emptyTitle"><%- t('feed.emptyTitle') %></p>
+          <p class="tk-empty__p" data-i18n="feed.emptyText"><%- t('feed.emptyText') %></p>
+          <a href="/upload" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="feed.upload"><%- t('feed.upload') %></a>
+        </div>
+        <% } %>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script defer src="<%= asset('/catalog.js') %>"></script>
+</body>
+</html>

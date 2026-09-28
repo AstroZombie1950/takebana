@@ -1,0 +1,347 @@
+/* Главная (/) с 28.09.2026: разделы строкой, эфиры, авторы полосой,
+ * лента видео (views/home.ejs). Плашка гостю, сетка эфиров и её карточки —
+ * из catalog.css: они общие с разделами. */
+
+/* Ленте ширина нужна больше, чем витрине разделов (catalog.css, 1440):
+ * на 1920 справа оставалось 220px пустоты — туда встаёт пятая колонка. */
+.tk-home { max-width: 1760px; padding-top: 28px; }
+
+/* ── Разделы строкой ──
+ * Как тематические фильтры над лентой YouTube: на узком экране строка
+ * прокручивается вбок, полосы прокрутки не видно. */
+.tk-home__chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -40px;
+  padding: 0 40px 4px;
+}
+
+.tk-home__chips::-webkit-scrollbar { display: none; }
+
+.tk-home__chip {
+  flex: none;
+  padding: 9px 16px;
+  border: 1px solid var(--tk-rule);
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  white-space: nowrap;
+  transition: border-color .18s ease, color .18s ease;
+}
+
+.tk-home__chip:hover,
+.tk-home__chip:focus-visible { border-color: var(--tk-accent); color: var(--tk-paper); }
+
+.tk-home__chip.is-on {
+  border-color: var(--tk-paper);
+  background: var(--tk-paper);
+  color: var(--tk-ink);
+}
+
+/* ── Секции ── */
+.tk-home__sec { padding-top: 40px; }
+
+.tk-home__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 20px;
+}
+
+.tk-home__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+}
+
+.tk-home__h1,
+.tk-home__h2 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: -.02em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
+.tk-home__h2 { font-size: 22px; }
+
+/* «2 в эфире» рядом с заголовком — счётчик, а не часть заголовка. */
+.tk-home__count {
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: .14em;
+  color: var(--tk-accent);
+}
+
+.tk-home__more {
+  /* Зона нажатия 44px в высоту, а строка не раздвигается: отступ съеден
+   * отрицательным полем. На телефоне в 20px пальцем не попасть. */
+  padding: 12px 0;
+  margin: -12px 0;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  transition: color .18s ease;
+}
+
+.tk-home__more:hover,
+.tk-home__more:focus-visible { color: var(--tk-accent); }
+
+/* Фильтры эфиров — в строку с заголовком, без подписей над полями. */
+.tk-home__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.tk-home__bar .tk-select { width: 190px; padding-block: 9px; }
+.tk-home__bar .tk-cat__reset { padding-block: 8px; }
+
+/* Никто не в эфире — строка, а не рамка на пол-экрана: ниже лента. */
+.tk-home__quiet {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 16px 20px;
+  border: 1px solid var(--tk-rule);
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  color: var(--tk-muted);
+}
+
+/* ── Авторы полосой ── */
+.tk-home__authors {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -40px;
+  padding: 0 40px 4px;
+}
+
+.tk-home__authors::-webkit-scrollbar { display: none; }
+
+.tk-home__author {
+  flex: none;
+  width: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.tk-home__author-ava {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid transparent;
+  background: rgba(144, 113, 99, .35);
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--tk-paper);
+  transition: border-color .18s ease;
+}
+
+.tk-home__author-ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tk-home__author-ava.is-live { border-color: var(--tk-accent); }
+.tk-home__author:hover .tk-home__author-ava { border-color: var(--tk-paper); }
+
+.tk-home__author-ava .presence-dot {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+}
+
+.tk-home__author-name {
+  max-width: 100%;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-home__author-live {
+  margin-top: -4px;
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--tk-accent);
+}
+
+/* ── Лента ──
+ * Колонок столько, сколько помещается: на широком экране четыре-пять,
+ * на телефоне одна. Карточка без рамки — как у YouTube: рамку держит
+ * только кадр, текст стоит под ним свободно. */
+.tk-feed {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 32px 20px;
+}
+
+.tk-feed__card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  animation: tk-card-in .4s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-feed__card { animation: none; }
+}
+
+.tk-feed__shot {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--tk-rule);
+  background: #141414;
+  transition: border-color .18s ease;
+}
+
+.tk-feed__card:hover .tk-feed__shot,
+.tk-feed__card:focus-visible .tk-feed__shot { border-color: var(--tk-accent); }
+
+.tk-feed__shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .5s ease;
+}
+
+.tk-feed__card:hover .tk-feed__shot img { transform: scale(1.04); }
+
+.tk-feed__len,
+.tk-feed__kind {
+  position: absolute;
+  padding: 3px 7px;
+  background: rgba(10, 10, 10, .82);
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .06em;
+  color: var(--tk-paper);
+}
+
+.tk-feed__len { right: 8px; bottom: 8px; }
+
+.tk-feed__kind {
+  left: 8px;
+  top: 8px;
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+}
+
+.tk-feed__body {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tk-feed__ava {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .35);
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-feed__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-feed__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tk-feed__title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--tk-paper);
+  /* Две строки: иначе карточки в ряду разъезжаются по высоте. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.tk-feed__who,
+.tk-feed__meta {
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-feed__who { color: var(--tk-beige); }
+
+.tk-feed__more {
+  display: flex;
+  width: max-content;
+  margin: 36px auto 0;
+}
+
+.tk-feed__more[aria-busy="true"] { opacity: .5; pointer-events: none; }
+
+/* ── Узкие экраны ── */
+@media (max-width: 767px) {
+  .tk-home { padding-top: 20px; }
+  .tk-home__chips,
+  .tk-home__authors { margin: 0 -20px; padding: 0 20px 4px; }
+  .tk-home__sec { padding-top: 32px; }
+  .tk-home__h1 { font-size: 24px; }
+  .tk-home__h2 { font-size: 20px; }
+  .tk-home__bar { width: 100%; }
+  .tk-home__bar .tk-select { flex: 1 1 140px; width: auto; }
+  .tk-feed { grid-template-columns: 1fr; gap: 28px; }
+  /* Эфиры на телефоне — лентой вбок: столбиком они уводили ленту видео
+   * на второй-третий экран. Следующая карточка выглядывает справа. */
+  .tk-home .tk-grid {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    margin: 0 -20px;
+    padding: 0 20px;
+    scroll-padding-inline: 20px;
+  }
+  .tk-home .tk-grid::-webkit-scrollbar { display: none; }
+  .tk-home .tk-grid .tk-card { flex: 0 0 82%; scroll-snap-align: start; }
+}

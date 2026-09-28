@@ -10,12 +10,15 @@
 // называется в ответе полем engine.
 
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const { requireAuth, requireOwner, requireNotBanned } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
+const { watchLimiter } = require('../middleware/rateLimit');
 const { commonDataMiddleware } = require('./streaming/shared');
 const ChatMessage = require('../models/ChatMessage');
 const restriction = require('../utils/restrict');
@@ -28,6 +31,9 @@ const Establishments = require('../models/Establishments');
 const User = require('../models/User');
 const { audit } = require('../utils/audit');
 const errorLog = require('../utils/errorLog');
+const { UPLOADS, upload } = require('./streaming/uploads');
+const { saveImage, BadImageError } = require('../utils/image');
+const { resolveWithin, isPlainFileName } = require('../utils/safePath');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 const DAILY_MAX_PARTICIPANTS = Number(process.env.DAILY_MAX_PARTICIPANTS) || 20;
@@ -152,20 +158,28 @@ router.delete('/api/venues/:id/live', requireAuth, ownVenue, async (req, res) =>
 
 const offline = (res) => res.status(409).json({ message: 'Заведение сейчас не показывает камеру' });
 
-// Гость: свой приём — адрес HLS на CDN, Daily — токен только на просмотр.
+// Зритель: свой приём — адрес HLS на CDN, Daily — токен только на просмотр.
 // Владелец приходит сюда за правом вещать: на своём приёме — каждый раз,
 // когда камеру попросили (venue:demand), в Daily — после обрыва: вернуться
 // через /live значило бы пересоздать комнату и выкинуть всех гостей.
 // Ограниченному владельцу права вещать нет и здесь: /live закрыт
 // requireNotBanned, а повторный вход — вторая дверь в ту же комнату.
-router.post('/api/venues/:id/watch', requireAuth, async (req, res) => {
+//
+// С 28.09.2026 смотреть можно и без входа (гость с карты): на своём приёме
+// раздаёт Bunny, и лишний зритель нам ничего не стоит. В комнате Daily
+// каждый зритель — оплачиваемый участник, там гостю по-прежнему 401.
+// Кому владелец закрыл канал (utils/restrict.js), адреса не выдаём.
+router.post('/api/venues/:id/watch', watchLimiter, async (req, res) => {
   const venue = await Establishments.findById(req.params.id).select('online status owner').lean();
   if (!venue || venue.status === false) return res.status(404).json({ message: 'Заведение не найдено' });
   if (!venue.online) return offline(res);
   const name = roomName(req.params.id);
   const userId = req.session.userId;
-  const isOwner = String(venue.owner) === String(userId)
+  const isOwner = !!userId && String(venue.owner) === String(userId)
     && !(await User.exists({ _id: userId, banned: true }));
+  if (!isOwner && await restriction.isRestricted(venue.owner, userId)) {
+    return res.status(403).json({ message: 'Автор ограничил вам доступ к своему каналу' });
+  }
 
   if (mediamtx.configured()) {
     const path = mediamtx.pathOf(req.params.id);
@@ -181,6 +195,7 @@ router.post('/api/venues/:id/watch', requireAuth, async (req, res) => {
     return res.json({ engine: 'hls', url: `${hlsBase}/live/${venueCam.hlsKey(req.params.id)}/index.m3u8` });
   }
 
+  if (!userId) return res.status(401).json({ message: 'Необходима авторизация' });
   try {
     // online в базе без комнаты в Daily: вкладка владельца умерла, не успев
     // отправить sendBeacon. Без проверки гость получал токен в пустоту,
@@ -199,6 +214,43 @@ router.post('/api/venues/:id/watch', requireAuth, async (req, res) => {
   }
 });
 
+// ── Обложка камеры (28.09) ──
+// Заставка страницы камеры, пока нет картинки, и превью ссылки на неё.
+// Как обложка эфира (routes/streaming/streams.js): 16:9, сжатая и со
+// знаком, на своём сервере — /uploads/thumbnails/. Прежняя стирается.
+// requireAuth и права — до multer: чужой файл не должен даже читаться.
+const THUMBS = path.join(UPLOADS, 'thumbnails');
+
+// Путь прежней обложки — из базы, а не из запроса, и только внутри папки.
+function dropCover(url) {
+  const name = typeof url === 'string' && url.startsWith('/uploads/thumbnails/') ? path.basename(url) : null;
+  const file = isPlainFileName(name) ? resolveWithin(THUMBS, name) : null;
+  if (file) fs.promises.rm(file, { force: true }).catch(() => {});
+}
+
+router.post('/api/venues/:id/cover', requireAuth, requireNotBanned, ownVenue, upload.single('cover'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: 'Изображение не загружено.' });
+  let name;
+  try {
+    name = await saveImage(req.file.buffer, 'thumbnail', THUMBS);
+  } catch (e) {
+    if (!(e instanceof BadImageError)) throw e;
+    return res.status(400).json({ message: e.message });
+  }
+  const cover = `/uploads/thumbnails/${name}`;
+  const before = await Establishments.findOneAndUpdate({ _id: req.params.id }, { $set: { cover } }).select('cover').lean();
+  if (before) dropCover(before.cover);
+  audit(req, 'venue.cover', { targetType: 'venue', target: req.resource });
+  res.json({ cover });
+});
+
+router.delete('/api/venues/:id/cover', requireAuth, ownVenue, async (req, res) => {
+  const before = await Establishments.findOneAndUpdate({ _id: req.params.id }, { $unset: { cover: 1 } }).select('cover').lean();
+  if (before) dropCover(before.cover);
+  audit(req, 'venue.cover', { targetType: 'venue', target: req.resource, meta: { removed: true } });
+  res.json({ ok: true });
+});
+
 // ── Страница камеры (24.09) ──────────────────────────────────────────────────
 // До неё владелец включал камеру кнопкой в «Моих заведениях» и не видел
 // ничего — ни себя, ни зрителей, ни чата, а гость смотрел голое видео
@@ -211,7 +263,7 @@ router.post('/api/venues/:id/watch', requireAuth, async (req, res) => {
 router.get('/venue/:venueId/live', commonDataMiddleware, async (req, res, next) => {
   if (!OBJECT_ID.test(req.params.venueId)) return next();
   const venue = await Establishments.findById(req.params.venueId)
-    .select('name type city address weekdayHours weekendHours photos online status owner').lean();
+    .select('name type city address weekdayHours weekendHours photos cover online status owner').lean();
   const userId = req.session.userId;
   const mine = !!venue && !!userId && String(venue.owner) === String(userId);
   // Заведение на проверке видно только владельцу — как и на карте.
@@ -223,6 +275,9 @@ router.get('/venue/:venueId/live', commonDataMiddleware, async (req, res, next) 
     isOwner: mine && !res.locals.currentUser?.banned,
     approved: venue.status === true,
     restricted,
+    // Гостю в комнату Daily нельзя (/watch отвечает 401): страница сразу
+    // просит войти, не отправляя заведомо отклонённый запрос.
+    loginToWatch: !userId && !mediamtx.configured(),
   });
 });
 

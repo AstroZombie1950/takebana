@@ -153,6 +153,7 @@ const META = {
   resolved: 'разобрано', count: 'случаев', action: 'сделано', about: 'на что', city: 'город', type: 'тип',
   category: 'раздел', isAdult: '18+', wasLive: 'шёл', login: 'логин',
   privacy: 'приватность', audience: 'кому', template: 'заготовка', len: 'знаков', on: 'включено',
+  chat: 'переписка', photos: 'фото', videos: 'видео',
 };
 
 function meta(m) {
@@ -574,6 +575,14 @@ VIEWS.person = {
     if (IS_ADMIN) html += fact('Открытых сеансов', num(a.sessions) + (a.sessionUntil ? ' <span class="tk-panel__why">до ' + esc(when(a.sessionUntil)) + '</span>' : ''));
     html += fact('Веб / OBS', num(d.streams.web) + ' / ' + num(d.streams.obs));
     html += '</dl></section>';
+
+    // Сроки хранения его файлов: пусто — как у всех (вкладка «Сроки хранения»).
+    if (d.retention) {
+      html += '<section data-ret-box><h2 class="tk-panel__h2">Сроки хранения</h2><dl class="tk-facts">' +
+        RET_KINDS.map(([k, name]) => '<dt>' + esc(name) + '</dt><dd>' + retSelect(k, d.retention.own[k] ?? null, d.retention.all[k]) + '</dd>').join('') +
+        '</dl><p class="tk-panel__more"><button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="ret-user" data-id="' + esc(p.id) + '">Сохранить сроки</button></p>' +
+        '<p class="tk-panel__why">Пока не применяются: файлы хранятся бессрочно.</p></section>';
+    }
 
     html += '<section><h2 class="tk-panel__h2">Заведения</h2>';
     html += d.venues.length
@@ -1118,6 +1127,61 @@ VIEWS.storage = {
   },
 };
 
+// ── Сроки хранения ───────────────────────────────────────────────────────────
+//
+// Сколько хранить то, что люди загружают, — всем и отдельным людям
+// (routes/admin/retention.js). Пока сроки не применяются: вкладка хранит
+// решение и считает, сколько файлов и места ушло бы сегодня.
+const RET_KINDS = [
+  ['chat', 'Переписка', 'фото, видео, голосовые, кружки и документы в личных и групповых чатах'],
+  ['photos', 'Фото галереи', 'лента фото в профиле'],
+  ['videos', 'Видео галереи', 'загруженные видео в профиле'],
+  ['recordings', 'Записи эфиров', 'сохранённые после эфира записи'],
+];
+const RET_DAYS = [[0, 'бессрочно'], [30, '30 дней'], [90, '3 месяца'], [180, 'полгода'], [365, '1 год'], [730, '2 года'], [1095, '3 года'], [1825, '5 лет']];
+const retTitle = (days) => (RET_DAYS.find((d) => d[0] === days) || [0, days + ' дн.'])[1];
+
+// Выбор срока. inherit — у человека: первым пунктом «как у всех (…)».
+function retSelect(kind, value, inherit) {
+  const list = RET_DAYS.some((d) => d[0] === value) || value == null ? RET_DAYS : RET_DAYS.concat([[value, value + ' дн.']]);
+  return '<select class="tk-field tk-select tk-ret" data-ret="' + kind + '">' +
+    (inherit != null ? '<option value=""' + (value == null ? ' selected' : '') + '>как у всех — ' + esc(retTitle(inherit)) + '</option>' : '') +
+    list.map(([d, t]) => '<option value="' + d + '"' + (value === d ? ' selected' : '') + '>' + esc(t) + '</option>').join('') +
+  '</select>';
+}
+
+// Собрать выбранное: у общих — числа, у личных пустое — null («как у всех»).
+function retValues(root) {
+  const out = {};
+  root.querySelectorAll('[data-ret]').forEach((s) => { out[s.dataset.ret] = s.value === '' ? null : Number(s.value); });
+  return out;
+}
+
+VIEWS.retention = {
+  title: 'Сроки хранения',
+  admin: true,
+  async render() {
+    const d = await api('/retention');
+    let html = '<p class="tk-panel__warn">Сроки пока не применяются: все файлы хранятся бессрочно. Здесь их задают заранее и видят, сколько файлов ушло бы, начни мы убирать сегодня.</p>';
+    html += table([{ title: 'Что' }, { title: 'Хранить' }, { title: 'Ушло бы сегодня' }], RET_KINDS.map(([k, name, hint]) => {
+      const p = d.preview[k] || { files: 0, bytes: 0 };
+      return '<tr><td>' + esc(name) + '<br><span class="tk-panel__why">' + esc(hint) + '</span></td>' +
+        '<td>' + retSelect(k, d.policy[k]) + '</td>' +
+        '<td>' + (p.files ? count(p.files, 'файл', 'файла', 'файлов') + (k === 'photos' ? '' : ', ' + bytes(p.bytes)) : '—') + '</td></tr>';
+    }));
+    html += '<p class="tk-panel__more"><button type="button" class="tk-btn tk-btn--primary tk-btn--xs" data-act="ret-save">Сохранить сроки</button></p>';
+    html += '<p class="tk-panel__why">Срок считается от загрузки. Чей файл — того и срок: у вложения — отправителя. Аватары, обложки и фото заведений не в счёт: они мелкие и лежат на своём сервере. «Ушло бы» считает и личные сроки людей ниже; у фото размер в базе не хранится — только число.</p>';
+
+    html += '<h2 class="tk-panel__h2">Личные сроки</h2>';
+    html += d.people.length
+      ? table([{ title: 'Человек' }].concat(RET_KINDS.map(([, name]) => ({ title: name }))), d.people.map((p) =>
+          '<tr><td>' + person(p.person) + '</td>' + RET_KINDS.map(([k]) => '<td>' + (p.own[k] == null ? '<span class="tk-panel__why">как у всех</span>' : esc(retTitle(p.own[k]))) + '</td>').join('') + '</tr>'))
+      : note('Ни у кого нет своих сроков');
+    html += '<p class="tk-panel__why">Свой срок задают в профиле человека — например, тому, кому нужно хранить дольше (потом — пакетом подписки).</p>';
+    return { html, sub: d.updatedAt ? 'Изменены ' + when(d.updatedAt) : 'По умолчанию — всё бессрочно' };
+  },
+};
+
 // ── Система ──────────────────────────────────────────────────────────────────
 VIEWS.system = {
   title: 'Система',
@@ -1425,7 +1489,7 @@ function serverParams(params) {
   return out;
 }
 
-const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'support', 'broadcast', 'venues', 'recordings', 'audit', 'errors', 'costs', 'storage', 'system'];
+const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'support', 'broadcast', 'venues', 'recordings', 'audit', 'errors', 'costs', 'storage', 'retention', 'system'];
 
 function drawNav(active) {
   nav.innerHTML = ORDER.filter((name) => !VIEWS[name].admin || IS_ADMIN).map((name) => {
@@ -1568,6 +1632,18 @@ view.addEventListener('click', async (e) => {
       } finally {
         el.disabled = false;
       }
+      return;
+    }
+
+    if (act === 'ret-save') {
+      await send('PUT', '/api/admin/retention', retValues(view));
+      toast('Сроки сохранены', 'ok');
+      return show();
+    }
+
+    if (act === 'ret-user') {
+      await send('PUT', '/api/admin/users/' + id + '/retention', retValues(el.closest('[data-ret-box]')));
+      toast('Сроки человека сохранены', 'ok');
       return;
     }
 

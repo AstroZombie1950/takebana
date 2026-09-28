@@ -10,7 +10,7 @@
 //
 // Камера вещает, только когда её смотрят. Страница владельца открыта
 // весь день, но видео уходит, лишь пока на странице камеры есть хоть
-// один вошедший зритель: сокет-комната venue:<id> (sockets/index.js)
+// один зритель (с 28.09 — и гость без входа): сокет-комната venue:<id> (sockets/index.js)
 // сообщает сюда их число, отсюда владельцу — venue:demand. Зрителей
 // не стало — выжидаем IDLE_MS (обновление страницы не должно рвать
 // показ) и гасим. Начало и конец публикации MediaMTX сообщает сам
@@ -34,9 +34,10 @@ const idle = new Map();   // venueId → таймер выключения
 const gone = new Map();   // venueId → таймер «владелец пропал»
 
 // Каталог HLS камеры: не угадать без секрета, но один и тот же между
-// перезапусками — зритель с открытой страницей не теряет адрес. Смотреть
-// камеру пускают после входа (routes/venueLive.js), а адрес без суффикса
-// подбирался бы по id заведения из карты.
+// перезапусками — зритель с открытой страницей не теряет адрес. Адрес
+// выдаётся только открытой камерой и не тому, от кого владелец закрыл
+// канал (routes/venueLive.js); без суффикса он подбирался бы по id
+// заведения из карты.
 function hlsKey(venueId) {
   const sig = createHmac('sha256', process.env.SESSION_SECRET || 'dev').update('venue:' + venueId).digest('hex').slice(0, 16);
   return `venue_${venueId}_${sig}`;
@@ -54,18 +55,14 @@ function room(venueId) {
   return io ? io.sockets.adapter.rooms.get(`venue:${venueId}`) : null;
 }
 
-// Зрители — вошедшие, кроме владельца: гостю картинку не показывают
-// (routes/venueLive.js). Один человек с трёх вкладок — один зритель.
+// Зрители — все на странице камеры, кроме владельца; считаются как у
+// эфира (utils/io.js): человек с трёх вкладок — один, гости — по адресу.
+// В запасной комнате Daily гостю картинку не дают (routes/venueLive.js) —
+// там он и не зритель.
 function count(venueId) {
-  const io = ioHolder.get();
-  const ids = room(venueId);
-  if (!io || !ids) return 0;
-  const users = new Set();
-  for (const id of ids) {
-    const s = io.sockets.sockets.get(id);
-    if (s && s.data.userId && s.data.venueOwn !== String(venueId)) users.add(s.data.userId);
-  }
-  return users.size;
+  const guestsWatch = mediamtx.configured();
+  return ioHolder.viewers(ioHolder.get(), `venue:${venueId}`,
+    (s) => s.data.venueOwn === String(venueId) || (!guestsWatch && !s.data.userId));
 }
 
 // Сидит ли владелец на странице камеры (sockets/index.js, venueOwn).

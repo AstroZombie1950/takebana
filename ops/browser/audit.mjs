@@ -35,8 +35,9 @@ const SCREENS = [
 const PUBLIC = [
   ['главная (витрина)', '/'],
   ['каталог: бизнес', '/streaming/business'],
-  ['карта заведений', '/main'],
+  ['карта заведений', '/map'],
   ['поиск', '/search?q=demo'],
+  ['поиск: видео', '/search?q=demo&tab=videos'],
   ['авторы', '/authors'],
   ['вход', '/login'],
   ['регистрация', '/register'],
@@ -50,7 +51,7 @@ const PUBLIC = [
 const PRIVATE = [
   ['витрина вошедшему', '/'],
   ['каталог с фильтрами', '/streaming/business?sub=horeca&city=belgrade&sort=new'],
-  ['карта вошедшему', '/main'],
+  ['карта вошедшему', '/map'],
   ['переписка', '/chatsPage'],
   ['журнал звонков', '/chatsPage?tab=calls'],
   ['контакты', '/chatsPage?tab=contacts'],
@@ -123,7 +124,10 @@ const COLLECT = `(() => {
       else if (href.startsWith('/') && !href.startsWith('//')) links.push(href.split('#')[0]);
     }
     // Кнопка без подписи и без aria-label — для скринридера пустая.
-    if (el.tagName === 'BUTTON' && !el.textContent.trim() && !el.getAttribute('aria-label')) {
+    // aria-labelledby и title — тоже подпись: так подписан свой выпадающий
+    // список (public/tk-listbox.js), пока в нём ничего не выбрано.
+    if (el.tagName === 'BUTTON' && !el.textContent.trim() && !el.getAttribute('aria-label')
+        && !el.getAttribute('aria-labelledby') && !el.title) {
       empty.push('button без подписи');
     }
   }

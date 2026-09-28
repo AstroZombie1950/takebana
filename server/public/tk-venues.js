@@ -29,8 +29,8 @@
     return many;
   }
 
-  // Гость карту смотрит, а камеру и оценку — после входа: туда и отправляем,
-  // с возвратом на эту же карту. true — ушли на вход.
+  // Гость смотрит карту и камеры (с 28.09), а оценку ставит после входа:
+  // туда и отправляем, с возвратом на эту же карту. true — ушли на вход.
   function needLogin() {
     if (window.TK && window.TK.userId) return false;
     location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);

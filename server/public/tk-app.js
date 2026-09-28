@@ -268,7 +268,8 @@ document.addEventListener('DOMContentLoaded', () => {
 //
 // Поле лежит в обычной форме, поэтому Enter и кнопка лупы работают и без
 // скрипта. Скрипт добавляет к этому выпадашку: одна строка запроса — один
-// запрос к /api/search, ответ группами (люди, эфиры, записи, заведения).
+// запрос к /api/search, ответ группами (люди, эфиры, записи, видео,
+// заведения).
 //
 // Прежняя версия искала только людей, на каждое нажатие клавиши, и после
 // отрисовки пересобирала строки клонированием узлов, чтобы навесить
@@ -281,6 +282,7 @@ document.addEventListener('DOMContentLoaded', function () {
     { key: 'people',     i18n: 'search.people',     href: (x) => '/userPage/' + encodeURIComponent(x._id) },
     { key: 'streams',    i18n: 'search.streams',    href: (x) => '/stream/' + encodeURIComponent(x._id) },
     { key: 'recordings', i18n: 'search.recordings', href: (x) => '/recording/' + encodeURIComponent(x._id) },
+    { key: 'videos',     i18n: 'search.videos',     href: (x) => '/video/' + encodeURIComponent(x._id) },
     { key: 'venues',     i18n: 'search.venues',     href: (x) => '/map?venue=' + encodeURIComponent(x._id) }
   ];
 
@@ -305,14 +307,18 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === 'people') {
       media = avatar(item.avatarStyle, item.displayName);
       name = item.displayName;
-      meta = `${t('authors.followers')}: ${item.followersCount}`;
+      // Нашёлся по описанию — куском описания с выделенным совпадением,
+      // иначе непонятно, почему он здесь (utils/search.js, bioMatch).
+      meta = item.about
+        ? { html: `${escapeHtml(item.about[0])}<mark class="tk-hit">${escapeHtml(item.about[1])}</mark>${escapeHtml(item.about[2])}` }
+        : `${t('authors.followers')}: ${item.followersCount}`;
     } else if (key === 'streams') {
       media = shot(item.thumbnail);
       name = item.title;
       meta = `${item.author.displayName} · ${item.viewers} ${t('search.viewers')}`;
-    } else if (key === 'recordings') {
+    } else if (key === 'recordings' || key === 'videos') {
       media = shot(item.thumb);
-      name = item.title;
+      name = item.title || t('video.untitled', { date: tkDate(item.createdAt, { day: 'numeric', month: 'long' }) });
       meta = item.author.displayName;
     } else {
       media = shot(item.photo);
@@ -325,7 +331,7 @@ document.addEventListener('DOMContentLoaded', function () {
         ${media}
         <span class="tk-found__body">
           <span class="tk-found__name">${escapeHtml(name)}${key === 'people' && item.official ? tkOfficial() : ''}</span>
-          <span class="tk-found__meta">${escapeHtml(meta)}</span>
+          <span class="tk-found__meta${meta.html ? ' tk-found__about' : ''}">${meta.html || escapeHtml(meta)}</span>
         </span>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
       </a>`;
@@ -386,6 +392,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     input.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
+    // Вернулись «назад» к странице из кэша браузера — в поле остался
+    // прошлый запрос, и новый приходилось набирать поверх. Каждый поиск
+    // начинается с пустого поля.
+    window.addEventListener('pageshow', (e) => {
+      if (!e.persisted) return;
+      input.value = '';
+      hide();
+    });
     // Выпадашка — внутри формы: щелчок по ссылке не должен её отправлять.
     box.addEventListener('mousedown', (e) => e.stopPropagation());
     document.addEventListener('click', (e) => {
@@ -402,6 +416,11 @@ document.addEventListener('DOMContentLoaded', function () {
     field.placeholder = t('app.searchPhShort');
   }
   attach(field, document.getElementById('searchResults'));
+
+  // Поле на странице результатов показывает, что искали, — но новый запрос
+  // набирают с чистого: фокус выделяет прежний, и первая же буква его заменяет.
+  const pageField = document.querySelector('.tk-search__field');
+  if (pageField) pageField.addEventListener('focus', () => pageField.select());
 });
 
 // ===== Сайт как приложение на телефоне =====

@@ -4,7 +4,9 @@
   шаблоне своя. Стили — css/search.css.
 
   person: _id, displayName, avatarStyle, isOnline, followersCount, official;
-          у авторов ещё stream (идёт эфир) или recordings (сколько записей).
+          у авторов ещё stream (идёт эфир) или recordings (сколько записей);
+          в поиске — about: [до, совпадение, после] из описания, если
+          нашёлся по нему (utils/search.js, bioMatch).
   href — куда ведёт карточка; по умолчанию на страницу человека.
 %>
 <a href="<%= typeof href !== 'undefined' && href ? href : person.url %>" class="tk-person" data-presence-user="<%= person._id %>">
@@ -25,10 +27,14 @@
     <span class="tk-person__meta">
       <span data-i18n="authors.followers"><%- t('authors.followers') %></span>: <%= person.followersCount %>
     </span>
+    <% if (person.about) { %>
+    <span class="tk-person__meta tk-person__about"><%= person.about[0] %><mark class="tk-hit"><%= person.about[1] %></mark><%= person.about[2] %></span>
+    <% } else { %>
     <span class="tk-person__meta">
       <% if (person.recordings) { %><span data-i18n="authors.recordings"><%- t('authors.recordings') %></span>: <%= person.recordings %>
       <% } else { %><% var pk = person.isOnline ? 'common.online' : 'common.offline'; %><span data-presence-text><span data-i18n="<%= pk %>"><%- t(pk) %></span></span><% } %>
     </span>
+    <% } %>
     <% } %>
   </span>
 </a>

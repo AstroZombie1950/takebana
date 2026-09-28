@@ -1,0 +1,2 @@
+<%# Следующая страница ленты главной (/feed, подгружает catalog.js). %>
+<% items.forEach(function (item) { %><%- include('feedCard', { item: item }) %><% }); %>
