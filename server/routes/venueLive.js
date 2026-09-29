@@ -56,7 +56,8 @@ function announceState(req, id, online) {
 async function stopCamera(venueId) {
   await Establishments.updateOne({ _id: venueId }, { $set: { online: false } });
   const io = require('../utils/io').get();
-  if (io) io.to(`venue:${venueId}`).emit('venue:state', { venueId: String(venueId), online: false });
+  // reason — пульту владельца: камеру выключил не он и не его другая вкладка.
+  if (io) io.to(`venue:${venueId}`).emit('venue:state', { venueId: String(venueId), online: false, reason: 'moderation' });
   venueCam.switchedOff(venueId);
   await Promise.all([
     mediamtx.kick(mediamtx.pathOf(venueId)),

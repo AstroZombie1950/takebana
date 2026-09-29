@@ -270,8 +270,18 @@
   // переключился на другое приложение» врала зрителю поверх живого видео
   // (проверка 23.09, Safari на Mac). Дорожка знает правду про оба случая.
   var awayUrl = '/stream/away/' + streamId + '?on=';
-  var awayOn = false;
+  // null — страница ещё ничего не сообщала: пульт, открытый заново после
+  // закрытой вкладки, должен снять отметку, оставленную прежним.
+  var awayOn = null;
   var awayTrack = null;
+
+  // Вкладку веб-эфира закрыли без «Завершить»: камеры больше нет, и зритель
+  // до уборки брошенного эфира смотрел бесконечную загрузку (правки 29.09).
+  // Теперь сразу видит заставку. У OBS камеры на странице нет — закрыть
+  // пульт там обычное дело, эфир идёт.
+  window.addEventListener('pagehide', function () {
+    if (awayTrack && streamer && streamer.connected) navigator.sendBeacon(awayUrl + '1');
+  });
 
   function away(on) {
     if (!streamer || !streamer.connected || on === awayOn) return;

@@ -32,6 +32,11 @@ const OWNER_GONE_MS = 60 * 1000;
 const demand = new Map(); // venueId → true, пока камеру просят
 const idle = new Map();   // venueId → таймер выключения
 const gone = new Map();   // venueId → таймер «владелец пропал»
+// Камеры, снятые по «владелец пропал», а не кнопкой: вернувшаяся страница
+// владельца (свёрнутый айфон, заблокированный экран) включает такую камеру
+// снова сама — владелец её не выключал (правки 29.09). Кнопка, бан,
+// удаление и новое включение отметку стирают.
+const lapsed = new Set();
 
 // Каталог HLS камеры: не угадать без секрета, но один и тот же между
 // перезапусками — зритель с открытой страницей не теряет адрес. Адрес
@@ -105,6 +110,7 @@ async function viewers(venueId, count) {
 // Владелец включил камеру: зрители уже ждут — сразу просим картинку.
 function switchedOn(venueId, count) {
   venueId = String(venueId);
+  lapsed.delete(venueId);
   if (count > 0) setDemand(venueId, true);
 }
 
@@ -117,10 +123,12 @@ function switchedOff(venueId) {
   clearTimeout(gone.get(venueId));
   gone.delete(venueId);
   demand.delete(venueId);
+  lapsed.delete(venueId);
   hls.stop(hlsKey(venueId));
 }
 
 const wanted = (venueId) => !!demand.get(String(venueId));
+const wasLapsed = (venueId) => lapsed.has(String(venueId));
 
 // Сокет владельца отключился. Вернулся за минуту — ничего не было.
 function ownerLeft(venueId) {
@@ -132,8 +140,9 @@ function ownerLeft(venueId) {
     try {
       const r = await Establishments.updateOne({ _id: venueId, online: true }, { $set: { online: false } });
       if (!r.modifiedCount) return;
-      emit(venueId, 'venue:state', { online: false });
+      emit(venueId, 'venue:state', { online: false, reason: 'lapsed' });
       switchedOff(venueId);
+      lapsed.add(venueId);
       await mediamtx.kick(mediamtx.pathOf(venueId));
     } catch (e) {
       errorLog.server(e, 'venueCam.ownerLeft', { venueId });
@@ -159,4 +168,4 @@ async function resume() {
   for (const path of await mediamtx.livePaths()) available(path);
 }
 
-module.exports = { hlsKey, count, viewers, switchedOn, switchedOff, wanted, ownerHere, ownerLeft, available, unavailable, resume };
+module.exports = { hlsKey, count, viewers, switchedOn, switchedOff, wanted, wasLapsed, ownerHere, ownerLeft, available, unavailable, resume };

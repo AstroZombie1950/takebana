@@ -48,7 +48,7 @@ async function started(io, stream) {
   const author = await User.findOneAndUpdate(
     { _id: stream.userId, $or: [{ liveNotifiedAt: null }, { liveNotifiedAt: { $lt: since } }] },
     { $set: { liveNotifiedAt: new Date() } },
-    { new: false, projection: 'nickname login email' }
+    { returnDocument: 'before', projection: 'nickname login email' }
   ).lean();
   if (!author) return { sent: 0, notified: 0 };
   const name = userView.displayName(author);

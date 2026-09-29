@@ -85,7 +85,7 @@ async function saveFor(userId, raw) {
   const change = {};
   if (Object.keys(set).length) change.$set = set;
   if (Object.keys(unset).length) change.$unset = unset;
-  const user = await User.findOneAndUpdate({ _id: userId }, change, { new: true, projection: { retention: 1 } }).lean();
+  const user = await User.findOneAndUpdate({ _id: userId }, change, { returnDocument: 'after', projection: { retention: 1 } }).lean();
   return user ? ownLimits(user) : null;
 }
 

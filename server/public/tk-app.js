@@ -216,10 +216,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Эфир: ведёт на сам эфир, а текстом — его название (utils/liveNotify.js).
             const isLive = n.type === 'live';
             const isFollow = n.type === 'follow';
-            const href = isCall ? '/chatsPage?tab=calls'
+            // Звонок группе (utils/groupPush.js) ведёт в группу, в content —
+            // её название.
+            const href = isCall ? (n.link || '/chatsPage?tab=calls')
               : isComment || isLive || isFollow ? (n.link || '/')
               : '/chatsPage?peer=' + encodeURIComponent(sender._id || '');
-            const title = isCall ? t('modal.notifications.missedCall', { name })
+            const title = isCall && n.link ? t('modal.notifications.missedGroupCall', { name, group: n.content || '' })
+              : isCall ? t('modal.notifications.missedCall', { name })
               : isComment ? t('modal.notifications.comment', { name })
               : isLive ? t('modal.notifications.live', { name })
               : isFollow ? t('modal.notifications.follow', { name })
@@ -783,6 +786,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
         // Приглашение в идущий разговор: показываем, кто там уже есть, —
         // до того, как человек возьмёт трубку.
         group: group === true,
+        chat: !!chat,
         peers: peers || [],
         onAccept: () => { window.currentCallId = callId; socket.emit('call:accept', { callId, own: ownPath() }); },
         onDecline: () => socket.emit('call:decline', { callId })
@@ -929,6 +933,7 @@ document.addEventListener('DOMContentLoaded', function(){
       camBtn: $(prefix + 'CamBtn'),
       spkBtn: $(prefix + 'SpeakerBtn'),
       chatBtn: $(prefix + 'ChatBtn'),
+      chatCount: $(prefix + 'ChatBtn').querySelector('.tk-call__count'),
       chat: $(prefix + 'Chat'),
       chatFeed: $(prefix + 'ChatFeed'),
       chatForm: $(prefix + 'ChatForm'),
@@ -981,6 +986,7 @@ document.addEventListener('DOMContentLoaded', function(){
     s.loud = true;
     s.chatLoaded = false;
     s.chatBusy = false;
+    s.chatUnread = 0;
     s.chatFeed.innerHTML = '';
     showChat(s, false);
   }
@@ -1315,6 +1321,12 @@ document.addEventListener('DOMContentLoaded', function(){
       paintVideo(s);
       if (stuck) window.rememberOwnCallPath();
       window._call = viaOwn(access);
+      // Выключенные кнопкой микрофон и камера остаются выключенными (правки
+      // 29.09): новое соединение начинало с обоими включёнными, а кнопки
+      // по-прежнему показывали «выключено» — собеседник вдруг слышал того,
+      // кто считал себя без звука.
+      if (!s.micOn) window._call.setMic(false);
+      if (!s.camOn) window._call.setCamera(false);
     };
   };
 
@@ -1353,7 +1365,11 @@ document.addEventListener('DOMContentLoaded', function(){
       // а при открытой переписке на телефоне «Завершить» спрятана вовсе.
       const bar = s.tools.hidden ? s.actions : s.tools;
       const floor = Math.min(b.bottom, bar.getBoundingClientRect().top - 8) - b.top;
-      const width = Math.max(MIN, Math.min(w, b.width * 0.7, (floor * from.w) / from.h));
+      // И выше таймера не поднимается (правки 29.09): на телефоне над ним
+      // лежат статус, имя и крестик «закрыть» — своя картинка их закрывала.
+      const clock = s.timer.parentElement.getBoundingClientRect();
+      const ceil = clock.height ? Math.max(0, Math.min(clock.bottom + 6 - b.top, floor - MIN)) : 0;
+      const width = Math.max(MIN, Math.min(w, b.width * 0.7, ((floor - ceil) * from.w) / from.h));
       const height = (width * from.h) / from.w;
       const cx = left + w / 2;
       const cy = top + (w * from.h) / from.w / 2;
@@ -1361,7 +1377,7 @@ document.addEventListener('DOMContentLoaded', function(){
         width: width + 'px',
         height: height + 'px',
         left: Math.max(0, Math.min(cx - width / 2, b.width - width)) + 'px',
-        top: Math.max(0, Math.min(cy - height / 2, floor - height)) + 'px',
+        top: Math.max(ceil, Math.min(cy - height / 2, floor - height)) + 'px',
         right: 'auto',
         bottom: 'auto',
       });
@@ -1490,7 +1506,7 @@ document.addEventListener('DOMContentLoaded', function(){
     else if (!text && (m.attachments || []).length) text = t('call.chatAttachment');
     const at = new Date(m.sentAt);
     const time = String(at.getHours()).padStart(2, '0') + ':' + String(at.getMinutes()).padStart(2, '0');
-    return '<div class="tk-callchat__msg' + (mine ? ' tk-callchat__msg--mine' : '') + '">' +
+    return '<div class="tk-callchat__msg' + (mine ? ' tk-callchat__msg--mine' : '') + '" data-id="' + escapeHtml(String(m._id || '')) + '">' +
       '<span>' + escapeHtml(text) + '</span><i>' + time + '</i></div>';
   }
 
@@ -1498,7 +1514,11 @@ document.addEventListener('DOMContentLoaded', function(){
     s.chatFeed.innerHTML = '<p class="tk-callchat__empty">' + escapeHtml(t('call.chatEmpty')) + '</p>';
   }
 
+  // Своё сообщение приходит дважды: ответом на отправку и эхом сокета,
+  // которое сервер шлёт всем вкладкам отправителя (messages.js). Второе
+  // узнаём по id — раньше отправитель видел его в ленте два раза.
   function addChatMessage(s, m) {
+    if (m._id && s.chatFeed.querySelector('[data-id="' + CSS.escape(String(m._id)) + '"]')) return;
     const empty = s.chatFeed.querySelector('.tk-callchat__empty');
     if (empty) empty.remove();
     s.chatFeed.insertAdjacentHTML('beforeend', chatBubble(m));
@@ -1558,11 +1578,20 @@ document.addEventListener('DOMContentLoaded', function(){
       .then(() => { s.chatBusy = false; });
   }
 
+  function paintUnread(s) {
+    s.chatCount.hidden = !s.chatUnread;
+    s.chatCount.textContent = s.chatUnread > 9 ? '9+' : String(s.chatUnread);
+  }
+
   function showChat(s, on) {
     s.chat.hidden = !on;
     if (s.card) s.card.classList.toggle('has-chat', on);
     paintTool(s.chatBtn, on, 'call.chatHide', 'call.chatShow');
     if (!on) return;
+    // Открыли — пришедшее за это время прочитано.
+    if (s.chatUnread && s.chatLoaded) markChatRead(s);
+    s.chatUnread = 0;
+    paintUnread(s);
     loadChat(s);
     // На телефоне клавиатуру не поднимаем сами: она закрыла бы собеседника.
     if (!coarse) s.chatInput.focus();
@@ -1588,14 +1617,19 @@ document.addEventListener('DOMContentLoaded', function(){
     s.chatForm.addEventListener('submit', (e) => { e.preventDefault(); sendChat(s); });
   });
 
-  // Пришло сообщение от того, с кем разговариваем, — в открытую ленту.
+  // Сообщение от того, с кем разговариваем (или своё из другой вкладки), —
+  // в ленту, если она уже загружена. Переписка закрыта — входящее считаем
+  // на значке, прочитанным оно станет, когда её откроют.
   document.addEventListener('tk:message:new', (e) => {
     const d = e.detail || {};
     if (!d.message || !d.peer) return;
     [OUT, IN].forEach((s) => {
-      if (s.chat.hidden || String(s.peerId || '') !== String(d.peer.id)) return;
-      addChatMessage(s, d.message);
-      if (String(d.message.sender) !== String(TK.userId)) markChatRead(s);
+      if (!s.peerId || s.peerId !== String(d.peer.id)) return;
+      if (s.chatLoaded) addChatMessage(s, d.message);
+      if (String(d.message.sender) === String(TK.userId)) return;
+      if (!s.chat.hidden) return markChatRead(s);
+      s.chatUnread++;
+      paintUnread(s);
     });
   });
 
@@ -1608,6 +1642,8 @@ document.addEventListener('DOMContentLoaded', function(){
     renderAvatar(outAvatar, opts && opts.avatarUrl || '', displayName);
     resetSide(OUT);
     OUT.peerId = opts && opts.userId ? String(opts.userId) : '';
+    // Звонок группе: собеседник не один, переписки на двоих нет.
+    OUT.chatBtn.hidden = !OUT.peerId;
     OUT.actions.classList.remove('tk-call__actions--pair', 'tk-call__actions--live');
     tkText(outCancel, 'call.cancel');
     outCancel.classList.remove('tk-btn--mute');
@@ -1641,7 +1677,10 @@ document.addEventListener('DOMContentLoaded', function(){
     }
     renderAvatar(inAvatar, opts && opts.avatarUrl || '', displayName);
     resetSide(IN);
-    IN.peerId = opts && opts.userId ? String(opts.userId) : '';
+    // Звонок группе или приглашение в идущий разговор: собеседник не один,
+    // и переписка с тем, кто позвал, в общем разговоре только путала бы.
+    IN.peerId = opts && opts.userId && !opts.group && !opts.chat ? String(opts.userId) : '';
+    IN.chatBtn.hidden = !IN.peerId;
     tkText(IN.status, 'call.ringing');
     IN.actions.classList.remove('tk-call__actions--live');
     IN.actions.classList.add('tk-call__actions--pair');

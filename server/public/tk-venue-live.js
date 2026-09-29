@@ -260,6 +260,9 @@
   var pub = null;
   var wanted = false;
   var retry = null;
+  // Запрос на включение ушёл, камера ещё не открылась: эхо своего же
+  // venue:state в это время — не «включили с другой вкладки».
+  var starting = false;
   // 480p и 15 кадров: вид зала, а не эфир. Больше сервер всё равно не отдаст.
   var CAMERA = { width: { ideal: 854 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 15 } };
 
@@ -282,8 +285,10 @@
         },
         onError: function () {},
       });
-    }).catch(function () {
-      if (wanted) retry = setTimeout(publishNow, 5000);
+    }).catch(function (e) {
+      // 409 — камера на сервере уже выключена: просить снова бесполезно,
+      // об этом скажет venue:state или сверка после обрыва сокета.
+      if (wanted && e.status !== 409) retry = setTimeout(publishNow, 5000);
     });
   }
 
@@ -306,26 +311,89 @@
   }
 
   function start() {
+    starting = true;
     paintOwner('connecting');
     say('connecting');
     json('/api/venues/' + ID + '/live', 'POST', {}).then(function (first) {
-      if (first.engine !== 'whip') return startDaily(first);
+      if (first.engine !== 'whip') { starting = false; return startDaily(first); }
       // Свой приём: камеру открываем сами. Движок узнаём до этого —
       // в Daily камеру открывает он, а телефон две разом не даёт.
       return navigator.mediaDevices.getUserMedia({ video: CAMERA, audio: true }).then(function (stream) {
+        starting = false;
         local = stream;
         show(stream);
         video.play().catch(function () {});
         startOwn(first);
       }, function () {
+        starting = false;
         toast(t('venues.mediaDenied'), 'error');
         stop();
       });
     }).catch(function (e) {
+      starting = false;
       paintOwner('off');
       say('ownerOff');
       toast(e.message, 'error');
     });
+  }
+
+  // Сервер снял камеру, не дождавшись этой страницы: айфон свернули или
+  // заблокировали, сменилась сеть (utils/venueCam.js, ownerLeft). Владелец
+  // её не выключал — включаем снова, с той же камерой телефона. Раньше пульт
+  // об этом не узнавал вовсе: «Ждём зрителей», а у зрителей «Камера
+  // выключена» (правки 29.09).
+  function resume() {
+    if (starting) return;
+    starting = true;
+    wanted = false;
+    unpublish();
+    paintOwner('connecting');
+    json('/api/venues/' + ID + '/live', 'POST', {}).then(function (first) {
+      starting = false;
+      if (!local) return;
+      if (first.engine !== 'whip') return stop();
+      return freshTracks().then(function () {
+        startOwn(first);
+        toast(t('vlive.resumed'), 'ok');
+      }, function () {
+        toast(t('venues.mediaDenied'), 'error');
+        stop();
+      });
+    }).catch(function (e) {
+      starting = false;
+      halt();
+      toast(e.message, 'error');
+    });
+  }
+
+  // iOS гасит камеру и микрофон свёрнутой страницы: вернулись — дорожки
+  // могли кончиться, и зрителю уходил бы чёрный кадр. Берём новые с той же
+  // стороны; в идущей публикации они встают на место прежних.
+  // Возврат на страницу и сверка сокета приходят почти разом — камеру
+  // открываем один раз.
+  var refreshing = null;
+  function freshTracks() {
+    if (refreshing) return refreshing;
+    if (!local || !local.getTracks().some(function (tr) { return tr.readyState === 'ended'; })) return Promise.resolve();
+    var cur = local.getVideoTracks()[0];
+    var facing = cur && cur.getSettings().facingMode;
+    var want = Object.assign({}, CAMERA, facing ? { facingMode: facing } : {});
+    refreshing = navigator.mediaDevices.getUserMedia({ video: want, audio: true }).then(function (ns) {
+      refreshing = null;
+      if (!local) return ns.getTracks().forEach(function (tr) { tr.stop(); });
+      local.getTracks().forEach(function (tr) { tr.stop(); local.removeTrack(tr); });
+      ns.getTracks().forEach(function (tr) {
+        if (tr.kind === 'audio') tr.enabled = micOn;
+        local.addTrack(tr);
+        if (pub) pub.replaceTrack(tr);
+      });
+      show(local);
+      video.play().catch(function () {});
+    }, function (e) {
+      refreshing = null;
+      throw e;
+    });
+    return refreshing;
   }
 
   function startDaily(first) {
@@ -359,7 +427,8 @@
     if (local) { local.getTracks().forEach(function (tr) { tr.stop(); }); local = null; }
   }
 
-  function stop() {
+  // Погасить камеру у себя — пульт снова «Запустить трансляцию».
+  function halt() {
     var s = session;
     session = null;
     if (s) s.leave();
@@ -368,7 +437,18 @@
     markOnline(false);
     paintOwner('off');
     say('ownerOff');
+  }
+
+  function stop() {
+    halt();
     return fetch('/api/venues/' + ID + '/live', { method: 'DELETE', keepalive: true }).catch(function () {});
+  }
+
+  // Камеру выключили не отсюда: другой вкладкой или устройством владельца,
+  // модерацией. На сервере она уже выключена — гасим свою и говорим почему.
+  function droppedElsewhere(reason) {
+    halt();
+    toast(t(reason === 'moderation' ? 'vlive.stoppedModeration' : 'vlive.stoppedElsewhere'), 'error');
   }
 
   // Другая камера: телефон — по стороне (фронтальная ↔ задняя), компьютер —
@@ -483,29 +563,66 @@
 
   // ── Сокет ──────────────────────────────────────────────────────────────
   var socket = io(window.location.origin, { transports: ['websocket', 'polling'], tryAllTransports: true });
+  // Камеру включили или выключили. Владелец со своей камерой: включение —
+  // эхо своего же запроса; выключение — не его: другой вкладкой, модерацией
+  // или сервером, не дождавшимся этой страницы (reason: lapsed). Прежде
+  // пульт с камерой такие события пропускал целиком и так и показывал
+  // «Остановить трансляцию» у выключенной камеры (правки 29.09).
+  function applyState(on, reason) {
+    if (OWNER) {
+      if (session || local || starting) {
+        if (on || starting) return;
+        return reason === 'lapsed' && local ? resume() : droppedElsewhere(reason);
+      }
+      markOnline(on);
+      paintOwner(on ? 'elsewhere' : 'off');
+      return say(on ? 'elsewhere' : 'ownerOff');
+    }
+    markOnline(on);
+    if (!canWatch) return say(RESTRICTED ? 'restricted' : on ? 'login' : 'off');
+    if (on) watch(); else unwatch();
+  }
+
   socket.on('connect', function () {
     socket.emit('venue:join', ID, function (r) {
-      if (r && typeof r.count === 'number') viewers(r.count);
-      // После обрыва сокета: просят ли камеру сейчас.
-      if (OWNER && local && r) demand(r.demand);
+      if (!r || r.error) return;
+      if (typeof r.count === 'number') viewers(r.count);
+      // Сверка после обрыва сокета: события, пришедшие без него, прошли
+      // мимо. У владельца с камерой — ещё и просят ли её сейчас.
+      if (OWNER && (session || local)) {
+        if (!r.online) return applyState(false, r.lapsed ? 'lapsed' : '');
+        if (local) demand(r.demand);
+        return;
+      }
+      if (r.online !== online || (r.online && canWatch && !session)) applyState(r.online);
     });
     fetchMissed();
   });
   socket.on('venue:demand', function (d) { if (OWNER && local && d.venueId === ID) demand(d.on); });
   socket.on('venue:chat', function (m) { if (m.venueId === ID) render(m); });
   socket.on('venue:viewers', function (d) { if (d.venueId === ID) viewers(d.count); });
-  socket.on('venue:state', function (d) {
-    if (d.venueId !== ID) return;
-    // Владелец: включили или выключили с другой вкладки.
+  socket.on('venue:state', function (d) { if (d.venueId === ID) applyState(d.online, d.reason); });
+
+  // Вернулись на страницу. Владелец: iOS мог погасить камеру свёрнутой
+  // страницы — берём новую. Зритель: айфон после блокировки экрана
+  // оставлял застывший кадр до перезагрузки — родной плеер Safari после
+  // обрыва потока сам не оживает (tk-hls.js). Картинка за несколько секунд
+  // не сдвинулась — подключаемся заново.
+  var hiddenAt = 0;
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
     if (OWNER) {
-      if (session || local) return;
-      markOnline(d.online);
-      paintOwner(d.online ? 'elsewhere' : 'off');
-      return say(d.online ? 'elsewhere' : 'ownerOff');
+      if (local && !starting) freshTracks().catch(function () { toast(t('venues.mediaDenied'), 'error'); });
+      return;
     }
-    markOnline(d.online);
-    if (!canWatch) return say(RESTRICTED ? 'restricted' : d.online ? 'login' : 'off');
-    if (d.online) watch(); else unwatch();
+    if (!session || !online || Date.now() - hiddenAt < 20000) return;
+    var at = video.currentTime;
+    setTimeout(function () {
+      if (!session || !online || document.hidden || video.currentTime !== at) return;
+      session.leave();
+      session = null;
+      watch();
+    }, 4000);
   });
 
   if (!OWNER && online) watch();

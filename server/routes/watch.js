@@ -293,7 +293,7 @@ function mount(kind) {
 
     const key = { recordingId: item._id, userId: me };
     const prev = value
-      ? await RecordingReaction.findOneAndUpdate(key, { $set: { value, createdAt: new Date() } }, { upsert: true, new: false }).lean()
+      ? await RecordingReaction.findOneAndUpdate(key, { $set: { value, createdAt: new Date() } }, { upsert: true, returnDocument: 'before' }).lean()
       : await RecordingReaction.findOneAndDelete(key).lean();
 
     const was = prev ? prev.value : 0;

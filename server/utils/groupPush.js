@@ -5,6 +5,8 @@
 // Служебные строки («Анна добавила Бориса») не будят никого.
 
 const Group = require('../models/Group');
+const Notification = require('../models/Notification');
+const User = require('../models/User');
 const push = require('./push');
 const errorLog = require('./errorLog');
 const userView = require('./userView');
@@ -49,4 +51,44 @@ function send(group, message, sender) {
   if (online.length) setTimeout(() => fire(online), PUSH_WAIT_MS).unref();
 }
 
-module.exports = { send };
+// Звонок группе, до которого человек так и не дошёл (правки 29.09): звонило
+// и не взял, или был не в сети. Как пропущенный один на один
+// (utils/callLog.js): строка в колокольчике всем, пуш «вам звонили» — у кого
+// вкладки на экране нет (свёрнутый айфон звонка не слышал) и у кого звук
+// группы не выключен. Ждать, как с сообщением, нечего — звонок уже кончился.
+// call — звонок из sockets/index.js или routes/groups.js; missed он отдаёт
+// один раз: второй конец того же звонка ничего не повторит.
+function missedCall(io, call) {
+  if (!call.missed) return;
+  const ids = [...call.missed];
+  call.missed = null;
+  if (ids.length) sendMissed(io, call, ids).catch((e) => errorLog.server(e, 'push.groupCall'));
+}
+
+async function sendMissed(io, call, ids) {
+  const [group, caller] = await Promise.all([
+    Group.findById(call.groupId).select('title members.user members.mutedUntil').lean(),
+    User.findById(call.callerId).select('nickname login email').lean(),
+  ]);
+  if (!group || !caller) return;
+  const now = new Date();
+  // Вышел из группы, пока звонило, — ему уже ничего.
+  const members = new Map(group.members.map((m) => [String(m.user), m]));
+  const to = ids.filter((id) => members.has(id));
+  if (!to.length) return;
+  const url = '/chatsPage?group=' + String(group._id);
+  await Notification.insertMany(to.map((id) => ({ recipient: id, sender: call.callerId, type: 'call', content: group.title, link: url })));
+  if (io) io.to(to.map((id) => 'user:' + id)).emit('notification:new');
+  const loud = to.filter((id) => !push.onScreen(id) && !(members.get(id).mutedUntil > now));
+  if (!loud.length) return;
+  return push.sendMany(loud, {
+    topic: 'call',
+    title: group.title,
+    bodyKey: 'push.missedGroupCall',
+    bodyVars: { name: userView.displayName(caller) },
+    tag: 'group-call-' + String(group._id),
+    url,
+  });
+}
+
+module.exports = { send, missedCall };

@@ -1351,6 +1351,7 @@ body.tk-app {
 .tk-call__tools[hidden] { display: none; }
 
 .tk-call__tool {
+  position: relative;
   width: 44px;
   height: 44px;
   flex: none;
@@ -1366,6 +1367,27 @@ body.tk-app {
 
 .tk-call__tool:hover { color: var(--tk-paper); border-color: var(--tk-beige); }
 .tk-call__tool[hidden] { display: none; }
+
+/* Непрочитанные в закрытой переписке — число в углу значка (правки 29.09):
+ * без него сообщение собеседника в разговоре проходило незамеченным. */
+.tk-call__count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.tk-call__count[hidden] { display: none; }
 
 /* Нажато — значит выключено (микрофон, камера) или открыто (переписка,
  * громкая связь): и то и другое состояние, о котором стоит помнить. */

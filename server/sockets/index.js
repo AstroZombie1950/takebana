@@ -12,6 +12,7 @@ const Establishments = require('../models/Establishments');
 const streamLog = require('../utils/streamLog');
 const daily = require('../utils/daily');
 const callLog = require('../utils/callLog');
+const groupPush = require('../utils/groupPush');
 const errorLog = require('../utils/errorLog');
 const turn = require('../utils/turn');
 const venueCam = require('../utils/venueCam');
@@ -206,6 +207,8 @@ function registerSockets(io) {
     callLog.ended(io, callId, event === 'call:failed' ? 'failed' : 'canceled');
     pendingCalls.delete(callId);
     activeCalls.delete(callId);
+    // Звонок группе кончился раньше, чем отзвонило: кто не дошёл — «вам звонили».
+    groupPush.missedCall(io, call);
     if (call.members) everyone(call).emit(event, { callId });
     else io.to([`user:${call.callerId}`, ...[...(call.calleeIds || [call.calleeId])].map((id) => `user:${id}`)]).emit(event, { callId });
     // Приглашённый, который не успел ответить, тоже гасит своё окно.
@@ -232,6 +235,8 @@ function registerSockets(io) {
   async function joinGroup(socket, callId, call) {
     const userId = socket.data.userId;
     call.invited.delete(userId);
+    // Взял трубку — звонок до него дошёл, даже если места уже нет.
+    if (call.missed) call.missed.delete(userId);
     // Места кончились, пока звонило (звонок группе зовёт всех, кто в сети).
     if (call.members.size >= GROUP_MAX) return socket.emit('call:full', { callId });
     call.members.set(userId, { joinedAt: Date.now() });
@@ -270,11 +275,13 @@ function registerSockets(io) {
     const now = Date.now();
     const invited = new Map([...call.calleeIds].filter((id) => id !== me)
       .map((id) => [id, { by: call.callerId, at: call.createdAt, quiet: true }]));
+    call.missed.delete(me);
     const active = {
       callerId: call.callerId, calleeId: me, type: call.type, groupId: call.groupId,
       engine: 'own', roomName: null, startedAt: now,
       members: new Map([[call.callerId, { joinedAt: now }], [me, { joinedAt: now + 1 }]]),
       invited,
+      missed: call.missed,
     };
     activeCalls.set(callId, active);
     callLog.created(callId, { callerId: call.callerId, calleeId: me, type: call.type, chat: call.groupId });
@@ -290,6 +297,7 @@ function registerSockets(io) {
         live.invited.delete(id);
         io.to(`user:${id}`).emit('call:canceled', { callId });
       }
+      groupPush.missedCall(io, live);
     }, Math.max(0, 30000 - (now - call.createdAt))).unref();
   }
 
@@ -422,7 +430,7 @@ function registerSockets(io) {
       if (typeof venueId !== 'string' || !OBJECT_ID.test(venueId)) return done({ error: 'Invalid venue' });
       let venue;
       try {
-        venue = await Establishments.findById(venueId).select('owner status').lean();
+        venue = await Establishments.findById(venueId).select('owner status online').lean();
       } catch (e) {
         errorLog.server(e, 'socket.venueJoin');
         return done({ error: 'Server error' });
@@ -436,8 +444,16 @@ function registerSockets(io) {
       currentVenue = venueId;
       socket.join(`venue:${venueId}`);
       announceVenue(venueId);
-      // Владельцу — просят ли камеру прямо сейчас (venue:demand).
-      done({ success: true, count: venueCam.count(venueId), demand: venueCam.wanted(venueId) });
+      // Владельцу — просят ли камеру прямо сейчас (venue:demand). Всем —
+      // включена ли она: события venue:state, пришедшие, пока сокета не
+      // было (свёрнутый айфон, смена сети), страница пропустила, и без
+      // этого пульт так и показывал «Ждём зрителей» у снятой сервером
+      // камеры (правки 29.09). lapsed — сняли потому, что владелец пропал.
+      done({
+        success: true, count: venueCam.count(venueId), online: !!venue.online,
+        demand: venueCam.wanted(venueId),
+        ...(socket.data.venueOwn ? { lapsed: venueCam.wasLapsed(venueId) } : {}),
+      });
     });
 
     // Вход в комнату эфира: чат, счётчик зрителей, смена типа эфира.
@@ -585,6 +601,8 @@ function registerSockets(io) {
       if (running && running.invited && running.invited.has(socket.data.userId)) {
         const { by, quiet } = running.invited.get(socket.data.userId);
         running.invited.delete(socket.data.userId);
+        // Отклонил сам — «вам звонили» ему незачем.
+        if (running.missed) running.missed.delete(socket.data.userId);
         // Звонок группе: отказы участников звонящему не показываем — их
         // было бы по одному на каждого, кому звонило.
         if (!quiet) io.to(`user:${by}`).emit('call:invite:declined', { callId, userId: socket.data.userId });
@@ -597,10 +615,13 @@ function registerSockets(io) {
       const ringing = pendingCalls.get(callId);
       if (ringing && ringing.calleeIds && ringing.calleeIds.has(socket.data.userId)) {
         ringing.calleeIds.delete(socket.data.userId);
+        ringing.missed.delete(socket.data.userId);
         socket.to(`user:${socket.data.userId}`).emit('call:canceled', { callId });
         if (!ringing.calleeIds.size) {
           pendingCalls.delete(callId);
           io.to(`user:${ringing.callerId}`).emit('call:declined', { callId });
+          // Кто был не в сети, звонок пропустил и так.
+          groupPush.missedCall(io, ringing);
         }
         return;
       }
@@ -619,6 +640,7 @@ function registerSockets(io) {
       pendingCalls.delete(callId);
       callLog.ended(io, callId, 'canceled');
       io.to(call.calleeIds ? [...call.calleeIds].map((id) => `user:${id}`) : `user:${call.calleeId}`).emit('call:canceled', { callId });
+      groupPush.missedCall(io, call);
     });
 
     // «Завершить» у себя: вдвоём это конец звонка, в группе — уход одного.

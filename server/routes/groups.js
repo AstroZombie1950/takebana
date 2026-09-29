@@ -22,6 +22,7 @@ const Group = require('../models/Group');
 const Message = require('../models/Message');
 const User = require('../models/User');
 const groups = require('../utils/groups');
+const groupPush = require('../utils/groupPush');
 const restriction = require('../utils/restrict');
 const privacy = require('../utils/privacy');
 const turn = require('../utils/turn');
@@ -396,18 +397,27 @@ router.post('/api/groups/:id/call', requireAuthApi, requireNotBanned, callLimite
   const rooms = req.app.get('userRooms');
   const pendingCalls = req.app.get('pendingCalls');
   const caller = me(req);
-  const online = group.members.map((m) => String(m.user)).filter((id) => id !== caller && rooms && rooms.has(id));
+  const others = group.members.map((m) => String(m.user)).filter((id) => id !== caller);
   // С кем стоит ограничение доступа — тому не звоним (utils/restrict.js).
   // И тому, кто не принимает звонки от звонящего (utils/privacy.js).
   const [barred, rules] = await Promise.all([
-    Promise.all(online.map((id) => restriction.between(caller, id))),
-    Promise.all(online.map((id) => privacy.decide('calls', id, caller))),
+    Promise.all(others.map((id) => restriction.between(caller, id))),
+    Promise.all(others.map((id) => privacy.decide('calls', id, caller))),
   ]);
-  const callees = online.filter((id, i) => !barred[i] && rules[i].ok);
+  const reachable = others.filter((id, i) => !barred[i] && rules[i].ok);
+  const callees = reachable.filter((id) => rooms && rooms.has(id));
   if (!callees.length || !pendingCalls) return res.status(409).json({ message: 'Сейчас никого из группы нет в сети' });
 
   const callId = crypto.randomUUID();
-  pendingCalls.set(callId, { callerId: caller, calleeIds: new Set(callees), groupId: String(group._id), type: req.body.type, own: true, createdAt: Date.now() });
+  // missed — до кого звонок так и не дошёл: звонило и не взяли, или человек
+  // был не в сети. Кто ответил или отклонил, оттуда уходит (sockets/index.js);
+  // остальным по концу звонка — «вам звонили» в колокольчик и пушем
+  // (utils/groupPush.js, правки 29.09). Прежде звонок группе без ответа
+  // не оставлял следа нигде, кроме строки в ленте.
+  pendingCalls.set(callId, {
+    callerId: caller, calleeIds: new Set(callees), missed: new Set(reachable),
+    groupId: String(group._id), type: req.body.type, own: true, createdAt: Date.now(),
+  });
   const actor = await actorOf(req);
   const from = { userId: caller, displayName: groups.person(actor).displayName, avatarUrl: actor.avatar || null };
   io(req).to(callees.map((id) => 'user:' + id)).emit('incoming_call', {
@@ -419,6 +429,7 @@ router.post('/api/groups/:id/call', requireAuthApi, requireNotBanned, callLimite
     if (!call) return;
     pendingCalls.delete(callId);
     io(req).to(['user:' + caller, ...[...call.calleeIds].map((id) => 'user:' + id)]).emit('call:timeout', { callId });
+    groupPush.missedCall(io(req), call);
   }, 30000).unref();
   await groups.note(req, group, actor, 'call');
   res.json({ success: true, callId, ringing: callees.length });
