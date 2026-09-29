@@ -121,8 +121,26 @@
   border: 1px solid var(--tk-rule);
   font-family: Oswald, sans-serif;
   font-size: 15px;
-  color: var(--tk-muted);
+  color: var(--tk-beige);
 }
+
+.tk-home__first { gap: 10px; margin-left: auto; }
+
+/* Точка «в эфир» — пульсирует, как у живых эфиров на плитках. */
+.tk-home__first-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: tk-home-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tk-home-pulse { 50% { opacity: .25; } }
+
+@media (prefers-reduced-motion: reduce) { .tk-home__first-dot { animation: none; } }
+
+/* На телефоне строка переносится — кнопка во всю ширину под текстом. */
+@media (max-width: 600px) { .tk-home__first { flex: 1 1 100%; margin-left: 0; } }
 
 /* ── Авторы полосой ── */
 .tk-home__authors {
@@ -344,4 +362,7 @@
   }
   .tk-home .tk-grid::-webkit-scrollbar { display: none; }
   .tk-home .tk-grid .tk-card { flex: 0 0 82%; scroll-snap-align: start; }
+  /* Эфир один — листать некуда, и выглядывать нечему: во всю ширину, как
+   * в разделах (правки 29.09 — одинокая карточка на 82% смотрелась обрезком). */
+  .tk-home .tk-grid .tk-card:only-child { flex-basis: 100%; }
 }

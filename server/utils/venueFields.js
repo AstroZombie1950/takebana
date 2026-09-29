@@ -32,4 +32,31 @@ const LOCATION = { type: 'object', json: true, label: 'Координаты', sc
 const CITY = { type: 'string', values: Object.keys(CITY_NAME), label: 'Город' };
 const TYPE = { type: 'string', values: Object.keys(VENUE_TYPE_NAME), label: 'Тип заведения' };
 
-module.exports = { HOURS, LOCATION, CITY, TYPE };
+// Описание на странице заведения (/venue/:id).
+const ABOUT_MAX = 1000;
+
+// ── Черновик правки одобренного заведения (Establishments.pending, 29.09) ──
+// Поля черновика — те же, что правит владелец; фото — полный новый список.
+const DRAFT_FIELDS = ['name', 'type', 'country', 'city', 'address', 'about', 'weekdayHours', 'weekendHours', 'location', 'photos'];
+
+// Лениво: utils/userDelete тянет за собой камеры и эфиры, а эти схемы
+// нужны и формам, которым всё это ни к чему.
+const unlink = (url) => require('./userDelete').unlinkUpload(url, 'establishments');
+
+// Отклонить или отозвать: новые фото черновика — с диска, одобренные остаются.
+function dropDraft(venue) {
+  const live = new Set(venue.photos || []);
+  for (const url of (venue.pending && venue.pending.photos) || []) if (!live.has(url)) unlink(url);
+}
+
+// Принять: $set для документа; одобренные фото, которых в черновике нет, —
+// с диска.
+function applyDraft(venue) {
+  const p = venue.pending || {};
+  const set = {};
+  for (const k of DRAFT_FIELDS) if (p[k] !== undefined && p[k] !== null) set[k] = p[k];
+  if (set.photos) for (const url of venue.photos || []) if (!set.photos.includes(url)) unlink(url);
+  return set;
+}
+
+module.exports = { HOURS, LOCATION, CITY, TYPE, ABOUT_MAX, DRAFT_FIELDS, dropDraft, applyDraft };

@@ -418,7 +418,11 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 /* Пустое значение — подсказка («Город», «Не выбрано»), как плейсхолдер поля. */
 .tk-lb__button--empty { color:#8A827C; }
 
-.tk-lb--open .tk-lb__button { border-color:#E34234; }
+.tk-lb--open .tk-lb__button {
+  border-color:#E34234;
+  /* Открыт — стрелка смотрит вверх и киноварная. */
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23E34234' stroke-width='2'%3E%3Cpath d='M6 15l6-6 6 6'/%3E%3C/svg%3E");
+}
 
 .tk-lb__list {
   position:fixed;
@@ -432,7 +436,13 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   border:1px solid rgba(144, 113, 99, .7);
   box-shadow:0 16px 40px rgba(0, 0, 0, .55);
   outline:none;
+  animation:tk-lb-in .14s ease-out;
 }
+
+/* Раскрытие — коротким появлением со сдвигом, без него список «выпрыгивал». */
+@keyframes tk-lb-in { from { opacity:0; transform:translateY(-4px); } }
+
+@media (prefers-reduced-motion: reduce) { .tk-lb__list { animation:none; } }
 
 .tk-lb__option {
   padding:11px 20px;

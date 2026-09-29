@@ -86,12 +86,20 @@ async function stop({ streamKey, dailyRoomName }) {
 
 // Публикация Daily закончилась (mediaServer.js, donePublish). Если ведущий
 // эфир не останавливал — это обрыв, и выход запускается снова в ту же комнату.
-function ended(streamKey) {
+//
+// absent — прошлый перезапуск получил 404 «does not seem to be hosting
+// a call»: ведущего в комнате уже нет (закрыл вкладку, пропала сеть).
+// Это не поломка — пробуем ещё, вдруг вернётся, а не вернулся — тихо
+// бросаем: выход Daily и так гаснет сам через минуту без ведущего
+// (IDLE_TIMEOUT_S), эфир подберёт уборка. В журнале 26.09 такое лежало
+// внешней ошибкой, хотя делать с ней было нечего.
+function ended(streamKey, absent = false) {
   const out = outputs.get(streamKey);
   if (!out) return;
   if (out.restarts >= MAX_RESTARTS) {
-    errorLog.external(new Error(`выход Daily обрывается подряд ${MAX_RESTARTS} раза, больше не запускаем`), 'webLive.restarts', { streamKey });
     outputs.delete(streamKey);
+    if (absent) return console.warn(`[webLive ${streamKey}] ведущего нет в комнате Daily, выход больше не запускаем`);
+    errorLog.external(new Error(`выход Daily обрывается подряд ${MAX_RESTARTS} раза, больше не запускаем`), 'webLive.restarts', { streamKey });
     return;
   }
   out.restarts++;
@@ -106,6 +114,7 @@ function ended(streamKey) {
       console.warn(`[webLive ${streamKey}] выход Daily оборвался, запуск ${out.restarts}/${MAX_RESTARTS}`);
       await launch(out.room, out.rtmpUrl, out.portrait);
     } catch (err) {
+      if (err.status === 404) return ended(streamKey, true);
       errorLog.external(err, 'webLive.restart', { streamKey });
     }
   }, RESTART_DELAY_MS).unref();

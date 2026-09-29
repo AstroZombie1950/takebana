@@ -451,7 +451,7 @@ function registerSockets(io) {
         return done({ error: 'Invalid streamKey' });
       }
       try {
-        const stream = await Stream.findOne({ streamKey }).select('userId isAdult').lean();
+        const stream = await Stream.findOne({ streamKey }).select('userId isAdult subscribersOnly').lean();
         if (!stream) return done({ error: 'Unknown stream' });
         // Те же ворота, что у чата по HTTP (streamChat.js, chatStream):
         // ограниченный автором и не подтвердивший 18+ читали чат сокетом.
@@ -459,6 +459,7 @@ function registerSockets(io) {
         if (String(stream.userId) !== String(me)) {
           if (me && await restriction.isRestricted(stream.userId, me)) return done({ error: 'Restricted' });
           if (stream.isAdult && !(me && await User.exists({ _id: me, adultConfirmedAt: { $ne: null } }))) return done({ error: 'Adult' });
+          if (!(await restriction.canWatch(stream, me))) return done({ error: 'Subscribers' });
         }
         // Ключ эфира — ключ пользователя: вкладку ведущего узнаём по нему.
         socket.data.ownStreamKey = me && await User.exists({ _id: me, streamKey })

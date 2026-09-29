@@ -125,6 +125,11 @@ expect "о нас"                    "200"     GET /about
 expect "раздел каталога"         "200"     GET /streaming/business   # гость смотрит без входа
 expect "старый адрес популярного" "302"    GET /streaming           # ведёт на главную
 expect "карта заведений"         "200"     GET /map
+# Страница заведения (29.09): нет такого — 404, кривой адрес — тоже 404;
+# правка гостю — на вход, а не страница.
+expect "заведение, которого нет"  "404"     GET /venue/000000000000000000000000
+expect "заведение, кривой адрес"  "404"     GET /venue/zzz
+expect "правка заведения гостю"   "302"     GET /venue/000000000000000000000000/edit
 moved  "старый адрес карты"               /main /map
 # SEO (docs/seo/): robots, карта сайта, подтверждение Вебмастера.
 expect "robots.txt"               "200"     GET /robots.txt
@@ -236,6 +241,11 @@ expect "POST /api/venues/:id/watch гостю"  "404"     POST /api/venues/00000
 # Обложка камеры (28.09) — только владельцу.
 expect "POST /api/venues/:id/cover"       "401"     POST /api/venues/000000000000000000000000/cover
 expect "DELETE /api/venues/:id/cover"     "401"     DELETE /api/venues/000000000000000000000000/cover
+# Логотип заведения (29.09) — только владельцу.
+expect "POST /api/venues/:id/avatar"      "401"     POST /api/venues/000000000000000000000000/avatar
+expect "DELETE /api/venues/:id/avatar"    "401"     DELETE /api/venues/000000000000000000000000/avatar
+# Отозвать правку заведения, ждущую проверки (29.09).
+expect "DELETE /updateEstablishment/:id"  "401"     DELETE /updateEstablishment/000000000000000000000000
 expect "POST /api/calls/create"           "401"     POST /api/calls/create           -H 'Content-Type: application/json' -d '{}'
 expect "PUT /updateEstablishment/:id"     "401"     PUT  /updateEstablishment/000000000000000000000000
 expect "POST /register-establishment"     "401"     POST /register-establishment     -H 'Content-Type: application/json' -d '{}'
@@ -300,6 +310,9 @@ expect "GET /api/admin/audit"             "401"     GET  /api/admin/audit
 expect "GET /api/admin/audit.csv"         "401"     GET  /api/admin/audit.csv
 expect "GET /api/admin/system"            "401"     GET  /api/admin/system
 expect "PUT /api/admin/venues/:id"        "401"     PUT  /api/admin/venues/000000000000000000000000
+# Разбор правки заведения и ошибок пачкой (29.09).
+expect "POST /api/admin/venues/:id/pending" "401"   POST /api/admin/venues/000000000000000000000000/pending "${JSON[@]}" -d '{"accept":true}'
+expect "POST /api/admin/errors/bulk"      "401"     POST /api/admin/errors/bulk "${JSON[@]}" -d '{"action":"delete","all":true}'
 # Сроки хранения файлов (28.09): общие и личные — только администратору.
 expect "GET /api/admin/retention"         "401"     GET  /api/admin/retention
 expect "PUT /api/admin/retention"         "401"     PUT  /api/admin/retention "${JSON[@]}" -d '{"chat":1}'

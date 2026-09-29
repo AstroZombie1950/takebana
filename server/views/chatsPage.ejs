@@ -329,7 +329,10 @@
 <%# Меню человека: строка диалога, строка контакта, строка журнала звонков.
     data-in перечисляет, где пункт уместен: «удалить переписку» — только
     в списке диалогов, избранное — только в контактах. Прячет их chats.js. %>
-<div class="tk-msgmenu" id="peerMenu" role="menu" hidden>
+<%# «Ограничить доступ» (правки 29.09) — как на странице подписчиков:
+    канал, переписка и звонки закрываются в обе стороны (utils/restrict.js).
+    data-restricted — кому я его уже закрыл: им пункт «Вернуть доступ». %>
+<div class="tk-msgmenu" id="peerMenu" role="menu" data-restricted="<%= restricted.join(',') %>" hidden>
   <button type="button" role="menuitem" data-act="call" data-i18n="calls.audio"><%- t('calls.audio') %></button>
   <button type="button" role="menuitem" data-act="video" data-i18n="calls.video"><%- t('calls.video') %></button>
   <button type="button" role="menuitem" data-act="write" data-in="contact,call" data-i18n="contacts.write"><%- t('contacts.write') %></button>
@@ -337,6 +340,8 @@
   <button type="button" role="menuitem" data-act="unfavorite" data-in="contact" data-i18n="contacts.unfavorite"><%- t('contacts.unfavorite') %></button>
   <button type="button" role="menuitem" data-act="contactAdd" data-i18n="contacts.add"><%- t('contacts.add') %></button>
   <button type="button" role="menuitem" data-act="contactRemove" data-i18n="contacts.remove"><%- t('contacts.remove') %></button>
+  <button type="button" role="menuitem" data-act="restrict" class="tk-msgmenu__danger" data-i18n="user.restrict"><%- t('user.restrict') %></button>
+  <button type="button" role="menuitem" data-act="unrestrict" data-i18n="user.unrestrict"><%- t('user.unrestrict') %></button>
   <button type="button" role="menuitem" data-act="report" data-report="user" data-report-id="" data-i18n="common.report"><%- t('common.report') %></button>
   <button type="button" role="menuitem" data-act="delete" data-in="dialog" class="tk-msgmenu__danger" data-i18n="chats.deleteChat"><%- t('chats.deleteChat') %></button>
 </div>

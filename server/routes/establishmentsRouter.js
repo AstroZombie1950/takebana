@@ -51,11 +51,12 @@ const PHOTO_URL = /^\/uploads\/establishments\/[\w.-]+$/;
 
 // Часы, координаты, город и тип — в utils/venueFields.js: те же схемы
 // нужны админке, и разъезжаться им нельзя.
-const { HOURS, LOCATION, CITY, TYPE } = require('../utils/venueFields');
+const { HOURS, LOCATION, CITY, TYPE, ABOUT_MAX, DRAFT_FIELDS, dropDraft } = require('../utils/venueFields');
+const { commonDataMiddleware } = require('./streaming/shared');
 
 // То, что видит любой вошедший: карточка на карте и поиск. Почта, телефон
 // и владелец — только самому владельцу, в /user-establishments.
-const PUBLIC_FIELDS = 'name type city country address weekdayHours weekendHours location photos online';
+const PUBLIC_FIELDS = 'name type city country address about weekdayHours weekendHours location photos avatar cover online';
 
 
 
@@ -122,11 +123,12 @@ router.get('/establishmentsLocation', wrap(async (req, res) => {
     // Потолок — на случай, когда карта отдалена на всю Европу: список
     // в панели всё равно показывает только видимое.
     const establishments = await Establishments.find(where)
-        .select('name type city location online photos')
+        .select('name type city location online photos avatar')
         .limit(500)
         .lean();
 
-    res.json(establishments.map(({ photos, ...e }) => ({ ...e, photos: (photos || []).slice(0, 1) })));
+    // Значок точки и строки списка — логотип, без него первое фото.
+    res.json(establishments.map(({ photos, avatar, ...e }) => ({ ...e, photos: avatar ? [avatar] : (photos || []).slice(0, 1) })));
 }));
 
 
@@ -178,15 +180,21 @@ router.get('/user-establishments', requireAuth, wrap(async (req, res) => {
     res.json(establishments);
 }));
 
+// Правка заведения — со страницы /venue/:id/edit (public/tk-venue-edit.js).
 // validate стоит после multer: до разбора multipart тела ещё нет.
+//
+// Заведение ещё не одобрено — правка ложится сразу, проверять всё равно
+// будут целиком. Одобренное — правка уходит черновиком (pending) и ждёт
+// панели, а на карте до тех пор остаётся прежнее (решение 29.09). До этого
+// любая правка ставила status: false, и заведение пропадало с карты, пока
+// его не одобрят заново. Правку администратора не проверяет никто.
 router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments), upload.array('newPhotos', MAX_PHOTOS), validate({
     name: { type: 'string', max: 200, label: 'Название' },
     type: TYPE,
     country: { type: 'string', max: 100, label: 'Страна' },
     city: CITY,
     address: { type: 'string', max: 300, label: 'Адрес' },
-    email: { type: 'email', label: 'Почта' },
-    phone: { type: 'string', max: 32, label: 'Телефон' },
+    about: { type: 'string', max: ABOUT_MAX, label: 'Описание' },
     weekdayHours: { ...HOURS, label: 'Часы по будням' },
     weekendHours: { ...HOURS, label: 'Часы по выходным' },
     location: LOCATION,
@@ -199,14 +207,19 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
         of: { type: 'string', max: 300, pattern: PHOTO_URL }, label: 'Фотографии' },
 }), wrap(async (req, res) => {
     const venue = req.resource; // requireOwner уже нашёл документ
-    // Оставляем только фото этого заведения: образец пути пропускал и файл
-    // чужого, а при удалении своего заведения он стирался. Новых — сколько
-    // осталось места, до записи на диск, а не после.
-    const had = new Set(venue.photos || []);
+    const draft = !!venue.status && String(venue.owner) === String(req.session.userId);
+    const before = venue.pending && venue.pending.at ? venue.pending : null;
+
+    // Оставляем только фото этого заведения — одобренные и из прежнего
+    // черновика: образец пути пропускал и файл чужого, а при удалении своего
+    // заведения он стирался. Новых — сколько осталось места, до записи на
+    // диск, а не после.
+    const live = new Set(venue.photos || []);
+    const had = new Set([...live, ...((before && before.photos) || [])]);
     const kept = [...new Set(req.body.uploadedPhotos)].filter((u) => had.has(u));
     const files = req.files.slice(0, MAX_PHOTOS - kept.length);
 
-    const { name, type, country, city, address, email, phone, weekdayHours, weekendHours, location } = req.body;
+    const { name, type, country, city, address, about, weekdayHours, weekendHours, location } = req.body;
     const { lat, lng } = location || {};
 
     // Пустое тело после разбора и означает «обновлять нечего». Три JSON.parse
@@ -223,15 +236,13 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
         return res.status(400).json({ message: e.message });
     }
 
-    const establishment = {
+    const fields = {
         name,
         type,
         country,
         city,
         address,
-        email,
-        phone,
-        status: false,
+        about,
         weekdayHours,
         weekendHours,
         location: lat !== undefined && lng !== undefined ? { lat, lng } : undefined,
@@ -241,11 +252,36 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
         photos: kept.concat(newPhotoNames.map(name => `/uploads/establishments/${name}`))
     };
 
-    const updatedEstablishment = await Establishments.findByIdAndUpdate(req.params.id, establishment, { returnDocument: 'after' });
-    // Убранные из списка — с диска, иначе они оставались сиротами.
-    for (const url of had) if (!kept.includes(url)) unlinkUpload(url, 'establishments');
-    audit(req, 'venue.update', { targetType: 'venue', target: updatedEstablishment, meta: { fields: Object.keys(establishment) } });
-    res.json(updatedEstablishment);
+    let updated;
+    if (draft) {
+        // Незаполненное в черновике — как у одобренного: иначе принятая
+        // правка стёрла бы поле, которое человек и не трогал.
+        const plain = venue.toObject();
+        const pending = { at: new Date() };
+        for (const [k, v] of Object.entries(fields)) pending[k] = v === undefined ? plain[k] : v;
+        updated = await Establishments.findByIdAndUpdate(venue._id, { $set: { pending } }, { returnDocument: 'after' });
+        // Из прежнего черновика ушли — с диска, если их нет и среди одобренных.
+        for (const url of (before && before.photos) || []) {
+            if (!live.has(url) && !fields.photos.includes(url)) unlinkUpload(url, 'establishments');
+        }
+        audit(req, 'venue.pending', { targetType: 'venue', target: updated, meta: { fields: Object.keys(fields).filter((k) => fields[k] !== undefined) } });
+    } else {
+        updated = await Establishments.findByIdAndUpdate(venue._id, fields, { returnDocument: 'after' });
+        // Убранные из списка — с диска, иначе они оставались сиротами.
+        for (const url of had) if (!fields.photos.includes(url)) unlinkUpload(url, 'establishments');
+        audit(req, 'venue.update', { targetType: 'venue', target: updated, meta: { fields: Object.keys(fields) } });
+    }
+    res.json({ ok: true, pending: draft });
+}));
+
+// Отозвать правку, которая ещё ждёт проверки: черновик уходит, новые фото
+// из него — с диска.
+router.delete('/updateEstablishment/:id', requireAuth, requireOwner(Establishments), wrap(async (req, res) => {
+    const venue = req.resource;
+    if (!venue.pending || !venue.pending.at) return res.json({ ok: true });
+    dropDraft(venue);
+    await Establishments.updateOne({ _id: venue._id }, { $unset: { pending: 1 } });
+    res.json({ ok: true });
 }));
 
 
@@ -284,6 +320,57 @@ router.post('/rateEstablishment', requireAuth, validate({
     );
     audit(req, 'venue.rate', { targetType: 'venue', targetId: establishmentId, meta: { rating } });
     res.json({ rating: userRating.rating });
+}));
+
+// ── Страница заведения (29.09) ───────────────────────────────────────────────
+// До неё у заведения была только карточка поверх карты и страница камеры,
+// а у владельца — окно «Мои заведения» на карте: где править, как запустить
+// камеру, что сейчас на проверке — не понять. Теперь /venue/:id — профиль:
+// гостю сведения, фото, оценка и камера, владельцу ещё и пульт — камера,
+// правка, удаление, состояние проверки. Правка — /venue/:id/edit.
+//
+// Заведение на проверке видно только владельцу (и администратору) — как
+// на карте. Параметр — venueId: кривой адрес ведёт на страницу 404.
+async function pageVenue(req, res) {
+    if (!OBJECT_ID.test(req.params.venueId)) return null;
+    const venue = await Establishments.findById(req.params.venueId).lean();
+    if (!venue) return null;
+    const me = res.locals.currentUser;
+    const own = !!me && String(venue.owner) === String(me._id);
+    const admin = !!me && me.isAdmin;
+    if (venue.status !== true && !own && !admin) return null;
+    return { venue, own, admin };
+}
+
+router.get('/venue/:venueId', commonDataMiddleware, wrap(async (req, res, next) => {
+    const found = await pageVenue(req, res);
+    if (!found) return next();
+    const { venue, own, admin } = found;
+    const ratings = await Rating.aggregate([
+        { $match: { establishment: venue._id } },
+        { $group: { _id: null, avg: { $avg: '$rating' }, n: { $sum: 1 } } },
+    ]);
+    res.render('venue', {
+        venue,
+        manage: own || admin,
+        rating: ratings.length ? { average: ratings[0].avg, count: ratings[0].n } : { average: 0, count: 0 },
+    });
+}));
+
+router.get('/venue/:venueId/edit', requireAuth, commonDataMiddleware, wrap(async (req, res, next) => {
+    const found = await pageVenue(req, res);
+    if (!found || !(found.own || found.admin)) return next();
+    const { venue } = found;
+    // В форму — черновик, если правка ещё ждёт проверки: человек продолжает
+    // её, а не начинает заново с одобренного.
+    const draft = venue.pending && venue.pending.at ? venue.pending : null;
+    res.render('venueEdit', {
+        venue,
+        form: draft ? { ...venue, ...Object.fromEntries(DRAFT_FIELDS.filter((k) => draft[k] != null).map((k) => [k, draft[k]])) } : venue,
+        draftAt: draft ? draft.at : null,
+        maxPhotos: MAX_PHOTOS,
+        aboutMax: ABOUT_MAX,
+    });
 }));
 
 module.exports = router;

@@ -370,7 +370,11 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
   // Заявки — кто их прислал: счётчик папки считает людей, а не сообщения.
   const requests = (await Conversation.find({ requestFor: me, hiddenFor: { $ne: me } }).select('userOne userTwo').limit(500).lean())
     .map((c) => String(String(c.userOne) === String(me) ? c.userTwo : c.userOne));
-  res.render('chatsPage', { conversations: list, dialogsBefore: before ? before.toISOString() : '', recent, requests, timeAgo, tab: tabs.includes(req.query.tab) ? req.query.tab : 'messages' });
+  // Кому я закрыл доступ (utils/restrict.js) — меню собеседника в списках
+  // предлагает «Ограничить» или «Вернуть доступ» по нему.
+  const mine = await User.findById(me).select('restricted').lean();
+  const restricted = ((mine && mine.restricted) || []).map(String);
+  res.render('chatsPage', { conversations: list, dialogsBefore: before ? before.toISOString() : '', recent, requests, restricted, timeAgo, tab: tabs.includes(req.query.tab) ? req.query.tab : 'messages' });
 });
 
 

@@ -53,10 +53,12 @@ body.tk-app {
   border-bottom: 1px solid var(--tk-rule);
 }
 
+/* Полоски — по середине кнопки: прижатые вправо, они давали слева от
+ * себя вдвое больше воздуха, чем справа до поиска (правки 29.09). */
 .tk-ahead__burger {
   display: none;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   gap: 5px;
   width: 40px;
@@ -533,12 +535,19 @@ body.tk-app {
 }
 
 .tk-aside__empty {
-  padding: 18px;
   font-family: Oswald, sans-serif;
   font-size: 13px;
   line-height: 1.5;
   color: var(--tk-muted);
 }
+
+/* Подписок нет — заголовок и подсказка под ним плотнее (правки 29.09):
+ * с полным списком воздух вокруг заголовка нужен, а над двумя строками
+ * подсказки он разваливал панель. Заголовок «Подписки» — тот, за которым
+ * следует видимая подсказка; «Разделы» стоят ниже неё и не задеты. */
+.tk-aside__title:has(~ .tk-aside__empty:not(.hidden)) { padding: 4px 18px 0; }
+.tk-aside__empty { padding: 6px 18px 10px; }
+.tk-aside__empty:not(.hidden) + .tk-aside__rule { margin-top: 4px; }
 
 .tk-aside__cta {
   margin-top: auto;
@@ -629,6 +638,10 @@ body.tk-app {
   .tk-ahead--auth .tk-ahead__brand { display: block; }
 
   .tk-ahead__right { gap: 4px; }
+
+  /* Воздух у бургера слева (поле шапки 12px) и справа (зазор 10px) —
+   * поровну. */
+  .tk-ahead__burger { margin-right: 2px; }
 
   /* Выпадашка поиска на телефоне: экранная клавиатура забирает половину
    * экрана, и 380px списка не во что показывать. Шириной — во весь экран
@@ -1080,6 +1093,7 @@ body.tk-app {
 }
 
 .tk-dropzone p { margin: 0; font-family: Oswald, sans-serif; font-size: 13px; }
+.tk-dropzone[hidden] { display: none; }
 
 .tk-thumbs {
   display: grid;
@@ -1220,11 +1234,14 @@ body.tk-app {
   white-space: nowrap;
 }
 
+/* «Исходящий видеозвонок» под именем и таймер — киноварью: серым их на
+ * тёмном фоне и поверх картинки было не разглядеть (правки 29.09). */
 .tk-call__type {
   margin: 2px 0 0;
   font-family: Oswald, sans-serif;
   font-size: 12px;
-  color: var(--tk-muted);
+  letter-spacing: .04em;
+  color: var(--tk-accent);
 }
 
 .tk-call__body {
@@ -1308,11 +1325,14 @@ body.tk-app {
 .tk-call__level[data-sound="no"] i { background: var(--tk-accent); }
 
 .tk-call__timer {
-  margin: 6px 0 0;
+  margin: 2px 0 0;
   text-align: center;
   font-family: Oswald, sans-serif;
-  font-size: 13px;
-  color: var(--tk-muted);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--tk-accent);
 }
 
 .tk-call__stage { margin: 14px 0; }
@@ -1553,10 +1573,10 @@ body.tk-app {
   font-size: 14px;
   color: var(--tk-muted);
 }
-/* Картинки собеседника нет — прятать надо и знак: над подписью «видео нет»
- * он висел бы просто так. */
+/* Знак остаётся и без картинки собеседника: камеру выключили — экран
+ * всё равно наш, и знак на нём должен быть (правки 29.09, решение 18.09
+ * «знак на всех медиа»). */
 .tk-call__stage--empty .pip-remote,
-.tk-call__stage--empty .tk-wm,
 .tk-call__stage--nolocal .pip-local { visibility: hidden; }
 
 @media (min-width: 640px) {
@@ -1606,9 +1626,8 @@ body.tk-app {
   background: #000;
 }
 
-/* Картинки нет — прячем и видео, и знак: знак поверх пустоты не нужен. */
-.tk-call__tile.is-dark video,
-.tk-call__tile.is-dark .tk-wm { visibility: hidden; }
+/* Картинки нет — прячем видео; знак остаётся, как и у разговора вдвоём. */
+.tk-call__tile.is-dark video { visibility: hidden; }
 
 .tk-call__tile audio { display: none; }
 
@@ -1833,7 +1852,7 @@ body.tk-app {
   }
 
   .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__status { top: 76px; }
-  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__timer { top: 100px; margin: 0; }
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__timer { top: 98px; margin: 0; }
 
   .tk-call__stage:not(.hidden) {
     position: absolute;
@@ -1861,8 +1880,9 @@ body.tk-app {
     padding: 104px 0 calc(140px + var(--tk-safe-b));
   }
 
-  /* Знак — под шапку: в её углу он ложился на крестик «закрыть». */
-  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .pip-call-container > .tk-wm { top: 76px; right: 12px; }
+  /* Знак — под шапку и левее крестика «закрыть»: прямо под ним он
+   * выглядел прилепленным к кнопке (правки 29.09). */
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .pip-call-container > .tk-wm { top: 76px; right: 64px; }
 
   /* Своя картинка — над кнопками, а не под ними. */
   .pip-local { bottom: calc(96px + var(--tk-safe-b)); right: 12px; }
@@ -1910,7 +1930,7 @@ body.tk-app {
  * подписи) — полоса переносится второй строкой, но не налезает. */
 @media (max-height: 500px) and (orientation: landscape) {
   .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__status { top: 60px; }
-  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__timer { top: 84px; }
+  .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__timer { top: 82px; }
 
   .tk-modal__card--call:has(.tk-call__stage:not(.hidden)) .tk-call__body {
     flex-direction: row;
@@ -1971,6 +1991,91 @@ body.tk-app {
 /* Бургер по одной из сторон уже пальца. Увеличиваем зону нажатия, не трогая рисунок. */
 @media (max-width: 1024px) {
   .tk-ahead__burger { width: 40px; height: 40px; }
+}
+
+/* ── Вкладки: поиск, профиль и галерея, подписчики и подписки ─────────────
+ * Здесь, в общем app.css: до 29.09 они жили в profile.css, а страница
+ * подписчиков его не подключает — «Подписчики2Подписки0» сливались в одну
+ * строку без оформления. Активная помечена киноварной линейкой снизу — тем
+ * же приёмом, что раздел в левой панели. Ниже 640 строка вкладок прокручивается вбок сама, чтобы
+ * не переносить их в два этажа и не растить шапку страницы.
+ */
+.tk-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 28px 0 0;
+  border-bottom: 1px solid var(--tk-rule);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tk-tabs::-webkit-scrollbar { display: none; }
+
+.tk-tabs__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.tk-tabs__item:hover { color: var(--tk-paper); }
+
+.tk-tabs__item--on {
+  border-bottom-color: var(--tk-accent);
+  color: var(--tk-paper);
+}
+
+.tk-tabs__num {
+  font-size: 12px;
+  color: var(--tk-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-tabs__item--on .tk-tabs__num { color: var(--tk-accent); }
+
+/* Вкладка-кнопка (галерея в профиле переключается без перехода). */
+button.tk-tabs__item {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+button.tk-tabs__item.tk-tabs__item--on { border-bottom-color: var(--tk-accent); }
+
+/* Пусто сразу под вкладками — не вплотную к их линейке. */
+.tk-tabs + .tk-empty { margin-top: 24px; }
+
+/* Звёзды оценки заведения: пять серых, поверх — киноварные на долю
+ * --v из 5. Карточка на карте и страница заведения (29.09). */
+.tk-stars {
+  position: relative;
+  display: inline-block;
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 2px;
+  color: var(--tk-ink-soft);
+}
+
+.tk-stars::before { content: '★★★★★'; }
+
+.tk-stars::after {
+  content: '★★★★★';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(var(--v, 0) / 5 * 100%);
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--tk-accent);
 }
 
 /* ── Пусто: каталог, поиск, авторы, подписчики ──

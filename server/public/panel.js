@@ -705,6 +705,36 @@ const VENUE_FIELDS = [
   { key: 'lng', label: 'Долгота' },
 ];
 
+// Правка владельца одобренного заведения ждёт решения (29.09): что
+// меняется — было и стало, новые фото картинками. Поля ниже — одобренное.
+const DRAFT_LABELS = { name: 'Название', type: 'Тип', country: 'Страна', city: 'Город', address: 'Адрес', about: 'Описание',
+  weekdayHours: 'Часы по будням', weekendHours: 'Часы по выходным', location: 'Точка', photos: 'Фото' };
+const draftValue = (k, x) => {
+  if (x == null || x === '') return '—';
+  if (k === 'weekdayHours' || k === 'weekendHours') return (x.open || '?') + '–' + (x.close || '?');
+  if (k === 'location') return x.lat != null ? Number(x.lat).toFixed(5) + ', ' + Number(x.lng).toFixed(5) : '—';
+  if (k === 'type') return (CATALOG.types || []).reduce((a, t) => (t.code === x ? t.name : a), x);
+  if (k === 'city') return (CATALOG.cities || []).reduce((a, c) => (c.code === x ? c.name : a), x);
+  return String(x);
+};
+
+function venueDraft(v) {
+  if (!v.pending) return '';
+  const rows = Object.entries(v.pending.changes).map(([k, c]) => {
+    if (k === 'photos') {
+      return '<li><b>Фото:</b> было ' + c.was + ', станет ' + c.now +
+        (c.added.length ? '<span class="tk-draft__pics">' + c.added.map((u) => '<a href="' + esc(u) + '" target="_blank" rel="noopener"><img src="' + esc(u) + '" alt=""></a>').join('') + '</span>' : '') + '</li>';
+    }
+    return '<li><b>' + esc(DRAFT_LABELS[k] || k) + ':</b> <s>' + esc(draftValue(k, c.was)) + '</s> → ' + esc(draftValue(k, c.now)) + '</li>';
+  }).join('');
+  return '<div class="tk-draft"><p class="tk-draft__head">Правка владельца · ' + esc(when(v.pending.at)) + '</p>' +
+    (rows ? '<ul class="tk-draft__list">' + rows + '</ul>' : '<p class="tk-panel__why">Без изменений по сути</p>') +
+    '<div class="tk-card__acts">' +
+      '<button type="button" class="tk-btn tk-btn--ok tk-btn--xs" data-act="venue-draft" data-id="' + esc(v.id) + '" data-accept="1">Принять правку</button>' +
+      '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="venue-draft" data-id="' + esc(v.id) + '">Отклонить</button>' +
+    '</div></div>';
+}
+
 VIEWS.venues = {
   title: 'Заведения',
   admin: true,
@@ -712,7 +742,7 @@ VIEWS.venues = {
   csv: true,
   filters: [
     { name: 'q', type: 'search', placeholder: 'Название или адрес' },
-    { name: 'status', options: [{ value: '', title: 'Все' }, { value: 'active', title: 'Активные' }, { value: 'inactive', title: 'Неактивные' }] },
+    { name: 'status', options: [{ value: '', title: 'Все' }, { value: 'active', title: 'Активные' }, { value: 'inactive', title: 'Неактивные' }, { value: 'pending', title: 'Правки на проверке' }] },
     { name: 'city', options: () => [{ value: '', title: 'Любой город' }].concat((CATALOG.cities || []).map((c) => ({ value: c.code, title: c.name }))) },
     { name: 'type', options: () => [{ value: '', title: 'Любой тип' }].concat((CATALOG.types || []).map((t) => ({ value: t.code, title: t.name }))) },
     { name: 'online', options: [{ value: '', title: 'Камера: всё равно' }, { value: '1', title: 'Камера включена' }] },
@@ -753,6 +783,7 @@ VIEWS.venues = {
         '</div>' +
         '<p class="tk-card__from">' + person(v.owner) + ' · оценка ' +
           (v.rating.count ? v.rating.avg + ' (' + v.rating.count + ')' : 'нет') + ' · фото ' + v.photos + '</p>' +
+        venueDraft(v) +
         '<div class="tk-fields">' + fields + '</div>' +
         '<div class="tk-card__acts">' +
           // Заперта, пока ничего не правили: иначе «Сохранить» нажимают
@@ -879,12 +910,31 @@ VIEWS.errors = {
     { name: 'period', options: PERIOD },
   ],
   sub: (d) => Object.entries(d.byScope).map(([k, v]) => (SCOPES[k] || k) + ': ' + v.groups).join(' · ') || 'ошибок нет',
-  render2(d) {
+  render2(d, params) {
     if (!d.items.length) return note('Ошибок нет — или все разобраны');
 
-    return '<div class="tk-cards tk-cards--wide">' + d.items.map((e) => { const more = errorMore(e); return (
+    // Полоса разбора пачкой (errorBulk ниже): галочки на карточках, «все
+    // на странице», а когда их больше страницы — «все N по отбору».
+    const done = params.resolved === '1';
+    bulkAll = false;
+    const bulk =
+      '<div class="tk-bulk" data-bulk data-total="' + d.total + '" data-shown="' + d.items.length + '">' +
+        '<label class="tk-switch"><input type="checkbox" data-pick-all> Выбрать все на странице</label>' +
+        '<span class="tk-bulk__count" data-bulk-count>ничего не выбрано</span>' +
+        (d.total > d.items.length ? '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-bulk-all hidden>Все ' + num(d.total) + ' по отбору</button>' : '') +
+        '<span class="tk-bulk__acts">' +
+          (params.resolved !== 'all'
+            ? '<button type="button" class="tk-btn tk-btn--' + (done ? 'outline' : 'ok') + ' tk-btn--xs" data-bulk-act="' + (done ? 'reopen' : 'resolve') + '" disabled>' +
+                (done ? 'Вернуть в работу' : 'Разобрано') + '</button>'
+            : '') +
+          '<button type="button" class="tk-btn tk-btn--danger tk-btn--xs" data-bulk-act="delete" disabled>Удалить</button>' +
+        '</span>' +
+      '</div>';
+
+    return bulk + '<div class="tk-cards tk-cards--wide">' + d.items.map((e) => { const more = errorMore(e); return (
       '<article class="tk-card tk-card--error' + (e.resolved ? ' is-done' : '') + '" data-card="' + esc(e.id) + '">' +
         '<div class="tk-card__head">' +
+          '<label class="tk-card__pick" title="Выбрать"><input type="checkbox" data-pick value="' + esc(e.id) + '"></label>' +
           '<p class="tk-card__name"><span class="tk-tag">' + esc(SCOPES[e.scope] || e.scope) + '</span> ' +
             esc(e.name) + (e.status ? ' · ' + e.status : '') + '</p>' +
           '<span class="tk-card__when">' + esc(ago(e.lastAt)) +
@@ -904,6 +954,64 @@ VIEWS.errors = {
       '</article>'); }).join('') + '</div>';
   },
 };
+
+// Разбор ошибок пачкой. Выбор живёт в самих галочках: перерисовка списка
+// после действия его и сбрасывает, отдельного состояния держать незачем.
+// Щелчок по пустому месту карточки — та же галочка: по двадцать карточек
+// кликать в квадратик размером с букву долго.
+// «Все по отбору» — не галочки, а флаг: он включается кнопкой и гаснет,
+// стоит снять хоть одну галочку.
+let bulkAll = false;
+
+function bulkSync() {
+  const bar = view.querySelector('[data-bulk]');
+  if (!bar) return;
+  const picks = [...view.querySelectorAll('[data-pick]')];
+  const on = picks.filter((x) => x.checked);
+  if (on.length < picks.length) bulkAll = false;
+  picks.forEach((x) => x.closest('.tk-card').classList.toggle('is-picked', x.checked));
+  bar.querySelector('[data-pick-all]').checked = picks.length > 0 && on.length === picks.length;
+  const all = bar.querySelector('[data-bulk-all]');
+  if (all) all.hidden = bulkAll || on.length !== picks.length;
+  const n = bulkAll ? Number(bar.dataset.total) : on.length;
+  bar.querySelector('[data-bulk-count]').textContent = n
+    ? 'выбрано: ' + num(n) + (bulkAll ? ' — все по отбору' : '') : 'ничего не выбрано';
+  bar.querySelectorAll('[data-bulk-act]').forEach((b) => { b.disabled = !n; });
+}
+
+view.addEventListener('change', (e) => {
+  if (e.target.matches('[data-pick-all]')) {
+    view.querySelectorAll('[data-pick]').forEach((x) => { x.checked = e.target.checked; });
+  }
+  if (e.target.matches('[data-pick], [data-pick-all]')) bulkSync();
+});
+
+view.addEventListener('click', async (e) => {
+  const card = e.target.closest('.tk-card--error');
+  if (card && !e.target.closest('a, button, input, label, summary, pre') && !String(getSelection())) {
+    const box = card.querySelector('[data-pick]');
+    box.checked = !box.checked;
+    return bulkSync();
+  }
+  if (e.target.closest('[data-bulk-all]')) { bulkAll = true; return bulkSync(); }
+
+  const btn = e.target.closest('[data-bulk-act]');
+  if (!btn) return;
+  const action = btn.dataset.bulkAct;
+  const ids = [...view.querySelectorAll('[data-pick]:checked')].map((x) => x.value);
+  const n = bulkAll ? Number(view.querySelector('[data-bulk]').dataset.total) : ids.length;
+  if (action === 'delete' && !await confirmDialog('Удалить из журнала карточек: ' + num(n) +
+    '? Если ошибка повторится, карточка появится заново.', { okText: 'Удалить' })) return;
+  try {
+    const query = bulkAll ? '?' + new URLSearchParams(serverParams(route().params)).toString() : '';
+    const r = await send('POST', '/api/admin/errors/bulk' + query, bulkAll ? { action, all: true } : { action, ids });
+    toast((action === 'delete' ? 'Удалено: ' : action === 'resolve' ? 'Разобрано: ' : 'Вернули в работу: ') + num(r.rows), 'ok');
+    bulkAll = false;
+    show();
+  } catch (err) {
+    toast(err.message || 'Не получилось', 'error');
+  }
+});
 
 // ── Расходы ──────────────────────────────────────────────────────────────────
 VIEWS.costs = {
@@ -1574,6 +1682,7 @@ async function badges() {
     };
     put('reports', d.reports.new);
     put('support', d.support); // непрочитанное поддержкой (routes/admin/support.js)
+    put('venues', d.venuesReview); // заявки и правки заведений на проверке
   } catch (_) {
     // Панель без счётчика работает; ошибку покажет сама вкладка.
   }
@@ -1758,6 +1867,14 @@ view.addEventListener('click', async (e) => {
 
       await send('PUT', '/api/admin/venues/' + id, body);
       toast('Заведение сохранено', 'ok');
+      return show();
+    }
+
+    if (act === 'venue-draft') {
+      const accept = !!el.dataset.accept;
+      if (!accept && !await confirmDialog('Отклонить правку? Новые фото из неё удалятся, в заведении останется прежнее.', { okText: 'Отклонить' })) return;
+      await send('POST', '/api/admin/venues/' + id + '/pending', { accept });
+      toast(accept ? 'Правка принята' : 'Правка отклонена', 'ok');
       return show();
     }
 

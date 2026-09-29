@@ -205,27 +205,27 @@
       (manage
         ? '<section class="tk-gsec"><h3 class="tk-kicker">' + escapeHtml(t('groups.invite')) + '</h3>' +
           (link
-            ? '<p class="tk-ginvite"><code>' + escapeHtml(link) + '</code></p><div class="tk-panel__actions">' +
+            ? '<p class="tk-ginvite"><code>' + escapeHtml(link) + '</code></p><div class="tk-gacts">' +
               '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-gp="invite-copy">' + escapeHtml(t('groups.inviteCopy')) + '</button>' +
               '<button type="button" class="tk-btn tk-btn--ghost tk-btn--xs" data-gp="invite-new">' + escapeHtml(t('groups.inviteNew')) + '</button>' +
               '<button type="button" class="tk-btn tk-btn--ghost tk-btn--xs" data-gp="invite-off">' + escapeHtml(t('groups.inviteOff')) + '</button></div>'
-            : '<p class="tk-note">' + escapeHtml(t('groups.inviteHint')) + '</p><button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-gp="invite-new">' + escapeHtml(t('groups.inviteOn')) + '</button>') +
+            : '<p class="tk-note">' + escapeHtml(t('groups.inviteHint')) + '</p><div class="tk-gacts"><button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-gp="invite-new">' + escapeHtml(t('groups.inviteOn')) + '</button></div>') +
           '</section>'
         : '') +
 
       '<section class="tk-gsec"><h3 class="tk-kicker">' + escapeHtml(t('groups.members')) + '</h3>' +
         (manage && g.count < MAX || rolesOpen(g)
-          ? '<div class="tk-panel__actions">' +
+          ? '<div class="tk-gacts">' +
             (manage && g.count < MAX ? '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-gp="add">' + escapeHtml(t('groups.addMembers')) + '</button>' : '') +
             (rolesOpen(g) ? '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-gp="roles">' + escapeHtml(t('groups.roles')) + '</button>' : '') +
             '</div>'
           : '') +
         '<div class="tk-gmembers">' + members + '</div></section>' +
 
-      '<section class="tk-gsec tk-gsec--danger">' +
+      '<section class="tk-gsec tk-gsec--danger"><div class="tk-gacts">' +
         '<button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" data-gp="leave">' + escapeHtml(t('groups.leave')) + '</button>' +
         (g.myRole === 'owner' ? '<button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-gdanger" data-gp="delete">' + escapeHtml(t('groups.delete')) + '</button>' : '') +
-      '</section>');
+      '</div></section>');
   }
 
   // Роли нескольким сразу (24.09) — у создателя, когда есть кому их дать.

@@ -1,0 +1,236 @@
+/* Страница заведения /venue/:id и её правка /venue/:id/edit (29.09).
+ * Каркас, поля, панели, вкладки и звёзды — общие, в app.css. Здесь своё:
+ * шапка с логотипом, картинка идущей камеры, пульт владельца, фото, форма.
+ * Правка прежде жила окном поверх карты, её сетка полей переехала сюда
+ * из venues.css. */
+
+/* hidden у кнопок сильнее их display: inline-flex — «Убрать обложку» при
+ * пустой обложке иначе оставалась видна. */
+.tk-vp [hidden] { display: none !important; }
+
+.tk-vp {
+  max-width: 880px;
+  padding: 32px 40px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Шапка: логотип, тип и город, название, адрес, часы, оценка ── */
+.tk-vp__head { display: flex; align-items: center; gap: 24px; }
+
+.tk-vp__ava {
+  flex: none;
+  width: 112px;
+  height: 112px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: rgba(144, 113, 99, .25);
+  border: 1px solid var(--tk-rule);
+  font: 600 44px/1 Oswald, sans-serif;
+  color: var(--tk-paper);
+}
+
+.tk-vp__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-vp__id { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.tk-vp__id .tk-kicker { margin: 0; }
+
+.tk-vp__name {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+  overflow-wrap: anywhere;
+}
+
+.tk-vp__line { margin: 0; font-size: 14px; color: var(--tk-beige); }
+
+.tk-vp__rating {
+  margin: 2px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+}
+
+.tk-vp__score { font-size: 18px; font-weight: 500; color: var(--tk-paper); }
+
+/* ── Камера идёт: обложка во всю ширину, отметка и кнопка поверх ── */
+.tk-vp__live {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #131211;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-vp__live img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s ease; }
+.tk-vp__live:hover img { transform: scale(1.02); }
+
+.tk-vp__badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--tk-accent);
+  font: 500 12px/1 Oswald, sans-serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-ink);
+}
+
+.tk-vp__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: tk-vp-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tk-vp-pulse { 50% { opacity: .3; } }
+
+.tk-vp__watch { position: absolute; left: 14px; bottom: 14px; gap: 8px; }
+
+.tk-vp__off {
+  margin: 0;
+  padding: 14px 18px;
+  border: 1px dashed var(--tk-rule);
+  font-size: 14px;
+  color: var(--tk-muted);
+}
+
+.tk-vp__acts { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* ── Пульт владельца ── */
+.tk-vp__own { display: flex; flex-direction: column; gap: 12px; }
+
+.tk-vp__state { margin: 0; font-size: 14px; color: var(--tk-beige); }
+.tk-vp__state b { font-weight: 700; }
+.tk-vp__state.is-ok b, .tk-vp__state.is-ok { color: var(--tk-green-live); }
+.tk-vp__state.is-wait b { color: var(--tk-accent); }
+
+/* «Отозвать правку» — ссылкой в строке состояния. */
+.tk-vp__link {
+  padding: 0;
+  margin-left: 6px;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: var(--tk-link);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Кнопки пульта — одной ширины в ряд, на телефоне столбиком. */
+.tk-vp__own-acts {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.tk-vp__danger.tk-btn { color: var(--tk-accent); }
+
+/* ── Описание и фото ── */
+.tk-vp__sec { display: flex; flex-direction: column; gap: 12px; }
+.tk-vp__sec .tk-kicker { margin: 0; }
+
+.tk-vp__about {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--tk-beige);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.tk-vp__photos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.tk-vp__photos a { display: block; aspect-ratio: 4 / 3; overflow: hidden; background: #131211; }
+.tk-vp__photos img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s ease; }
+.tk-vp__photos a:hover img { transform: scale(1.03); }
+
+/* ── Правка: оформление ── */
+.tk-vp__look { display: flex; flex-direction: column; gap: 18px; }
+.tk-vp__look-row { display: flex; align-items: center; gap: 20px; }
+.tk-vp__look-row .tk-vp__ava { width: 88px; height: 88px; font-size: 34px; }
+.tk-vp__look-side { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.tk-vp__cover {
+  flex: none;
+  width: 156px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #131211;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-vp__cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ── Правка: поля ── */
+.tk-vp__form { display: flex; flex-direction: column; gap: 14px; }
+.tk-vp__form .tk-form__row { align-items: stretch; }
+.tk-vp__form .tk-form__row .tk-field { width: 100%; }
+.tk-vp__form > .tk-btn { align-self: stretch; }
+
+.tk-vp__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.tk-vp__pair .tk-field { width: 100%; }
+
+.tk-vp__hours {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 84px auto 84px;
+  align-items: center;
+  gap: 10px;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+}
+
+.tk-vp__hours .tk-field { padding-block: 10px; text-align: center; }
+
+.tk-vp__photos-edit { display: flex; flex-direction: column; gap: 10px; }
+
+@media (max-width: 767px) {
+  .tk-vp { padding: 24px 16px 48px; }
+  .tk-vp__head { align-items: flex-start; gap: 16px; }
+  .tk-vp__ava { width: 80px; height: 80px; font-size: 32px; }
+  .tk-vp__name { font-size: 24px; }
+  .tk-vp__own-acts { grid-auto-flow: row; }
+  .tk-vp__own-acts .tk-btn { padding-top: 14px; padding-bottom: 14px; }
+  .tk-vp__photos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px) {
+  .tk-vp__pair { grid-template-columns: 1fr; }
+  .tk-vp__hours { grid-template-columns: auto 1fr auto 1fr; }
+  .tk-vp__hours > .tk-form__label { grid-column: 1 / -1; }
+  .tk-vp__look-row { align-items: flex-start; }
+  .tk-vp__cover { width: 112px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-vp__dot { animation: none; }
+  .tk-vp__live img, .tk-vp__photos img { transition: none; }
+}

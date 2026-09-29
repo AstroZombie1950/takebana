@@ -173,6 +173,14 @@
           <p class="tk-form__note" data-i18n="studio.adultNote"><%- t('studio.adultNote') %></p>
         </div>
 
+        <div class="tk-form__row">
+          <label class="tk-form__toggle">
+            <input type="checkbox" name="subscribersOnly"<%= defaults.subscribersOnly ? ' checked' : '' %>>
+            <span data-i18n="studio.subsOnly"><%- t('studio.subsOnly') %></span>
+          </label>
+          <p class="tk-form__note" data-i18n="studio.subsOnlyNote"><%- t('studio.subsOnlyNote') %></p>
+        </div>
+
         <button type="submit" class="tk-btn tk-btn--primary tk-studio__go" id="studioGo" data-i18n="<%= source === 'obs' ? 'studio.goObs' : 'studio.go' %>"><%- t(source === 'obs' ? 'studio.goObs' : 'studio.go') %></button>
       </form>
     </div>

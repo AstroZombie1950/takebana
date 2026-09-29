@@ -61,13 +61,16 @@ function unlinkUpload(url, folder) {
 
 const dropRoom = (name, why) => name && daily.deleteRoom(name).catch((err) => errorLog.external(err, 'daily.deleteRoom', { roomName: name, by: why }));
 
-// Заведение: камера, оценки, фотографии и обложка камеры, сам документ.
+// Заведение: камера, оценки, фотографии (и из черновика правки), обложка
+// камеры, логотип, сам документ.
 async function removeVenue(venue) {
   if (venue.online) await stopCamera(venue._id);
   await Rating.deleteMany({ establishment: venue._id });
   await ChatMessage.deleteMany({ venueId: venue._id });
-  for (const url of venue.photos || []) unlinkFile('establishments', path.basename(String(url)));
+  const photos = new Set([...(venue.photos || []), ...((venue.pending && venue.pending.photos) || [])]);
+  for (const url of photos) unlinkFile('establishments', path.basename(String(url)));
   unlinkUpload(venue.cover, 'thumbnails');
+  unlinkUpload(venue.avatar, 'avatars');
   await Establishments.deleteOne({ _id: venue._id });
 }
 

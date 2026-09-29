@@ -485,6 +485,20 @@
   color: var(--tk-ink);
 }
 
+/* «Для подписчиков» — под LIVE, тёмной плашкой с рамкой. */
+.tk-card__subs {
+  position: absolute;
+  top: 38px;
+  left: 10px;
+  padding: 4px 9px;
+  background: rgba(10, 10, 10, .78);
+  border: 1px solid var(--tk-accent);
+  font: 500 10px/1.2 Oswald, sans-serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+}
+
 .tk-card__live::before {
   content: "";
   width: 6px;

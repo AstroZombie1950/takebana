@@ -3332,6 +3332,32 @@
     menuPeer = null;
   }
 
+  // Кому я закрыл доступ: с сервера при загрузке, дальше — по событию
+  // access:changed (tk-app.js), в том числе из другой вкладки.
+  var restrictedSet = {};
+  (peerMenu.getAttribute('data-restricted') || '').split(',').forEach(function (id) { if (id) restrictedSet[id] = true; });
+  document.addEventListener('tk:access:changed', function (e) {
+    var d = e.detail || {};
+    if (d.by !== 'me') return;
+    if (d.restricted) restrictedSet[d.peerId] = true;
+    else delete restrictedSet[d.peerId];
+  });
+
+  function setRestricted(p, on) {
+    var ask = on ? confirmDialog(t('user.restrictQ', { name: p.name }), { okText: t('user.restrict') }) : Promise.resolve(true);
+    ask.then(function (yes) {
+      if (!yes) return;
+      return post('/restrict', { userId: p.id, on: on }).then(function () {
+        if (on) restrictedSet[p.id] = true;
+        else delete restrictedSet[p.id];
+        // Открыт диалог с ним — поле ввода меняется на объяснение сразу,
+        // не дожидаясь события из сокета.
+        if (peer && peer.id === p.id) setBlocked(on ? 'me' : null);
+        toast(t(on ? 'user.restricted' : 'user.unrestricted', { name: p.name }), 'ok');
+      });
+    }).catch(function (err) { toast(err.message, 'error'); });
+  }
+
   function openPeerMenu(el, where, x, y) {
     closeMenu();
     closePeerMenu();
@@ -3339,14 +3365,18 @@
     menuPeer = { p: p, where: where };
     var known = isContact(p.id);
     var fav = known && known.favorite;
+    var barred = !!restrictedSet[p.id];
     peerMenu.querySelectorAll('[data-act]').forEach(function (b) {
       var where0 = b.getAttribute('data-in');
       var act = b.getAttribute('data-act');
       b.hidden = (where0 && where0.split(',').indexOf(where) === -1)
-        || (act === 'contactAdd' && !!known)
+        || (act === 'contactAdd' && (!!known || barred))
         || (act === 'contactRemove' && !known)
         || (act === 'favorite' && !!fav)
-        || (act === 'unfavorite' && !fav);
+        || (act === 'unfavorite' && !fav)
+        || (act === 'restrict' && barred)
+        || (act === 'unrestrict' && !barred)
+        || ((act === 'call' || act === 'video') && barred);
     });
     var report = peerMenu.querySelector('[data-act="report"]');
     report.setAttribute('data-report-id', p.id);
@@ -3369,6 +3399,7 @@
     else if (act === 'contactAdd') addContact(p, 'chat');
     else if (act === 'contactRemove') removeContact(p);
     else if (act === 'favorite' || act === 'unfavorite') setFavorite(p, act === 'favorite');
+    else if (act === 'restrict' || act === 'unrestrict') setRestricted(p, act === 'restrict');
     // «Пожаловаться» дальше ведёт report.js — по data-report на самой кнопке.
   });
 

@@ -98,6 +98,9 @@ const ACTIONS = {
   'venue.live.on': 'Камера заведения включена',
   'venue.live.off': 'Камера заведения выключена',
   'venue.cover': 'Обложка камеры заведения',
+  'venue.avatar': 'Логотип заведения',
+  'venue.pending': 'Правка заведения отправлена на проверку',
+  'venue.review': 'Правка заведения проверена',
   'venue.rate': 'Оценка заведения',
 
   'report.create': 'Жалоба подана',
@@ -116,6 +119,7 @@ const ACTIONS = {
   'admin.password.set': 'Пароль задан администратором',
   'admin.links.follow': 'Индексация ссылки на сайт',
   'admin.error.resolve': 'Ошибка отмечена разобранной',
+  'admin.error.bulk': 'Ошибки разобраны или удалены пачкой',
   'admin.retention': 'Сроки хранения файлов',
   'admin.retention.user': 'Личные сроки хранения',
 };

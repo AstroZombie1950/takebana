@@ -46,7 +46,7 @@ setInterval(() => {
 // страницы эфира (streamPages.js) — ограничение и гейт 18+. Ответ — эфир
 // или код отказа с текстом.
 async function chatStream(streamId, userId) {
-  const stream = await Stream.findById(streamId).select('streamKey userId isActive isAdult slowMode').lean();
+  const stream = await Stream.findById(streamId).select('streamKey userId isActive isAdult slowMode subscribersOnly').lean();
   if (!stream) return { status: 404, message: 'Эфир не найден' };
   if (String(stream.userId) === String(userId)) return { stream, own: true };
   if (await restriction.isRestricted(stream.userId, userId)) {
@@ -56,6 +56,7 @@ async function chatStream(streamId, userId) {
     const u = userId ? await User.findById(userId).select('adultConfirmedAt').lean() : null;
     if (!u || !u.adultConfirmedAt) return { status: 403, message: 'Эфир для 18+: подтвердите возраст' };
   }
+  if (!(await restriction.canWatch(stream, userId))) return { status: 403, message: 'Эфир только для подписчиков' };
   return { stream };
 }
 

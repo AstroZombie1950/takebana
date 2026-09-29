@@ -47,7 +47,29 @@ const UNLOAD_NOISE = /browsing context is going away|page was (unloaded|discarde
 // о звуке — ещё и сам, через десять секунд каждого разговора. В списке
 // поломок они считались наравне с ними: «браузер: 11» — это девять ошибок
 // и два успешных отчёта. Вид записи check, свой пункт в фильтре панели.
-const CHECK_NAMES = /^(CallAudio|NetCheck)$/;
+//
+// CallDiag — хронология звонка, который не соединился через Daily. После
+// такого отчёта звонок сам уходит на свой сервер (public/tk-daily.js,
+// onStuck), а в хронологии почти всегда сеть человека: 3g, «нет ответа
+// от серверов Daily за 15 с». Это разбор чужой сети, а не наша поломка —
+// в отчёты, рядом с проверкой связи, где его и сравнивают.
+const CHECK_NAMES = /^(CallAudio|NetCheck|CallDiag)$/;
+
+// Не загрузился файл с чужого хоста: Метрика, которую режут Safari,
+// блокировщики и VPN, или скрипт расширения со случайного домена. Наша
+// страница этого уже не шлёт (partials/tkHead.ejs), но открытые до
+// обновления вкладки и кэш телефона ещё пришлют — отсекаем и здесь.
+// Наши — домен сайта с поддоменами, CDN и хост самого запроса.
+const suffixOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
+const OWN_HOSTS = [process.env.PUBLIC_URL, process.env.RECORDINGS_CDN_URL, process.env.HLS_BASE_URL].map(suffixOf).filter(Boolean);
+
+function foreignResource(name, source, req) {
+    if (name !== 'ResourceError' || !/^https?:/i.test(source)) return false;
+    let host;
+    try { host = new URL(source).hostname; } catch (e) { return false; }
+    const own = OWN_HOSTS.concat(req.hostname.replace(/^www\./, ''));
+    return !own.some((h) => host === h || host.endsWith('.' + h));
+}
 
 router.post('/api/client-error', clientErrorLimiter, express.json({ limit: '16kb' }), (req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -55,7 +77,8 @@ router.post('/api/client-error', clientErrorLimiter, express.json({ limit: '16kb
     // Старые вкладки ещё шлют «Script error.» — ошибку чужого скрипта без
     // подробностей (см. partials/tkHead.ejs). Не пишем и её.
     const opaque = /^Script error\.?$/.test(message) && !body.source;
-    const noise = UNLOAD_NOISE.test(message) || BOT_UA.test(req.get('user-agent') || '');
+    const noise = UNLOAD_NOISE.test(message) || BOT_UA.test(req.get('user-agent') || '')
+        || foreignResource(cut(body.name, 100), cut(body.source, 2000), req);
 
     // Пустое сообщение записывать нечего: так приходят ошибки загрузки
     // сторонних файлов, у которых браузер прячет подробности.

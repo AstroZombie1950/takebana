@@ -283,7 +283,7 @@ document.addEventListener('DOMContentLoaded', function () {
     { key: 'streams',    i18n: 'search.streams',    href: (x) => '/stream/' + encodeURIComponent(x._id) },
     { key: 'recordings', i18n: 'search.recordings', href: (x) => '/recording/' + encodeURIComponent(x._id) },
     { key: 'videos',     i18n: 'search.videos',     href: (x) => '/video/' + encodeURIComponent(x._id) },
-    { key: 'venues',     i18n: 'search.venues',     href: (x) => '/map?venue=' + encodeURIComponent(x._id) }
+    { key: 'venues',     i18n: 'search.venues',     href: (x) => '/venue/' + encodeURIComponent(x._id) }
   ];
 
   // Аватар человека: фото или буква на своём градиенте.

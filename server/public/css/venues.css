@@ -529,28 +529,6 @@
 }
 
 /* Средняя оценка: пять звёзд поверх пяти, закрашено на --v из 5. */
-.tk-stars {
-  position: relative;
-  display: inline-block;
-  font-size: 16px;
-  line-height: 1;
-  letter-spacing: 2px;
-  color: var(--tk-ink-soft);
-}
-
-.tk-stars::before { content: '★★★★★'; }
-
-.tk-stars::after {
-  content: '★★★★★';
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: calc(var(--v, 0) / 5 * 100%);
-  overflow: hidden;
-  white-space: nowrap;
-  color: var(--tk-accent);
-}
-
 .tk-vcard__vote {
   display: flex;
   align-items: center;
@@ -647,11 +625,15 @@
   gap: 14px;
 }
 
+/* Строка — ссылка на страницу заведения (29.09). */
 .tk-mine__top {
   display: flex;
   align-items: center;
   gap: 12px;
+  color: inherit;
 }
+
+.tk-mine__top:hover .tk-vrow__name { color: var(--tk-accent); }
 
 .tk-mine__state {
   flex: none;
@@ -673,40 +655,6 @@
   gap: 8px;
 }
 
-/* «Удалить» — к правому краю и цветом опасного действия: рядом с «Настройки»
- * его легко нажать не глядя. */
-.tk-mine__del {
-  margin-left: auto;
-  color: var(--tk-accent);
-}
-
-.tk-mine__del:hover { border-color: var(--tk-accent); }
-
-/* Настройки */
-.tk-venues__pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-.tk-venues__pair .tk-field,
-.tk-modal .tk-form__row .tk-field { width: 100%; }
-
-.tk-modal .tk-form__row { align-items: stretch; }
-
-.tk-venues__hours {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 84px auto 84px;
-  align-items: center;
-  gap: 10px;
-  font-family: Oswald, sans-serif;
-  font-size: 13px;
-  color: var(--tk-muted);
-}
-
-.tk-venues__hours .tk-field { padding-block: 10px; text-align: center; }
-
-.tk-dropzone[hidden] { display: none; }
 
 /* ── Узкие экраны: карта во весь экран, панель и карточка — снизу ─────── */
 @media (max-width: 1023px) {
@@ -789,13 +737,6 @@
   }
 
   .tk-vcard__photos { height: 170px; }
-}
-
-@media (max-width: 520px) {
-  .tk-venues__pair { grid-template-columns: 1fr; }
-
-  .tk-venues__hours { grid-template-columns: auto 1fr auto 1fr; }
-  .tk-venues__hours > .tk-form__label { grid-column: 1 / -1; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,5 +1,7 @@
-// Карта заведений (/main): фильтры, список, поиск, карточка, оценка, камера
-// заведения, кабинет владельца. Разметка — views/map.ejs, карта — tk-map.js.
+// Карта заведений (/map): фильтры, список, поиск, карточка, оценка, камера
+// заведения, список своих заведений. Разметка — views/map.ejs, карта —
+// tk-map.js. Правка и пульт владельца — на странице заведения
+// (/venue/:id, public/tk-venue-edit.js, с 29.09).
 //
 // Заменяет main.js и service.js (900 и 500 строк на jQuery с тремя плагинами):
 // карточка заведения заполнялась там двумя копиями кода — по щелчку на карте
@@ -47,7 +49,7 @@
   }
 
   // ── Окна ──
-  const modals = ['venuePhotoModal', 'myVenuesModal', 'venueSettingsModal'].map($).filter(Boolean);
+  const modals = ['venuePhotoModal', 'myVenuesModal'].map($).filter(Boolean);
 
   function openModal(m) { m.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
   function closeModal(m) {
@@ -273,11 +275,16 @@
     }).catch((e) => toast(e.message, 'error'));
   }
 
+  // Картинка карточки: идёт камера — обложка камеры первой (правки 29.09:
+  // обложку поставили, а карточка показывала букву); дальше фото; без
+  // них — логотип, и только потом буква.
   function fillCard(v) {
-    cardPhotos = v.photos || [];
+    cardPhotos = (v.online && v.cover ? [v.cover] : []).concat(v.photos || []);
+    if (!cardPhotos.length && v.avatar) cardPhotos = [v.avatar];
     $('venueCardPhotos').innerHTML = cardPhotos.length
       ? cardPhotos.map((src, i) => `<button type="button" data-i="${i}" aria-label="${esc(t('venues.photoN', { n: i + 1 }))}"><img src="${esc(src)}" alt=""></button>`).join('')
       : `<span class="tk-vcard__nophoto" aria-hidden="true">${esc(initial(v.name))}</span>`;
+    $('venuePage').href = '/venue/' + encodeURIComponent(v._id);
 
     $('venueCardMeta').textContent = typeCity(v);
     $('venueCardName').textContent = v.name;
@@ -346,7 +353,10 @@
     if (e.key === 'ArrowRight') showPhoto(photoAt + 1);
   });
 
-  // ── Кабинет владельца: камера и настройки ──
+  // ── Свои заведения ──
+  // Список со ссылками на страницы заведений: камера, правка и удаление —
+  // там (/venue/:id, с 29.09). Прежде всё это было здесь, окнами поверх
+  // карты, и найти, как запустить камеру, было непросто.
   const mineModal = $('myVenuesModal');
   const mineList = $('myVenuesList');
   let mine = [];
@@ -361,22 +371,24 @@
       const on = !!v.online;
       const approved = v.status === true;
       const state = on ? ['is-live', t('venues.onAir')]
-        : approved ? ['', t('venues.offlineState')]
-        : ['is-pending', t('venues.pending')];
+        : !approved ? ['is-pending', t('venues.pending')]
+        : v.pending ? ['is-pending', t('venue.page.draft')]
+        : ['', t('venues.offlineState')];
+      const id = esc(v._id);
       return `
         <li class="tk-mine__item">
-          <div class="tk-mine__top">
-            <span class="tk-vrow__pic">${pic(v)}</span>
+          <a class="tk-mine__top" href="/venue/${id}">
+            <span class="tk-vrow__pic">${v.avatar ? `<img src="${esc(v.avatar)}" alt="">` : pic(v)}</span>
             <span class="tk-vrow__body">
               <span class="tk-vrow__name">${esc(v.name)}</span>
               <span class="tk-vrow__meta">${esc(typeCity(v) || v.address)}</span>
             </span>
             <span class="tk-mine__state ${state[0]}">${state[1]}</span>
-          </div>
+          </a>
           <div class="tk-mine__actions">
-            ${approved ? `<a href="/venue/${esc(v._id)}/live" class="tk-btn tk-btn--primary tk-btn--sm">${esc(t('vlive.open'))}</a>` : ''}
-            <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" data-settings="${esc(v._id)}">${esc(t('venues.settingsBtn'))}</button>
-            <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-mine__del" data-remove="${esc(v._id)}">${esc(t('common.delete'))}</button>
+            <a href="/venue/${id}" class="tk-btn tk-btn--primary tk-btn--sm">${esc(t('venue.page.open'))}</a>
+            ${approved ? `<a href="/venue/${id}/live" class="tk-btn tk-btn--outline tk-btn--sm">${esc(t(on ? 'vlive.open' : 'venues.startLive'))}</a>` : ''}
+            <a href="/venue/${id}/edit" class="tk-btn tk-btn--ghost tk-btn--sm">${esc(t('venue.page.edit'))}</a>
           </div>
           ${approved ? '' : `<p class="tk-form__note">${esc(t('venues.pendingNote'))}</p>`}
         </li>`;
@@ -387,150 +399,6 @@
     $('myVenuesButton').addEventListener('click', () => {
       openModal(mineModal);
       loadMine().catch((e) => toast(e.message, 'error'));
-    });
-    mineList.addEventListener('click', (e) => {
-      const setBtn = e.target.closest('[data-settings]');
-      if (setBtn) {
-        openSettings(setBtn.dataset.settings);
-        return;
-      }
-      const delBtn = e.target.closest('[data-remove]');
-      if (delBtn) removeVenue(delBtn.dataset.remove, delBtn);
-    });
-  }
-
-  // Удаление необратимо, и вместе с заведением уходят его фотографии
-  // и оценки, — поэтому спрашиваем, а не удаляем по щелчку.
-  function removeVenue(id, button) {
-    const v = mine.find((x) => x._id === id);
-    if (!v) return;
-
-    confirmDialog(t('venues.deleteConfirm', { name: v.name }), { okText: t('common.delete') })
-      .then((yes) => {
-        if (!yes) return;
-        button.disabled = true;
-        return api('/establishment/' + encodeURIComponent(id), { method: 'DELETE' })
-          .then(() => {
-            toast(t('venues.deleted'), 'ok');
-            return Promise.all([loadMine(), loadVenues()]);
-          })
-          .catch((err) => {
-            button.disabled = false;
-            toast(err.message, 'error');
-          });
-      });
-  }
-
-  // ── Настройки заведения ──
-  const settingsModal = $('venueSettingsModal');
-  const settingsForm = $('venueSettingsForm');
-  const thumbs = $('venueThumbs');
-  const photoInput = $('venuePhotoInput');
-  const drop = $('venueDrop');
-  const MAX_PHOTOS = 6;
-  // Точка на карте: метка и поиск по адресу (public/tk-point.js). Карта
-  // внутри окна поднимается при первом открытии настроек, не раньше.
-  const pointBox = settingsForm && settingsForm.querySelector('[data-point]');
-  const point = pointBox && window.TKPoint
-    ? window.TKPoint.attach(pointBox, {
-        address: settingsForm.elements.address,
-        cityField: settingsForm.elements.city,
-      })
-    : null;
-  let editing = null;
-  let photos = []; // { url } — уже загруженное, { file, preview } — новое
-
-  function renderThumbs() {
-    thumbs.replaceChildren(...photos.map((p, i) => {
-      const div = document.createElement('div');
-      div.className = 'tk-thumb';
-      div.innerHTML = `<img src="${esc(p.url || p.preview)}" alt="">
-        <button type="button" class="tk-thumb__del" data-del="${i}" aria-label="${esc(t('venues.removePhoto'))}" data-i18n-aria="venues.removePhoto">
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-        </button>`;
-      return div;
-    }));
-    drop.hidden = photos.length >= MAX_PHOTOS;
-  }
-
-  function addFiles(files) {
-    const room = MAX_PHOTOS - photos.length;
-    const images = [...files].filter((f) => /^image\//.test(f.type));
-    if (images.length > room) toast(t('venues.photoLimit', { n: room }));
-    images.slice(0, room).forEach((file) => photos.push({ file, preview: URL.createObjectURL(file) }));
-    renderThumbs();
-  }
-
-  // Время: цифры и двоеточие после второй — как в заявке (tk-company.js).
-  function timeMask() {
-    const digits = this.value.replace(/\D/g, '').slice(0, 4);
-    this.value = digits.length > 2 ? digits.slice(0, 2) + ':' + digits.slice(2) : digits;
-  }
-
-  function openSettings(id) {
-    const v = mine.find((x) => x._id === id);
-    if (!v) return;
-    editing = id;
-    const f = settingsForm.elements;
-    f.name.value = v.name || '';
-    f.type.value = dict.types[v.type] ? v.type : '';
-    f.city.value = dict.cities[v.city] ? v.city : '';
-    f.country.value = v.country || '';
-    f.address.value = v.address || '';
-    f.weekdayOpen.value = (v.weekdayHours && v.weekdayHours.open) || '';
-    f.weekdayClose.value = (v.weekdayHours && v.weekdayHours.close) || '';
-    f.weekendOpen.value = (v.weekendHours && v.weekendHours.open) || '';
-    f.weekendClose.value = (v.weekendHours && v.weekendHours.close) || '';
-    photos = (v.photos || []).map((url) => ({ url }));
-    renderThumbs();
-    openModal(settingsModal);
-    // После openModal: скрытой карте MapLibre мерит нулевой размер.
-    if (point) point.open(v.location && v.location.lat, v.location && v.location.lng);
-  }
-
-  if (settingsForm) {
-    settingsForm.querySelectorAll('[data-time]').forEach((el) => el.addEventListener('input', timeMask));
-    photoInput.addEventListener('change', () => { addFiles(photoInput.files); photoInput.value = ''; });
-    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('is-over'); });
-    drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
-    drop.addEventListener('drop', (e) => {
-      e.preventDefault();
-      drop.classList.remove('is-over');
-      addFiles(e.dataTransfer.files);
-    });
-    thumbs.addEventListener('click', (e) => {
-      const del = e.target.closest('[data-del]');
-      if (!del) return;
-      const [gone] = photos.splice(Number(del.dataset.del), 1);
-      if (gone.preview) URL.revokeObjectURL(gone.preview);
-      renderThumbs();
-    });
-
-    settingsForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const f = settingsForm.elements;
-      const data = new FormData();
-      ['name', 'type', 'city', 'country', 'address'].forEach((k) => data.append(k, f[k].value));
-      data.append('weekdayHours', JSON.stringify({ open: f.weekdayOpen.value, close: f.weekdayClose.value }));
-      data.append('weekendHours', JSON.stringify({ open: f.weekendOpen.value, close: f.weekendClose.value }));
-      data.append('uploadedPhotos', JSON.stringify(photos.filter((p) => p.url).map((p) => p.url)));
-      // Точки может не быть: у заведений, заведённых до этой формы, координат
-      // нет, и пустое поле сервер пропускает, а не стирает старое значение.
-      const spot = point && point.value();
-      if (spot) data.append('location', JSON.stringify(spot));
-      photos.filter((p) => p.file).forEach((p) => data.append('newPhotos', p.file));
-
-      const button = settingsForm.querySelector('[type="submit"]');
-      button.disabled = true;
-      api('/updateEstablishment/' + editing, { method: 'PUT', body: data })
-        .then(() => {
-          toast(t('venues.saved'), 'ok');
-          closeModal(settingsModal);
-          loadMine();
-          loadVenues();
-        })
-        .catch((err) => toast(err.message, 'error'))
-        .finally(() => { button.disabled = false; });
     });
   }
 

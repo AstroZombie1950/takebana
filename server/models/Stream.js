@@ -73,6 +73,13 @@ const StreamSchema = new mongoose.Schema({
     enum: [0, 10, 30, 60],
     default: 0
   },
+  // Только для подписчиков (29.09): эфир виден в каталоге с отметкой, но
+  // картинку и чат получают автор, подписчики и модерация (utils/restrict.js,
+  // canWatch). Ставит ведущий в студии, как и метку 18+.
+  subscribersOnly: {
+    type: Boolean,
+    default: false
+  },
   thumbnail: {
     type: String, // Путь к изображению
     default: null // Оставляем пустым по умолчанию

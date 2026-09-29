@@ -491,6 +491,36 @@ body.tk-panel {
 
 .tk-card--error.is-done { opacity: .55; }
 
+/* Разбор пачкой: полоса над карточками ошибок и галочка на каждой. Полоса
+ * липнет к верху — выбирают, листая вниз, а действовать надо, не листая
+ * обратно. Выбранная карточка — рамкой, не заливкой: текст стека читается
+ * и так. */
+.tk-bulk {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: var(--tk-ink);
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-bulk__count { font-size: 12px; color: var(--tk-muted); }
+.tk-bulk__acts { display: flex; gap: 8px; margin-left: auto; }
+
+.tk-card--error { cursor: pointer; }
+.tk-card--error pre, .tk-card--error code { cursor: text; }
+.tk-card--error.is-picked { border-color: var(--tk-accent); box-shadow: inset 0 0 0 1px var(--tk-accent); }
+.tk-card--error.is-done.is-picked { opacity: .8; }
+
+.tk-card__pick { display: flex; flex: none; padding: 2px 0; cursor: pointer; }
+.tk-card__pick input { width: 16px; height: 16px; margin: 0; accent-color: var(--tk-accent); cursor: pointer; }
+.tk-card__pick + .tk-card__name { flex: 1; min-width: 0; }
+
 .tk-card__head {
   display: flex;
   align-items: flex-start;
@@ -557,6 +587,21 @@ body.tk-panel {
 
 .tk-card__acts .tk-field { flex: 1 1 180px; min-width: 0; padding: 7px 10px; font-size: 13px; }
 .tk-card__acts .tk-panel__why { flex: 1 1 100%; }
+
+/* Правка владельца на проверке — над полями одобренного, рамкой акцента. */
+.tk-draft {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--tk-accent);
+}
+
+.tk-draft__head { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tk-accent); }
+.tk-draft__list { margin: 0; padding-left: 16px; font-size: 13px; color: var(--tk-beige); display: flex; flex-direction: column; gap: 4px; }
+.tk-draft__list s { color: var(--tk-muted); }
+.tk-draft__pics { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tk-draft__pics img { width: 64px; height: 48px; object-fit: cover; display: block; }
 
 /* ── Поля в карточке заведения ────────────────────────────────────────── */
 .tk-fields {

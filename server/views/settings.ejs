@@ -41,9 +41,18 @@
 
       <div class="tk-set__grid">
 
-        <!-- Имя и никнейм -->
+        <%# Вход в панель — только администратору: модератору панель тоже
+            открыта, но кнопку просили именно для админа (правки 29.09). %>
+        <% if (isAdmin) { %>
+        <section class="tk-panel tk-set__admin">
+          <p class="tk-panel__title" data-i18n="settings.panel"><%- t('settings.panel') %></p>
+          <p class="tk-note" data-i18n="settings.panelHint"><%- t('settings.panelHint') %></p>
+          <a href="/panel" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="settings.panelBtn"><%- t('settings.panelBtn') %></a>
+        </section>
+        <% } %>
+
+        <%# Имя и никнейм — без заголовка: подписи полей и так говорят, что это. %>
         <section class="tk-panel">
-          <p class="tk-panel__title" data-i18n="settings.who"><%- t('settings.who') %></p>
           <form class="tk-form tk-set__form" id="nameForm" novalidate>
             <label class="tk-form__label" for="profileName" data-i18n="settings.name"><%- t('settings.name') %></label>
             <input id="profileName" class="tk-field" type="text" maxlength="64" value="<%= profile.login %>" placeholder="<%= ta('settings.namePh') %>" data-i18n-placeholder="settings.namePh">
@@ -83,10 +92,10 @@
         <!-- О себе и ссылки: одной кнопкой (/settings/about). Ссылку сети
              сервер собирает сам по логину (utils/profileLinks.js); под полем —
              что получилось, чтобы проверить переходом. -->
-        <%# Пока ссылки выключены (utils/profileLinks.js, ENABLED) — только описание. %>
-        <% var aboutKey = linksOn ? 'settings.about' : 'settings.aboutBio'; %>
+        <%# Пока ссылки выключены (utils/profileLinks.js, ENABLED) — только
+            описание, и заголовок над ним не нужен: хватает подписи поля. %>
         <section class="tk-panel tk-set__about<% if (!linksOn) { %> tk-set__about--bio<% } %>">
-          <p class="tk-panel__title" data-i18n="<%= aboutKey %>"><%- t(aboutKey) %></p>
+          <% if (linksOn) { %><p class="tk-panel__title" data-i18n="settings.about"><%- t('settings.about') %></p><% } %>
           <form class="tk-form tk-set__form" id="aboutForm" novalidate>
             <div class="tk-set__about-cols">
               <div class="tk-set__bio">
@@ -116,6 +125,27 @@
             <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>
           </form>
         </section>
+
+        <%# Свои заведения (29.09) — во всю ширину, ссылками на их страницы:
+            там камера, правка и удаление. Нет заведений — нет и блока,
+            заявка подаётся с карты. %>
+        <% if (venues.length) { %>
+        <section class="tk-panel tk-set__venues">
+          <p class="tk-panel__title" data-i18n="venues.mine"><%- t('venues.mine') %></p>
+          <ul class="tk-set__vlist" data-user-content>
+            <% venues.forEach(function (v) { var st = v.online ? ['is-live', 'venues.onAir'] : v.status !== true ? ['is-wait', 'venues.pending'] : v.pending && v.pending.at ? ['is-wait', 'venue.page.draft'] : ['', 'venues.offlineState']; %>
+            <li>
+              <a href="/venue/<%= v._id %>" class="tk-set__vrow">
+                <span class="tk-set__vava"><% if (v.avatar) { %><img src="<%= v.avatar %>" alt=""><% } else { %><%= (String(v.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase() %><% } %></span>
+                <span class="tk-set__vname"><%= v.name %></span>
+                <span class="tk-set__vstate <%= st[0] %>" data-i18n="<%= st[1] %>"><%- t(st[1]) %></span>
+              </a>
+            </li>
+            <% }); %>
+          </ul>
+          <a href="/company-register" class="tk-btn tk-btn--ghost tk-btn--xs tk-set__vadd" data-i18n="venues.add"><%- t('venues.add') %></a>
+        </section>
+        <% } %>
 
         <p class="tk-kicker tk-set__row-title" data-i18n="settings.security"><%- t('settings.security') %></p>
 

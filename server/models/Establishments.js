@@ -26,8 +26,37 @@ const EstablishmentsSchema = new mongoose.Schema({
     // Обложка камеры (28.09): заставка страницы /venue/:id/live, пока нет
     // картинки, и превью ссылки. /uploads/thumbnails/…, ставит владелец.
     cover: String,
-    online: Boolean // камера заведения включена (routes/venueLive.js)
+    // Логотип (29.09): круглый значок на карте, в списке и на странице
+    // заведения. /uploads/avatars/…, ставит владелец сразу, без проверки —
+    // как обложку камеры и аватар человека.
+    avatar: String,
+    // Описание для страницы заведения /venue/:id (29.09).
+    about: String,
+    online: Boolean, // камера заведения включена (routes/venueLive.js)
+    // Правка одобренного заведения ждёт проверки (29.09). До того правка
+    // снимала заведение с карты целиком (status: false) до повторного
+    // одобрения. Теперь на карте остаётся одобренное, а правка лежит здесь,
+    // пока панель её не примет (поля переезжают наверх) или не отклонит.
+    // Фото в черновике — полный новый список: новые файлы уже на диске,
+    // отклонение их убирает.
+    pending: {
+        at: Date,
+        name: String,
+        // Объектом: голое `type: String` Mongoose принял бы за тип всего pending.
+        type: { type: String },
+        country: String,
+        city: String,
+        address: String,
+        about: String,
+        weekdayHours: { open: String, close: String },
+        weekendHours: { open: String, close: String },
+        location: { lat: Number, lng: Number },
+        photos: { type: [String], default: undefined },
+    },
 });
+
+// Правки на проверке — вкладка панели «Заведения», фильтр «Правки».
+EstablishmentsSchema.index({ 'pending.at': 1 }, { sparse: true });
 
 // Заведения владельца — личный кабинет
 EstablishmentsSchema.index({ owner: 1 });

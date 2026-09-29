@@ -48,4 +48,19 @@ const BLOCKED = {
   them: 'Автор ограничил вам доступ — написать и позвонить нельзя',
 };
 
-module.exports = { isRestricted, restrict, unrestrict, between, BLOCKED };
+// Эфир «только для подписчиков» (Stream.subscribersOnly, 29.09): смотреть
+// и читать чат можно автору, его подписчикам и модерации — ей разбирать
+// жалобы на то, что показывают. Остальным эфир виден в каталоге, но без
+// картинки и чата.
+async function canWatch(stream, userId) {
+  if (!stream || !stream.subscribersOnly) return true;
+  if (!userId) return false;
+  if (String(stream.userId) === String(userId)) return true;
+  const [sub, staff] = await Promise.all([
+    Subscription.exists({ subscriberId: userId, subscribedToId: stream.userId }),
+    User.exists({ _id: userId, role: { $in: ['admin', 'moderator'] } }),
+  ]);
+  return !!(sub || staff);
+}
+
+module.exports = { isRestricted, restrict, unrestrict, between, canWatch, BLOCKED };

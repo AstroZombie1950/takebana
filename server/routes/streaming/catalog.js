@@ -70,7 +70,7 @@ async function findStreams(category, filters) {
     .sort(filters.sort === 'new' ? { startedAt: -1 } : { viewers: -1, startedAt: -1 })
     .limit(PAGE_SIZE)
     .populate('userId', 'nickname login email avatar')
-    .select('title category city viewers thumbnail userId isActive')
+    .select('title category city viewers thumbnail userId isActive subscribersOnly')
     .lean();
 
   // Эфир удалённого пользователя приходит с userId: null. Прежде на нём
@@ -85,6 +85,7 @@ async function findStreams(category, filters) {
       city: stream.city,
       viewers: stream.viewers,
       isActive: stream.isActive,
+      subscribersOnly: !!stream.subscribersOnly,
       thumbnail: stream.thumbnail || null,
       user: {
         displayName,
@@ -282,10 +283,10 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
       currentUserId ? privacy.messageGate(conversation, currentUserId, userId).then((g) => g.ok) : true,
       currentUserId ? privacy.decide('calls', userId, currentUserId).then((g) => g.ok) : true,
     ]);
-  const recordings = restricted ? [] : await Recording.find({ userId, ...(isSelf ? {} : { status: 'ready' }) })
-    .sort({ createdAt: -1 })
-    .select('title status duration thumb isAdult createdAt views')
-    .lean();
+  // Записи — начало ленты, целиком — на /@ник/recordings.
+  const [recordings, recordingsTotal] = restricted
+    ? [[], 0]
+    : await Promise.all([gallery.recordings(userId, isSelf), gallery.recordingsCount(userId, isSelf)]);
   // Галерея — вкладками «Фото» и «Видео» (utils/gallery.js): в профиле —
   // начало каждой, целиком — на /@ник/photos и /@ник/videos. Владельцу
   // видны и ролики в работе.
@@ -309,10 +310,10 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
     // Карточка для мессенджеров с CDN или null — общая обложка (utils/ogImage.js).
     ogImage: ogImage.forProfile(user),
     recordings,
+    recordingsTotal,
     photos,
     videos,
     counts,
-    preview: gallery.PREVIEW,
     restricted,
     iRestricted,
     inContacts,
@@ -348,6 +349,42 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
 router.get('/@:nick/gallery', (req, res) => {
   const qs = req.originalUrl.indexOf('?');
   res.redirect(301, `/@${req.params.nick}/photos` + (qs === -1 ? '' : req.originalUrl.slice(qs)));
+});
+
+// Записи эфиров целиком: карточками, новые сверху, по gallery.PAGE на
+// страницу (?page=N). Адресация листалки и ограничение доступа — как
+// у вкладок галереи ниже.
+router.get('/@:nick/recordings', commonDataMiddleware, async (req, res) => {
+  const user = await byNick(req, res, 'nickname login email avatar banned');
+  if (!user) return;
+  const userId = String(user._id);
+
+  const me = req.session.userId;
+  const isSelf = userId === String(me);
+  const restricted = !!me && !isSelf && await restriction.isRestricted(userId, me);
+  res.locals.pageOwner = { id: userId, scope: 'profile', access: restricted ? 'them' : '' };
+
+  const total = restricted ? 0 : await gallery.recordingsCount(userId, isSelf);
+  const asked = req.query.page;
+  const pg = gallery.page(total, parseInt(asked, 10));
+  const base = `${profileUrl(user)}/recordings`;
+  if (asked !== undefined) {
+    if (asked === '1') return res.redirect(301, base);
+    if (asked !== String(pg.page) || pg.page === 1) return notFound(req, res);
+  }
+  const items = restricted ? [] : await gallery.recordings(userId, isSelf, { skip: pg.skip, limit: gallery.PAGE });
+
+  res.render('recordings', {
+    owner: { _id: user._id, displayName: userView.displayName(user), url: profileUrl(user) },
+    isSelf,
+    restricted,
+    // Пока все записи помещаются в профиль, страница его повторяет — вне индекса.
+    indexable: !user.banned && total > gallery.PREVIEW.recordings,
+    items,
+    total,
+    page: pg.page,
+    pages: pg.pages,
+  });
 });
 
 // Вкладка галереи целиком: фото сеткой или видео карточками, новые сверху,

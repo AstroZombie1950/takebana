@@ -9,7 +9,7 @@
 // всегда в нижнем регистре, ник — тоже (utils/nickname.js).
 
 const PAGES = ['about', 'authors', 'map', 'terms', 'privacy', 'cookies', 'search',
-  'userPage', 'video', 'recording', 'stream', 'streaming'];
+  'userPage', 'video', 'recording', 'stream', 'streaming', 'venue'];
 const BY_LOWER = new Map(PAGES.map((p) => [p.toLowerCase(), p]));
 
 function canonicalPath(req, res, next) {

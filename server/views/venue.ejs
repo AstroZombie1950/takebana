@@ -1,0 +1,117 @@
+<%#
+  Страница заведения /venue/:id (29.09) — маршрут в routes/establishmentsRouter.js.
+  Гостю: логотип, название, адрес, часы, оценка, описание, фото и камера —
+  идёт она сейчас или нет. Владельцу (и администратору) сверху ещё пульт:
+  запустить трансляцию, изменить, удалить, что сейчас на проверке.
+  Действия пульта — public/tk-venue-edit.js, вид — css/venue.css.
+%>
+<% var meta = [venue.type ? ta('venue.' + venue.type, catalog.VENUE_TYPE_NAME[venue.type] || '') : '',
+               venue.city ? ta('city.' + venue.city, catalog.CITY_NAME[venue.city] || '') : ''].filter(Boolean).join(' · ');
+   var day = new Date().getDay(), hours = day === 0 || day === 6 ? venue.weekendHours : venue.weekdayHours;
+   var hoursOk = hours && /^\d{2}:\d{2}$/.test(hours.open) && /^\d{2}:\d{2}$/.test(hours.close);
+   var photos = venue.photos || [];
+   // Картинка эфира: обложка камеры, без неё первое фото.
+   var shot = venue.cover || photos[0];
+   var letter = (String(venue.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase();
+   var approved = venue.status === true;
+   var draftAt = venue.pending && venue.pending.at;
+   var votes = plural(rating.count, 'venues.votes'); %>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%# В индекс — одобренное заведение: это его страница в поиске. %>
+<%- include('partials/tkHead', { title: venue.name + ' — Takebana', description: [meta, venue.address].filter(Boolean).join(' · '),
+      seo: { path: '/venue/' + venue._id, robots: approved ? '' : 'noindex, nofollow', image: venue.cover || photos[0] || venue.avatar, imageAlt: venue.name } }) %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/venue.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-vp" data-venue="<%= venue._id %>" data-name="<%= venue.name %>">
+
+      <a href="/map?venue=<%= venue._id %>" class="tk-page__back">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        <span data-i18n="venue.page.back"><%- t('venue.page.back') %></span>
+      </a>
+
+      <header class="tk-vp__head">
+        <div class="tk-vp__ava"><% if (venue.avatar) { %><img src="<%= venue.avatar %>" alt=""><% } else { %><%= letter %><% } %></div>
+        <div class="tk-vp__id">
+          <% if (meta) { %><p class="tk-kicker"><%= meta %></p><% } %>
+          <h1 class="tk-vp__name" data-user-content><%= venue.name %></h1>
+          <% if (venue.address) { %><p class="tk-vp__line" data-user-content><%= venue.address %></p><% } %>
+          <% if (hoursOk) { %><p class="tk-vp__line" data-i18n="venues.today" data-i18n-vars='<%= JSON.stringify({ from: hours.open, to: hours.close }) %>'><%- t('venues.today', { from: hours.open, to: hours.close }) %></p><% } %>
+          <p class="tk-vp__rating">
+            <span class="tk-vp__score"><%= rating.average.toFixed(1) %></span>
+            <span class="tk-stars" style="--v: <%= rating.average %>" aria-hidden="true"></span>
+            <span><%= num(rating.count) %> <span data-i18n="<%= votes.key %>"><%= votes.text %></span></span>
+          </p>
+        </div>
+      </header>
+
+      <%# Камера: идёт — картинкой и кнопкой «Смотреть», нет — строкой. %>
+      <% if (approved && venue.online) { %>
+      <a href="/venue/<%= venue._id %>/live" class="tk-vp__live">
+        <% if (shot) { %><img src="<%= shot %>" alt=""><% } %>
+        <span class="tk-vp__badge"><i class="tk-vp__dot" aria-hidden="true"></i><span data-i18n="venues.onAir"><%- t('venues.onAir') %></span></span>
+        <span class="tk-btn tk-btn--primary tk-btn--sm tk-vp__watch" data-i18n="venues.watch"><%- t('venues.watch') %></span>
+      </a>
+      <% } else if (approved) { %>
+      <p class="tk-vp__off" data-i18n="vlive.off"><%- t('vlive.off') %></p>
+      <% } %>
+
+      <div class="tk-vp__acts">
+        <a href="/map?venue=<%= venue._id %>" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="vlive.onMap"><%- t('vlive.onMap') %></a>
+      </div>
+
+      <% if (manage) { %>
+      <%# Пульт владельца. Одобрение — сверху: от него зависит, что можно. %>
+      <section class="tk-panel tk-vp__own">
+        <p class="tk-panel__title" data-i18n="venue.page.manage"><%- t('venue.page.manage') %></p>
+        <% if (!approved) { %>
+        <p class="tk-vp__state is-wait"><b data-i18n="venues.pending"><%- t('venues.pending') %></b> — <span data-i18n="venues.pendingNote"><%- t('venues.pendingNote') %></span></p>
+        <% } else if (draftAt) { %>
+        <p class="tk-vp__state is-wait"><b data-i18n="venue.page.draft"><%- t('venue.page.draft') %></b> — <span data-i18n="venue.page.draftNote" data-i18n-vars='<%= JSON.stringify({ date: date(draftAt, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) }) %>'><%- t('venue.page.draftNote', { date: date(draftAt, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) }) %></span>
+          <button type="button" class="tk-vp__link" data-venue-withdraw data-i18n="venue.page.withdraw"><%- t('venue.page.withdraw') %></button></p>
+        <% } else { %>
+        <p class="tk-vp__state is-ok" data-i18n="venue.page.approved"><%- t('venue.page.approved') %></p>
+        <% } %>
+        <div class="tk-vp__own-acts">
+          <% if (approved) { %><a href="/venue/<%= venue._id %>/live" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="<%= venue.online ? 'vlive.open' : 'venues.startLive' %>"><%- t(venue.online ? 'vlive.open' : 'venues.startLive') %></a><% } %>
+          <a href="/venue/<%= venue._id %>/edit" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="venue.page.edit"><%- t('venue.page.edit') %></a>
+          <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-vp__danger" data-venue-delete data-i18n="common.delete"><%- t('common.delete') %></button>
+        </div>
+        <% if (approved) { %><p class="tk-note" data-i18n="venue.page.liveHint"><%- t('venue.page.liveHint') %></p><% } %>
+      </section>
+      <% } %>
+
+      <% if (venue.about) { %>
+      <section class="tk-vp__sec">
+        <h2 class="tk-kicker" data-i18n="venue.page.about"><%- t('venue.page.about') %></h2>
+        <p class="tk-vp__about" data-user-content><%= venue.about %></p>
+      </section>
+      <% } %>
+
+      <% if (photos.length) { %>
+      <section class="tk-vp__sec">
+        <h2 class="tk-kicker" data-i18n="venue.page.photos"><%- t('venue.page.photos') %></h2>
+        <div class="tk-vp__photos">
+          <% photos.forEach(function (src, i) { %>
+          <a href="<%= src %>" target="_blank" rel="noopener" aria-label="<%= ta('venues.photoN', { n: i + 1 }) %>"><img src="<%= src %>" alt="" loading="lazy"></a>
+          <% }); %>
+        </div>
+      </section>
+      <% } %>
+
+    </div>
+  </main>
+</div>
+<% if (manage) { %><script defer src="<%= asset('/tk-venue-edit.js') %>"></script><% } %>
+</body>
+</html>

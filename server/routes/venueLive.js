@@ -34,6 +34,9 @@ const errorLog = require('../utils/errorLog');
 const { UPLOADS, upload } = require('./streaming/uploads');
 const { saveImage, BadImageError } = require('../utils/image');
 const { resolveWithin, isPlainFileName } = require('../utils/safePath');
+// Лениво: utils/userDelete сам берёт отсюда stopCamera, и прямой require
+// по кругу оставил бы ему пустой объект.
+const unlinkUpload = (url, folder) => require('../utils/userDelete').unlinkUpload(url, folder);
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 const DAILY_MAX_PARTICIPANTS = Number(process.env.DAILY_MAX_PARTICIPANTS) || 20;
@@ -248,6 +251,34 @@ router.delete('/api/venues/:id/cover', requireAuth, ownVenue, async (req, res) =
   const before = await Establishments.findOneAndUpdate({ _id: req.params.id }, { $unset: { cover: 1 } }).select('cover').lean();
   if (before) dropCover(before.cover);
   audit(req, 'venue.cover', { targetType: 'venue', target: req.resource, meta: { removed: true } });
+  res.json({ ok: true });
+});
+
+// ── Логотип заведения (29.09) ────────────────────────────────────────────────
+// Значок на карте, в списке и на странице заведения. Ставится сразу, как
+// обложка и аватар человека: картинку проверяют жалобы, а не очередь панели.
+const AVATARS = path.join(UPLOADS, 'avatars');
+
+router.post('/api/venues/:id/avatar', requireAuth, requireNotBanned, ownVenue, upload.single('avatar'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: 'Изображение не загружено.' });
+  let name;
+  try {
+    name = await saveImage(req.file.buffer, 'avatar', AVATARS);
+  } catch (e) {
+    if (!(e instanceof BadImageError)) throw e;
+    return res.status(400).json({ message: e.message });
+  }
+  const avatar = `/uploads/avatars/${name}`;
+  const before = await Establishments.findOneAndUpdate({ _id: req.params.id }, { $set: { avatar } }).select('avatar').lean();
+  if (before) unlinkUpload(before.avatar, 'avatars');
+  audit(req, 'venue.avatar', { targetType: 'venue', target: req.resource });
+  res.json({ avatar });
+});
+
+router.delete('/api/venues/:id/avatar', requireAuth, ownVenue, async (req, res) => {
+  const before = await Establishments.findOneAndUpdate({ _id: req.params.id }, { $unset: { avatar: 1 } }).select('avatar').lean();
+  if (before) unlinkUpload(before.avatar, 'avatars');
+  audit(req, 'venue.avatar', { targetType: 'venue', target: req.resource, meta: { removed: true } });
   res.json({ ok: true });
 });
 

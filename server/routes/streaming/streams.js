@@ -93,13 +93,14 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
   // Метку 18+ ставит сам вещатель при создании эфира. Снять её может только
   // модерация — иначе смысл гейта теряется на первом же нажатии.
   isAdult: { type: 'bool', required: false, default: false, label: 'Контент 18+' },
+  subscribersOnly: { type: 'bool', required: false, default: false, label: 'Только для подписчиков' },
   source: { type: 'string', required: true, values: Object.keys(SOURCES), label: 'Источник' },
   // Обложка (21.09): keep — оставить прежнюю (черновика или прошлого эфира),
   // none — убрать. Новую картинку студия шлёт следом в /upload-thumbnail.
   cover: { type: 'string', default: 'keep', values: ['keep', 'none'], label: 'Обложка' },
 }), async (req, res) => {
   const userId = req.session.userId;
-  const { title, category, subcategory, city, description, isAdult, source, cover } = req.body;
+  const { title, category, subcategory, city, description, isAdult, subscribersOnly, source, cover } = req.body;
 
   if (SUB_CATEGORY[subcategory] !== category) {
     return res.status(400).json({ message: 'Подкатегория не относится к выбранной категории' });
@@ -109,7 +110,7 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
   if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
 
   const thumbnail = cover === 'none' ? '' : (user.streamDefaults && user.streamDefaults.thumbnail) || '';
-  const fields = { title, category, subcategory, city: city || '', description: description || '', isAdult };
+  const fields = { title, category, subcategory, city: city || '', description: description || '', isAdult, subscribersOnly };
   user.streamDefaults = { ...fields, source, thumbnail };
   // Ключ создаёт ещё студия, когда показывает его для OBS; здесь — страховка.
   if (!user.streamKey) user.streamKey = uuidv4();
@@ -136,7 +137,7 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
     stream = await Stream.create({ userId, streamKey: user.streamKey, ...fields, ...SOURCES[source], thumbnail: thumbnail || null, isActive: false });
   }
 
-  audit(req, 'stream.setup', { targetType: 'stream', target: stream, meta: { source, category, subcategory, city: city || '', isAdult: !!isAdult } });
+  audit(req, 'stream.setup', { targetType: 'stream', target: stream, meta: { source, category, subcategory, city: city || '', isAdult: !!isAdult, subscribersOnly: !!subscribersOnly } });
   res.json({ streamId: String(stream._id), streamKey: stream.streamKey });
 });
 

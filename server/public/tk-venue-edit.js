@@ -1,0 +1,175 @@
+// Страница заведения и её правка (views/venue.ejs, views/venueEdit.ejs, 29.09).
+//
+// На странице заведения — пульт владельца: удалить (без проверки, сразу)
+// и отозвать правку, которая ещё ждёт проверки. На странице правки —
+// логотип и обложка камеры (сразу, отдельными запросами), поля, точка
+// на карте (tk-point.js) и фото; «Сохранить» у одобренного заведения
+// отправляет правку на проверку, у неодобренного — сразу в заведение.
+// До 29.09 всё это жило окном поверх карты (tk-venues.js).
+(function () {
+  'use strict';
+
+  var t = function (k, v) { return window.t ? window.t(k, v) : ''; };
+  var root = document.querySelector('.tk-vp[data-venue]');
+  if (!root) return;
+  var ID = root.getAttribute('data-venue');
+  var NAME = root.getAttribute('data-name') || '';
+  var esc = function (s) { return escapeHtml(String(s == null ? '' : s)); };
+
+  function api(url, opts) {
+    return fetch(url, opts).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (body) {
+        if (!r.ok) throw new Error(body.message || 'HTTP ' + r.status);
+        return body;
+      });
+    });
+  }
+
+  // ── Пульт на странице заведения ──
+  document.addEventListener('click', function (e) {
+    var del = e.target.closest('[data-venue-delete]');
+    if (del) {
+      confirmDialog(t('venues.deleteConfirm', { name: NAME }), { okText: t('common.delete') }).then(function (yes) {
+        if (!yes) return;
+        del.disabled = true;
+        return api('/establishment/' + encodeURIComponent(ID), { method: 'DELETE' }).then(function () {
+          toast(t('venues.deleted'), 'ok');
+          location.href = '/map';
+        });
+      }).catch(function (err) { del.disabled = false; toast(err.message, 'error'); });
+      return;
+    }
+    var back = e.target.closest('[data-venue-withdraw]');
+    if (back) {
+      back.disabled = true;
+      api('/updateEstablishment/' + encodeURIComponent(ID), { method: 'DELETE' })
+        .then(function () { location.reload(); })
+        .catch(function (err) { back.disabled = false; toast(err.message, 'error'); });
+    }
+  });
+
+  var form = document.getElementById('venueEditForm');
+  if (!form) return;
+
+  // ── Логотип и обложка камеры: сразу, без проверки ──
+  var imageInput = document.getElementById('venueImageInput');
+  var picking = '';
+  var BOX = { avatar: document.getElementById('venueAva'), cover: document.getElementById('venueCoverBox') };
+
+  function paint(kind, url) {
+    var box = BOX[kind];
+    if (url) box.innerHTML = '<img src="' + esc(url) + '" alt="">';
+    else box.textContent = kind === 'avatar' ? ((NAME.match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase()) : '';
+    root.querySelector('[data-drop="' + kind + '"]').hidden = !url;
+  }
+
+  root.addEventListener('click', function (e) {
+    var pick = e.target.closest('[data-pick]');
+    if (pick) { picking = pick.getAttribute('data-pick'); imageInput.click(); return; }
+    var drop = e.target.closest('[data-drop]');
+    if (!drop) return;
+    var kind = drop.getAttribute('data-drop');
+    api('/api/venues/' + encodeURIComponent(ID) + '/' + kind, { method: 'DELETE' })
+      .then(function () { paint(kind, ''); })
+      .catch(function (err) { toast(err.message, 'error'); });
+  });
+
+  imageInput.addEventListener('change', function () {
+    var file = imageInput.files[0];
+    imageInput.value = '';
+    if (!file || !picking) return;
+    var kind = picking;
+    var data = new FormData();
+    data.append(kind, file);
+    api('/api/venues/' + encodeURIComponent(ID) + '/' + kind, { method: 'POST', body: data })
+      .then(function (r) {
+        paint(kind, r[kind]);
+        toast(t(kind === 'avatar' ? 'venue.page.logoSaved' : 'vlive.coverSaved'), 'ok');
+      })
+      .catch(function (err) { toast(err.message, 'error'); });
+  });
+
+  // ── Поля ──
+  var f = form.elements;
+  f.address.value = form.getAttribute('data-address') || '';
+
+  // Время: цифры и двоеточие после второй — как в заявке (tk-company.js).
+  form.querySelectorAll('[data-time]').forEach(function (el) {
+    el.addEventListener('input', function () {
+      var d = el.value.replace(/\D/g, '').slice(0, 4);
+      el.value = d.length > 2 ? d.slice(0, 2) + ':' + d.slice(2) : d;
+    });
+  });
+
+  // Точка на карте: метка и поиск по адресу (public/tk-point.js).
+  var pointBox = form.querySelector('[data-point]');
+  var point = pointBox && window.TKPoint ? window.TKPoint.attach(pointBox, { address: f.address, cityField: f.city }) : null;
+  var lat = parseFloat(form.getAttribute('data-lat'));
+  var lng = parseFloat(form.getAttribute('data-lng'));
+  if (point) point.open(Number.isFinite(lat) ? lat : undefined, Number.isFinite(lng) ? lng : undefined);
+
+  // ── Фото: уже загруженные { url } и новые { file, preview } ──
+  var thumbs = document.getElementById('venueThumbs');
+  var drop = document.getElementById('venueDrop');
+  var photoInput = document.getElementById('venuePhotoInput');
+  var MAX = Number(thumbs.getAttribute('data-max')) || 6;
+  var photos = JSON.parse(thumbs.getAttribute('data-photos') || '[]').map(function (url) { return { url: url }; });
+
+  function renderThumbs() {
+    thumbs.innerHTML = photos.map(function (p, i) {
+      return '<div class="tk-thumb"><img src="' + esc(p.url || p.preview) + '" alt="">' +
+        '<button type="button" class="tk-thumb__del" data-del="' + i + '" aria-label="' + esc(t('venues.removePhoto')) + '">' +
+        '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>' +
+        '</button></div>';
+    }).join('');
+    drop.hidden = photos.length >= MAX;
+  }
+
+  function addFiles(files) {
+    var room = MAX - photos.length;
+    var images = Array.prototype.filter.call(files, function (x) { return /^image\//.test(x.type); });
+    if (images.length > room) toast(t('venues.photoLimit', { n: room }));
+    images.slice(0, room).forEach(function (file) { photos.push({ file: file, preview: URL.createObjectURL(file) }); });
+    renderThumbs();
+  }
+
+  photoInput.addEventListener('change', function () { addFiles(photoInput.files); photoInput.value = ''; });
+  drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('is-over'); });
+  drop.addEventListener('dragleave', function () { drop.classList.remove('is-over'); });
+  drop.addEventListener('drop', function (e) {
+    e.preventDefault();
+    drop.classList.remove('is-over');
+    addFiles(e.dataTransfer.files);
+  });
+  thumbs.addEventListener('click', function (e) {
+    var del = e.target.closest('[data-del]');
+    if (!del) return;
+    var gone = photos.splice(Number(del.getAttribute('data-del')), 1)[0];
+    if (gone.preview) URL.revokeObjectURL(gone.preview);
+    renderThumbs();
+  });
+  renderThumbs();
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var data = new FormData();
+    ['name', 'type', 'city', 'country', 'address', 'about'].forEach(function (k) { data.append(k, f[k].value); });
+    data.append('weekdayHours', JSON.stringify({ open: f.weekdayOpen.value, close: f.weekdayClose.value }));
+    data.append('weekendHours', JSON.stringify({ open: f.weekendOpen.value, close: f.weekendClose.value }));
+    data.append('uploadedPhotos', JSON.stringify(photos.filter(function (p) { return p.url; }).map(function (p) { return p.url; })));
+    // Точки может не быть: у заведений, заведённых до этой формы, координат
+    // нет, и пустое поле сервер пропускает, а не стирает старое значение.
+    var spot = point && point.value();
+    if (spot) data.append('location', JSON.stringify(spot));
+    photos.filter(function (p) { return p.file; }).forEach(function (p) { data.append('newPhotos', p.file); });
+
+    var button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    api('/updateEstablishment/' + encodeURIComponent(ID), { method: 'PUT', body: data })
+      .then(function (r) {
+        toast(t(r.pending ? 'venue.page.sentReview' : 'venue.page.saved'), 'ok');
+        location.href = '/venue/' + encodeURIComponent(ID);
+      })
+      .catch(function (err) { button.disabled = false; toast(err.message, 'error'); });
+  });
+})();

@@ -1,0 +1,147 @@
+<%#
+  Правка заведения /venue/:id/edit (29.09) — владельцу и администратору.
+  До неё правка жила окном поверх карты. Логотип и обложка камеры ставятся
+  сразу; остальное у одобренного заведения уходит на проверку черновиком,
+  а на карте до решения остаётся прежнее (routes/establishmentsRouter.js).
+  form — что показать в полях: черновик, если он есть, иначе одобренное.
+  Поведение — public/tk-venue-edit.js, точка — tk-point.js, вид — venue.css.
+%>
+<% var letter = (String(venue.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase();
+   var wd = form.weekdayHours || {}, we = form.weekendHours || {};
+   var loc = form.location && form.location.lat != null ? form.location : null; %>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { title: venue.name + ' — Takebana', robots: 'noindex, nofollow' }) %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="/vendor/maplibre-gl-6.9.0/maplibre-gl.css">
+<link rel="stylesheet" href="<%= asset('/css/tk-map.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/venue.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-vp tk-vp--edit" data-venue="<%= venue._id %>" data-name="<%= venue.name %>" data-approved="<%= venue.status === true ? '1' : '' %>">
+
+      <a href="/venue/<%= venue._id %>" class="tk-page__back">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        <span data-i18n="venue.page.toPage"><%- t('venue.page.toPage') %></span>
+      </a>
+      <h1 class="tk-page__h1" data-i18n="venues.settings"><%- t('venues.settings') %></h1>
+
+      <%# Оформление — сразу, без проверки: как аватар человека. %>
+      <section class="tk-panel tk-vp__look">
+        <p class="tk-panel__title" data-i18n="venue.page.look"><%- t('venue.page.look') %></p>
+        <div class="tk-vp__look-row">
+          <div class="tk-vp__ava" id="venueAva"><% if (venue.avatar) { %><img src="<%= venue.avatar %>" alt=""><% } else { %><%= letter %><% } %></div>
+          <div class="tk-vp__look-side">
+            <span class="tk-form__label" data-i18n="venue.page.logo"><%- t('venue.page.logo') %></span>
+            <div class="tk-panel__actions">
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-pick="avatar" data-i18n="settings.photoUpload"><%- t('settings.photoUpload') %></button>
+              <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs" data-drop="avatar"<% if (!venue.avatar) { %> hidden<% } %> data-i18n="settings.photoDelete"><%- t('settings.photoDelete') %></button>
+            </div>
+            <p class="tk-note" data-i18n="venue.page.logoHint"><%- t('venue.page.logoHint') %></p>
+          </div>
+        </div>
+        <div class="tk-vp__look-row">
+          <div class="tk-vp__cover" id="venueCoverBox"><% if (venue.cover) { %><img src="<%= venue.cover %>" alt=""><% } %></div>
+          <div class="tk-vp__look-side">
+            <span class="tk-form__label" data-i18n="vlive.cover"><%- t('vlive.cover') %></span>
+            <div class="tk-panel__actions">
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-pick="cover" data-i18n="settings.photoUpload"><%- t('settings.photoUpload') %></button>
+              <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs" data-drop="cover"<% if (!venue.cover) { %> hidden<% } %> data-i18n="vlive.coverClear"><%- t('vlive.coverClear') %></button>
+            </div>
+            <p class="tk-note" data-i18n="venue.page.coverHint"><%- t('venue.page.coverHint') %></p>
+          </div>
+        </div>
+        <input type="file" id="venueImageInput" accept="image/png,image/jpeg,image/webp" hidden>
+      </section>
+
+      <form class="tk-panel tk-vp__form" id="venueEditForm" novalidate
+            data-lat="<%= loc ? loc.lat : '' %>" data-lng="<%= loc ? loc.lng : '' %>" data-address="<%= form.address || '' %>">
+        <p class="tk-panel__title" data-i18n="venue.page.info"><%- t('venue.page.info') %></p>
+        <% if (draftAt) { %>
+        <p class="tk-vp__state is-wait" data-i18n="venue.page.draftNote" data-i18n-vars='<%= JSON.stringify({ date: date(draftAt, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) }) %>'><%- t('venue.page.draftNote', { date: date(draftAt, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) }) %></p>
+        <% } %>
+
+        <label class="tk-form__row">
+          <span class="tk-form__label" data-i18n="venues.name"><%- t('venues.name') %></span>
+          <input class="tk-field" type="text" name="name" maxlength="200" value="<%= form.name || '' %>">
+        </label>
+
+        <div class="tk-vp__pair">
+          <label class="tk-form__row">
+            <span class="tk-form__label" data-i18n="venues.type"><%- t('venues.type') %></span>
+            <select class="tk-field tk-select" name="type">
+              <option value="" data-i18n="common.notPicked"><%- t('common.notPicked') %></option>
+              <% catalog.VENUE_TYPES.forEach(function (type) { %>
+              <option value="<%= type.code %>"<%= form.type === type.code ? ' selected' : '' %> data-i18n="venue.<%= type.code %>"><%= ta('venue.' + type.code, type.name) %></option>
+              <% }); %>
+            </select>
+          </label>
+          <label class="tk-form__row">
+            <span class="tk-form__label" data-i18n="venues.city"><%- t('venues.city') %></span>
+            <select class="tk-field tk-select" name="city">
+              <option value="" data-i18n="common.notPicked"><%- t('common.notPicked') %></option>
+              <% catalog.CITIES.forEach(function (city) { %>
+              <option value="<%= city.code %>"<%= form.city === city.code ? ' selected' : '' %> data-i18n="<%= city.i18n %>"><%= ta(city.i18n, city.name) %></option>
+              <% }); %>
+            </select>
+          </label>
+        </div>
+
+        <label class="tk-form__row">
+          <span class="tk-form__label" data-i18n="venues.country"><%- t('venues.country') %></span>
+          <input class="tk-field" type="text" name="country" maxlength="100" value="<%= form.country || '' %>">
+        </label>
+
+        <label class="tk-form__row">
+          <span class="tk-form__label" data-i18n="venue.page.about"><%- t('venue.page.about') %></span>
+          <textarea class="tk-field" name="about" rows="5" maxlength="<%= aboutMax %>" placeholder="<%= ta('venue.page.aboutPh') %>" data-i18n-placeholder="venue.page.aboutPh"><%= form.about || '' %></textarea>
+        </label>
+
+        <%- include('partials/venuePoint') %>
+
+        <div class="tk-vp__hours">
+          <span class="tk-form__label" data-i18n="venues.weekdayHours"><%- t('venues.weekdayHours') %></span>
+          <span data-i18n="common.from"><%- t('common.from') %></span><input class="tk-field" type="text" name="weekdayOpen" value="<%= wd.open || '' %>" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
+          <span data-i18n="common.till"><%- t('common.till') %></span><input class="tk-field" type="text" name="weekdayClose" value="<%= wd.close || '' %>" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
+          <span class="tk-form__label" data-i18n="venues.weekendHours"><%- t('venues.weekendHours') %></span>
+          <span data-i18n="common.from"><%- t('common.from') %></span><input class="tk-field" type="text" name="weekendOpen" value="<%= we.open || '' %>" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
+          <span data-i18n="common.till"><%- t('common.till') %></span><input class="tk-field" type="text" name="weekendClose" value="<%= we.close || '' %>" placeholder="00:00" inputmode="numeric" maxlength="5" data-time>
+        </div>
+
+        <div class="tk-vp__photos-edit">
+          <div class="tk-panel__head">
+            <span class="tk-form__label" data-i18n="venues.photoUpload"><%- t('venues.photoUpload') %></span>
+            <span class="tk-form__label tk-form__hint" data-i18n="venues.photoMax"><%- t('venues.photoMax') %></span>
+          </div>
+          <label class="tk-dropzone" id="venueDrop">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M7 18a4 4 0 01-.6-8A6 6 0 0118 9a4 4 0 01-1 9"></path><path d="M12 12v8M9 15l3-3 3 3"></path></svg>
+            <p data-i18n="venues.photoDrop"><%- t('venues.photoDrop') %></p>
+            <input type="file" id="venuePhotoInput" accept="image/*" multiple hidden>
+          </label>
+          <div class="tk-thumbs" id="venueThumbs" data-photos="<%= JSON.stringify(form.photos || []) %>" data-max="<%= maxPhotos %>"></div>
+        </div>
+
+        <p class="tk-form__note" data-i18n="<%= venue.status === true ? 'venues.reviewNote' : 'venue.page.reviewFirst' %>"><%- t(venue.status === true ? 'venues.reviewNote' : 'venue.page.reviewFirst') %></p>
+        <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>
+      </form>
+
+    </div>
+  </main>
+</div>
+
+<%# Центры городов — чтобы выбор точки открывался на нужном городе (tk-point.js). %>
+<script>window.TKCityCenter = <%- JSON.stringify(catalog.CITY_CENTER) %>;</script>
+<script defer src="<%= asset('/vendor/pmtiles-4.5.0.js') %>"></script>
+<script defer src="<%= asset('/tk-map.js') %>"></script>
+<script defer src="<%= asset('/tk-point.js') %>"></script>
+<script defer src="<%= asset('/tk-venue-edit.js') %>"></script>
+</body>
+</html>

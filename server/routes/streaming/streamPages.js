@@ -129,7 +129,11 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
     subscriberId: req.session.userId,
     subscribedToId: page.user._id,
   }));
-  res.render('streamPageViewer', { ...page, isSubscribed, streamKey: page.stream.streamKey });
+  // Только для подписчиков: страница есть — название, автор, «Подписаться»,
+  // — но без плеера, чата и ключа эфира. По ключу собирается адрес
+  // плейлиста и заходят в комнату чата — чужому он не нужен.
+  const locked = !(await restriction.canWatch(page.stream, req.session.userId));
+  res.render('streamPageViewer', { ...page, isSubscribed, locked, streamKey: locked ? '' : page.stream.streamKey });
 });
 
 module.exports = router;

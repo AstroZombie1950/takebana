@@ -1,0 +1,79 @@
+<%#
+  Все записи эфиров человека: /@ник/recordings, ?page=N — маршрут
+  в routes/streaming/catalog.js. В профиле — начало ленты (gallery.PREVIEW),
+  здесь — целиком. Карточка — partials/recordingCard.ejs, вид — тот же,
+  что у видео галереи (.tk-recs, profile.css), листалка — как у галереи.
+%>
+<%
+  var base = owner.url + '/recordings';
+  var pageHref = function (p) { return base + (p > 1 ? '?page=' + p : ''); };
+  // Номера вокруг текущей, первая и последняя всегда; пропуски — «…».
+  var nums = [];
+  for (var p = 1; p <= pages; p++) {
+    if (p === 1 || p === pages || Math.abs(p - page) <= 2) nums.push(p);
+    else if (nums[nums.length - 1] !== 0) nums.push(0);
+  }
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { titleKey: 'page.recordings.title', titleVars: { name: owner.displayName }, seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow',
+         jsonld: ld.crumbs([['Takebana', '/'], [owner.displayName, owner.url], [ta('rec.title'), pageHref(1)]]) } }) %>
+<% if (page > 1) { %><link rel="prev" href="<%= pageHref(page - 1) %>"><% } %>
+<% if (page < pages) { %><link rel="next" href="<%= pageHref(page + 1) %>"><% } %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/profile.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/gallery.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-gal">
+
+      <a href="<%= owner.url %>" class="tk-page__back">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        <span data-i18n="user.backToProfile"><%- t('user.backToProfile') %></span>
+      </a>
+
+      <p class="tk-kicker"><span data-i18n="rec.title"><%- t('rec.title') %></span> · <%= num(total) %></p>
+      <div class="tk-gal__head">
+        <h1 class="tk-gal__h1"><%= owner.displayName %></h1>
+      </div>
+
+      <% if (restricted) { %>
+      <section class="tk-panel--prof">
+        <div class="tk-prof__none">
+          <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M6 6l12 12"></path></svg>
+          <p data-i18n="restricted.text"><%- t('restricted.text') %></p>
+        </div>
+      </section>
+      <% } else if (!items.length) { %>
+      <p class="tk-note tk-note--center" data-i18n="rec.empty"><%- t('rec.empty') %></p>
+      <% } else { %>
+      <div class="tk-recs">
+        <% items.forEach(function (r) { %><%- include('partials/recordingCard', { r: r }) %><% }); %>
+      </div>
+      <% } %>
+
+      <% if (!restricted && pages > 1) { %>
+      <nav class="tk-pager" aria-label="<%= ta('gallery.pages') %>" data-i18n-aria="gallery.pages">
+        <% if (page > 1) { %><a href="<%= pageHref(page - 1) %>" class="tk-btn tk-btn--outline tk-btn--sm" rel="prev" data-i18n="user.listPrev"><%- t('user.listPrev') %></a><% } %>
+        <% nums.forEach(function (p) { %>
+          <% if (!p) { %><span class="tk-pager__num tk-pager__gap" aria-hidden="true">…</span>
+          <% } else if (p === page) { %><span class="tk-pager__num" aria-current="page"><%= p %></span>
+          <% } else { %><a href="<%= pageHref(p) %>" class="tk-pager__num"><%= p %></a><% } %>
+        <% }); %>
+        <% if (page < pages) { %><a href="<%= pageHref(page + 1) %>" class="tk-btn tk-btn--outline tk-btn--sm" rel="next" data-i18n="user.listNext"><%- t('user.listNext') %></a><% } %>
+      </nav>
+      <% } %>
+
+    </div>
+  </main>
+</div>
+</body>
+</html>

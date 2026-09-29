@@ -195,6 +195,7 @@
         city: f.city.value,
         description: f.description.value.trim(),
         isAdult: f.isAdult.checked,
+        subscribersOnly: f.subscribersOnly.checked,
         source: source(),
         cover: f.cover.value
       })

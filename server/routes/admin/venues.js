@@ -14,7 +14,7 @@ const Establishments = require('../../models/Establishments');
 const Rating = require('../../models/Rating');
 const { validate } = require('../../middleware/validate');
 const { audit } = require('../../utils/audit');
-const { HOURS, LOCATION, CITY, TYPE } = require('../../utils/venueFields');
+const { HOURS, LOCATION, CITY, TYPE, DRAFT_FIELDS, applyDraft, dropDraft } = require('../../utils/venueFields');
 const { removeVenue } = require('../../utils/userDelete');
 const { stopCamera } = require('../venueLive');
 const { requireAdmin, paging, list, needle, namesFor, csvRoute, nameOf } = require('./shared');
@@ -28,6 +28,8 @@ async function loadVenues(req) {
 
   if (req.query.status === 'active') filter.status = true;
   else if (req.query.status === 'inactive') filter.status = { $ne: true };
+  // Одобренные с правкой на проверке (Establishments.pending, 29.09).
+  else if (req.query.status === 'pending') filter['pending.at'] = { $exists: true };
   if (req.query.online === '1') filter.online = true;
   if (req.query.city) filter.city = String(req.query.city).slice(0, 50);
   if (req.query.type) filter.type = String(req.query.type).slice(0, 50);
@@ -69,7 +71,24 @@ async function loadVenues(req) {
     photo: (v.photos || [])[0] || '',
     rating: rating.get(String(v._id)) || { avg: 0, count: 0 },
     owner: names.get(String(v.owner)) || null,
+    // Правка на проверке: только то, что в ней отличается от одобренного.
+    pending: v.pending && v.pending.at ? draftDiff(v) : null,
   })), total, p);
+}
+
+// Что правка меняет: поле → { was, now }. Фото — числом и новыми файлами.
+function draftDiff(v) {
+  const same = (a, b) => JSON.stringify(a == null ? '' : a) === JSON.stringify(b == null ? '' : b);
+  const changes = {};
+  for (const k of DRAFT_FIELDS) {
+    const now = v.pending[k];
+    if (now === undefined || same(v[k], now)) continue;
+    if (k === 'photos') {
+      const live = new Set(v.photos || []);
+      changes.photos = { was: (v.photos || []).length, now: now.length, added: now.filter((u) => !live.has(u)) };
+    } else changes[k] = { was: v[k] == null ? '' : v[k], now };
+  }
+  return { at: v.pending.at, changes };
 }
 
 router.get('/venues', requireAdmin, async (req, res) => res.json(await loadVenues(req)));
@@ -136,6 +155,24 @@ router.put('/venues/:id/status', requireAdmin, byId, validate({
 
   audit(req, 'venue.status', { targetType: 'venue', target: venue, meta: { status: !!req.body.status } });
   res.json({ ok: true, status: !!venue.status });
+});
+
+// Правка владельца: принять — поля переезжают в заведение, отклонить —
+// черновик уходит, новые фото из него — с диска.
+router.post('/venues/:id/pending', requireAdmin, byId, validate({
+  accept: { type: 'bool', required: true, label: 'Решение' },
+}), async (req, res) => {
+  const venue = await Establishments.findById(req.params.id).lean();
+  if (!venue) return res.status(404).json({ message: 'Заведение не найдено' });
+  if (!venue.pending || !venue.pending.at) return res.status(409).json({ message: 'Правки на проверке нет' });
+
+  const accept = req.body.accept;
+  const set = accept ? applyDraft(venue) : {};
+  if (!accept) dropDraft(venue);
+  await Establishments.updateOne({ _id: venue._id }, { $set: set, $unset: { pending: 1 } });
+
+  audit(req, 'venue.review', { targetType: 'venue', target: venue, meta: { accept, fields: Object.keys(set) } });
+  res.json({ ok: true });
 });
 
 router.delete('/venues/:id', requireAdmin, byId, async (req, res) => {

@@ -5,12 +5,16 @@
 (function () {
   var data = document.body.dataset;
   var active = data.streamActive === '1';
+  // Только для подписчиков, а зритель не подписан: чата и плеера на
+  // странице нет, TKStream не подключён. Подписался — перезагрузка
+  // откроет эфир.
+  var locked = !!data.locked;
 
   // Старт, пауза, конец эфира и смена его типа меняют сам плеер — на месте
   // он не перестраивается, страница перезагружается. Эфира больше нет —
   // перезагрузка покажет «эфир завершён».
   var awayBox = document.getElementById('hostAway');
-  TKStream.onUpdate(function (u) {
+  if (window.TKStream) TKStream.onUpdate(function (u) {
     if (awayBox && typeof u.away === 'boolean') awayBox.hidden = !u.away;
     if (u.ended || (u.streamType && u.streamType !== data.streamType) ||
         (typeof u.isActive === 'boolean' && u.isActive !== active)) {
@@ -33,6 +37,7 @@
           toast(t('app.errorShort', { message: b.message || 'HTTP ' + r.status }), 'error');
           return;
         }
+        if (subscribe && locked) return location.reload();
         if (subscribe) window.tkSubscriptions.add(b.user);
         else window.tkSubscriptions.remove(data.streamerId);
         toast(t(subscribe ? 'stream.subscribed' : 'stream.unsubscribed'), 'ok');
@@ -48,6 +53,7 @@
   });
 
   var playerRoot = document.querySelector('.tk-player');
+  if (locked) return;
   if (!playerRoot) {
     // Старт эфира пришлёт stream:update, и страница перезагрузится. Событие
     // могло проскочить между отрисовкой страницы и входом в комнату сокета —

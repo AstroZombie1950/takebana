@@ -90,6 +90,9 @@ router.get('/summary', requireModerator, async (req, res) => {
     errors: isAdmin ? { groups: e.groups || 0, cases: e.cases || 0, fresh: e.fresh || 0, loginFails } : null,
     // Непрочитанное поддержкой — счётчик у вкладки «Поддержка» (utils/support.js).
     support: isAdmin ? await supportUnread() : 0,
+    // Заведения ждут решения: новые заявки и правки одобренных (29.09) —
+    // счётчик у вкладки «Заведения».
+    venuesReview: isAdmin ? await Establishments.countDocuments({ $or: [{ status: { $ne: true } }, { 'pending.at': { $exists: true } }] }) : 0,
   });
 });
 

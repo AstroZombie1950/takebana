@@ -2150,10 +2150,24 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 .tk-groles__acts { display: flex; gap: 10px; }
 .tk-groles__acts .tk-btn { flex: 1 1 0; padding-left: 10px; padding-right: 10px; }
 
-.tk-gsec--danger { flex-direction: row; flex-wrap: wrap; }
+/* Кнопки разделов группы — ссылка, участники, выход и удаление — одной
+ * ширины и во всю ширину блока (правки 29.09): прежде каждая была по
+ * своей подписи и прижата влево. На широком экране — в ряд поровну,
+ * на телефоне — столбиком во всю ширину. */
+.tk-gacts {
+  align-self: stretch;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.tk-gacts .tk-btn { padding-left: 10px; padding-right: 10px; }
 .tk-gdanger.tk-btn { color: var(--tk-accent); }
 
 @media (max-width: 767px) {
+  .tk-gacts { grid-auto-flow: row; }
+  .tk-gacts .tk-btn { padding-top: 14px; padding-bottom: 14px; }
   .tk-chat__newgroup { padding: 8px 16px; }
   .tk-gpane__head { padding: 10px 16px; gap: 8px; }
   .tk-gpane__body { padding: 16px; }

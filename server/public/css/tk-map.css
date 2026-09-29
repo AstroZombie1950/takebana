@@ -76,8 +76,9 @@
 .maplibregl-ctrl-attrib-button { filter: invert(.85); }
 
 /* ── Выбор точки заведения (public/tk-point.js) ─────────────────────────────
- * Блок живёт и в окне настроек на /main, и в заявке на /company-register,
- * поэтому стили здесь, рядом с картой, а не в venues.css или company.css.
+ * Блок живёт и в правке заведения (/venue/:id/edit), и в заявке на
+ * /company-register, поэтому стили здесь, рядом с картой, а не в venue.css
+ * или company.css.
  * Цвета — значениями, как и всё в этом файле. */
 
 .tk-pick {

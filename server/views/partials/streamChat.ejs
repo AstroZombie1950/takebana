@@ -13,7 +13,7 @@
   <% if (typeof host !== 'undefined' && host) { %>
   <label class="tk-live__slow">
     <span data-i18n="chat.slowMode"><%- t('chat.slowMode') %></span>
-    <select class="tk-field tk-live__slow-pick" id="chatSlowPick">
+    <select class="tk-field tk-select tk-live__slow-pick" id="chatSlowPick">
       <% [0, 10, 30, 60].forEach(function (n) { %><option value="<%= n %>"<%= n === slow ? ' selected' : '' %> data-i18n="chat.slow<%= n %>"><%- t('chat.slow' + n) %></option><% }); %>
     </select>
   </label>

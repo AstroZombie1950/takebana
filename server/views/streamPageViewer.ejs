@@ -7,7 +7,10 @@
   картинкой, во весь экран — картинка и чат (на телефоне чат по кнопке). Общее
   с пультом ведущего — в partials и /tk-stream.js, своё — /tk-viewer.js.
 %>
-<% var playable = stream.isActive && (stream.streamType === 'obs-stream' || stream.streamType === 'daily-stream'); %>
+<%# locked — эфир только для подписчиков, а зритель не подписан (utils/restrict.js,
+    canWatch): вместо плеера и чата — объяснение и «Подписаться», ключа эфира
+    в странице нет. %>
+<% var playable = !locked && stream.isActive && (stream.streamType === 'obs-stream' || stream.streamType === 'daily-stream'); %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
@@ -27,6 +30,7 @@
       data-streamer-id="<%= user._id %>"
       data-stream-type="<%= stream.streamType %>"
       data-stream-active="<%= stream.isActive ? '1' : '0' %>"
+      data-locked="<%= locked ? '1' : '' %>"
       data-started-at="<%= stream.isActive && stream.startedAt ? new Date(stream.startedAt).toISOString() : '' %>">
 
 <%- include('partials/header', { socket: true }) %>
@@ -49,6 +53,13 @@
               <div class="tk-live__hint tk-live__away" id="hostAway"<% if (!stream.hostAway) { %> hidden<% } %>>
                 <p class="tk-live__hint-title" data-i18n="viewer.awayTitle"><%- t('viewer.awayTitle') %></p>
               </div>
+            <% } else if (locked) { %>
+              <div class="tk-live__hint tk-live__hint--paused tk-live__locked">
+                <% if (stream.thumbnail) { %><img class="tk-live__thumb" src="<%= stream.thumbnail %>" alt=""><% } %>
+                <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10"></rect><path d="M8 10.5V7a4 4 0 018 0v3.5"></path></svg>
+                <p class="tk-live__hint-title" data-i18n="viewer.subsOnlyTitle"><%- t('viewer.subsOnlyTitle') %></p>
+                <p data-i18n="viewer.subsOnlyText"><%- t('viewer.subsOnlyText') %></p>
+              </div>
             <% } else { %>
               <div class="tk-live__hint tk-live__hint--paused" id="viewerIdle">
                 <% if (stream.thumbnail) { %>
@@ -62,22 +73,31 @@
             <%- include('partials/streamBadges', { state: stream.isActive ? 'live' : 'paused' }) %>
 
             <%# Весь экран у идущего эфира — кнопкой в полосе плеера. %>
-            <% if (!playable) { %>
+            <% if (!playable && !locked) { %>
             <button type="button" class="tk-live__fs" data-fullscreen aria-pressed="false" aria-label="<%= ta('stream.fullscreen') %>" data-i18n-aria="stream.fullscreen" title="<%= ta('stream.fullscreen') %>" data-i18n-title="stream.fullscreen">
               <svg class="tk-live__fs-on" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M4.5 15v4.5H9M15 19.5h4.5V15"></path></svg>
               <svg class="tk-live__fs-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 4.5V9H4.5M19.5 9H15V4.5M9 19.5V15H4.5M15 19.5V15h4.5"></path></svg>
             </button>
             <% } %>
             <%# Чат поверх картинки во весь экран на телефоне — по кнопке (stream.css). %>
+            <% if (!locked) { %>
             <button type="button" class="tk-live__fs tk-live__chatbtn" data-chat-toggle aria-pressed="false" aria-label="<%= ta('stream.chatShow') %>" data-i18n-aria="stream.chatShow" title="<%= ta('stream.chatShow') %>" data-i18n-title="stream.chatShow">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M21 11a8 8 0 01-11.5 7.2L4 20l1.8-5.5A8 8 0 1121 11Z"></path></svg>
             </button>
+            <% } %>
           </div>
 
           <%- include('partials/streamInfo', { isStreamer: false }) %>
         </section>
 
+        <% if (locked) { %>
+        <aside class="tk-live__chat tk-live__chat--locked" aria-labelledby="chatTitle">
+          <h2 class="tk-live__chat-head" id="chatTitle" data-i18n="chat.title"><%- t('chat.title') %></h2>
+          <p class="tk-note tk-note--center" data-i18n="viewer.subsOnlyChat"><%- t('viewer.subsOnlyChat') %></p>
+        </aside>
+        <% } else { %>
         <%- include('partials/streamChat') %>
+        <% } %>
       </div>
     </div>
   </main>
@@ -88,7 +108,7 @@
 <script defer src="<%= asset('/tk-hls.js') %>"></script>
 <script defer src="<%= asset('/tk-player.js') %>"></script>
 <% } %>
-<script defer src="<%= asset('/tk-stream.js') %>"></script>
+<% if (!locked) { %><script defer src="<%= asset('/tk-stream.js') %>"></script><% } %>
 <script defer src="<%= asset('/tk-viewer.js') %>"></script>
 </body>
 </html>

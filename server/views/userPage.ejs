@@ -137,7 +137,7 @@
             </a>
             <% if (!restricted) { %>
             <a href="#recordings" class="tk-prof__stat">
-              <span class="tk-prof__num"><%= recordings.length %></span>
+              <span class="tk-prof__num"><%= recordingsTotal %></span>
               <span class="tk-prof__lbl" data-i18n="user.recordingsStat"><%- t('user.recordingsStat') %></span>
             </a>
             <a href="#gallery" class="tk-prof__stat">
@@ -241,33 +241,20 @@
       <section class="tk-prof__gal" id="recordings">
         <div class="tk-prof__gal-head">
           <h2 class="tk-kicker tk-prof__gal-title" data-i18n="rec.title"><%- t('rec.title') %></h2>
-          <span class="tk-note"><%= recordings.length %></span>
+          <span class="tk-note"><%= recordingsTotal %></span>
         </div>
 
         <% if (recordings.length) { %>
         <div class="tk-recs">
           <% recordings.forEach(function (r) { %>
-          <%# data-rec-id — чтобы profile.js нашёл карточку, когда придёт
-              recording:status: склейка идёт минуты, и до 20.09.2026 автор
-              не узнавал о её конце без перезагрузки. %>
-          <a href="/recording/<%= r._id %>" class="tk-recard<%= r.status !== 'ready' ? ' is-' + r.status : '' %>" data-rec-id="<%= r._id %>">
-            <span class="tk-recard__thumb">
-              <% if (r.thumb && r.thumb.url) { %><img src="<%= r.thumb.url %>" alt="" loading="lazy"><% } %>
-              <% if (r.status === 'ready') { %>
-                <span class="tk-recard__len"><%= clock(r.duration) %></span>
-              <% } else { %>
-                <% var stKey = r.status === 'failed' ? 'rec.failed' : 'rec.processing'; %>
-                <span class="tk-recard__state" data-i18n="<%= stKey %>"><%- t(stKey) %></span>
-              <% } %>
-              <% if (r.isAdult) { %><span class="tk-recard__adult">18+</span><% } %>
-            </span>
-            <span class="tk-recard__title"><%= r.title %></span>
-            <span class="tk-recard__date">
-              <% if (r.status === 'ready') { var rv = plural(r.views || 0, 'rec.views'); %><span data-i18n="<%= rv.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(r.views) }) %>'><%= rv.text %></span> · <% } %>
-              <time><%= date(r.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></time>
-            </span>
-          </a>
+          <%- include('partials/recordingCard', { r: r }) %>
           <% }); %>
+        </div>
+        <%# Вся лента — своей страницей, кнопкой всегда, когда есть что
+            смотреть (правки 29.09: прежде в профиле были все записи разом,
+            а перейти было некуда). %>
+        <div class="tk-prof__gal-add">
+          <a href="<%= user.url %>/recordings" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="rec.all" data-i18n-vars='<%= JSON.stringify({ n: recordingsTotal }) %>'><%- t('rec.all', { n: recordingsTotal }) %></a>
         </div>
         <% } else { %>
         <p class="tk-note tk-note--center" data-i18n="rec.empty"><%- t('rec.empty') %></p>
@@ -301,7 +288,10 @@
           <% } else { %>
           <p class="tk-note tk-note--center" data-i18n="gallery.photosEmpty"><%- t('gallery.photosEmpty') %></p>
           <% } %>
-          <% if (counts.photos > preview.photos) { %>
+          <%# Вся вкладка — кнопкой, как только есть что смотреть, а не только
+              когда фото больше, чем влезает в профиль: без неё на страницу
+              галереи было не попасть (правки 29.09). %>
+          <% if (counts.photos > 0) { %>
           <div class="tk-prof__gal-add">
             <a href="<%= user.url %>/photos" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.allPhotos" data-i18n-vars='<%= JSON.stringify({ n: counts.photos }) %>'><%- t('gallery.allPhotos', { n: counts.photos }) %></a>
           </div>
@@ -316,7 +306,7 @@
           <% } else { %>
           <p class="tk-note tk-note--center" data-i18n="gallery.videosEmpty"><%- t('gallery.videosEmpty') %></p>
           <% } %>
-          <% if (counts.videosListed > preview.videos) { %>
+          <% if (counts.videosListed > 0) { %>
           <div class="tk-prof__gal-add">
             <a href="<%= user.url %>/videos" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.allVideos" data-i18n-vars='<%= JSON.stringify({ n: counts.videos }) %>'><%- t('gallery.allVideos', { n: counts.videos }) %></a>
           </div>

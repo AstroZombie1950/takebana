@@ -89,6 +89,13 @@
 
 .tk-live__hint > :not(.tk-live__thumb) { position: relative; }
 
+/* Только для подписчиков: обложка размыта — видно, что эфир идёт, но не что в нём. */
+.tk-live__locked { gap: 8px; padding: 0 24px; text-align: center; color: var(--tk-beige); }
+.tk-live__locked .tk-live__thumb { filter: blur(18px); transform: scale(1.1); }
+.tk-live__locked svg { color: var(--tk-accent); }
+.tk-live__chat--locked { justify-content: flex-start; }
+.tk-live__chat--locked .tk-note { padding: 24px 16px; }
+
 /* Ведущий в другом приложении: заставка поверх застывшего или чёрного
  * кадра. Полоса плеера (z-index 5) — над ней. */
 .tk-live__away {
@@ -383,6 +390,21 @@
   background: var(--tk-ink);
 }
 
+/* Широкий экран: низ чата — по низу блока с картинкой, именем и
+ * описанием слева (правки 29.09). Прежде чат был в высоту окна и торчал
+ * ниже левого блока без описания. contain: size — сообщения чата не
+ * растягивают строку сетки, её высоту задаёт левый блок; длинное
+ * описание дальше высоты окна чат не тянет — max-height. min-height —
+ * у совсем короткого блока чат не сжимается в щель. */
+@media (min-width: 1024px) {
+  .tk-live__grid:not(.is-full) > .tk-live__chat {
+    align-self: stretch;
+    contain: size;
+    height: auto;
+    max-height: calc(100dvh - var(--tk-head-h) - 44px);
+  }
+}
+
 .tk-live__chat-head {
   flex: none;
   margin: 0;
@@ -457,7 +479,19 @@
 }
 
 .tk-live__slow[hidden] { display: none; }
-.tk-live__slow-pick { width: auto; padding: 4px 8px; font-size: 12px; }
+/* Выбор паузы — тем же списком, что остальные на сайте (tk-listbox.js,
+ * .tk-select): прежде системный, без оформления пунктов, и стрелка
+ * налезала на правую рамку (правки 29.09). Мелкий — под полосу чата. */
+.tk-live__slow-pick.tk-select {
+  width: auto;
+  min-width: 150px;
+  padding: 7px 34px 7px 12px;
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  color: var(--tk-paper);
+  background-position: right 10px center;
+  background-size: 14px;
+}
 
 /* Гостю вместо поля — кнопка входа во всю ширину полосы. */
 .tk-live__chat-guest > .tk-btn { flex: 1; }
@@ -674,7 +708,10 @@ html.tk-stage-open { overflow: hidden; }
 }
 
 .tk-vl__facts dd { margin: 0; line-height: 20px; color: var(--tk-beige); overflow-wrap: anywhere; }
-.tk-vl__map { margin-top: 16px; }
+.tk-vl__links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+/* Название — ссылка на страницу заведения: на телефоне кнопок под ним нет. */
+.tk-vl__name { color: inherit; }
+.tk-vl__name:hover { color: var(--tk-accent); }
 
 /* Знак — в правый нижний угол: верхний правый занят кнопкой «весь экран». */
 .tk-vl .tk-wm { top: auto; bottom: 10px; }
@@ -730,7 +767,7 @@ html.tk-stage-open { overflow: hidden; }
   /* Камера заведения на телефоне: экран — картинке и чату, от карточки
    * остаётся строка с названием и стрелкой назад на карту. */
   .tk-vl__facts,
-  .tk-vl__map { display: none; }
+  .tk-vl__links { display: none; }
 
   .tk-live__title {
     font-size: 16px;

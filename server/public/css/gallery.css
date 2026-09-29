@@ -2,7 +2,7 @@
  * в профиле (userPage.ejs) и на страницах /@ник/photos и /@ник/videos
  * (gallery.ejs), там же листалка. Фото — квадратной сеткой, как
  * в Инстаграме (partials/galleryPhoto.ejs); видео — карточками записи
- * эфира (.tk-recs, profile.css). Вкладки — .tk-tabs, profile.css.
+ * эфира (.tk-recs, profile.css). Вкладки — .tk-tabs, app.css.
  */
 
 /* ── Фото: квадраты впритык, три в ряд, на широком экране четыре ── */

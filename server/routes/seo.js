@@ -56,6 +56,7 @@ Disallow: /upload
 Disallow: /chatsPage
 Disallow: /calls
 Disallow: /company-register
+Disallow: /venue/*/edit
 Disallow: /check
 Disallow: /calc
 Disallow: /streaming/*/grid
@@ -117,7 +118,7 @@ async function collect() {
     GalleryPhoto.find({}).sort({ createdAt: -1 }).select('userId url createdAt').lean(),
     Stream.distinct('userId', { isActive: true }),
     authors.groups(),
-    Establishments.exists({ status: true }),
+    Establishments.find({ status: true }).select('_id').lean(),
   ]);
 
   const withContent = new Set([...recordings, ...videos, ...photos].map((x) => String(x.userId)).concat(live.map(String)));
@@ -136,7 +137,8 @@ async function collect() {
 
   const pages = [{ loc: '/' }, ...Object.keys(CATEGORIES).map((c) => ({ loc: '/streaming/' + c })), { loc: '/about' }];
   if (Object.values(groups).some((g) => g.length)) pages.push({ loc: '/authors' });
-  if (venues) pages.push({ loc: '/map' });
+  // Карта и страницы заведений (/venue/:id, с 29.09) — одобренных.
+  if (venues.length) pages.push({ loc: '/map' }, ...venues.map((v) => ({ loc: `/venue/${v._id}` })));
 
   const people = [];
   for (const u of users) {
@@ -162,6 +164,12 @@ async function collect() {
     if (vids.length > gallery.PREVIEW.videos) {
       const { pages: total } = gallery.page(vids.length, 1);
       for (let n = 1; n <= total; n++) people.push({ loc: `${url}/videos` + (n > 1 ? `?page=${n}` : ''), lastmod });
+    }
+    // Все записи (/@ник/recordings, 29.09) — так же: когда в профиль влезло не всё.
+    const recs = recsOf.get(id) || [];
+    if (recs.length > gallery.PREVIEW.recordings) {
+      const { pages: total } = gallery.page(recs.length, 1);
+      for (let n = 1; n <= total; n++) people.push({ loc: `${url}/recordings` + (n > 1 ? `?page=${n}` : ''), lastmod });
     }
   }
 

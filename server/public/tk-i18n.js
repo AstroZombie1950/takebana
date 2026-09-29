@@ -196,4 +196,17 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
+
+  // Страница, отрисованная до переключения, может вернуться на экран целой:
+  // Safari отдаёт её из памяти по «назад» (bfcache, pageshow с persisted),
+  // а соседняя вкладка или окно приложения просто становится видимым. Язык
+  // в ней — прежний, хотя выбран уже другой: у заказчика 29.09 после
+  // переключения на английский бургер-меню открывалось по-русски, а новая
+  // страница — уже по-английски. Сверяем с cookie и переводим на месте.
+  function resync() {
+    var l = saved();
+    if (l !== current || l !== document.documentElement.getAttribute('lang')) start();
+  }
+  window.addEventListener('pageshow', function (e) { if (e.persisted) resync(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) resync(); });
 })();

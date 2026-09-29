@@ -102,8 +102,10 @@ router.delete('/audit', requireAdmin, async (req, res) => {
 // ── Ошибки ───────────────────────────────────────────────────────────────────
 const ERROR_SCOPES = ['server', 'client', 'media', 'external'];
 
-async function loadErrors(req) {
-  const p = paging(req);
+// Отбор ошибок один на список, выгрузку и разбор пачкой — по той же
+// причине, что у журнала: «разобрать всё по отбору» обязано задеть ровно
+// то, что человек видит на экране.
+function errorFilter(req) {
   const filter = { ...period(req, 'lastAt') };
 
   // Проверки связи и звука (scope check) — не поломки, и в общем списке
@@ -117,6 +119,13 @@ async function loadErrors(req) {
 
   const q = needle(req.query.q);
   if (q) filter.$or = [{ message: q }, { route: q }, { name: q }];
+
+  return filter;
+}
+
+async function loadErrors(req) {
+  const p = paging(req);
+  const filter = errorFilter(req);
 
   const [rows, total, byScope] = await Promise.all([
     ErrorLog.find(filter).sort({ lastAt: -1 }).skip(p.skip).limit(p.perPage).lean(),
@@ -195,6 +204,44 @@ router.post('/errors/:id/resolve', requireAdmin, async (req, res) => {
   });
 
   res.json({ ok: true, resolved });
+});
+
+// Разбор пачкой. Ошибки приходят сериями — один заблокированный скрипт
+// даёт по карточке на каждую страницу, — а кнопка на карточке закрывала
+// ровно одну. ids — выбранные галочками; all — всё по текущему отбору
+// (параметры те же, что у списка, в адресе запроса). Удаление — для
+// шума, который разбирать нечего: вернётся — заведёт карточку заново.
+const BULK = { resolve: 'разобрано', reopen: 'в работу', delete: 'удалено' };
+
+router.post('/errors/bulk', requireAdmin, async (req, res) => {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const action = body.action;
+  if (!BULK[action]) return res.status(400).json({ message: 'Неизвестное действие' });
+
+  let filter;
+  if (body.all === true) filter = errorFilter(req);
+  else {
+    const ids = Array.isArray(body.ids) ? body.ids.filter((id) => OBJECT_ID.test(id)).slice(0, 500) : [];
+    if (!ids.length) return res.status(400).json({ message: 'Ничего не выбрано' });
+    filter = { _id: { $in: ids } };
+  }
+
+  let rows;
+  if (action === 'delete') rows = (await ErrorLog.deleteMany(filter)).deletedCount;
+  else {
+    const set = action === 'resolve'
+      ? { resolved: true, resolvedBy: req.session.userId, resolvedAt: new Date() }
+      : { resolved: false, resolvedBy: null, resolvedAt: null };
+    rows = (await ErrorLog.updateMany(filter, { $set: set })).modifiedCount;
+  }
+
+  audit(req, 'admin.error.bulk', {
+    targetType: 'error',
+    targetLabel: BULK[action] + ': ' + rows,
+    meta: { action, rows, all: body.all === true, q: req.query.q || '' },
+  });
+
+  res.json({ ok: true, rows });
 });
 
 module.exports = router;
