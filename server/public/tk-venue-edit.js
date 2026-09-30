@@ -1,7 +1,8 @@
 // Страница заведения и её правка (views/venue.ejs, views/venueEdit.ejs, 29.09).
 //
 // На странице заведения — пульт владельца: удалить (без проверки, сразу)
-// и отозвать правку, которая ещё ждёт проверки. На странице правки —
+// и отозвать правку, которая ещё ждёт проверки. На странице настроек
+// (views/venueSettings.ejs) — переключатели, сохраняются сразу. На странице правки —
 // логотип и обложка камеры (сразу, отдельными запросами), поля, точка
 // на карте (tk-point.js) и фото; «Сохранить» у одобренного заведения
 // отправляет правку на проверку, у неодобренного — сразу в заведение.
@@ -34,7 +35,7 @@
         del.disabled = true;
         return api('/establishment/' + encodeURIComponent(ID), { method: 'DELETE' }).then(function () {
           toast(t('venues.deleted'), 'ok');
-          location.href = '/map';
+          location.href = '/venues';
         });
       }).catch(function (err) { del.disabled = false; toast(err.message, 'error'); });
       return;
@@ -46,6 +47,29 @@
         .then(function () { location.reload(); })
         .catch(function (err) { back.disabled = false; toast(err.message, 'error'); });
     }
+  });
+
+  // ── Настройки заведения (/venue/:id/settings) ──
+  // Переключатель сохраняется сразу; не сохранилось — возвращаем как было.
+  document.addEventListener('change', function (e) {
+    var box = e.target.closest('[data-venue-feature]');
+    if (!box) return;
+    var body = {};
+    body[box.getAttribute('data-venue-feature')] = box.checked;
+    box.disabled = true;
+    api('/venue/' + encodeURIComponent(ID) + '/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+      .then(function () { toast(t('venue.page.saved'), 'ok'); })
+      .catch(function (err) { box.checked = !box.checked; toast(err.message, 'error'); })
+      .then(function () {
+        // Ссылка на то, что включает настройка, — «Открыть меню».
+        var link = document.querySelector('[data-feature-link="' + box.getAttribute('data-venue-feature') + '"]');
+        if (link) link.hidden = !box.checked;
+      })
+      .then(function () { box.disabled = false; });
   });
 
   var form = document.getElementById('venueEditForm');

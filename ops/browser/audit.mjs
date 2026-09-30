@@ -35,7 +35,7 @@ const SCREENS = [
 const PUBLIC = [
   ['главная (витрина)', '/'],
   ['каталог: бизнес', '/streaming/business'],
-  ['карта заведений', '/map'],
+  ['заведения', '/venues'],
   ['поиск', '/search?q=demo'],
   ['поиск: видео', '/search?q=demo&tab=videos'],
   ['авторы', '/authors'],
@@ -51,7 +51,7 @@ const PUBLIC = [
 const PRIVATE = [
   ['витрина вошедшему', '/'],
   ['каталог с фильтрами', '/streaming/business?sub=horeca&city=belgrade&sort=new'],
-  ['карта вошедшему', '/map'],
+  ['заведения вошедшему', '/venues'],
   ['переписка', '/chatsPage'],
   ['журнал звонков', '/chatsPage?tab=calls'],
   ['контакты', '/chatsPage?tab=contacts'],

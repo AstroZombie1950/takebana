@@ -360,6 +360,11 @@
 
 .tk-live__author-name:hover { color: var(--tk-accent); }
 
+/* Эфир заведения (29.09): под названием заведения — кто ведёт. */
+.tk-live__host { display: block; margin-top: 2px; font-size: 12px; color: var(--tk-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-live__host a { color: var(--tk-beige); }
+.tk-live__host a:hover { color: var(--tk-accent); }
+
 .tk-live__role {
   font-size: 12px;
   color: var(--tk-label);
@@ -539,6 +544,47 @@
 }
 
 .tk-studio__form .tk-page__h1 { margin-bottom: 4px; }
+
+/* Эфир от имени заведения (29.09): его лицо над формой студии. */
+.tk-studio__venue {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--tk-accent);
+  background: rgba(227, 66, 52, .08);
+}
+
+.tk-studio__venue-ava {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  font: 600 16px/1 Oswald, sans-serif;
+  color: var(--tk-paper);
+  background: rgba(144, 113, 99, .25);
+}
+
+.tk-studio__venue-ava img { width: 100%; height: 100%; object-fit: cover; }
+.tk-studio__venue-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tk-studio__venue-text .tk-form__label { margin: 0; }
+.tk-studio__venue-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tk-paper); }
+
+.tk-studio__venue-off {
+  flex: none;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+}
+
+.tk-studio__venue-off:hover,
+.tk-studio__venue-off:focus-visible { color: var(--tk-accent); }
 .tk-studio__form .tk-form__row .tk-field { padding: 12px 14px; }
 .tk-studio__form .tk-select { padding-right: 40px; }
 
@@ -566,7 +612,9 @@
 
 .tk-studio__pair {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, …): иначе выпадающий список не уже своей подсказки
+   * («Сначала выберите категорию») и вылезает за колонку формы. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 

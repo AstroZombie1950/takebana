@@ -158,6 +158,7 @@ async function save(stream) {
   const dir = dirFor(stream.streamKey);
   const rec = await Recording.create({
     userId: stream.userId,
+    venue: stream.venue || null, // эфир заведения — и запись его (29.09)
     title: stream.title,
     description: stream.description || '',
     category: stream.category,

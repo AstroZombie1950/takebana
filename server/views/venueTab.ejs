@@ -1,0 +1,81 @@
+<%#
+  Вкладки «Эфиры» и «Видео» заведения: /venue/:id/streams и /venue/:id/videos
+  (29.09, docs/VENUES.md п. 9) — маршрут в routes/establishmentsRouter.js.
+  «Эфиры» — идущий эфир от имени заведения и записи прошлых, «Видео» — видео
+  галереи, загруженные от его имени. Владельцу — ещё «Начать эфир» и
+  «Загрузить видео» и незаконченное. Карточки — те же, что у человека
+  (partials/recordingCard, partials/galleryVideo), вид — profile.css, листалка —
+  partials/pager, шапка и вкладки — venue.css.
+%>
+<% var letter = (String(venue.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase();
+   var base = '/venue/' + venue._id + '/' + tab;
+   var pageHref = function (p) { return base + (p > 1 ? '?page=' + p : ''); };
+   var tabKey = 'venue.tab.' + tab; %>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { title: venue.name + ' — ' + ta(tabKey) + ' — Takebana', description: ta('venue.' + tab + 'Description', { name: venue.name }),
+      seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow', image: venue.cover || (venue.photos || [])[0] || venue.avatar, imageAlt: venue.name,
+             jsonld: ld.crumbs([['Takebana', '/'], [ta('app.venues'), '/venues'], [venue.name, '/venue/' + venue._id], [ta(tabKey), pageHref(1)]]) } }) %>
+<% if (page > 1) { %><link rel="prev" href="<%= pageHref(page - 1) %>"><% } %>
+<% if (page < pages) { %><link rel="next" href="<%= pageHref(page + 1) %>"><% } %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/profile.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/gallery.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/venue.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-vp" data-venue="<%= venue._id %>" data-name="<%= venue.name %>">
+
+      <header class="tk-vp__head tk-vp__head--small">
+        <a href="/venue/<%= venue._id %>" class="tk-vp__ava"><% if (venue.avatar) { %><img src="<%= venue.avatar %>" alt=""><% } else { %><%= letter %><% } %></a>
+        <div class="tk-vp__id">
+          <h1 class="tk-vp__name" data-user-content><%= venue.name %></h1>
+        </div>
+      </header>
+
+      <%- include('partials/venueTabs') %>
+
+      <% if (tab === 'streams' && tabs.live) { %>
+      <%# Идёт эфир от имени заведения. %>
+      <a href="/stream/<%= tabs.live._id %>" class="tk-vp__live">
+        <% if (tabs.live.thumbnail) { %><img src="<%= tabs.live.thumbnail %>" alt=""><% } %>
+        <span class="tk-vp__badge"><i class="tk-vp__dot" aria-hidden="true"></i><span data-i18n="venues.onAir"><%- t('venues.onAir') %></span></span>
+        <span class="tk-vp__live-title" data-user-content><%= tabs.live.title %></span>
+        <span class="tk-btn tk-btn--primary tk-btn--sm tk-vp__watch" data-i18n="venue.page.watchStream"><%- t('venue.page.watchStream') %></span>
+      </a>
+      <% } %>
+
+      <% if (canPost) { %>
+      <div class="tk-vp__post">
+        <% if (tab === 'streams') { %>
+        <a href="/studio?venue=<%= venue._id %>" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="venue.page.goLive"><%- t('venue.page.goLive') %></a>
+        <p class="tk-note" data-i18n="venue.page.goLiveHint"><%- t('venue.page.goLiveHint') %></p>
+        <% } else { %>
+        <a href="/upload?venue=<%= venue._id %>" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="venue.page.upload"><%- t('venue.page.upload') %></a>
+        <p class="tk-note" data-i18n="venue.page.uploadHint"><%- t('venue.page.uploadHint') %></p>
+        <% } %>
+      </div>
+      <% } %>
+
+      <% if (items.length) { %>
+      <div class="tk-recs">
+        <% items.forEach(function (x) { %><%- tab === 'streams' ? include('partials/recordingCard', { r: x }) : include('partials/galleryVideo', { v: x }) %><% }); %>
+      </div>
+      <% if (pages > 1) { %><%- include('partials/pager') %><% } %>
+      <% } else if (!tabs.live) { %>
+      <p class="tk-note tk-note--center" data-i18n="venue.<%= tab %>Empty"><%- t('venue.' + tab + 'Empty') %></p>
+      <% } %>
+
+    </div>
+  </main>
+</div>
+</body>
+</html>

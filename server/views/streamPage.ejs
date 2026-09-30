@@ -98,6 +98,21 @@
       <form class="tk-studio__form tk-form" id="studioForm" novalidate>
         <h1 class="tk-page__h1" data-i18n="studio.h1"><%- t('studio.h1') %></h1>
 
+        <%# Эфир от имени заведения (29.09): «Начать эфир» со страницы своего
+            заведения — /studio?venue=<id>. Черновик такого эфира помнит его. %>
+        <% if (venue) { %>
+        <div class="tk-studio__venue">
+          <span class="tk-studio__venue-ava"<% if (!venue.avatarStyle.url) { %> data-bg="<%= venue.avatarStyle.gradient %>"<% } %>><% if (venue.avatarStyle.url) { %><img src="<%= venue.avatarStyle.url %>" alt=""><% } else { %><%= venue.avatarStyle.initial %><% } %></span>
+          <span class="tk-studio__venue-text">
+            <span class="tk-form__label" data-i18n="studio.venueFor"><%- t('studio.venueFor') %></span>
+            <b data-user-content><%= venue.displayName %></b>
+          </span>
+          <% if (!stream) { %><a href="/studio" class="tk-studio__venue-off" data-i18n="studio.venueOff"><%- t('studio.venueOff') %></a>
+          <% } else if (!stream.firstLiveAt && !stream.isActive) { %><a href="/stream/<%= stream._id %>?venue=0" class="tk-studio__venue-off" data-i18n="studio.venueOff"><%- t('studio.venueOff') %></a><% } %>
+          <input type="hidden" name="venue" value="<%= venue._id %>">
+        </div>
+        <% } %>
+
         <fieldset class="tk-seg">
           <legend class="tk-form__label" data-i18n="studio.source"><%- t('studio.source') %></legend>
           <label class="tk-seg__btn"><input type="radio" name="source" value="web"<%= source === 'web' ? ' checked' : '' %>><span data-i18n="studio.sourceWeb"><%- t('studio.sourceWeb') %></span></label>

@@ -124,15 +124,40 @@ moved  "старый адрес персональных данных"   /person
 expect "о нас"                    "200"     GET /about
 expect "раздел каталога"         "200"     GET /streaming/business   # гость смотрит без входа
 expect "старый адрес популярного" "302"    GET /streaming           # ведёт на главную
-expect "карта заведений"         "200"     GET /map
+# Раздел «Заведения» /venues (29.09, docs/VENUES.md) вместо «Карты заведений»
+# /map: старые адреса — 301 вместе с запросом. Поиск по разделу — не в индекс
+# (docs/seo/DECISIONS.md, п. 10), карточки фрагментом — тоже.
+expect "раздел «Заведения»"       "200"     GET /venues
+expect "заведения: поиск и фильтры" "200"   GET "/venues?q=ab&city=nis&open=1&sort=rate"
+moved  "старый адрес карты"               /map /venues
+moved  "ещё более старый адрес карты"     /main /venues
+moved  "старая карта с поиском"           "/map?q=ab" "/venues?q=ab"
+VENUES_Q=$("${CURL[@]}" "${BASE}/venues?q=ab" 2>/dev/null || echo "")
+[[ "$VENUES_Q" == *'name="robots" content="noindex'* ]] && pass "поиск по заведениям закрыт от индекса" \
+  || fail "у /venues?q= нет noindex" "views/venues.ejs — robots при filters.q"
+CARDS_HEADERS=$("${CURL[@]}" -sI "${BASE}/venues/cards?q=ab" 2>/dev/null || echo "")
+grep -qi '^x-robots-tag:.*noindex' <<<"$CARDS_HEADERS" && pass "карточки /venues/cards закрыты от индекса" \
+  || fail "/venues/cards без X-Robots-Tag noindex"
+expect "«Мои заведения» гостю"    "302"     GET /venues/mine
 # Страница заведения (29.09): нет такого — 404, кривой адрес — тоже 404;
-# правка гостю — на вход, а не страница.
+# правка и настройки гостю — на вход, а не страница. Вкладки «Эфиры»,
+# «Видео» и «Меню» (этапы 3–4): нечего показать — 404.
 expect "заведение, которого нет"  "404"     GET /venue/000000000000000000000000
 expect "заведение, кривой адрес"  "404"     GET /venue/zzz
 expect "правка заведения гостю"   "302"     GET /venue/000000000000000000000000/edit
-moved  "старый адрес карты"               /main /map
+expect "настройки заведения гостю" "302"    GET /venue/000000000000000000000000/settings
+expect "«Эфиры» заведения, которого нет" "404" GET /venue/000000000000000000000000/streams
+expect "«Видео» заведения, которого нет" "404" GET /venue/000000000000000000000000/videos
+expect "«Меню» заведения, которого нет"  "404" GET /venue/000000000000000000000000/menu
+expect "«Меню», кривой адрес"     "404"     GET /venue/zzz/menu
 # SEO (docs/seo/): robots, карта сайта, подтверждение Вебмастера.
 expect "robots.txt"               "200"     GET /robots.txt
+ROBOTS=$("${CURL[@]}" "${BASE}/robots.txt" 2>/dev/null || echo "")
+if [[ "$ROBOTS" == *'Disallow: /venues/cards'* && "$ROBOTS" == *'Disallow: /venues/mine'* && "$ROBOTS" == *'Disallow: /venue/*/settings'* ]]; then
+  pass "robots.txt закрывает служебное заведений"
+else
+  fail "robots.txt без Disallow для /venues/cards, /venues/mine, /venue/*/settings" "routes/seo.js"
+fi
 expect "карта сайта"              "200"     GET /sitemap.xml
 expect "файл Вебмастера"          "200"     GET /yandex_80b052bf060e4036.html
 moved  "адрес страницы без хвостовой косой" /about/ /about
@@ -223,6 +248,26 @@ if grep -qi 'javascript' <<<"$MJS_TYPE"; then
 else
   fail "модуль карты: ${MJS_TYPE:-нет ответа}" "в location /vendor/ у nginx нет types для mjs (ops/nginx/takebana.conf)"
 fi
+# Ролик видео-меню — до 250 МБ одним запросом (29.09): у его адреса в nginx
+# свой предел, общий в 64 МБ отбил бы его 413-м ещё до приложения. Тело не
+# шлём — хватает заголовка: nginx решает по Content-Length, приложение
+# отвечает 401 гостю, не читая тела. HTTP/1.1 — в h2 длина без тела сама
+# по себе 400. Смысл только через nginx, то есть по https.
+if [[ "$SCHEME" == "https" ]]; then
+  Z=000000000000000000000000
+  CLIP_CODE=$(code POST "/venue/$Z/menu/$Z/clip" --http1.1 -H 'Content-Length: 104857600' -H 'Expect:')
+  if [[ "$CLIP_CODE" == "401" ]]; then
+    pass "ролик меню в 100 МБ доходит до приложения ${c_dim}→ 401 гостю${c_off}"
+  elif [[ "$CLIP_CODE" == "413" ]]; then
+    fail "ролик меню в 100 МБ отбит nginx (413)" "в ops/nginx/takebana.conf блок ^/venue/…/menu/…/clip$ — переложить конфиг и reload"
+  else
+    fail "ролик меню: ждали 401, получили $CLIP_CODE"
+  fi
+  expect "прочее больше 64 МБ — 413 от nginx" "413" POST "/venue/$Z/menu" --http1.1 -H 'Content-Length: 104857600' -H 'Expect:'
+else
+  skip "пределы тела nginx не проверяем: адрес по http, мимо nginx"
+fi
+
 if [[ "$SCHEME" == "https" ]]; then
   grep -qi '^strict-transport-security:' <<<"$HEADERS" \
     && pass "HSTS" || fail "нет HSTS" "helmet ставит его только когда видит HTTPS — снова X-Forwarded-Proto"
@@ -249,7 +294,15 @@ expect "DELETE /updateEstablishment/:id"  "401"     DELETE /updateEstablishment/
 expect "POST /api/calls/create"           "401"     POST /api/calls/create           -H 'Content-Type: application/json' -d '{}'
 expect "PUT /updateEstablishment/:id"     "401"     PUT  /updateEstablishment/000000000000000000000000
 expect "POST /register-establishment"     "401"     POST /register-establishment     -H 'Content-Type: application/json' -d '{}'
-expect "GET /user-establishments"         "401|302" GET  /user-establishments        -H 'X-Requested-With: XMLHttpRequest'
+# Настройки и видео-меню заведения (29.09) — только владельцу и администратору.
+expect "PUT /venue/:id/settings"          "401"     PUT  /venue/000000000000000000000000/settings -H 'Content-Type: application/json' -d '{"videoMenu":true}'
+expect "POST /venue/:id/menu"             "401"     POST /venue/000000000000000000000000/menu -H 'Content-Type: application/json' -d '{"name":"x"}'
+expect "GET /venue/:id/menu/:item"        "401"     GET  /venue/000000000000000000000000/menu/000000000000000000000000 -H 'Accept: application/json'
+expect "PUT /venue/:id/menu/:item"        "401"     PUT  /venue/000000000000000000000000/menu/000000000000000000000000 -H 'Content-Type: application/json' -d '{"name":"x"}'
+expect "DELETE /venue/:id/menu/:item"     "401"     DELETE /venue/000000000000000000000000/menu/000000000000000000000000
+expect "POST /venue/:id/menu/:item/move"  "401"     POST /venue/000000000000000000000000/menu/000000000000000000000000/move -H 'Content-Type: application/json' -d '{"dir":1}'
+expect "POST /venue/:id/menu/:item/clip"  "401"     POST /venue/000000000000000000000000/menu/000000000000000000000000/clip
+expect "DELETE /venue/:id/menu/:item/clip" "401"    DELETE /venue/000000000000000000000000/menu/000000000000000000000000/clip
 expect "POST /profile/gallery"            "401"     POST /profile/gallery
 # Фото галереи с 25.09 — свои записи (models/GalleryPhoto.js), удаление — /photo/:id (routes/watch.js).
 expect "DELETE /photo/:id"                "401"     DELETE /photo/000000000000000000000000
@@ -355,6 +408,11 @@ expect "/stream-obs/:id"                  "404" GET  /stream-obs/000000000000000
 expect "/stream/:id/enter"                "404" POST /stream/000000000000000000000000/enter -H 'Content-Type: application/json' -d '{"mode":"web"}'
 expect "/api/pause-stream"                "404" POST /api/pause-stream -H 'Content-Type: application/json' -d '{}'
 expect "/updateEstablishmentOnlineStatus" "404" POST /updateEstablishmentOnlineStatus -H 'Content-Type: application/json' -d '{}'
+# 29.09: окно «Мои заведения» и поиск выпадашкой на карте ушли вместе с /map —
+# их заменили /venues/mine и сам список раздела /venues.
+expect "/user-establishments"             "404" GET  /user-establishments -H 'Accept: application/json'
+expect "/searchEstablishments"            "404" GET  "/searchEstablishments?q=ab" -H 'Accept: application/json'
+expect "GET /api/venues/:id"              "404" GET  /api/venues/000000000000000000000000 -H 'Accept: application/json'
 
 step "Обход каталогов"
 # Проверяются пути, которые берут имя файла от клиента и живы сейчас: раздача
@@ -499,10 +557,10 @@ if [[ $DO_LOGIN -eq 1 ]]; then
         (( days >= 29 )) && pass "cookie сессии на ${days} дн." || fail "cookie сессии на ${days} дн." "ждали 30: config/session.js"
 
         # Сессия должна действительно работать, а не просто выдаться.
-        auth_code=$("${CURL[@]}" -b "$jar" -o /dev/null -w '%{http_code}' \
-          -H 'X-Requested-With: XMLHttpRequest' "${BASE}/user-establishments" 2>/dev/null || echo 000)
-        [[ "$auth_code" == "200" ]] && pass "с сессией /user-establishments отдаёт 200" \
-          || fail "с сессией /user-establishments вернул $auth_code" "сессия не сохраняется — смотрите MongoDBStore"
+        # Страница только для вошедшего: гостя она уводит на вход (302).
+        auth_code=$("${CURL[@]}" -b "$jar" -o /dev/null -w '%{http_code}' "${BASE}/venues/mine" 2>/dev/null || echo 000)
+        [[ "$auth_code" == "200" ]] && pass "с сессией /venues/mine отдаёт 200" \
+          || fail "с сессией /venues/mine вернул $auth_code" "сессия не сохраняется — смотрите MongoDBStore"
         badge=$(code GET /api/badge -b "$jar" -H 'Accept: application/json')
         [[ "$badge" == "200" ]] && pass "с сессией /api/badge отдаёт 200" || fail "с сессией /api/badge вернул $badge"
 

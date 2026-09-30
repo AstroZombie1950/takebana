@@ -1,416 +1,348 @@
-// Карта заведений (/map): фильтры, список, поиск, карточка, оценка, камера
-// заведения, список своих заведений. Разметка — views/map.ejs, карта —
-// tk-map.js. Правка и пульт владельца — на странице заведения
-// (/venue/:id, public/tk-venue-edit.js, с 29.09).
+// Раздел «Заведения» /venues (29.09): вид «Список и карта / Список / Карта»,
+// поиск и фильтры, связь карточек с метками. Разметка — views/venues.ejs,
+// карточки рисует сервер (views/partials/venueCard.ejs) — и при смене
+// фильтров тоже, фрагментом /venues/cards. Карта — tk-map.js, вёрстка —
+// css/venues.css, решения — docs/VENUES.md.
 //
-// Заменяет main.js и service.js (900 и 500 строк на jQuery с тремя плагинами):
-// карточка заведения заполнялась там двумя копиями кода — по щелчку на карте
-// и из поиска, — а данные собирались тремя запросами.
+// До 29.09 здесь была «Карта заведений» /map: узкая панель, поиск выпадашкой
+// и карточка поверх карты. Оценка из той карточки переехала на страницу
+// заведения (public/tk-venue.js).
 (function () {
-  const dict = window.TKVenueDict || { types: {}, cities: {} };
   const $ = (id) => document.getElementById(id);
-  const esc = (s) => escapeHtml(s == null ? '' : String(s));
   // Подписи — из общего словаря (public/tk-i18n.js); он подключён шапкой
   // кабинета, то есть до этого файла.
   const t = (key, arg) => (window.t ? window.t(key, arg) : '');
   const tkText = (el, key, vars) => (window.tkText ? window.tkText(el, key, vars) : undefined);
 
-  const label = (kind, code, fallback) => (code ? t(kind + '.' + code, fallback || '') : '');
-  const typeCity = (v) => [label('venue', v.type, dict.types[v.type]),
-                           label('city', v.city, dict.cities[v.city])].filter(Boolean).join(' · ');
-
-  function initial(name) {
-    const m = String(name || '').match(/[\p{L}\p{N}]/u);
-    return m ? m[0].toUpperCase() : '•';
-  }
-
-  function plural(n, one, few, many) {
-    const d10 = n % 10, d100 = n % 100;
-    if (d10 === 1 && d100 !== 11) return one;
-    if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return few;
-    return many;
-  }
-
-  // Гость смотрит карту и камеры (с 28.09), а оценку ставит после входа:
-  // туда и отправляем, с возвратом на эту же карту. true — ушли на вход.
-  function needLogin() {
-    if (window.TK && window.TK.userId) return false;
-    location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
-    return true;
-  }
-
-  // Ответ с ошибкой — исключение с текстом сервера: его и показываем.
-  function api(url, opts) {
-    return fetch(url, opts).then(async (r) => {
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.message || 'HTTP ' + r.status);
-      return body;
-    });
-  }
-
-  // ── Окна ──
-  const modals = ['venuePhotoModal', 'myVenuesModal'].map($).filter(Boolean);
-
-  function openModal(m) { m.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
-  function closeModal(m) {
-    if (m.classList.contains('hidden')) return;
-    m.classList.add('hidden');
-    if (!modals.some((x) => !x.classList.contains('hidden'))) document.body.style.overflow = '';
-  }
-
-  modals.forEach((m) => {
-    m.addEventListener('click', (e) => {
-      if (e.target === m || e.target.closest('[data-close]')) closeModal(m);
-    });
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    const open = modals.filter((m) => !m.classList.contains('hidden')).pop();
-    if (open) closeModal(open);
-    else hideCard();
-  });
-
-  // ── Фильтры ──
+  const root = $('venues');
   const form = $('venueFilters');
+  const query = $('venueQuery');
+  const clear = $('venueClear');
   const reset = form.querySelector('[data-reset]');
-  form.querySelector('[type="submit"]').remove();
-
-  function filterParams() {
-    const p = new URLSearchParams();
-    new FormData(form).forEach((value, key) => { if (value) p.append(key, value); });
-    return p;
-  }
-
-  function applyFilters() {
-    const p = filterParams();
-    history.replaceState(null, '', '/map' + (p.toString() ? '?' + p : ''));
-    reset.hidden = !p.toString();
-    loadVenues();
-  }
-
-  form.addEventListener('change', applyFilters);
-  form.addEventListener('submit', (e) => { e.preventDefault(); applyFilters(); });
-  reset.addEventListener('click', (e) => {
-    e.preventDefault();
-    form.elements.city.value = '';
-    form.querySelectorAll('input[type="checkbox"]').forEach((box) => { box.checked = false; });
-    applyFilters();
-  });
-
-  // ── Карта и точки ──
+  const list = root.querySelector('.tk-venues__list');
+  const cardsEl = $('venueCards');
+  const countEl = $('venueCount');
+  const empty = $('venueEmpty');
+  const emptyNote = $('venueEmptyNote');
+  const showAll = $('venueShowAll');
   const mapEl = $('venueMap');
-  let map = null;
-  let bounds = null;
-  let venues = [];
-  let pending = null;
+  const follow = $('venueFollow');
+  const fab = $('venueFab');
+  const wide = matchMedia('(min-width: 1024px)');
 
-  const venueParam = new URLSearchParams(location.search).get('venue') || '';
+  // «Показать» нужна только без скрипта: здесь фильтр применяется сразу.
+  form.querySelectorAll('[data-nojs]').forEach((el) => el.remove());
+
+  // Форма слова по числу: plural(5, 'venues.count') → ключ venues.countMany.
+  function plural(n, base) {
+    const d10 = n % 10, d100 = n % 100;
+    return base + (d10 === 1 && d100 !== 11 ? 'One' : d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14) ? 'Few' : 'Many');
+  }
+
+  // ── Карточки ──
+  // Точки карты — из самих карточек: сервер отдаёт их один раз, разметкой.
+  let cards = [];
+
+  function readCards() {
+    cards = Array.from(cardsEl.querySelectorAll('.tk-vc'), (el) => {
+      const lat = parseFloat(el.dataset.lat), lng = parseFloat(el.dataset.lng);
+      return {
+        el, id: el.dataset.id, name: el.dataset.name, photo: el.dataset.pin || '',
+        lat, lng, has: Number.isFinite(lat) && Number.isFinite(lng),
+        online: el.classList.contains('is-live'),
+      };
+    });
+    if (map) map.setPoints(points());
+  }
+
+  const points = () => cards.filter((c) => c.has)
+    .map((c) => ({ id: c.id, lng: c.lng, lat: c.lat, name: c.name, photo: c.photo, online: c.online }));
+  const cardOf = (id) => cards.find((c) => c.id === id);
+
+  // ── Вид ──
+  // Выбор помним отдельно для широкого и узкого экрана: «Карта» на телефоне
+  // не значит, что и на компьютере человек хочет карту без списка.
+  const viewKey = () => 'tk.venues.view.' + (wide.matches ? 'wide' : 'narrow');
+  const view = () => root.dataset.view;
+
+  function storedView() {
+    let v = null;
+    try { v = localStorage.getItem(viewKey()); } catch (e) {}
+    if (v === 'list' || v === 'map' || (v === 'split' && wide.matches)) return v;
+    return wide.matches ? 'split' : 'list';
+  }
+
+  function setView(v, remember) {
+    if (v === 'split' && !wide.matches) v = 'list';
+    root.dataset.view = v;
+    root.querySelectorAll('[data-set-view]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.setView === v)));
+    tkText(fab, v === 'map' ? 'venues.viewList' : 'venues.viewMap');
+    if (remember) {
+      try { localStorage.setItem(viewKey(), v); } catch (e) {}
+    }
+    if (v !== 'list') ensureMap();
+    refresh();
+  }
+
+  root.querySelectorAll('[data-set-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.setView, true)));
+  fab.addEventListener('click', () => setView(view() === 'map' ? 'list' : 'map', true));
+  wide.addEventListener('change', () => setView(storedView(), false));
+
+  // ── Карта ──
+  // Поднимается, когда её впервые показывают: MapLibre — около 290 КБ,
+  // а телефону в списке карта не нужна вовсе.
+  const FOCUS_ZOOM = 15;
+  let map = null;
+  let mounting = null;
+  let bounds = null;
 
   const tip = document.createElement('div');
   tip.className = 'tk-venues__tip';
   tip.hidden = true;
   mapEl.append(tip);
 
-  TKMap.mount(mapEl).then((m) => {
-    map = m;
-    m.on('move', (b) => { bounds = b; loadVenues(); });
-    m.on('click', openCard);
-    m.on('hover', (id, at) => {
-      const v = id && venues.find((x) => x._id === id);
-      tip.hidden = !v;
-      if (!v) return;
-      tip.textContent = v.name;
-      tip.style.left = at.x + 'px';
-      tip.style.top = at.y + 'px';
-    });
-    // Ссылка на конкретное заведение — /map?venue=<id>: так на карту ведут
-    // результаты поиска по сайту. Тогда карта летит к нему, а не к посетителю.
-    const wanted = /^[a-f\d]{24}$/i.test(venueParam) ? venueParam : '';
-    if (wanted) {
-      api('/api/venues/' + wanted).then((v) => {
-        if (v.location && Number.isFinite(v.location.lat)) focusVenue(v);
-        openCard(wanted);
-      }).catch(() => {});
-    } else if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((p) => m.flyTo(p.coords.longitude, p.coords.latitude, 12));
-    }
-  }).catch((e) => {
-    console.error('Карта не загрузилась:', e);
-    toast(t('venues.mapFailed'), 'error');
-  });
-
-  // Точки — по видимой части карты и фильтрам. Щёлкнули три тега подряд —
-  // нужен ответ на последний, а не на тот, что пришёл позже остальных.
-  function loadVenues() {
-    if (!map || !bounds) return;
-    const p = filterParams();
-    p.set('bl_lat', bounds.south);
-    p.set('bl_lng', bounds.west);
-    p.set('tr_lat', bounds.north);
-    p.set('tr_lng', bounds.east);
-    if (pending) pending.abort();
-    const ctrl = pending = new AbortController();
-    fetch('/establishmentsLocation?' + p, { signal: ctrl.signal })
-      .then((r) => r.json())
-      .then((list) => {
-        venues = list;
-        map.setPoints(list.map((v) => ({
-          id: v._id, lng: v.location.lng, lat: v.location.lat, name: v.name, photo: v.photos[0], online: v.online,
-        })));
-        renderList(list);
-      })
-      .catch((e) => { if (e.name !== 'AbortError') console.error('Заведения не загрузились:', e); });
-  }
-
-  // Точка — в середину свободной части карты: на десктопе справа её
-  // закрывает карточка, на телефоне карточка выезжает снизу.
-  function focusVenue(v) {
-    const padding = innerWidth >= 1024 ? { right: 412 } : { bottom: Math.round(innerHeight * 0.55) };
-    map.flyTo(v.location.lng, v.location.lat, 15, padding);
-  }
-
-  // ── Список в панели ──
-  const list = $('venueList');
-
-  function pic(v) {
-    return v.photos && v.photos[0]
-      ? `<img src="${esc(v.photos[0])}" alt="" loading="lazy">`
-      : esc(initial(v.name));
-  }
-
-  function renderList(items) {
-    // Сначала те, где идёт камера, — ради них на карту и заходят.
-    const sorted = items.slice().sort((a, b) => (b.online === true) - (a.online === true));
-    list.replaceChildren(...sorted.map((v) => {
-      const li = document.createElement('li');
-      li.innerHTML = `
-        <button type="button" class="tk-vrow${v.online ? ' is-live' : ''}">
-          <span class="tk-vrow__pic">${pic(v)}</span>
-          <span class="tk-vrow__body">
-            <span class="tk-vrow__name">${esc(v.name)}</span>
-            <span class="tk-vrow__meta">${esc(typeCity(v))}</span>
-          </span>
-          ${v.online ? `<span class="tk-vrow__live"><i class="tk-venues__dot"></i>${esc(t('venues.onAir'))}</span>` : ''}
-        </button>`;
-      li.firstElementChild.addEventListener('click', () => {
-        focusVenue(v);
-        openCard(v._id);
-        panel.classList.remove('is-open');
+  function ensureMap() {
+    if (mounting) return mounting;
+    mounting = TKMap.mount(mapEl).then((m) => {
+      map = m;
+      m.setPoints(points());
+      m.on('move', (b) => { bounds = b; refresh(); });
+      m.on('click', pick);
+      m.on('hover', (id, at) => {
+        const c = id && cardOf(id);
+        tip.hidden = !c;
+        mark(c ? id : null, 'is-hot');
+        if (!c) return;
+        tip.textContent = c.name;
+        tip.style.left = at.x + 'px';
+        tip.style.top = at.y + 'px';
       });
-      return li;
-    }));
-    $('venueEmpty').hidden = items.length > 0;
-    $('venueCount').textContent = items.length || '';
-    $('venueOpenCount').textContent = items.length || '';
+      // Выбранное (?venue= или «На карте» до загрузки) карта покажет сама;
+      // иначе — все найденные разом, чтобы список не начинался с пустоты.
+      if (sel) {
+        const c = cardOf(sel);
+        m.mark(sel, 'sel');
+        if (c && c.has) m.flyTo(c.lng, c.lat, FOCUS_ZOOM);
+      } else {
+        fitAll();
+      }
+      return m;
+    }).catch((e) => {
+      console.error('Карта не загрузилась:', e);
+      toast(t('venues.mapFailed'), 'error');
+      mounting = null;
+    });
+    return mounting;
   }
 
-  // ── Панель на телефоне ──
-  const panel = $('venuePanel');
-  $('venuePanelOpen').addEventListener('click', () => panel.classList.add('is-open'));
-  $('venuePanelClose').addEventListener('click', () => panel.classList.remove('is-open'));
-
-  // ── Поиск ──
-  const search = $('venueSearch');
-  const found = $('venueFound');
-  let searchTimer = null;
-  let searchCtrl = null;
-
-  function hideFound() {
-    found.classList.add('hidden');
-    found.replaceChildren();
+  function fitAll() {
+    const p = points();
+    if (map && p.length) map.fit(p);
   }
 
-  search.addEventListener('input', () => {
-    clearTimeout(searchTimer);
-    const q = search.value.trim();
-    if (!q) return hideFound();
-    searchTimer = setTimeout(() => {
-      if (searchCtrl) searchCtrl.abort();
-      const ctrl = searchCtrl = new AbortController();
-      api('/searchEstablishments/' + encodeURIComponent(q), { signal: ctrl.signal }).then((items) => {
-        found.innerHTML = items.length
-          ? items.map((v) => `
-              <button type="button" class="tk-venues__hit" data-id="${esc(v._id)}">
-                <span class="tk-vrow__name">${esc(v.name)}</span>
-                <span class="tk-vrow__meta">${esc([typeCity(v), v.address].filter(Boolean).join(' · '))}</span>
-              </button>`).join('')
-          : `<p class="tk-venues__miss">${esc(t('venues.nothingFound'))}</p>`;
-        found.classList.remove('hidden');
-        found.querySelectorAll('[data-id]').forEach((b, i) => {
-          b.addEventListener('click', () => {
-            const v = items[i];
-            if (map && v.location && Number.isFinite(v.location.lat)) focusVenue(v);
-            openCard(v._id);
-            hideFound();
-            panel.classList.remove('is-open');
-          });
-        });
-      }).catch((e) => { if (e.name !== 'AbortError') hideFound(); });
-    }, 200);
-  });
-  // mousedown, а не click: иначе поле теряет фокус и список прячется раньше щелчка.
-  found.addEventListener('mousedown', (e) => e.preventDefault());
-  search.addEventListener('blur', () => setTimeout(hideFound, 150));
-  search.addEventListener('keydown', (e) => { if (e.key === 'Escape') { search.value = ''; hideFound(); } });
+  // Список следует за картой, когда они рядом и ничего не ищут: запрос ищет
+  // по всему городу, а карта сама подстраивается под найденное.
+  const scoped = () => view() === 'split' && follow.checked && !query.value.trim() && !!bounds;
+  const inView = (c) => c.has && c.lat >= bounds.south && c.lat <= bounds.north && c.lng >= bounds.west && c.lng <= bounds.east;
 
-  // ── Карточка заведения ──
-  const card = $('venueCard');
-  const rate = $('venueRate');
-  let cardId = null;
-  let cardPhotos = [];
+  function refresh() {
+    const only = scoped();
+    let n = 0;
+    cards.forEach((c) => {
+      const show = !only || inView(c);
+      c.el.hidden = !show;
+      if (show) n++;
+    });
 
-  function hideCard() {
-    cardId = null;
-    card.classList.add('hidden');
-  }
-  $('venueCardClose').addEventListener('click', hideCard);
+    const q = query.value.trim();
+    const city = form.elements.city.value;
+    tkText(countEl.firstElementChild, plural(n, 'venues.count'), { n });
+    const scope = countEl.lastElementChild;
+    if (only) tkText(scope, 'venues.scopeView');
+    else if (q) tkText(scope, 'venues.scopeQuery', { q });
+    else if (city) tkText(scope, 'city.' + city);
+    else tkText(scope, 'common.allCities');
 
-  function openCard(id) {
-    cardId = id;
-    api('/api/venues/' + id).then((v) => {
-      if (cardId !== id) return;
-      fillCard(v);
-      card.classList.remove('hidden');
-    }).catch((e) => toast(e.message, 'error'));
+    empty.hidden = n > 0;
+    const offscreen = only && cards.length > 0;
+    showAll.hidden = !offscreen;
+    tkText(emptyNote, offscreen ? 'venues.emptyView' : 'venues.emptyFilter');
   }
 
-  // Картинка карточки: идёт камера — обложка камеры первой (правки 29.09:
-  // обложку поставили, а карточка показывала букву); дальше фото; без
-  // них — логотип, и только потом буква.
-  function fillCard(v) {
-    cardPhotos = (v.online && v.cover ? [v.cover] : []).concat(v.photos || []);
-    if (!cardPhotos.length && v.avatar) cardPhotos = [v.avatar];
-    $('venueCardPhotos').innerHTML = cardPhotos.length
-      ? cardPhotos.map((src, i) => `<button type="button" data-i="${i}" aria-label="${esc(t('venues.photoN', { n: i + 1 }))}"><img src="${esc(src)}" alt=""></button>`).join('')
-      : `<span class="tk-vcard__nophoto" aria-hidden="true">${esc(initial(v.name))}</span>`;
-    $('venuePage').href = '/venue/' + encodeURIComponent(v._id);
+  follow.addEventListener('change', refresh);
+  showAll.addEventListener('click', fitAll);
 
-    $('venueCardMeta').textContent = typeCity(v);
-    $('venueCardName').textContent = v.name;
-    $('venueCardAddr').textContent = v.address || '';
+  // ── Карточка ↔ метка ──
+  let sel = null;
 
-    // Часы — на сегодня: в субботу и воскресенье выходные.
-    const day = new Date().getDay();
-    const hours = day === 0 || day === 6 ? v.weekendHours : v.weekdayHours;
-    $('venueCardHours').textContent = hours && hours.open && hours.close
-      ? t('venues.today', { from: hours.open, to: hours.close })
-      : '';
+  function mark(id, cls) {
+    cardsEl.querySelectorAll('.tk-vc.' + cls).forEach((el) => el.classList.remove(cls));
+    const c = id && cardOf(id);
+    if (c) c.el.classList.add(cls);
+  }
 
-    const watch = $('venueWatch');
-    watch.hidden = !v.online;
-    watch.dataset.id = v._id;
-    watch.href = '/venue/' + encodeURIComponent(v._id) + '/live';
-    $('venueOffline').hidden = !!v.online;
+  function select(id) {
+    sel = id;
+    mark(id, 'is-sel');
+    if (map) map.mark(id, 'sel');
+  }
 
-    const r = v.rating;
-    $('venueScore').textContent = r.average.toFixed(1);
-    $('venueStars').style.setProperty('--v', r.average);
-    // Формы слова подбирает plural: по-английски «few» и «many» совпадают,
-    // поэтому те же правила годятся для обоих языков.
-    $('venueVotes').textContent = `${r.count} ${plural(r.count, t('venues.votesOne'), t('venues.votesFew'), t('venues.votesMany'))}`;
-    rate.querySelectorAll('button').forEach((b) => {
-      b.classList.toggle('is-on', Number(b.dataset.value) === r.mine);
+  // «На карте» у карточки: к точке на уровень квартала — соседи остаются
+  // видны, и список рядом не сжимается до одной карточки. Из вида «Список» — на
+  // карту: на широком экране рядом со списком, на узком — во весь экран.
+  function focus(id) {
+    const c = cardOf(id);
+    if (!c || !c.has) return;
+    select(id);
+    if (view() === 'list') setView(wide.matches ? 'split' : 'map', false);
+    ensureMap().then((m) => {
+      if (!m) return;
+      m.flyTo(c.lng, c.lat, FOCUS_ZOOM);
+      if (view() === 'map') scrollToCard(c);
     });
   }
 
-  rate.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-value]');
-    if (!b || !cardId || needLogin()) return;
-    const id = cardId;
-    api('/rateEstablishment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ establishmentId: id, rating: Number(b.dataset.value) }),
-    }).then(() => {
-      toast(t('venues.rateThanks'), 'ok');
-      openCard(id);
-    }).catch((err) => toast(err.message, 'error'));
-  });
-
-  // ── Фото во весь экран ──
-  const photoModal = $('venuePhotoModal');
-  const photoFull = $('venuePhotoFull');
-  let photoAt = 0;
-
-  function showPhoto(i) {
-    photoAt = (i + cardPhotos.length) % cardPhotos.length;
-    photoFull.src = cardPhotos[photoAt];
-    $('venuePhotoPrev').hidden = $('venuePhotoNext').hidden = cardPhotos.length < 2;
+  // Нажали метку — карточку на глаза: в списке прокруткой и вспышкой,
+  // в виде «Карта» — лентой внизу.
+  function pick(id) {
+    const c = cardOf(id);
+    if (!c) return;
+    select(id);
+    if (view() === 'map') return scrollToCard(c);
+    c.el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    c.el.classList.remove('is-flash');
+    void c.el.offsetWidth; // вспышка заново, даже если та же карточка
+    c.el.classList.add('is-flash');
   }
 
-  $('venueCardPhotos').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-i]');
-    if (!b) return;
-    showPhoto(Number(b.dataset.i));
-    openModal(photoModal);
-  });
-  $('venuePhotoPrev').addEventListener('click', () => showPhoto(photoAt - 1));
-  $('venuePhotoNext').addEventListener('click', () => showPhoto(photoAt + 1));
-  document.addEventListener('keydown', (e) => {
-    if (photoModal.classList.contains('hidden') || cardPhotos.length < 2) return;
-    if (e.key === 'ArrowLeft') showPhoto(photoAt - 1);
-    if (e.key === 'ArrowRight') showPhoto(photoAt + 1);
-  });
+  // Лента в виде «Карта»: листнули — карта за карточкой; сами подвинули
+  // ленту к метке — её прокрутку за выбор не считаем.
+  let steering = false;
+  let steerTimer = null;
+  let swipeTimer = null;
 
-  // ── Свои заведения ──
-  // Список со ссылками на страницы заведений: камера, правка и удаление —
-  // там (/venue/:id, с 29.09). Прежде всё это было здесь, окнами поверх
-  // карты, и найти, как запустить камеру, было непросто.
-  const mineModal = $('myVenuesModal');
-  const mineList = $('myVenuesList');
-  let mine = [];
-
-  function loadMine() {
-    return api('/user-establishments').then((items) => { mine = items; renderMine(); });
+  function scrollToCard(c) {
+    steering = true;
+    cardsEl.scrollTo({ left: c.el.offsetLeft - (cardsEl.clientWidth - c.el.offsetWidth) / 2, behavior: 'smooth' });
+    clearTimeout(steerTimer);
+    steerTimer = setTimeout(() => { steering = false; }, 700);
   }
 
-  function renderMine() {
-    if (!mineList) return;
-    mineList.innerHTML = mine.map((v) => {
-      const on = !!v.online;
-      const approved = v.status === true;
-      const state = on ? ['is-live', t('venues.onAir')]
-        : !approved ? ['is-pending', t('venues.pending')]
-        : v.pending ? ['is-pending', t('venue.page.draft')]
-        : ['', t('venues.offlineState')];
-      const id = esc(v._id);
-      return `
-        <li class="tk-mine__item">
-          <a class="tk-mine__top" href="/venue/${id}">
-            <span class="tk-vrow__pic">${v.avatar ? `<img src="${esc(v.avatar)}" alt="">` : pic(v)}</span>
-            <span class="tk-vrow__body">
-              <span class="tk-vrow__name">${esc(v.name)}</span>
-              <span class="tk-vrow__meta">${esc(typeCity(v) || v.address)}</span>
-            </span>
-            <span class="tk-mine__state ${state[0]}">${state[1]}</span>
-          </a>
-          <div class="tk-mine__actions">
-            <a href="/venue/${id}" class="tk-btn tk-btn--primary tk-btn--sm">${esc(t('venue.page.open'))}</a>
-            ${approved ? `<a href="/venue/${id}/live" class="tk-btn tk-btn--outline tk-btn--sm">${esc(t(on ? 'vlive.open' : 'venues.startLive'))}</a>` : ''}
-            <a href="/venue/${id}/edit" class="tk-btn tk-btn--ghost tk-btn--sm">${esc(t('venue.page.edit'))}</a>
-          </div>
-          ${approved ? '' : `<p class="tk-form__note">${esc(t('venues.pendingNote'))}</p>`}
-        </li>`;
-    }).join('');
-  }
+  cardsEl.addEventListener('scroll', () => {
+    if (view() !== 'map' || steering) return;
+    clearTimeout(swipeTimer);
+    swipeTimer = setTimeout(() => {
+      const mid = cardsEl.scrollLeft + cardsEl.clientWidth / 2;
+      let best = null, gap = Infinity;
+      cards.forEach((c) => {
+        const d = Math.abs(c.el.offsetLeft + c.el.offsetWidth / 2 - mid);
+        if (d < gap) { gap = d; best = c; }
+      });
+      if (!best || best.id === sel) return;
+      select(best.id);
+      if (map && best.has) map.panTo(best.lng, best.lat);
+    }, 150);
+  }, { passive: true });
 
-  if (mineModal) {
-    $('myVenuesButton').addEventListener('click', () => {
-      openModal(mineModal);
-      loadMine().catch((e) => toast(e.message, 'error'));
+  cardsEl.addEventListener('click', (e) => {
+    const show = e.target.closest('[data-show]');
+    if (show) return focus(show.closest('.tk-vc').dataset.id);
+    // В ленте карточка целиком — выбор; ссылки по-прежнему ведут на страницу.
+    const el = view() === 'map' && !e.target.closest('a') && e.target.closest('.tk-vc');
+    if (!el) return;
+    const c = cardOf(el.dataset.id);
+    select(c.id);
+    scrollToCard(c);
+    if (map && c.has) map.panTo(c.lng, c.lat);
+  });
+
+  cardsEl.addEventListener('mouseover', (e) => {
+    const el = e.target.closest('.tk-vc');
+    if (map) map.mark(el ? el.dataset.id : null, 'hot');
+  });
+  cardsEl.addEventListener('mouseleave', () => { if (map) map.mark(null, 'hot'); });
+
+  // ── Поиск и фильтры ──
+  // Карточки под новые фильтры рисует сервер — тем же шаблоном, что страницу.
+  // Нажали три фильтра подряд — нужен ответ на последний, а не на тот, что
+  // пришёл позже остальных.
+  let loading = null;
+  let typing = null;
+
+  function params() {
+    const p = new URLSearchParams();
+    new FormData(form).forEach((value, key) => {
+      if (value && !(key === 'sort' && value === 'live')) p.append(key, value);
     });
+    return p.toString();
   }
 
-  // Список, карточка и «Мои заведения» собираются скриптом, а переключатель
-  // языка перерисовывает только разметку с ключами — поэтому пересобираем.
-  document.addEventListener('tk:lang', () => {
-    loadVenues();
-    if (mine.length) loadMine().catch(() => {});
-    const openId = $('venueCard') && !$('venueCard').classList.contains('hidden') && $('venueWatch').dataset.id;
-    if (openId) openCard(openId);
+  // refit — показать на карте всех найденных: после запроса и смены города.
+  function apply(refit) {
+    const qs = params();
+    history.replaceState(null, '', '/venues' + (qs ? '?' + qs : ''));
+    reset.hidden = !qs;
+    clear.hidden = !query.value;
+    if (loading) loading.abort();
+    const ctrl = loading = new AbortController();
+    root.classList.add('is-loading');
+    fetch('/venues/cards' + (qs ? '?' + qs : ''), { signal: ctrl.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(t('common.failedCode', { code: r.status }));
+        return r.text();
+      })
+      .then((html) => {
+        cardsEl.innerHTML = html;
+        list.scrollTop = 0;
+        readCards();
+        select(sel && cardOf(sel) ? sel : null);
+        if (refit) fitAll();
+        refresh();
+      })
+      .catch((e) => { if (e.name !== 'AbortError') toast(e.message, 'error'); })
+      .finally(() => { if (loading === ctrl) root.classList.remove('is-loading'); });
+  }
+
+  form.addEventListener('change', (e) => {
+    if (e.target !== query) apply(e.target.name === 'city');
+  });
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    clearTimeout(typing);
+    apply(true);
+  });
+  query.addEventListener('input', () => {
+    clear.hidden = !query.value;
+    clearTimeout(typing);
+    typing = setTimeout(() => apply(true), 300);
+  });
+  query.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && query.value) {
+      query.value = '';
+      apply(true);
+    }
+  });
+  clear.addEventListener('click', () => {
+    query.value = '';
+    apply(true);
+    query.focus();
+  });
+  reset.addEventListener('click', (e) => {
+    e.preventDefault();
+    query.value = '';
+    form.elements.city.value = '';
+    form.elements.sort.value = 'live';
+    form.querySelectorAll('input[type="checkbox"]').forEach((box) => { box.checked = false; });
+    apply(true);
   });
 
-  // Для зондов (temp/): карточка и карта без щелчков.
-  window.TKVenues = { openCard, get map() { return map; } };
+  // ── Начало ──
+  // ?venue=<id> — ссылка «Показать на карте» со страницы заведения и камеры.
+  readCards();
+  setView(view() || storedView(), false);
+  const wanted = new URLSearchParams(location.search).get('venue');
+  if (wanted && cardOf(wanted)) focus(wanted);
+
+  // Для зондов (temp/): карта и выбор без щелчков.
+  window.TKVenues = { focus, setView, get map() { return map; } };
 })();

@@ -1,0 +1,21 @@
+<%#
+  Вкладки страницы заведения (29.09, docs/VENUES.md п. 8–9) — у каждой свой
+  адрес: «О заведении», «Меню», «Эфиры», «Видео» и владельцу (и администратору)
+  «Настройки». Какие есть — решает маршрут (tabsFor в utils/venuePage.js):
+  «Эфиры», «Видео» и включённое «Меню» — когда им есть что показать,
+  владельцу одобренного — всегда. Одна вкладка — полосы нет.
+  Ждёт venue, manage, tabs и tab — ключ открытой вкладки.
+%>
+<% var base = '/venue/' + venue._id, vt = locals.tabs || {};
+   var vtabs = [['about', base, 'venue.tab.about']];
+   if (vt.menu) vtabs.push(['menu', base + '/menu', 'venue.tab.menu']);
+   if (vt.streams) vtabs.push(['streams', base + '/streams', 'venue.tab.streams']);
+   if (vt.videos) vtabs.push(['videos', base + '/videos', 'venue.tab.videos']);
+   if (manage) vtabs.push(['settings', base + '/settings', 'venue.tab.settings']);
+   if (vtabs.length > 1) { %>
+<nav class="tk-tabs tk-vp__tabs" aria-label="<%= ta('venue.tab.aria') %>" data-i18n-aria="venue.tab.aria">
+  <% vtabs.forEach(function (tb) { %>
+  <a href="<%= tb[1] %>" class="tk-tabs__item<%= tb[0] === tab ? ' tk-tabs__item--on' : '' %>"<% if (tb[0] === tab) { %> aria-current="page"<% } %>><% if (tb[0] === 'streams' && vt.live) { %><i class="tk-vp__dot" aria-hidden="true"></i><% } %><span data-i18n="<%= tb[2] %>"><%- t(tb[2]) %></span></a>
+  <% }); %>
+</nav>
+<% } %>

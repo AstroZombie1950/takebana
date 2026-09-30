@@ -29,6 +29,7 @@ async function open(stream) {
     return await StreamSession.create({
       stream: stream._id,
       user: stream.userId,
+      venue: stream.venue || null,
       streamKey: stream.streamKey,
       title: stream.title || '',
       category: stream.category || '',

@@ -22,13 +22,17 @@ const userView = require('../../utils/userView');
 const { profileUrl } = require('../../utils/profileUrl');
 const { buildObsStreamKey, getSignExpiry } = require('../../utils/rtmpAuth');
 const { publicHost } = require('../../utils/site');
+const { VENUE_AUTHOR, venueAuthor } = require('../../utils/venueAuthor');
+const { ownApproved } = require('../../utils/venueOwner');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
 // Эфир и его автор для шапки эфира. null — эфира нет или нет автора.
+// venue — заведение, от имени которого эфир (29.09): шапка показывает его,
+// а user остаётся тем, кто ведёт, — на него подписка и права пульта.
 async function loadStream(streamId) {
   if (!OBJECT_ID.test(streamId)) return null;
-  const stream = await Stream.findById(streamId).populate('userId', 'nickname login email avatar').lean();
+  const stream = await Stream.findById(streamId).populate('userId', 'nickname login email avatar').populate('venue', VENUE_AUTHOR).lean();
   if (!stream || !stream.userId) return null;
 
   const author = stream.userId;
@@ -39,16 +43,17 @@ async function loadStream(streamId) {
     displayName,
     avatarStyle: userView.avatarStyle(author, displayName),
   };
-  return { stream, user };
+  return { stream, user, venue: venueAuthor(stream.venue) };
 }
 
 // Пульт и студия. stream — эфир владельца или null, если его ещё нет.
 // Ключ и адрес для OBS видны уже в студии: программу настраивают до выхода
 // в эфир. Вебу настраивать нечего — ему ключ не показываем.
-function renderConsole(req, res, { stream, user, defaults, streamKey }) {
+function renderConsole(req, res, { stream, user, defaults, streamKey, venue = null }) {
   res.render('streamPage', {
     stream,
     user,
+    venue,
     defaults,
     catalog,
     recordingEnabled: recording.enabled,
@@ -65,10 +70,18 @@ function renderConsole(req, res, { stream, user, defaults, streamKey }) {
 }
 
 // Студия: кнопки «Запустить эфир» в шапке и меню. Эфир уже есть — на его
-// пульт: второго эфира у одного человека не бывает.
+// пульт: второго эфира у одного человека не бывает — ни личного, ни
+// заведения. ?venue=<id> — «Начать эфир» со страницы своего заведения
+// (29.09): эфир пойдёт от его имени; чужое или неодобренное — молча личный.
 router.get('/studio', requireAuth, commonDataMiddleware, async (req, res) => {
-  const existing = await Stream.findOne({ userId: req.session.userId }).select('_id').lean();
-  if (existing) return res.redirect(`/stream/${existing._id}`);
+  // Черновик на пульте переподписывается тем же ?venue= (ниже, /stream/:id):
+  // иначе «Начать эфир» со страницы заведения молча вёл бы личный черновик.
+  const existing = await Stream.findOne({ userId: req.session.userId }).select('_id firstLiveAt isActive').lean();
+  if (existing) {
+    const draft = !existing.firstLiveAt && !existing.isActive;
+    return res.redirect(`/stream/${existing._id}` + (draft && OBJECT_ID.test(req.query.venue) ? `?venue=${req.query.venue}` : ''));
+  }
+  const venue = venueAuthor(await ownApproved(req.session.userId, req.query.venue));
 
   // Ключ трансляции — ключ пользователя, постоянный. Появляется при первом
   // визите в студию: в OBS его вставляют раньше, чем эфир создан.
@@ -77,7 +90,7 @@ router.get('/studio', requireAuth, commonDataMiddleware, async (req, res) => {
     owner.streamKey = randomUUID();
     await owner.save();
   }
-  renderConsole(req, res, { stream: null, user: null, defaults: owner.streamDefaults || {}, streamKey: owner.streamKey });
+  renderConsole(req, res, { stream: null, user: null, defaults: owner.streamDefaults || {}, streamKey: owner.streamKey, venue });
 });
 
 // Гость смотрит эфир и читает чат; писать, подписаться и пожаловаться —
@@ -122,7 +135,13 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
   }
 
   if (isStreamer) {
-    return renderConsole(req, res, { ...page, defaults: page.stream, streamKey: page.stream.streamKey });
+    // Черновик (в эфир ещё не выходил): ?venue=<id> — от имени своего
+    // заведения, ?venue=0 — личный. Сохраняется при «Запустить» (/start-stream).
+    const draft = !page.stream.firstLiveAt && !page.stream.isActive;
+    const venue = draft && req.query.venue === '0' ? null
+      : draft && req.query.venue ? venueAuthor(await ownApproved(req.session.userId, req.query.venue)) || page.venue
+      : page.venue;
+    return renderConsole(req, res, { ...page, venue, defaults: page.stream, streamKey: page.stream.streamKey });
   }
 
   const isSubscribed = !!req.session.userId && !!(await Subscription.exists({

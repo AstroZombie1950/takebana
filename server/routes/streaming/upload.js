@@ -28,6 +28,8 @@ const { validate } = require('../../middleware/validate');
 const { commonDataMiddleware } = require('./shared');
 const { uploadGallery } = require('./uploads');
 const { audit } = require('../../utils/audit');
+const { ownApproved } = require('../../utils/venueOwner');
+const { venueAuthor } = require('../../utils/venueAuthor');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 const CHUNK = galleryVideo.CHUNK_MB * 1024 * 1024;
@@ -66,10 +68,15 @@ function mine(req, extra = {}) {
 
 // Страница. Незаконченное — недокачанное, неопубликованное и то, что ещё
 // пережимается, — показывается сразу: с него человек и продолжает.
+// ?venue=<id> — «Загрузить видео» со страницы своего заведения (29.09):
+// видео уйдут от его имени, фото здесь тогда не принимаются — у заведения
+// они в правке. Чужое или неодобренное — молча обычная загрузка.
 router.get('/upload', requireAuth, commonDataMiddleware, async (req, res) => {
+  const venue = venueAuthor(await ownApproved(req.session.userId, req.query.venue));
   const drafts = await GalleryVideo.find({ userId: req.session.userId, status: { $in: ['uploading', 'draft', 'processing'] } })
     .sort({ createdAt: -1 }).limit(galleryVideo.MAX_PER_USER).lean();
   res.render('upload', {
+    venue,
     drafts: drafts.map(draftView),
     videoEnabled: galleryVideo.enabled,
     maxSeconds: galleryVideo.MAX_SECONDS,
@@ -81,14 +88,18 @@ router.get('/upload', requireAuth, commonDataMiddleware, async (req, res) => {
 router.post('/upload/video', requireAuthApi, requireNotBanned, validate({
   name: { type: 'string', max: 200, default: '', label: 'Имя файла' },
   size: { type: 'int', required: true, min: 1, max: galleryVideo.MAX_MB * 1024 * 1024, label: 'Размер' },
+  venue: { type: 'objectId', label: 'Заведение' }, // от имени своего заведения (29.09)
 }), async (req, res) => {
   if (!galleryVideo.enabled) return res.status(503).json({ success: false, message: 'Видео сейчас не принимаются' });
+  const venue = req.body.venue ? await ownApproved(req.session.userId, req.body.venue) : null;
+  if (req.body.venue && !venue) return res.status(403).json({ success: false, message: 'Загружать можно только от своего одобренного заведения' });
   const n = await GalleryVideo.countDocuments({ userId: req.session.userId, status: { $ne: 'failed' } });
   if (n >= galleryVideo.MAX_PER_USER) {
     return res.status(400).json({ success: false, message: 'В галерее уже 30 видео — удалите что-нибудь' });
   }
   const doc = await GalleryVideo.create({
     userId: req.session.userId,
+    venue: venue ? venue._id : null,
     status: 'uploading',
     upload: { name: req.body.name, size: req.body.size, received: 0 },
   });

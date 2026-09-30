@@ -18,6 +18,7 @@ const GalleryVideo = require('../models/GalleryVideo');
 const Establishments = require('../models/Establishments');
 const Subscription = require('../models/Subscription');
 const userView = require('./userView');
+const { VENUE_AUTHOR, venueAuthor } = require('./venueAuthor');
 const privacy = require('./privacy');
 const { profileUrl } = require('./profileUrl');
 const { VENUE_TYPES, CITIES } = require('../config/catalog');
@@ -63,8 +64,10 @@ const named = (list, rx, key) => list
   .filter((x) => rx.test(x.name) || rx.test(text('en', key(x.code))))
   .map((x) => x.code);
 
+// По описанию — с 29.09: «гриль» или «терраса» находят заведение, у которого
+// это написано в «О заведении». Тем же условием ищет и раздел /venues.
 function venuesWhere(rx) {
-  const or = [{ name: rx }, { address: rx }];
+  const or = [{ name: rx }, { address: rx }, { about: rx }];
   const types = named(VENUE_TYPES, rx, (c) => 'venue.' + c);
   const cities = named(CITIES, rx, (c) => 'city.' + c);
   if (types.length) or.push({ type: { $in: types } });
@@ -72,9 +75,12 @@ function venuesWhere(rx) {
   return { status: true, $or: or };
 }
 
+// От имени заведения (поле venue, 29.09) — автор карточки заведение.
 function authorOf(doc) {
   const user = doc.userId;
   if (!user) return null; // автора удалили — карточка без него бессмысленна
+  const venue = venueAuthor(doc.venue);
+  if (venue) return venue;
   const displayName = userView.displayName(user);
   return { _id: user._id, url: profileUrl(user), displayName, avatarStyle: userView.avatarStyle(user, displayName) };
 }
@@ -180,7 +186,8 @@ async function findStreams(rx, limit) {
     .sort({ viewers: -1, startedAt: -1 })
     .limit(limit)
     .populate('userId', 'nickname login email avatar')
-    .select('title category city viewers thumbnail isAdult userId')
+    .populate('venue', VENUE_AUTHOR)
+    .select('title category city viewers thumbnail isAdult userId venue')
     .lean();
   return streams.filter((s) => s.userId).map((s) => ({
     _id: s._id,
@@ -199,6 +206,7 @@ async function findRecordings(rx, limit) {
     .sort({ createdAt: -1 })
     .limit(limit)
     .populate('userId', 'nickname login email avatar')
+    .populate('venue', VENUE_AUTHOR)
     .select(RECORDING_CARD)
     .lean();
   return recordingCards(recordings);
@@ -209,15 +217,17 @@ async function findVideos(rx, limit) {
     .sort({ createdAt: -1 })
     .limit(limit)
     .populate('userId', 'nickname login email avatar')
-    .select('title duration thumb createdAt userId')
+    .populate('venue', VENUE_AUTHOR)
+    .select('title duration thumb createdAt userId venue')
     .lean();
   // Та же карточка, что у записи (partials/recCard.ejs), ведёт на /video/:id.
   return recordingCards(videos).map((v) => ({ ...v, href: '/video/' + v._id }));
 }
 
 // Карточки записей (partials/recCard.ejs) — поиск и разделы каталога.
-// recordings — с полями RECORDING_CARD и userId, раскрытым populate.
-const RECORDING_CARD = 'title duration thumb isAdult createdAt recordedAt userId';
+// recordings — с полями RECORDING_CARD и userId, раскрытым populate
+// (и venue — populate('venue', VENUE_AUTHOR), если запись заведения).
+const RECORDING_CARD = 'title duration thumb isAdult createdAt recordedAt userId venue';
 function recordingCards(recordings) {
   return recordings.filter((r) => r.userId).map((r) => ({
     _id: r._id,
@@ -286,4 +296,4 @@ async function counts(rawQuery) {
   return { people, streams, recordings, videos, venues, total: people + streams + recordings + videos + venues };
 }
 
-module.exports = { search, counts, normalize, peopleCards, recordingCards, RECORDING_CARD, TYPES };
+module.exports = { search, counts, normalize, escapeRegex, venuesWhere, peopleCards, recordingCards, RECORDING_CARD, TYPES };

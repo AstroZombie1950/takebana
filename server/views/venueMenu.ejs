@@ -1,0 +1,173 @@
+<%#
+  Вкладка «Меню» заведения /venue/:id/menu (29.09, docs/VENUES.md п. 10) —
+  маршрут в routes/venueMenu.js. Позиции по разделам: ролик (без звука, по
+  кругу, играет, пока карточка на экране), название, цена и описание.
+  Владельцу (и администратору) — ещё правка: добавить, изменить, выше/ниже,
+  удалить, прислать ролик. Скрипт — public/tk-venue-menu.js, вид — css/venue.css.
+%>
+<% var letter = (String(venue.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase();
+   var path = '/venue/' + venue._id + '/menu';
+   var named = sections.filter(function (s) { return s.name; });
+   var itemJson = function (x) {
+     var c = x.clip || {};
+     return JSON.stringify({ id: String(x._id), section: x.section || '', name: x.name, description: x.description || '', price: x.price || '',
+                             clip: c.video && c.video.url ? 1 : 0, status: c.status || 'none' });
+   }; %>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { title: venue.name + ' — ' + ta('venue.tab.menu') + ' — Takebana', description: ta('venue.menuDescription', { name: venue.name }),
+      seo: { path: path, robots: indexable ? '' : 'noindex, follow', image: venue.cover || (venue.photos || [])[0] || venue.avatar, imageAlt: venue.name,
+             jsonld: [ld.crumbs([['Takebana', '/'], [ta('app.venues'), '/venues'], [venue.name, '/venue/' + venue._id], [ta('venue.tab.menu'), path]]), menuLd].filter(Boolean) } }) %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/venue.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-vp" data-venue="<%= venue._id %>" data-name="<%= venue.name %>">
+
+      <header class="tk-vp__head tk-vp__head--small">
+        <a href="/venue/<%= venue._id %>" class="tk-vp__ava"><% if (venue.avatar) { %><img src="<%= venue.avatar %>" alt=""><% } else { %><%= letter %><% } %></a>
+        <div class="tk-vp__id">
+          <h1 class="tk-vp__name" data-user-content><%= venue.name %></h1>
+        </div>
+      </header>
+
+      <%- include('partials/venueTabs') %>
+
+      <% if (manage && !on) { %>
+      <p class="tk-vp__off"><span data-i18n="venue.menu.off"><%- t('venue.menu.off') %></span> <a href="/venue/<%= venue._id %>/settings" data-i18n="venue.tab.settings"><%- t('venue.tab.settings') %></a></p>
+      <% } %>
+      <% if (manage && venue.status !== true) { %>
+      <p class="tk-vp__off" data-i18n="venue.menu.unapproved"><%- t('venue.menu.unapproved') %></p>
+      <% } %>
+
+      <% if (canEdit) { %>
+      <div class="tk-vp__post">
+        <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" data-menu-add<% if (count >= limits.items) { %> disabled<% } %> data-i18n="venue.menu.add"><%- t('venue.menu.add') %></button>
+        <p class="tk-note" data-i18n="venue.menu.count" data-i18n-vars='<%= JSON.stringify({ n: count, max: limits.items }) %>'><%- t('venue.menu.count', { n: count, max: limits.items }) %></p>
+      </div>
+      <% } %>
+
+      <% if (named.length > 1) { %>
+      <nav class="tk-tags tk-menu__nav" aria-label="<%= ta('venue.menu.sectionsAria') %>" data-i18n-aria="venue.menu.sectionsAria">
+        <% sections.forEach(function (s, i) { if (s.name) { %><a href="#menu-<%= i %>" class="tk-tag" data-user-content><%= s.name %></a><% } }); %>
+      </nav>
+      <% } %>
+
+      <% sections.forEach(function (s, i) { %>
+      <section class="tk-menu__sec" id="menu-<%= i %>">
+        <% if (s.name) { %><h2 class="tk-menu__title" data-user-content><%= s.name %></h2><% } %>
+        <div class="tk-menu__grid">
+          <% s.items.forEach(function (x) { var c = x.clip || {}, video = c.video && c.video.url; %>
+          <article class="tk-menu__item"<% if (manage) { %> data-menu-item='<%= itemJson(x) %>'<% } %>>
+            <div class="tk-menu__media">
+              <% if (video) { %>
+              <video src="<%= video %>"<% if (c.thumb && c.thumb.url) { %> poster="<%= c.thumb.url %>"<% } %> muted loop playsinline preload="none" disablepictureinpicture data-menu-clip></video>
+              <% } else { %>
+              <span class="tk-menu__ph" aria-hidden="true"><%= (String(x.name).match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase() %></span>
+              <% } %>
+              <% if (manage && c.status === 'processing') { %>
+              <span class="tk-menu__state" data-i18n="venue.menu.processing"><%- t('venue.menu.processing') %></span>
+              <% } else if (manage && c.status === 'failed') { %>
+              <span class="tk-menu__state is-bad" data-i18n="venue.menu.failed"><%- t('venue.menu.failed') %></span>
+              <% } %>
+            </div>
+            <div class="tk-menu__body">
+              <div class="tk-menu__top">
+                <h3 class="tk-menu__name" data-user-content><%= x.name %></h3>
+                <% if (x.price) { %><span class="tk-menu__price" data-user-content><%= x.price %></span><% } %>
+              </div>
+              <% if (x.description) { %><p class="tk-menu__desc" data-user-content><%= x.description %></p><% } %>
+              <% if (canEdit || manage) { %>
+              <div class="tk-menu__acts">
+                <% if (canEdit) { %><button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-menu-edit data-i18n="venue.menu.edit"><%- t('venue.menu.edit') %></button><% } %>
+                <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs" data-menu-move="-1" aria-label="<%= ta('venue.menu.up') %>" data-i18n-aria="venue.menu.up">↑</button>
+                <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs" data-menu-move="1" aria-label="<%= ta('venue.menu.down') %>" data-i18n-aria="venue.menu.down">↓</button>
+                <%# Удалить — в окне правки; без правки (заведение скрыли) — здесь. %>
+                <% if (!canEdit) { %><button type="button" class="tk-btn tk-btn--ghost tk-btn--xs tk-vp__danger" data-menu-delete data-i18n="common.delete"><%- t('common.delete') %></button><% } %>
+              </div>
+              <% } %>
+            </div>
+          </article>
+          <% }); %>
+        </div>
+      </section>
+      <% }); %>
+
+      <% if (!count) { %>
+      <p class="tk-note tk-note--center" data-i18n="<%= canEdit ? 'venue.menu.emptyOwn' : 'venue.menuEmpty' %>"><%- t(canEdit ? 'venue.menu.emptyOwn' : 'venue.menuEmpty') %></p>
+      <% } %>
+
+    </div>
+  </main>
+</div>
+
+<% if (canEdit) { %>
+<%# Окно позиции: добавить и изменить. Ролик — отдельным запросом после
+    сохранения полей, с полосой загрузки. %>
+<div class="tk-modal hidden" id="menuModal">
+  <form class="tk-modal__card tk-menu__form" id="menuForm" novalidate
+        data-seconds="<%= limits.seconds %>" data-mb="<%= limits.mb %>" data-clips="<%= clipsEnabled ? 1 : 0 %>">
+    <div class="tk-modal__head">
+      <h3 class="tk-modal__title" id="menuModalTitle" data-i18n="venue.menu.addTitle"><%- t('venue.menu.addTitle') %></h3>
+      <button type="button" class="tk-modal__close" data-menu-close aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+    </div>
+    <div class="tk-modal__body">
+      <label class="tk-form__row">
+        <span class="tk-form__label" data-i18n="venue.menu.name"><%- t('venue.menu.name') %></span>
+        <input class="tk-field" type="text" name="name" maxlength="<%= limits.name %>" required>
+      </label>
+      <div class="tk-vp__pair">
+        <label class="tk-form__row">
+          <span class="tk-form__label" data-i18n="venue.menu.section"><%- t('venue.menu.section') %></span>
+          <input class="tk-field" type="text" name="section" maxlength="<%= limits.section %>" list="menuSections" placeholder="<%= ta('venue.menu.sectionPh') %>" data-i18n-placeholder="venue.menu.sectionPh">
+        </label>
+        <label class="tk-form__row">
+          <span class="tk-form__label" data-i18n="venue.menu.price"><%- t('venue.menu.price') %></span>
+          <input class="tk-field" type="text" name="price" maxlength="<%= limits.price %>" placeholder="<%= ta('venue.menu.pricePh') %>" data-i18n-placeholder="venue.menu.pricePh">
+        </label>
+      </div>
+      <datalist id="menuSections"><% named.forEach(function (s) { %><option value="<%= s.name %>"></option><% }); %></datalist>
+      <label class="tk-form__row">
+        <span class="tk-form__label" data-i18n="venue.menu.description"><%- t('venue.menu.description') %></span>
+        <textarea class="tk-field" name="description" rows="3" maxlength="<%= limits.description %>"></textarea>
+      </label>
+      <% if (clipsEnabled) { %>
+      <div class="tk-form__row tk-menu__clip">
+        <span class="tk-form__label" data-i18n="venue.menu.clip"><%- t('venue.menu.clip') %></span>
+        <video class="tk-menu__preview" id="menuPreview" muted loop playsinline hidden></video>
+        <label class="tk-menu__start" id="menuStartRow" hidden>
+          <span data-i18n="venue.menu.clipStart"><%- t('venue.menu.clipStart') %></span>
+          <input type="range" name="start" min="0" max="0" step="0.1" value="0">
+          <output id="menuStartOut">0:00</output>
+        </label>
+        <div class="tk-panel__actions">
+          <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-menu-pick data-i18n="venue.menu.clipPick"><%- t('venue.menu.clipPick') %></button>
+          <button type="button" class="tk-btn tk-btn--ghost tk-btn--xs" data-menu-unclip hidden data-i18n="venue.menu.clipRemove"><%- t('venue.menu.clipRemove') %></button>
+        </div>
+        <input type="file" id="menuClipInput" accept="video/mp4,video/quicktime,video/webm" hidden>
+        <p class="tk-note" data-i18n="venue.menu.clipHint" data-i18n-vars='<%= JSON.stringify({ sec: limits.seconds }) %>'><%- t('venue.menu.clipHint', { sec: limits.seconds }) %></p>
+        <progress class="tk-menu__progress" id="menuProgress" max="100" value="0" hidden></progress>
+      </div>
+      <% } %>
+    </div>
+    <div class="tk-modal__foot tk-panel__actions">
+      <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>
+      <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" data-menu-close data-i18n="common.cancel"><%- t('common.cancel') %></button>
+      <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-vp__danger tk-menu__del" data-menu-delete hidden data-i18n="common.delete"><%- t('common.delete') %></button>
+    </div>
+  </form>
+</div>
+<% } %>
+<script defer src="<%= asset('/tk-venue-menu.js') %>"></script>
+</body>
+</html>

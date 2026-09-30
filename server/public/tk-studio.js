@@ -197,7 +197,9 @@
         isAdult: f.isAdult.checked,
         subscribersOnly: f.subscribersOnly.checked,
         source: source(),
-        cover: f.cover.value
+        cover: f.cover.value,
+        // От имени заведения — только когда форма его несёт (views/streamPage.ejs).
+        venue: f.venue ? f.venue.value : undefined
       })
     })
       .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })

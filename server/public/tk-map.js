@@ -12,8 +12,11 @@
 //   карта.on('hover', fn(id, { x, y }) — наведение на заведение; fn(null) — ушли)
 //   карта.on('click', fn(id))
 //   карта.on('move', fn({ west, south, east, north })) — после остановки карты
-//   карта.flyTo(lng, lat, zoom, padding) — padding { right } или { bottom }:
-//     точка встаёт в середину той части карты, что не закрыта карточкой
+//   карта.flyTo(lng, lat, zoom) — перелететь к точке
+//   карта.panTo(lng, lat) — сдвинуть к точке, не меняя масштаба
+//   карта.fit([{ lng, lat }]) — показать все точки разом
+//   карта.mark(id, 'hot' | 'sel') — подсветить метку (наведение на карточку
+//     списка, выбранная); mark(null, …) — снять
 //
 // TKMap.pick(container, { center, zoom, point }) → Promise<выбор точки>:
 //   выбор.on('pick', fn({ lng, lat })) — метку перетащили или поставили щелчком
@@ -202,6 +205,7 @@
     var handlers = { hover: [], click: [], move: [] };
     function emit(ev, a, b) { handlers[ev].forEach(function (fn) { fn(a, b); }); }
     var markers = {}; // id → { marker, el, img, letter }
+    var marked = { hot: null, sel: null }; // подсвеченные метки — классы is-hot, is-sel
 
     map.addSource('venues', {
       type: 'geojson',
@@ -274,6 +278,8 @@
         m.el.classList.toggle('is-live', !!p.online);
         m.el.classList.toggle('tk-pin--empty', !p.photo);
         m.letter.textContent = initial(p.name);
+        m.el.classList.toggle('is-hot', marked.hot === p.id);
+        m.el.classList.toggle('is-sel', marked.sel === p.id);
         if (p.photo && m.img.getAttribute('src') !== p.photo) m.img.src = p.photo;
         m.marker.setLngLat(f.geometry.coordinates).addTo(map);
       });
@@ -318,8 +324,28 @@
           }),
         });
       },
-      flyTo: function (lng, lat, zoom, padding) {
-        map.flyTo({ center: [lng, lat], zoom: zoom || 14, padding: padding || 0 });
+      flyTo: function (lng, lat, zoom) {
+        map.flyTo({ center: [lng, lat], zoom: zoom || 14 });
+      },
+      panTo: function (lng, lat) {
+        map.easeTo({ center: [lng, lat] });
+      },
+      // Одна точка — к ней на уровень улицы: рамка вокруг одной точки
+      // увела бы в предельное приближение.
+      fit: function (list) {
+        if (!list.length) return;
+        if (list.length === 1) return map.flyTo({ center: [list[0].lng, list[0].lat], zoom: 15 });
+        var b = new lib.LngLatBounds();
+        list.forEach(function (p) { b.extend([p.lng, p.lat]); });
+        map.fitBounds(b, { padding: 60, maxZoom: 15 });
+      },
+      // Метка есть, только пока точка не собрана в кружок с числом, поэтому
+      // подсветку помним и ставим заново, когда маркер появится (syncMarkers).
+      mark: function (id, kind) {
+        var was = marked[kind];
+        marked[kind] = id;
+        if (was && markers[was]) markers[was].el.classList.remove('is-' + kind);
+        if (id && markers[id]) markers[id].el.classList.add('is-' + kind);
       },
     };
     return api;

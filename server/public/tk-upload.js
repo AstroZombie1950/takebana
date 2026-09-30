@@ -208,7 +208,8 @@
     return json('/upload/video', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: file.name.slice(0, 200), size: file.size }),
+      // От имени заведения — когда страница открыта с ?venue= (views/upload.ejs).
+      body: JSON.stringify({ name: file.name.slice(0, 200), size: file.size, venue: (window.TK_UPLOAD || {}).venue || undefined }),
     }).then(function (d) {
       var job = { id: d.video.id, name: file.name, size: file.size, received: 0, status: 'uploading', chunk: d.chunk, file: file };
       jobs[job.id] = job;

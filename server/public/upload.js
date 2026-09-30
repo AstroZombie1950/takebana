@@ -73,7 +73,8 @@
   function pick(list) {
     var all = Array.prototype.slice.call(list || []);
     var videos = D.videoEnabled ? all.filter(function (f) { return /^video\//.test(f.type); }) : [];
-    var photos = all.filter(function (f) { return /^image\/(png|jpeg|webp)$/.test(f.type); });
+    // От имени заведения — только видео: фото заведения — в его правке.
+    var photos = D.venue ? [] : all.filter(function (f) { return /^image\/(png|jpeg|webp)$/.test(f.type); });
     if (videos.length + photos.length < all.length) toast(t('user.galleryBadType'), 'error');
     var heavy = photos.filter(function (f) { return f.size > PHOTO_MB * 1024 * 1024; });
     if (heavy.length) toast(t(heavy.length === 1 ? 'user.photoHeavy' : 'user.photosHeavy', { name: heavy[0].name, n: heavy.length, mb: PHOTO_MB }), 'error');

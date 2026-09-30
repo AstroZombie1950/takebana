@@ -224,6 +224,7 @@ app.use(require('./routes/userRoutes'));
 app.use(require('./routes/passwordReset'));
 app.use(require('./routes/emailChange'));
 app.use(require('./routes/establishmentsRouter'));
+app.use(require('./routes/venueMenu'));
 app.use(require('./routes/admin'));
 app.use(require('./routes/streaming'));
 app.use(require('./routes/search'));
@@ -252,6 +253,8 @@ require('./jobs/streamCleanup').startStreamCleanup();
 require('./utils/recording').sweep();
 // Видео галереи, чьё пережатие оборвал перезапуск, — в «не вышло».
 require('./utils/galleryVideo').sweep();
+// Ролики видео-меню, чьё пережатие оборвал перезапуск, — в «не вышло».
+require('./utils/venueMenu').sweep();
 // Фото галереи из строк User.gallery — в документы (25.09.2026), один раз.
 require('./utils/galleryPhotos').start();
 // Готовые записи без нескольких качеств — в очередь пережатия (utils/recordingHls.js).
@@ -266,6 +269,8 @@ require('./utils/venueCam').resume();
 require('./utils/nickname').ensureAll(require('./models/User')).catch((e) => require('./utils/errorLog').server(e, 'nickname.ensureAll'));
 // Почта аккаунтов, заведённых до 24.09.2026, — в нижний регистр.
 require('./jobs/lowercaseEmails').run();
+// Средняя оценка в заведениях, заведённых до 29.09, — для карточек /venues.
+require('./utils/venueRating').backfill();
 // Рассылки поддержки, оборванные перезапуском, — в «прервана».
 require('./utils/support').markInterrupted().catch((e) => require('./utils/errorLog').server(e, 'support.sweep'));
 // Отрезки эфиров, оставшиеся открытыми от прошлого процесса, — закрыть,

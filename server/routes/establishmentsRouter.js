@@ -1,5 +1,5 @@
-// Заведения: заявка, карта, карточка, оценки, кабинет владельца.
-// Камера заведения — routes/venueLive.js, страница карты — views/map.ejs.
+// Заведения: раздел /venues (список и карта), заявка, оценки, страница
+// заведения, кабинет владельца. Камера заведения — routes/venueLive.js.
 
 const express = require('express');
 const router = express.Router();
@@ -9,6 +9,7 @@ asyncify(router); // ошибки async-обработчиков уходят в
 
 const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
+const gallery = require('../utils/gallery');
 const { removeVenue, unlinkUpload } = require('../utils/userDelete');
 const { readVenueFilters } = require('../utils/venueFilters');
 const multer = require('multer');
@@ -44,7 +45,6 @@ const upload = multer({
 const { requireAuth, requireOwner, wrap } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-const OBJECT_ID = /^[a-f\d]{24}$/i;
 // Адрес фотографии заведения — только файл в своей папке: его выдаёт загрузка
 // в этом же маршруте, а приходит он обратно от формы.
 const PHOTO_URL = /^\/uploads\/establishments\/[\w.-]+$/;
@@ -54,10 +54,81 @@ const PHOTO_URL = /^\/uploads\/establishments\/[\w.-]+$/;
 const { HOURS, LOCATION, CITY, TYPE, ABOUT_MAX, DRAFT_FIELDS, dropDraft } = require('../utils/venueFields');
 const { commonDataMiddleware } = require('./streaming/shared');
 
-// То, что видит любой вошедший: карточка на карте и поиск. Почта, телефон
-// и владелец — только самому владельцу, в /user-establishments.
-const PUBLIC_FIELDS = 'name type city country address about weekdayHours weekendHours location photos avatar cover online';
+const { venuesWhere, escapeRegex } = require('../utils/search');
+const { hoursState } = require('../utils/venueHours');
+const venueRating = require('../utils/venueRating');
+const { applyState, stateOf } = require('../utils/venueOwner');
+const { pageVenue, tabsFor, indexableVenue } = require('../utils/venuePage');
 
+// Что нужно карточке выдачи /venues. Почты, телефона и владельца в ней нет.
+const CARD_FIELDS = 'name type city address about weekdayHours weekendHours location photos avatar cover online ratingAvg ratingCount';
+
+
+
+// ── Раздел «Заведения» /venues (29.09) ───────────────────────────────────────
+// Прежде — «Карта заведений» /map: узкая панель, поиск выпадашкой на десять
+// названий и строки без фото. Теперь карточки (фото, оценка, часы, описание)
+// и карта рядом, поиск фильтрует сам список (docs/VENUES.md, вариант Б).
+//
+// Карточки рисует сервер — и в странице, и фрагментом /venues/cards, когда
+// меняются фильтры: шаблон один (views/partials/venueCard.ejs), а поиск видит
+// список заведений без скрипта. Скрипт (public/tk-venues.js) берёт из карточек
+// точки для карты и прячет те, что вне видимой её части.
+
+// Сколько карточек за раз. Одобренных заведений пока десятки; когда
+// перевалит за этот предел, нужна будет подгрузка страницами.
+const LIST_LIMIT = 300;
+
+const SORT = {
+    live: { online: -1, ratingAvg: -1, name: 1 },
+    rate: { ratingAvg: -1, ratingCount: -1, name: 1 },
+    name: { name: 1 },
+};
+
+async function listVenues(f) {
+    const where = f.q ? venuesWhere(new RegExp(escapeRegex(f.q), 'i')) : { status: true };
+    if (f.city) where.city = f.city;
+    if (f.types.length) where.type = { $in: f.types };
+    if (f.live) where.online = true;
+    const venues = await Establishments.find(where).select(CARD_FIELDS).sort(SORT[f.sort]).limit(LIST_LIMIT).lean();
+    // «Открыто сейчас» — по часам и белградскому времени, в базе его нет.
+    const now = new Date();
+    for (const v of venues) v.hours = hoursState(v, now);
+    return f.open ? venues.filter((v) => v.hours && v.hours.open) : venues;
+}
+
+// Каркас кабинета, поэтому commonDataMiddleware: шапке и левой панели нужны
+// профиль, подписки и уведомления. Открыт и гостю.
+router.get('/venues', commonDataMiddleware, wrap(async (req, res) => {
+    const filters = readVenueFilters(req.query);
+    res.render('venues', { filters, venues: await listVenues(filters) });
+}));
+
+// Карточки под новые фильтры — тот же шаблон, что в странице.
+router.get('/venues/cards', wrap(async (req, res) => {
+    const venues = await listVenues(readVenueFilters(req.query));
+    res.set('X-Robots-Tag', 'noindex');
+    res.render('partials/venueCards', { venues });
+}));
+
+// «Мои заведения» (29.09): все свои — и одобренные, и на проверке, — ссылками
+// на их страницы, и можно ли подать ещё одну заявку. В левой панели пункт
+// ведёт сюда, когда заведений больше одного (routes/streaming/shared.js).
+router.get('/venues/mine', requireAuth, commonDataMiddleware, wrap(async (req, res) => {
+    const [venues, apply] = await Promise.all([
+        Establishments.find({ owner: req.session.userId })
+            .select('name type city status reviewedAt online avatar pending.at').sort({ _id: 1 }).lean(),
+        applyState(req.session.userId),
+    ]);
+    res.render('myVenues', { venues: venues.map((v) => ({ ...v, state: stateOf(v) })), apply });
+}));
+
+// Прежние адреса раздела: /map (до 29.09) и /main (до 15.09). Ими делились
+// ссылками на заведения (?venue=) — запрос переезжает вместе с адресом.
+router.get(['/map', '/main'], (req, res) => {
+    const qs = req.originalUrl.indexOf('?');
+    res.redirect(301, '/venues' + (qs === -1 ? '' : req.originalUrl.slice(qs)));
+});
 
 
 // Заявка на заведение — страница /company-register (public/tk-company.js).
@@ -75,6 +146,13 @@ router.post('/register-establishment', requireAuth, validate({
     lat: { type: 'number', min: -90, max: 90, label: 'Широта' },
     lng: { type: 'number', min: -180, max: 180, label: 'Долгота' },
 }), wrap(async (req, res) => {
+    // Пределы (docs/VENUES.md, п. 6): заявка на проверке — одна за раз,
+    // заведений — не больше MAX_VENUES. Страница заявки о них предупреждает
+    // сама; здесь — на случай второй вкладки и прямого запроса.
+    const apply = await applyState(req.session.userId);
+    if (apply.waiting) return res.status(409).json({ message: 'Заявка уже на проверке: следующую можно подать после решения по ней' });
+    if (apply.full) return res.status(409).json({ message: 'Достигнут предел заведений на одного человека' });
+
     const { name, type, country, city, address, email, phone, weekdayHours, weekendHours, lat, lng } = req.body;
 
     const establishment = new Establishments({
@@ -101,8 +179,8 @@ router.post('/register-establishment', requireAuth, validate({
 }));
 
 
-// Точки для карты (public/tk-venues.js) — только то, что рисуют маркер и
-// строка списка. Фильтры те же, что в адресе страницы (utils/venueFilters.js).
+// Точки для карты на «О нас» (public/tk-landing.js) — только то, что рисует
+// маркер. Раздел /venues берёт точки из своих карточек (data-lat, data-lng).
 // Раньше уходили документы целиком — с почтой, телефоном и владельцем.
 router.get('/establishmentsLocation', wrap(async (req, res) => {
     const [south, west, north, east] = ['bl_lat', 'bl_lng', 'tr_lat', 'tr_lng'].map((k) => Number(req.query[k]));
@@ -131,54 +209,6 @@ router.get('/establishmentsLocation', wrap(async (req, res) => {
     res.json(establishments.map(({ photos, avatar, ...e }) => ({ ...e, photos: avatar ? [avatar] : (photos || []).slice(0, 1) })));
 }));
 
-
-// Карточка заведения: сведения, средняя оценка и оценка того, кто смотрит.
-// Раньше это были три запроса, /getRatings отдавал оценки вместе
-// с идентификаторами проголосовавших, а /getUserRating/:userId/… — чужую
-// оценку по идентификатору в адресе.
-// Гостю тоже: карта открыта без входа, своей оценки у него просто нет.
-router.get('/api/venues/:id', wrap(async (req, res) => {
-    if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Заведение не найдено' });
-
-    const venue = await Establishments.findOne({ _id: req.params.id, status: true }).select(PUBLIC_FIELDS).lean();
-    if (!venue) return res.status(404).json({ message: 'Заведение не найдено' });
-
-    const ratings = await Rating.find({ establishment: venue._id }).select('user rating').lean();
-    const mine = req.session.userId && ratings.find((r) => String(r.user) === String(req.session.userId));
-    const sum = ratings.reduce((s, r) => s + r.rating, 0);
-
-    res.json({
-        ...venue,
-        rating: {
-            average: ratings.length ? sum / ratings.length : 0,
-            count: ratings.length,
-            mine: mine ? mine.rating : null,
-        },
-    });
-}));
-
-
-// Поиск по названию для панели карты.
-router.get('/searchEstablishments/:name', wrap(async (req, res) => {
-    // Спецсимволы экранируются: строка вроде `(a+)+$` собирала регулярное
-    // выражение с катастрофическим откатом и вешала процесс на одном запросе.
-    const name = req.params.name.slice(0, 100);
-    const regex = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-
-    const establishments = await Establishments.find({ name: regex, status: true })
-        .select('name type city address location online')
-        .limit(10)
-        .lean();
-
-    res.json(establishments);
-}));
-
-
-// «Мои заведения» — всё, включая неодобренные, со всеми полями: это кабинет владельца.
-router.get('/user-establishments', requireAuth, wrap(async (req, res) => {
-    const establishments = await Establishments.find({ owner: req.session.userId }).lean();
-    res.json(establishments);
-}));
 
 // Правка заведения — со страницы /venue/:id/edit (public/tk-venue-edit.js).
 // validate стоит после multer: до разбора multipart тела ещё нет.
@@ -313,13 +343,16 @@ router.post('/rateEstablishment', requireAuth, validate({
         return res.status(404).json({ message: 'Заведение не найдено' });
     }
 
-    const userRating = await Rating.findOneAndUpdate(
+    await Rating.updateOne(
         { user: req.session.userId, establishment: establishmentId },
         { $set: { rating } },
-        { upsert: true, returnDocument: 'after' }
+        { upsert: true }
     );
+    await venueRating.recount(establishmentId);
+    const { ratingAvg, ratingCount } = await Establishments.findById(establishmentId).select('ratingAvg ratingCount').lean();
     audit(req, 'venue.rate', { targetType: 'venue', targetId: establishmentId, meta: { rating } });
-    res.json({ rating: userRating.rating });
+    // Новая средняя — странице заведения, чтобы не перезагружаться.
+    res.json({ rating, average: ratingAvg, count: ratingCount });
 }));
 
 // ── Страница заведения (29.09) ───────────────────────────────────────────────
@@ -330,30 +363,26 @@ router.post('/rateEstablishment', requireAuth, validate({
 // правка, удаление, состояние проверки. Правка — /venue/:id/edit.
 //
 // Заведение на проверке видно только владельцу (и администратору) — как
-// на карте. Параметр — venueId: кривой адрес ведёт на страницу 404.
-async function pageVenue(req, res) {
-    if (!OBJECT_ID.test(req.params.venueId)) return null;
-    const venue = await Establishments.findById(req.params.venueId).lean();
-    if (!venue) return null;
-    const me = res.locals.currentUser;
-    const own = !!me && String(venue.owner) === String(me._id);
-    const admin = !!me && me.isAdmin;
-    if (venue.status !== true && !own && !admin) return null;
-    return { venue, own, admin };
-}
+// на карте. Кто смотрит и какие вкладки — utils/venuePage.js: это общее
+// с видео-меню (routes/venueMenu.js).
 
 router.get('/venue/:venueId', commonDataMiddleware, wrap(async (req, res, next) => {
     const found = await pageVenue(req, res);
     if (!found) return next();
     const { venue, own, admin } = found;
-    const ratings = await Rating.aggregate([
-        { $match: { establishment: venue._id } },
-        { $group: { _id: null, avg: { $avg: '$rating' }, n: { $sum: 1 } } },
-    ]);
+    // Средняя — в самом заведении (utils/venueRating.js); своя — чтобы
+    // звёзды голосования показали, что уже поставлено.
+    const mine = req.session.userId
+        ? await Rating.findOne({ user: req.session.userId, establishment: venue._id }).select('rating').lean()
+        : null;
     res.render('venue', {
         venue,
+        own,
         manage: own || admin,
-        rating: ratings.length ? { average: ratings[0].avg, count: ratings[0].n } : { average: 0, count: 0 },
+        tabs: await tabsFor(venue, own || admin),
+        // Часы на сегодня — по белградскому дню недели, как в карточках выдачи.
+        hours: hoursState(venue),
+        rating: { average: venue.ratingAvg || 0, count: venue.ratingCount || 0, mine: mine ? mine.rating : 0 },
     });
 }));
 
@@ -371,6 +400,58 @@ router.get('/venue/:venueId/edit', requireAuth, commonDataMiddleware, wrap(async
         maxPhotos: MAX_PHOTOS,
         aboutMax: ABOUT_MAX,
     });
+}));
+
+// «Эфиры» и «Видео» заведения (29.09, docs/VENUES.md п. 9): записи эфиров
+// и видео, снятые от его имени, по PAGE на страницу. Владельцу видно и
+// незаконченное (склеивается, грузится) и кнопки «Начать эфир» и
+// «Загрузить видео». Нечего показать — вкладки нет, адрес — 404.
+router.get(['/venue/:venueId/streams', '/venue/:venueId/videos'], commonDataMiddleware, wrap(async (req, res, next) => {
+    const found = await pageVenue(req, res);
+    if (!found) return next();
+    const { venue, own, admin } = found;
+    const manage = own || admin;
+    const tab = req.path.endsWith('/videos') ? 'videos' : 'streams';
+    const tabs = await tabsFor(venue, manage);
+    if (!tabs[tab]) return next();
+
+    const owner = { venue: venue._id };
+    const total = tab === 'streams'
+        ? await gallery.recordingsCount(owner, manage)
+        : (await gallery.counts(owner, manage)).videosListed;
+    const pg = gallery.page(total, Number(req.query.page) || 1);
+    const range = { skip: pg.skip, limit: gallery.PAGE };
+    const items = tab === 'streams' ? await gallery.recordings(owner, manage, range) : await gallery.videos(owner, manage, range);
+    res.render('venueTab', {
+        venue, manage, tab, tabs, items, total, page: pg.page, pages: pg.pages,
+        // В индекс — как сама страница заведения (с описанием), и если есть что смотреть.
+        indexable: indexableVenue(venue) && items.some((x) => x.status === 'ready'),
+        canPost: own && venue.status === true,
+    });
+}));
+
+// Настройки заведения (29.09, docs/VENUES.md п. 8): свои у каждого, только
+// владельцу и администратору, меняются сразу, без проверки — как логотип.
+router.get('/venue/:venueId/settings', requireAuth, commonDataMiddleware, wrap(async (req, res, next) => {
+    const found = await pageVenue(req, res);
+    if (!found || !(found.own || found.admin)) return next();
+    res.set('X-Robots-Tag', 'noindex, nofollow');
+    res.render('venueSettings', { venue: found.venue, tabs: await tabsFor(found.venue, true) });
+}));
+
+// Одна настройка за запрос — так их шлёт переключатель страницы. Пустое тело
+// ничего не меняет и не ошибка.
+// requireOwner пускает владельца и администратора, как у правки.
+router.put('/venue/:id/settings', requireAuth, requireOwner(Establishments), validate({
+    videoMenu: { type: 'bool', label: 'Видео-меню' },
+}), wrap(async (req, res) => {
+    const venue = req.resource;
+    const set = {};
+    if (req.body.videoMenu !== undefined) set['features.videoMenu'] = req.body.videoMenu;
+    if (!Object.keys(set).length) return res.json({ ok: true });
+    await Establishments.updateOne({ _id: venue._id }, { $set: set });
+    audit(req, 'venue.settings', { targetType: 'venue', target: venue, meta: set });
+    res.json({ ok: true });
 }));
 
 module.exports = router;

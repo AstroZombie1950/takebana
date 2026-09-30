@@ -271,6 +271,19 @@ const EN = {
 
     // Заведения и адреса
     'Заведение не найдено': 'Establishment not found',
+    'Заявка уже на проверке: следующую можно подать после решения по ней': 'An application is already under review: you can submit the next one once it is decided',
+    'Достигнут предел заведений на одного человека': 'You have reached the limit of venues per person',
+    'Видео-меню': 'Video menu',
+    'Вести эфир можно только от своего одобренного заведения': 'You can only stream on behalf of your own approved venue',
+    'Загружать можно только от своего одобренного заведения': 'You can only upload on behalf of your own approved venue',
+    // Видео-меню (routes/venueMenu.js)
+    'Меню заводится у одобренного заведения': 'The menu is available once the venue is approved',
+    'В меню уже 100 позиций': 'The menu already has 100 items',
+    'Позиция не найдена': 'Menu item not found',
+    'Прежний ролик ещё обрабатывается': 'The previous clip is still being processed',
+    'Раздел': 'Section',
+    'Цена': 'Price',
+    'Куда': 'Direction',
     'Ошибка не найдена': 'Error not found',
     'Заведение сейчас не показывает камеру': 'The establishment is not showing its camera right now',
     'Заявка отправлена': 'Application submitted',

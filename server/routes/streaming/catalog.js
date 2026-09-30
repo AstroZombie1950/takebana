@@ -17,6 +17,7 @@ const { commonDataMiddleware, getActiveStreamsCount } = require('./shared');
 const { notFound } = require('../../middleware/errors');
 const authors = require('../../utils/authors');
 const userView = require('../../utils/userView');
+const { VENUE_AUTHOR, venueAuthor } = require('../../utils/venueAuthor');
 const restriction = require('../../utils/restrict');
 const privacy = require('../../utils/privacy');
 const gallery = require('../../utils/gallery');
@@ -70,7 +71,8 @@ async function findStreams(category, filters) {
     .sort(filters.sort === 'new' ? { startedAt: -1 } : { viewers: -1, startedAt: -1 })
     .limit(PAGE_SIZE)
     .populate('userId', 'nickname login email avatar')
-    .select('title category city viewers thumbnail userId isActive subscribersOnly')
+    .populate('venue', VENUE_AUTHOR)
+    .select('title category city viewers thumbnail userId venue isActive subscribersOnly')
     .lean();
 
   // Эфир удалённого пользователя приходит с userId: null. Прежде на нём
@@ -87,7 +89,8 @@ async function findStreams(category, filters) {
       isActive: stream.isActive,
       subscribersOnly: !!stream.subscribersOnly,
       thumbnail: stream.thumbnail || null,
-      user: {
+      // Эфир заведения — под заведением (utils/venueAuthor.js).
+      user: venueAuthor(stream.venue) || {
         displayName,
         avatarStyle: userView.avatarStyle(user, displayName),
       },
@@ -104,6 +107,7 @@ async function findRecordings(category) {
     .sort({ views: -1, createdAt: -1 })
     .limit(RECORDINGS * 2) // запас на забаненных
     .populate('userId', 'nickname login email avatar banned')
+    .populate('venue', VENUE_AUTHOR)
     .select(search.RECORDING_CARD)
     .lean();
   return search.recordingCards(recordings.filter((r) => r.userId && !r.userId.banned).slice(0, RECORDINGS));

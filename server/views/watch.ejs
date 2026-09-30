@@ -24,7 +24,7 @@
   var jsonld = [
     ld.video({ path: base, title: headTitle, description: rec.description, thumb: rec.thumb && rec.thumb.url,
                src: src, seconds: rec.duration, date: at, views: rec.views,
-               author: { url: author.url, name: author.displayName } }),
+               author: { url: author.url, name: author.displayName, org: !!author.venue } }),
     ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [headTitle, base]]),
   ].filter(Boolean);
 %>
@@ -73,6 +73,7 @@
             </a>
             <div class="tk-live__author-body">
               <a href="<%= author.url %>" class="tk-live__author-name"><%= author.displayName %><% if (author.official) { %><%- include('partials/official') %><% } %></a>
+              <% if (host) { %><span class="tk-live__host"><span data-i18n="stream.hostedBy"><%- t('stream.hostedBy') %></span> <a href="<%= host.url %>"><%= host.displayName %></a></span><% } %>
             </div>
           </div>
 

@@ -1,0 +1,45 @@
+<%#
+  Карточка заведения в разделе /venues (29.09): и в странице, и во фрагменте
+  /venues/cards, когда меняются фильтры (routes/establishmentsRouter.js).
+  Точку для карты скрипт берёт отсюда же — data-lat, data-lng, data-name,
+  data-pin (значок метки: логотип, без него первое фото). В виде «Карта» те же
+  карточки листаются строкой поверх карты — это делает только css/venues.css.
+
+  Ждёт v — заведение с полями CARD_FIELDS и hours из utils/venueHours.js.
+%>
+<% var id = String(v._id);
+   var loc = v.location && Number.isFinite(v.location.lat) && Number.isFinite(v.location.lng) ? v.location : null;
+   // Картинка: идёт камера — её обложка, иначе первое фото.
+   var shot = (v.online && v.cover) || (v.photos && v.photos[0]) || v.cover || '';
+   var pin = v.avatar || (v.photos && v.photos[0]) || '';
+   var letter = (String(v.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase();
+   var hk = v.hours ? (v.hours.open ? 'venues.openUntil' : 'venues.closedFrom') : '';
+   var hv = v.hours ? (v.hours.open ? { to: v.hours.to } : { from: v.hours.from }) : null; %>
+<article class="tk-vc<%= v.online ? ' is-live' : '' %>" data-id="<%= id %>" data-name="<%= v.name %>"<% if (loc) { %> data-lat="<%= loc.lat %>" data-lng="<%= loc.lng %>"<% } %><% if (pin) { %> data-pin="<%= pin %>"<% } %>>
+  <a class="tk-vc__media" href="/venue/<%= id %>" tabindex="-1" aria-hidden="true">
+    <% if (shot) { %><img src="<%= shot %>" alt="" loading="lazy"><% } else { %><span class="tk-vc__letter"><%= letter %></span><% } %>
+    <% if (v.online) { %><span class="tk-vc__live"><i></i><span data-i18n="venues.onAir"><%- t('venues.onAir') %></span></span><% } %>
+  </a>
+  <div class="tk-vc__body">
+    <div class="tk-vc__top">
+      <span class="tk-vc__logo"><% if (v.avatar) { %><img src="<%= v.avatar %>" alt="" loading="lazy"><% } else { %><%= letter %><% } %></span>
+      <div class="tk-vc__id">
+        <p class="tk-vc__meta"><% if (v.type) { %><span data-i18n="venue.<%= v.type %>"><%= ta('venue.' + v.type, catalog.VENUE_TYPE_NAME[v.type] || '') %></span><% } %><% if (v.type && v.city) { %> · <% } %><% if (v.city) { %><span data-i18n="city.<%= v.city %>"><%= ta('city.' + v.city, catalog.CITY_NAME[v.city] || '') %></span><% } %></p>
+        <h2 class="tk-vc__name"><a href="/venue/<%= id %>" data-user-content><%= v.name %></a></h2>
+      </div>
+    </div>
+    <p class="tk-vc__facts">
+      <% if (v.ratingCount) { %><span class="tk-vc__rate"><%= (v.ratingAvg || 0).toFixed(1) %> <span>(<%= num(v.ratingCount) %>)</span></span><% } else { %><span class="tk-vc__muted" data-i18n="venues.noVotes"><%- t('venues.noVotes') %></span><% } %>
+      <% if (hk) { %><span class="tk-vc__hours<%= v.hours.open ? ' is-open' : '' %>" data-i18n="<%= hk %>" data-i18n-vars='<%= JSON.stringify(hv) %>'><%- t(hk, hv) %></span><% } %>
+    </p>
+    <% if (v.about) { %><p class="tk-vc__about" data-user-content><%= v.about %></p><% } %>
+    <% if (v.address) { %><p class="tk-vc__addr" data-user-content><%= v.address %></p><% } %>
+    <div class="tk-vc__acts">
+      <% if (loc) { %><button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-show>
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
+        <span data-i18n="venues.onMap"><%- t('venues.onMap') %></span>
+      </button><% } %>
+      <a href="/venue/<%= id %>" class="tk-vc__open"><span data-i18n="venues.openPage"><%- t('venues.openPage') %></span> →</a>
+    </div>
+  </div>
+</article>

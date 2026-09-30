@@ -1,5 +1,6 @@
 // Пережатие загруженного видео со знаком — общее у галереи профиля
-// (utils/galleryVideo.js) и вложений переписки (utils/attachments.js).
+// (utils/galleryVideo.js), вложений переписки (utils/attachments.js)
+// и роликов видео-меню заведений (utils/venueMenu.js).
 //
 // Файл от человека не выкладывается как есть: водяной знак обязан быть
 // на всём видео сайта (требование торговой марки), а положить его можно
@@ -143,14 +144,29 @@ function roundArgs(src, out, info) {
   return args;
 }
 
+// Ролик видео-меню (29.09, docs/VENUES.md п. 10): квадрат из середины кадра,
+// 640×640, без звука. В меню он стоит в квадратной карточке целиком: знак
+// в углу виден, а у широкого кадра под object-fit: cover его бы срезало.
+const CLIP = 640;
+function clipArgs(src, out, info) {
+  const { height: wm, margin } = markSize(CLIP, CLIP);
+  return ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', ...input(src, info.format), '-i', WATERMARK,
+    '-filter_complex',
+    `[0:v]crop='min(iw,ih)':'min(iw,ih)',scale=${CLIP}:${CLIP},setsar=1[v];[1:v]scale=-1:${wm}[wm];` +
+    `[v][wm]overlay=W-w-${margin}:${margin}[out]`,
+    '-map', '[out]', '-an', '-fpsmax', '30',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-maxrate', '1500k', '-bufsize', '3000k',
+    '-pix_fmt', 'yuv420p', '-threads', '2', '-movflags', '+faststart', out];
+}
+
 // Пережать src в dir/video.mp4 со знаком и снять обложку dir/thumb.jpg.
-// round — кружок (roundArgs). Ошибки с reason — про сам файл (не видео,
-// слишком длинное), а не про сервер.
+// round — кружок (roundArgs), clip — ролик меню (clipArgs). Ошибки с reason —
+// про сам файл (не видео, слишком длинное), а не про сервер.
 //
 // edit — правка со страницы загрузки (21.09): start/end — обрезка в секундах
 // исходника (end 0 — до конца), mute — без звука, coverAt — секунда
 // исходника для обложки (-1 — сами: третья секунда или середина).
-async function encode(src, dir, { maxSeconds, round = false, log = {}, edit = {} }) {
+async function encode(src, dir, { maxSeconds, round = false, clip = false, log = {}, edit = {} }) {
   const format = await containerOf(src);
   if (!format) throw Object.assign(new Error('не MP4, MOV и не WebM'), { reason: 'novideo' });
   const probed = await probe(src, { explain: true, format });
@@ -166,7 +182,7 @@ async function encode(src, dir, { maxSeconds, round = false, log = {}, edit = {}
   const video = path.join(dir, 'video.mp4');
   const thumb = path.join(dir, 'thumb.jpg');
   const shape = edit.mute ? { ...info, audio: false } : info;
-  const args = round ? roundArgs(src, video, shape) : ffmpegArgs(src, video, shape);
+  const args = round ? roundArgs(src, video, shape) : clip ? clipArgs(src, video, shape) : ffmpegArgs(src, video, shape);
   // Обрезка: -ss перед входом (быстрый поиск, ffmpeg 4.4 режет точно по
   // кадру при перекодировании), -t — длина на выходе.
   if (start) args.splice(args.indexOf('-f'), 0, '-ss', start.toFixed(3));
@@ -184,7 +200,7 @@ async function encode(src, dir, { maxSeconds, round = false, log = {}, edit = {}
     '-ss', at.toFixed(3), '-i', video, '-frames:v', '1', '-vf', "scale='min(640,iw)':-2", thumb], { timeout: 30 })
     .catch((e) => errorLog.media(e, 'video.thumb', log));
 
-  const size = round ? { w: ROUND, h: ROUND } : fit(info.width, info.height);
+  const size = round ? { w: ROUND, h: ROUND } : clip ? { w: CLIP, h: CLIP } : fit(info.width, info.height);
   return {
     video,
     thumb: fs.existsSync(thumb) ? thumb : '',

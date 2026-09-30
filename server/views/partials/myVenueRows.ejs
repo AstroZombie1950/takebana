@@ -1,0 +1,21 @@
+<%#
+  Свои заведения строками — ссылками на их страницы (камера, правка,
+  настройки — там): «Мои заведения» /venues/mine и настройки профиля (29.09).
+  Ждёт venues с полями name type city avatar online status reviewedAt
+  pending.at и state — [класс, ключ подписи] из utils/venueOwner.js (stateOf).
+  Вид — app.css, «Свои заведения».
+%>
+<ul class="tk-myv">
+  <% venues.forEach(function (v) { %>
+  <li>
+    <a href="/venue/<%= v._id %>" class="tk-myv__row">
+      <span class="tk-myv__ava" data-user-content><% if (v.avatar) { %><img src="<%= v.avatar %>" alt=""><% } else { %><%= (String(v.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase() %><% } %></span>
+      <span class="tk-myv__body">
+        <span class="tk-myv__name" data-user-content><%= v.name %></span>
+        <% if (v.type || v.city) { %><span class="tk-myv__meta"><% if (v.type) { %><span data-i18n="venue.<%= v.type %>"><%= ta('venue.' + v.type, catalog.VENUE_TYPE_NAME[v.type] || '') %></span><% } %><% if (v.type && v.city) { %> · <% } %><% if (v.city) { %><span data-i18n="city.<%= v.city %>"><%= ta('city.' + v.city, catalog.CITY_NAME[v.city] || '') %></span><% } %></span><% } %>
+      </span>
+      <span class="tk-myv__state <%= v.state[0] %>" data-i18n="<%= v.state[1] %>"><%- t(v.state[1]) %></span>
+    </a>
+  </li>
+  <% }); %>
+</ul>

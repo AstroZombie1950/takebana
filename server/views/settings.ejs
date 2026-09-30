@@ -132,17 +132,7 @@
         <% if (venues.length) { %>
         <section class="tk-panel tk-set__venues">
           <p class="tk-panel__title" data-i18n="venues.mine"><%- t('venues.mine') %></p>
-          <ul class="tk-set__vlist" data-user-content>
-            <% venues.forEach(function (v) { var st = v.online ? ['is-live', 'venues.onAir'] : v.status !== true ? ['is-wait', 'venues.pending'] : v.pending && v.pending.at ? ['is-wait', 'venue.page.draft'] : ['', 'venues.offlineState']; %>
-            <li>
-              <a href="/venue/<%= v._id %>" class="tk-set__vrow">
-                <span class="tk-set__vava"><% if (v.avatar) { %><img src="<%= v.avatar %>" alt=""><% } else { %><%= (String(v.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase() %><% } %></span>
-                <span class="tk-set__vname"><%= v.name %></span>
-                <span class="tk-set__vstate <%= st[0] %>" data-i18n="<%= st[1] %>"><%- t(st[1]) %></span>
-              </a>
-            </li>
-            <% }); %>
-          </ul>
+          <%- include('partials/myVenueRows', { venues: venues }) %>
           <a href="/company-register" class="tk-btn tk-btn--ghost tk-btn--xs tk-set__vadd" data-i18n="venues.add"><%- t('venues.add') %></a>
         </section>
         <% } %>

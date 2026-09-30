@@ -97,8 +97,8 @@
             tip.style.left = at.x + "px";
             tip.style.top = at.y + "px";
           });
-          // Карточка заведения и эфир камеры — после входа.
-          map.on("click", function () { location.href = "/login"; });
+          // Заведение — в разделе, на карте рядом со списком (открыт и гостю).
+          map.on("click", function (id) { location.href = "/venues?venue=" + encodeURIComponent(id); });
         })
         .catch(function (e) { console.error("Карта не загрузилась:", e); });
     }

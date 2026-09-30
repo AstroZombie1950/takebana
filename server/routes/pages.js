@@ -1,6 +1,7 @@
-// Страницы, которые рендерит сам сервер: «О нас», вход, регистрация, карта,
+// Страницы, которые рендерит сам сервер: «О нас», вход, регистрация,
 // админка, выход. Главная — витрина эфиров (routes/streaming/catalog.js),
-// API и эфиры живут в соседних роутерах.
+// раздел заведений — routes/establishmentsRouter.js, API и эфиры живут
+// в соседних роутерах.
 
 const express = require('express');
 const path = require('path');
@@ -8,11 +9,10 @@ const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const User = require('../models/User');
-const Establishments = require('../models/Establishments');
 const catalog = require('../config/catalog');
 const { commonDataMiddleware } = require('./streaming/shared');
 const { requireAuth } = require('../middleware/auth');
-const { readVenueFilters } = require('../utils/venueFilters');
+const { applyState } = require('../utils/venueOwner');
 const { audit, ACTIONS } = require('../utils/audit');
 const userView = require('../utils/userView');
 const netCheck = require('../utils/netCheck');
@@ -92,35 +92,10 @@ router.get('/register', (req, res) => {
 });
 
 // Заявка на заведение — страница кабинета: без входа её всё равно не отправить.
-router.get('/company-register', requireAuth, commonDataMiddleware, (req, res) => {
-  res.render('newCompany', { catalog });
-});
-
-
-// Карта заведений — в каркасе кабинета, поэтому commonDataMiddleware:
-// шапке и левой панели нужны профиль, подписки и уведомления. Гость карту
-// смотрит, камеру и оценку — после входа (tk-venues.js).
-//
-// Список заведений сервер отдаёт сразу в разметке — с фильтрами из адреса,
-// в том виде, что рисует и скрипт: без него поиск видел пустую карту
-// (docs/seo/DECISIONS.md). Скрипт потом сужает список до видимой области.
-router.get('/map', commonDataMiddleware, async (req, res) => {
-  const filters = readVenueFilters(req.query);
-  const where = { status: true };
-  if (filters.city) where.city = filters.city;
-  if (filters.types.length) where.type = { $in: filters.types };
-  if (filters.live) where.online = true;
-  const [venues, hasEstablishments] = await Promise.all([
-    Establishments.find(where).select('name type city online photos').sort({ online: -1, name: 1 }).limit(500).lean(),
-    !!req.session.userId && Establishments.exists({ owner: req.session.userId }).then(Boolean),
-  ]);
-  res.render('map', { catalog, filters, venues, hasEstablishments });
-});
-
-// Прежний адрес карты — им делились ссылками на заведения (?venue=).
-router.get('/main', (req, res) => {
-  const qs = req.originalUrl.indexOf('?');
-  res.redirect(301, '/map' + (qs === -1 ? '' : req.originalUrl.slice(qs)));
+// Предел заведений и «одна заявка на проверке» (utils/venueOwner.js) видны
+// сразу, вместо формы, — а не отказом после того, как всё заполнено.
+router.get('/company-register', requireAuth, commonDataMiddleware, async (req, res) => {
+  res.render('newCompany', { apply: await applyState(req.session.userId) });
 });
 
 

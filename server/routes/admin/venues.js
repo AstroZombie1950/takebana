@@ -148,7 +148,9 @@ router.put('/venues/:id', requireAdmin, byId, validate({
 router.put('/venues/:id/status', requireAdmin, byId, validate({
   status: { type: 'bool', required: true, label: 'Статус' },
 }), async (req, res) => {
-  const venue = await Establishments.findByIdAndUpdate(req.params.id, { status: req.body.status }, { returnDocument: 'after' });
+  // reviewedAt — заявку рассмотрели: скрытое после одобрения уже не «заявка
+  // на проверке» и новой заявке владельца не мешает (utils/venueOwner.js).
+  const venue = await Establishments.findByIdAndUpdate(req.params.id, { status: req.body.status, reviewedAt: new Date() }, { returnDocument: 'after' });
   if (!venue) return res.status(404).json({ message: 'Заведение не найдено' });
   // Снятое с одобрения заведение не вещает: камера гаснет у всех.
   if (!venue.status && venue.online) await stopCamera(venue._id);

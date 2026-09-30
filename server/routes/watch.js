@@ -34,6 +34,7 @@ const galleryVideo = require('../utils/galleryVideo');
 const galleryPhotos = require('../utils/galleryPhotos');
 const recommend = require('../utils/recommend');
 const userView = require('../utils/userView');
+const { VENUE_AUTHOR, venueAuthor } = require('../utils/venueAuthor');
 const { profileUrl } = require('../utils/profileUrl');
 const { audit } = require('../utils/audit');
 
@@ -204,9 +205,11 @@ function mount(kind) {
   // Страница. Чужому — только готовое; метка 18+ — через тот же гейт, что
   // у эфира: подтверждение возраста хранится в аккаунте, гостя гейт зовёт войти.
   router.get(path, commonDataMiddleware, async (req, res) => {
-    const item = OBJECT_ID.test(req.params.id)
-      ? await K.Model.findById(req.params.id).populate('userId', 'nickname login email avatar banned role privacy').lean()
+    // У фото галереи заведения нет — populate поля, которого нет в схеме, Mongoose отвергает.
+    const query = OBJECT_ID.test(req.params.id)
+      ? K.Model.findById(req.params.id).populate('userId', 'nickname login email avatar banned role privacy')
       : null;
+    const item = query ? await (K.photo ? query : query.populate('venue', VENUE_AUTHOR)).lean() : null;
     const me = req.session.userId;
     const isOwner = !!item && !!item.userId && String(item.userId._id) === String(me);
     if (!item || !item.userId || (!isReady(K, item) && !isOwner)) {
@@ -238,11 +241,14 @@ function mount(kind) {
 
     const displayName = userView.displayName(item.userId);
     const ready = isReady(K, item);
+    // Запись или видео заведения (29.09): лицо — заведение, «назад» — на его
+    // вкладку; кто ведёт — строкой под ним (host).
+    const venue = venueAuthor(item.venue);
     res.render(K.view, {
       kind,
       k: K.i18n,
       base: `/${kind}/${item._id}`,
-      back: K.back(item.userId),
+      back: venue ? venue.url + (kind === 'video' ? '/videos' : '/streams') : K.back(item.userId),
       rec: item,
       ready,
       src: ready && K.src ? K.src(item) : '',
@@ -255,7 +261,8 @@ function mount(kind) {
       related,
       limits: { title: TITLE_MAX, description: DESCRIPTION_MAX, caption: galleryPhotos.CAPTION_MAX, comment: COMMENT_MAX },
       commentsClosed: commentGate.ok ? '' : commentsRule,
-      author: { official: privacy.isOfficial(item.userId), _id: item.userId._id, url: profileUrl(item.userId), displayName, avatarStyle: userView.avatarStyle(item.userId, displayName) },
+      author: venue || { official: privacy.isOfficial(item.userId), _id: item.userId._id, url: profileUrl(item.userId), displayName, avatarStyle: userView.avatarStyle(item.userId, displayName) },
+      host: venue ? { url: profileUrl(item.userId), displayName } : null,
     });
   });
 

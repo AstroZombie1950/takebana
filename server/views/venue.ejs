@@ -3,12 +3,11 @@
   Гостю: логотип, название, адрес, часы, оценка, описание, фото и камера —
   идёт она сейчас или нет. Владельцу (и администратору) сверху ещё пульт:
   запустить трансляцию, изменить, удалить, что сейчас на проверке.
+  Оценить — здесь же (с 29.09; до того — в карточке на карте): public/tk-venue.js.
   Действия пульта — public/tk-venue-edit.js, вид — css/venue.css.
 %>
 <% var meta = [venue.type ? ta('venue.' + venue.type, catalog.VENUE_TYPE_NAME[venue.type] || '') : '',
                venue.city ? ta('city.' + venue.city, catalog.CITY_NAME[venue.city] || '') : ''].filter(Boolean).join(' · ');
-   var day = new Date().getDay(), hours = day === 0 || day === 6 ? venue.weekendHours : venue.weekdayHours;
-   var hoursOk = hours && /^\d{2}:\d{2}$/.test(hours.open) && /^\d{2}:\d{2}$/.test(hours.close);
    var photos = venue.photos || [];
    // Картинка эфира: обложка камеры, без неё первое фото.
    var shot = venue.cover || photos[0];
@@ -19,9 +18,12 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%# В индекс — одобренное заведение: это его страница в поиске. %>
+<%# В индекс — одобренное заведение с описанием (docs/VENUES.md, п. 5): без
+    него страница — название и адрес, поиску в ней нечего взять. Фото, видео
+    и эфиры в условие не входят нарочно: они появляются и пропадают, и
+    страница выпадала бы из индекса при каждом удалении. %>
 <%- include('partials/tkHead', { title: venue.name + ' — Takebana', description: [meta, venue.address].filter(Boolean).join(' · '),
-      seo: { path: '/venue/' + venue._id, robots: approved ? '' : 'noindex, nofollow', image: venue.cover || photos[0] || venue.avatar, imageAlt: venue.name } }) %>
+      seo: { path: '/venue/' + venue._id, robots: !approved ? 'noindex, nofollow' : String(venue.about || '').trim() ? '' : 'noindex, follow', image: venue.cover || photos[0] || venue.avatar, imageAlt: venue.name } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/venue.css') %>">
 </head>
@@ -35,7 +37,7 @@
   <main class="tk-app-main">
     <div class="tk-vp" data-venue="<%= venue._id %>" data-name="<%= venue.name %>">
 
-      <a href="/map?venue=<%= venue._id %>" class="tk-page__back">
+      <a href="/venues?venue=<%= venue._id %>" class="tk-page__back">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
         <span data-i18n="venue.page.back"><%- t('venue.page.back') %></span>
       </a>
@@ -46,14 +48,39 @@
           <% if (meta) { %><p class="tk-kicker"><%= meta %></p><% } %>
           <h1 class="tk-vp__name" data-user-content><%= venue.name %></h1>
           <% if (venue.address) { %><p class="tk-vp__line" data-user-content><%= venue.address %></p><% } %>
-          <% if (hoursOk) { %><p class="tk-vp__line" data-i18n="venues.today" data-i18n-vars='<%= JSON.stringify({ from: hours.open, to: hours.close }) %>'><%- t('venues.today', { from: hours.open, to: hours.close }) %></p><% } %>
+          <% if (hours) { %><p class="tk-vp__line" data-i18n="venues.today" data-i18n-vars='<%= JSON.stringify({ from: hours.from, to: hours.to }) %>'><%- t('venues.today', { from: hours.from, to: hours.to }) %></p><% } %>
+          <%# Оценка и место на карте — у одобренного: заявку не оценить и в выдаче её нет. %>
+          <% if (approved) { %>
           <p class="tk-vp__rating">
-            <span class="tk-vp__score"><%= rating.average.toFixed(1) %></span>
-            <span class="tk-stars" style="--v: <%= rating.average %>" aria-hidden="true"></span>
-            <span><%= num(rating.count) %> <span data-i18n="<%= votes.key %>"><%= votes.text %></span></span>
+            <span class="tk-vp__score" id="venueScore"><%= rating.average.toFixed(1) %></span>
+            <span class="tk-stars" id="venueStars" style="--v: <%= rating.average %>" aria-hidden="true"></span>
+            <span><span id="venueVotesN"><%= num(rating.count) %></span> <span id="venueVotesWord" data-i18n="<%= votes.key %>"><%= votes.text %></span></span>
           </p>
+          <%# Звёзды в обратном порядке: при наведении подсвечиваются наведённая
+              и все «младшие» — это делает селектор ~ в CSS. %>
+          <div class="tk-vp__vote">
+            <span class="tk-form__label" id="venueVoteLabel" data-i18n="venues.yourRating"><%- t('venues.yourRating') %></span>
+            <div class="tk-rate" id="venueRate" role="group" aria-labelledby="venueVoteLabel">
+              <% for (var n = 5; n >= 1; n--) { %>
+              <button type="button" data-value="<%= n %>" class="<%= rating.mine === n ? 'is-on' : '' %>" aria-label="<%= ta('venues.starN', { n: n }) %>" data-i18n-aria="venues.starN" data-i18n-vars='{"n": <%= n %>}'>★</button>
+              <% } %>
+            </div>
+          </div>
+          <% } %>
         </div>
       </header>
+
+      <%- include('partials/venueTabs', { tab: 'about' }) %>
+
+      <%# Эфир от имени заведения (29.09) — первым: его ведут, камера лишь смотрит в зал. %>
+      <% if (tabs.live) { %>
+      <a href="/stream/<%= tabs.live._id %>" class="tk-vp__live">
+        <% if (tabs.live.thumbnail) { %><img src="<%= tabs.live.thumbnail %>" alt=""><% } %>
+        <span class="tk-vp__badge"><i class="tk-vp__dot" aria-hidden="true"></i><span data-i18n="venues.onAir"><%- t('venues.onAir') %></span></span>
+        <span class="tk-vp__live-title" data-user-content><%= tabs.live.title %></span>
+        <span class="tk-btn tk-btn--primary tk-btn--sm tk-vp__watch" data-i18n="venue.page.watchStream"><%- t('venue.page.watchStream') %></span>
+      </a>
+      <% } %>
 
       <%# Камера: идёт — картинкой и кнопкой «Смотреть», нет — строкой. %>
       <% if (approved && venue.online) { %>
@@ -66,9 +93,11 @@
       <p class="tk-vp__off" data-i18n="vlive.off"><%- t('vlive.off') %></p>
       <% } %>
 
+      <% if (approved) { %>
       <div class="tk-vp__acts">
-        <a href="/map?venue=<%= venue._id %>" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="vlive.onMap"><%- t('vlive.onMap') %></a>
+        <a href="/venues?venue=<%= venue._id %>" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="vlive.onMap"><%- t('vlive.onMap') %></a>
       </div>
+      <% } %>
 
       <% if (manage) { %>
       <%# Пульт владельца. Одобрение — сверху: от него зависит, что можно. %>
@@ -84,6 +113,12 @@
         <% } %>
         <div class="tk-vp__own-acts">
           <% if (approved) { %><a href="/venue/<%= venue._id %>/live" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="<%= venue.online ? 'vlive.open' : 'venues.startLive' %>"><%- t(venue.online ? 'vlive.open' : 'venues.startLive') %></a><% } %>
+          <%# Эфир и видео от имени заведения (29.09) — только своего: вести
+              за чужое заведение не может и администратор. %>
+          <% if (approved && own) { %>
+          <a href="/studio?venue=<%= venue._id %>" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="venue.page.goLive"><%- t('venue.page.goLive') %></a>
+          <a href="/upload?venue=<%= venue._id %>" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="venue.page.upload"><%- t('venue.page.upload') %></a>
+          <% } %>
           <a href="/venue/<%= venue._id %>/edit" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="venue.page.edit"><%- t('venue.page.edit') %></a>
           <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-vp__danger" data-venue-delete data-i18n="common.delete"><%- t('common.delete') %></button>
         </div>
@@ -112,6 +147,7 @@
     </div>
   </main>
 </div>
+<% if (approved) { %><script defer src="<%= asset('/tk-venue.js') %>"></script><% } %>
 <% if (manage) { %><script defer src="<%= asset('/tk-venue-edit.js') %>"></script><% } %>
 </body>
 </html>

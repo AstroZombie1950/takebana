@@ -20,6 +20,10 @@
 .tk-up__drop.is-over { border-color: var(--tk-accent); background: rgba(227, 66, 52, .06); }
 .tk-up__drop:focus-within { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
 .tk-up__or { font-family: Oswald, sans-serif; font-size: 14px; letter-spacing: .04em; }
+
+/* От имени заведения (29.09): чьё это будет видео. */
+.tk-up__venue { margin: 0; padding: 12px 14px; border: 1px solid var(--tk-accent); background: rgba(227, 66, 52, .08); color: var(--tk-beige); }
+.tk-up__venue b { color: var(--tk-paper); }
 .tk-up__drop .tk-note { max-width: 520px; margin: 0; }
 
 /* ── Полоса загрузки: общая у фото и видео ── */

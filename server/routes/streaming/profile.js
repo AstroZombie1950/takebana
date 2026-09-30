@@ -15,6 +15,7 @@ const { UPLOADS, uploadAvatar, uploadGallery } = require('./uploads');
 const GalleryVideo = require('../../models/GalleryVideo');
 const GalleryPhoto = require('../../models/GalleryPhoto');
 const Establishments = require('../../models/Establishments');
+const { stateOf } = require('../../utils/venueOwner');
 const { saveImage, BadImageError } = require('../../utils/image');
 const galleryPhotos = require('../../utils/galleryPhotos');
 const { commonDataMiddleware } = require('./shared');
@@ -52,7 +53,8 @@ router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
   const pending = user.emailChange && user.emailChange.expiresAt > new Date() ? user.emailChange.email : '';
   // Свои заведения — ссылками на их страницы (29.09): прежде кабинет
   // заведений был только окном на карте, и найти его было негде.
-  const venues = await Establishments.find({ owner: user._id }).select('name status online avatar pending.at').sort({ _id: 1 }).lean();
+  const venues = (await Establishments.find({ owner: user._id }).select('name type city status reviewedAt online avatar pending.at').sort({ _id: 1 }).lean())
+    .map((v) => ({ ...v, state: stateOf(v) }));
   res.render('settings', {
     hasPassword: (user.provider || '') === PASSWORD_PROVIDER,
     canDelete: user.role !== 'admin',

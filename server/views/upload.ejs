@@ -22,19 +22,32 @@
 
   <main class="tk-app-main">
     <div class="tk-page tk-up">
+      <% if (venue) { %>
+      <a href="<%= venue.url %>/videos" class="tk-page__back">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        <span data-user-content><%= venue.displayName %></span>
+      </a>
+      <% } else { %>
       <a href="/userPage/<%= currentUser._id %>#gallery" class="tk-page__back">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
         <span data-i18n="app.myProfile"><%- t('app.myProfile') %></span>
       </a>
-      <h1 class="tk-page__h1" data-i18n="upload.title"><%- t('upload.title') %></h1>
+      <% } %>
+      <% var h1Key = venue ? 'upload.titleVideo' : 'upload.title'; %>
+      <h1 class="tk-page__h1" data-i18n="<%= h1Key %>"><%- t(h1Key) %></h1>
+
+      <%# От имени заведения (29.09): только видео — фото заведения живут в его правке. %>
+      <% if (venue) { %>
+      <p class="tk-up__venue"><span data-i18n="upload.venueFor"><%- t('upload.venueFor') %></span> <b data-user-content><%= venue.displayName %></b></p>
+      <% } %>
 
       <%# Выбор файлов: кнопкой или перетаскиванием на всю рамку. %>
       <label class="tk-up__drop" id="upDrop">
-        <input type="file" id="upInput" accept="image/png,image/jpeg,image/webp<% if (videoEnabled) { %>,video/*<% } %>" multiple hidden>
+        <input type="file" id="upInput" accept="<%= venue ? 'video/*' : 'image/png,image/jpeg,image/webp' + (videoEnabled ? ',video/*' : '') %>" multiple hidden>
         <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 15v5h16v-5"></path></svg>
         <span class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="upload.pick"><%- t('upload.pick') %></span>
         <span class="tk-up__or" data-i18n="upload.drop"><%- t('upload.drop') %></span>
-        <% var limitsKey = videoEnabled ? 'upload.limits' : 'upload.limitsPhoto'; %>
+        <% var limitsKey = venue ? 'upload.limitsVideo' : videoEnabled ? 'upload.limits' : 'upload.limitsPhoto'; %>
         <span class="tk-note" data-i18n="<%= limitsKey %>"><%- t(limitsKey) %></span>
       </label>
 
@@ -122,7 +135,8 @@
     drafts: <%- JSON.stringify(drafts).replace(/</g, '\\u003c') %>,
     maxSeconds: <%- JSON.stringify(maxSeconds) %>,
     captionMax: <%- JSON.stringify(limits.caption) %>,
-    videoEnabled: <%- JSON.stringify(videoEnabled) %>
+    videoEnabled: <%- JSON.stringify(videoEnabled) %>,
+    venue: <%- JSON.stringify(venue ? String(venue._id) : '') %>
   };
 </script>
 <script defer src="<%= asset('/tk-upload.js') %>"></script>

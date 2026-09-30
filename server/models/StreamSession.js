@@ -16,6 +16,7 @@ const StreamSessionSchema = new mongoose.Schema({
   // и сходятся жалобы, написанные, пока эфир шёл.
   stream: { type: mongoose.Schema.Types.ObjectId, default: null },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  venue: { type: mongoose.Schema.Types.ObjectId, default: null }, // эфир заведения (29.09)
   streamKey: { type: String, default: '' },
 
   // Карточка на момент выхода в эфир: название потом не восстановить.

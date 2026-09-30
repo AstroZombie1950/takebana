@@ -9,6 +9,7 @@ const User = require('../../models/User');
 const Subscription = require('../../models/Subscription');
 const Stream = require('../../models/Stream');
 const Notification = require('../../models/Notification');
+const Establishments = require('../../models/Establishments');
 const { unreadTotal } = require('../../utils/groups');
 const userView = require('../../utils/userView');
 const callLog = require('../../utils/callLog');
@@ -30,7 +31,7 @@ const commonDataMiddleware = async (req, res, next) => {
       // по идущим эфирам: поля isStreaming у User нет. Дальше статус ведёт
       // сокет: author:live (utils/liveSignal.js).
       const me = new mongoose.Types.ObjectId(String(currentUserId));
-      const [currentUser, subscribedUsers, unreadNotificationsCount, missedCalls, unreadMessages] = await Promise.all([
+      const [currentUser, subscribedUsers, unreadNotificationsCount, missedCalls, unreadMessages, myVenues] = await Promise.all([
         User.findById(currentUserId)
           .select('nickname login email avatar streamKey banned banReason adultConfirmedAt lang role')
           .lean(),
@@ -49,6 +50,8 @@ const commonDataMiddleware = async (req, res, next) => {
         Notification.countDocuments({ recipient: currentUserId, isRead: false, type: { $ne: 'message' } }),
         callLog.missedCount(currentUserId),
         unreadTotal(currentUserId), // личные и в группах (utils/groups.js)
+        // «Мои заведения» в левой панели: есть ли они и одно ли (по индексу owner).
+        Establishments.find({ owner: me }).select('_id').limit(2).lean(),
       ]);
       // Пользователя уже нет: он удалил себя сам или его удалил администратор,
       // а вкладка осталась открытой. Это не ошибка сервера — гасим сеанс
@@ -95,7 +98,10 @@ const commonDataMiddleware = async (req, res, next) => {
           banned: !!currentUser.banned,
           banReason: currentUser.banReason || '',
           // Администратору — пульт чужого заведения (routes/establishmentsRouter.js).
-          isAdmin: currentUser.role === 'admin'
+          isAdmin: currentUser.role === 'admin',
+          // «Мои заведения» (29.09): одно — сразу его страница, несколько —
+          // список /venues/mine, нет — пункта нет.
+          venuesHref: myVenues.length === 1 ? '/venue/' + myVenues[0]._id : myVenues.length ? '/venues/mine' : '',
       };
 
       res.locals.subscriptions = subscriptions;

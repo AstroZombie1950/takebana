@@ -11,6 +11,10 @@ const fileSchema = new Schema({
 
 const recordingSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  // От имени заведения (29.09, docs/VENUES.md п. 9) — заведение, чьё это;
+  // null — личное. Ведёт и владеет по-прежнему userId: заведение не аккаунт,
+  // а подпись, под которой контент показывается (utils/venueAuthor.js).
+  venue: { type: Schema.Types.ObjectId, ref: 'Establishments', default: null },
   // Карточка эфира на момент завершения: сам эфир при этом удаляется.
   title: { type: String, required: true },
   description: { type: String, default: '' },
@@ -45,6 +49,8 @@ const recordingSchema = new Schema({
 
 // Записи на странице пользователя — новые сверху.
 recordingSchema.index({ userId: 1, createdAt: -1 });
+// Вкладка «Эфиры» заведения.
+recordingSchema.index({ venue: 1, createdAt: -1 }, { partialFilterExpression: { venue: { $type: 'objectId' } } });
 // Рекомендации: готовые записи раздела, популярные сверху.
 recordingSchema.index({ status: 1, category: 1, views: -1 });
 // Лента главной: готовые, новые сверху (utils/feed.js). У видео галереи

@@ -39,7 +39,8 @@ function video({ path, title, description, thumb, src, seconds, date, views, aut
     ...(seconds > 0 ? { duration: duration(seconds) } : {}),
     url: siteUrl(path),
     interactionStatistic: { '@type': 'InteractionCounter', interactionType: { '@type': 'WatchAction' }, userInteractionCount: views || 0 },
-    author: { '@type': 'Person', name: author.name, url: siteUrl(author.url) },
+    // Видео заведения (29.09) — от организации, не от человека.
+    author: { '@type': author.org ? 'Organization' : 'Person', name: author.name, url: siteUrl(author.url) },
   };
 }
 
@@ -61,6 +62,24 @@ function profile({ url, name, image, followers, description, sameAs }) {
   };
 }
 
+// Видео-меню заведения (29.09): разделы и позиции. Цена — текстом
+// (models/MenuItem.js), в Offer её не разобрать, поэтому без неё.
+function menu({ path, name, sections }) {
+  const item = (x) => ({
+    '@type': 'MenuItem',
+    name: x.name,
+    ...(x.description ? { description: x.description } : {}),
+    ...(x.clip && x.clip.thumb && x.clip.thumb.url ? { image: siteUrl(x.clip.thumb.url) } : {}),
+  });
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Menu',
+    name,
+    url: siteUrl(path),
+    hasMenuSection: sections.map((s) => ({ '@type': 'MenuSection', ...(s.name ? { name: s.name } : {}), hasMenuItem: s.items.map(item) })),
+  };
+}
+
 // [[название, путь], …] — от главной до текущей страницы.
 function crumbs(items) {
   return {
@@ -70,4 +89,4 @@ function crumbs(items) {
   };
 }
 
-module.exports = { site, video, profile, crumbs };
+module.exports = { site, video, profile, menu, crumbs };

@@ -27,6 +27,7 @@ const errorLog = require('../../utils/errorLog');
 const liveSignal = require('../../utils/liveSignal');
 const liveNotify = require('../../utils/liveNotify');
 const { publicHost } = require('../../utils/site');
+const { ownApproved } = require('../../utils/venueOwner');
 
 router.get('/stream-status/:streamId', async (req, res) => {
   if (!/^[a-f\d]{24}$/i.test(req.params.streamId)) return res.status(404).json({ message: 'Стрим не найден' });
@@ -98,9 +99,14 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
   // Обложка (21.09): keep — оставить прежнюю (черновика или прошлого эфира),
   // none — убрать. Новую картинку студия шлёт следом в /upload-thumbnail.
   cover: { type: 'string', default: 'keep', values: ['keep', 'none'], label: 'Обложка' },
+  // От имени своего одобренного заведения (29.09, docs/VENUES.md п. 9);
+  // пусто — личный эфир.
+  venue: { type: 'objectId', label: 'Заведение' },
 }), async (req, res) => {
   const userId = req.session.userId;
   const { title, category, subcategory, city, description, isAdult, subscribersOnly, source, cover } = req.body;
+  const venue = req.body.venue ? await ownApproved(userId, req.body.venue) : null;
+  if (req.body.venue && !venue) return res.status(403).json({ message: 'Вести эфир можно только от своего одобренного заведения' });
 
   if (SUB_CATEGORY[subcategory] !== category) {
     return res.status(400).json({ message: 'Подкатегория не относится к выбранной категории' });
@@ -112,6 +118,10 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
   const thumbnail = cover === 'none' ? '' : (user.streamDefaults && user.streamDefaults.thumbnail) || '';
   const fields = { title, category, subcategory, city: city || '', description: description || '', isAdult, subscribersOnly };
   user.streamDefaults = { ...fields, source, thumbnail };
+  // Заведение — не настройка «по умолчанию»: следующий эфир из шапки личный.
+  // Город у эфира заведения — его город, если свой не выбран.
+  fields.venue = venue ? venue._id : null;
+  if (venue && !fields.city) fields.city = venue.city || '';
   // Ключ создаёт ещё студия, когда показывает его для OBS; здесь — страховка.
   if (!user.streamKey) user.streamKey = uuidv4();
   await user.save();
@@ -137,7 +147,7 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
     stream = await Stream.create({ userId, streamKey: user.streamKey, ...fields, ...SOURCES[source], thumbnail: thumbnail || null, isActive: false });
   }
 
-  audit(req, 'stream.setup', { targetType: 'stream', target: stream, meta: { source, category, subcategory, city: city || '', isAdult: !!isAdult, subscribersOnly: !!subscribersOnly } });
+  audit(req, 'stream.setup', { targetType: 'stream', target: stream, meta: { source, category, subcategory, city: fields.city, isAdult: !!isAdult, subscribersOnly: !!subscribersOnly, venue: venue ? String(venue._id) : '' } });
   res.json({ streamId: String(stream._id), streamKey: stream.streamKey });
 });
 

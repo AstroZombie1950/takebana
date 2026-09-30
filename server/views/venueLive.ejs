@@ -114,7 +114,7 @@
               ссылки на страницу заведения (29.09) и на место на карте. %>
           <div class="tk-live__info tk-vl__info" id="streamInfo">
             <div class="tk-live__title-row">
-              <a href="/map?venue=<%= venue._id %>" class="tk-live__back" aria-label="<%= ta('stream.back') %>" data-i18n-aria="stream.back">
+              <a href="/venues?venue=<%= venue._id %>" class="tk-live__back" aria-label="<%= ta('stream.back') %>" data-i18n-aria="stream.back">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
               </a>
               <h1 class="tk-live__title"><a href="/venue/<%= venue._id %>" class="tk-vl__name"><%= venue.name %></a></h1>
@@ -127,7 +127,7 @@
             </dl>
             <div class="tk-vl__links">
               <a href="/venue/<%= venue._id %>" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="venue.page.open"><%- t('venue.page.open') %></a>
-              <a href="/map?venue=<%= venue._id %>" class="tk-btn tk-btn--ghost tk-btn--xs" data-i18n="vlive.onMap"><%- t('vlive.onMap') %></a>
+              <a href="/venues?venue=<%= venue._id %>" class="tk-btn tk-btn--ghost tk-btn--xs" data-i18n="vlive.onMap"><%- t('vlive.onMap') %></a>
             </div>
           </div>
         </section>

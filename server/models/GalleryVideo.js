@@ -13,6 +13,10 @@ const fileSchema = new Schema({
 
 const galleryVideoSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  // От имени заведения (29.09, docs/VENUES.md п. 9) — заведение, чьё это;
+  // null — личное. Ведёт и владеет по-прежнему userId: заведение не аккаунт,
+  // а подпись, под которой контент показывается (utils/venueAuthor.js).
+  venue: { type: Schema.Types.ObjectId, ref: 'Establishments', default: null },
   // uploading — файл ещё едет кусками со страницы загрузки (/upload);
   // draft — доехал, ждёт «Опубликовать»; processing — пережимается;
   // ready — можно смотреть; failed — не вышло. Всё, кроме ready, видит
@@ -55,6 +59,8 @@ const galleryVideoSchema = new Schema({
 
 // Галерея человека — новые сверху.
 galleryVideoSchema.index({ userId: 1, createdAt: -1 });
+// Вкладка «Видео» заведения.
+galleryVideoSchema.index({ venue: 1, createdAt: -1 }, { partialFilterExpression: { venue: { $type: 'objectId' } } });
 // Уборка брошенных загрузок (utils/galleryVideo.js, sweepDrafts).
 galleryVideoSchema.index({ status: 1, createdAt: 1 });
 // «Смотрите также»: популярные готовые (utils/recommend.js).

@@ -9,6 +9,16 @@ const EstablishmentsSchema = new mongoose.Schema({
     email: String, // email
     phone: String, // номер телефона
     status: Boolean, // status тру или фолс
+    // Когда панель последний раз меняла status (29.09). status: false без
+    // этой отметки — заявка, которую ещё не рассматривали: такая у человека
+    // может быть только одна (utils/venueOwner.js). С отметкой — одобренное,
+    // которое панель потом скрыла: новой заявке оно не мешает.
+    reviewedAt: Date,
+    // Настройки заведения — свои у каждого, меняет владелец сразу, без
+    // проверки (/venue/:id/settings, 29.09).
+    features: {
+        videoMenu: { type: Boolean, default: false }, // видео-меню (docs/VENUES.md, п. 10)
+    },
     weekdayHours: { // время работы в будни с и до
         open: String,
         close: String
@@ -33,6 +43,11 @@ const EstablishmentsSchema = new mongoose.Schema({
     // Описание для страницы заведения /venue/:id (29.09).
     about: String,
     online: Boolean, // камера заведения включена (routes/venueLive.js)
+    // Средняя оценка и число оценок (29.09) — для карточек выдачи /venues:
+    // считать их по Rating на каждую карточку дорого. Пересчитывает
+    // utils/venueRating.js — при оценке и при удалении того, кто оценивал.
+    ratingAvg: { type: Number, default: 0 },
+    ratingCount: { type: Number, default: 0 },
     // Правка одобренного заведения ждёт проверки (29.09). До того правка
     // снимала заведение с карты целиком (status: false) до повторного
     // одобрения. Теперь на карте остаётся одобренное, а правка лежит здесь,

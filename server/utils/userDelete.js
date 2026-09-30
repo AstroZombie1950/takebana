@@ -24,6 +24,8 @@ const attachments = require('./attachments');
 const groups = require('./groups');
 const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
+const venueRating = require('./venueRating');
+const venueMenu = require('./venueMenu');
 const Report = require('../models/Report');
 const Subscription = require('../models/Subscription');
 const Notification = require('../models/Notification');
@@ -61,12 +63,17 @@ function unlinkUpload(url, folder) {
 
 const dropRoom = (name, why) => name && daily.deleteRoom(name).catch((err) => errorLog.external(err, 'daily.deleteRoom', { roomName: name, by: why }));
 
-// Заведение: камера, оценки, фотографии (и из черновика правки), обложка
-// камеры, логотип, сам документ.
+// Заведение: камера, оценки, видео-меню, фотографии (и из черновика правки),
+// обложка камеры, логотип, сам документ; его эфиры и видео — владельцу, личными.
 async function removeVenue(venue) {
   if (venue.online) await stopCamera(venue._id);
+  // Эфиры, записи и видео от его имени (29.09) не пропадают: остаются тому,
+  // кто их вёл, — личными.
+  await Promise.all([Stream, Recording, GalleryVideo].map((M) => M.updateMany({ venue: venue._id }, { $set: { venue: null } })));
   await Rating.deleteMany({ establishment: venue._id });
   await ChatMessage.deleteMany({ venueId: venue._id });
+  // Видео-меню — вместе с роликами в хранилище.
+  await venueMenu.removeAll(venue._id);
   const photos = new Set([...(venue.photos || []), ...((venue.pending && venue.pending.photos) || [])]);
   for (const url of photos) unlinkFile('establishments', path.basename(String(url)));
   unlinkUpload(venue.cover, 'thumbnails');
@@ -119,6 +126,8 @@ async function removeUser(user, io) {
   // Из групп — молча, владение переходит преемнику, опустевшая удаляется
   // (utils/groups.js). Его сообщения в группах уходят ниже, вместе с личными.
   await groups.forgetUser(id, attachments.deleteMessages);
+  // Заведения, которые он оценивал: без его оценок средняя у них другая.
+  const rated = await Rating.distinct('establishment', { user: id });
   const chatIds = await ChatMessage.distinct('_id', { userId: id });
   const conversations = await Conversation.find({ $or: [{ userOne: id }, { userTwo: id }] }).select('_id').lean();
 
@@ -144,6 +153,8 @@ async function removeUser(user, io) {
     PushSubscription.deleteMany({ user: id }),
     mongoose.connection.collection('mySessions').deleteMany({ 'session.userId': idStr }),
   ]);
+
+  await venueRating.recount(rated);
 
   unlinkUpload(user.avatar, 'avatars');
   if (user.ogCard && user.ogCard.key) await storage.remove(user.ogCard.key).catch(() => {});

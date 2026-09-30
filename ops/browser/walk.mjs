@@ -37,7 +37,7 @@ const PUBLIC = [
   ['главная (витрина)', '/'],
   ['раздел «Бизнес»', '/streaming/business'],
   ['раздел «Развлечения»', '/streaming/entertainment'],
-  ['карта заведений', '/map'],
+  ['заведения', '/venues'],
   ['поиск', '/search?q=demo'],
   ['поиск: видео', '/search?q=demo&tab=videos'],
   ['поиск: заведения', '/search?q=bar&tab=venues'],
@@ -53,7 +53,7 @@ const PUBLIC = [
 ];
 const PRIVATE = [
   ['витрина вошедшему', '/'],
-  ['карта вошедшему', '/map'],
+  ['заведения вошедшему', '/venues'],
   ['переписка', '/chatsPage'],
   ['звонки', '/chatsPage?tab=calls'],
   ['контакты', '/chatsPage?tab=contacts'],

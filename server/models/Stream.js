@@ -7,6 +7,11 @@ const StreamSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  // От имени заведения (29.09, docs/VENUES.md п. 9) — заведение, чьё это;
+  // null — личное. Ведёт и владеет по-прежнему userId: заведение не аккаунт,
+  // а подпись, под которой контент показывается (utils/venueAuthor.js).
+  venue: { type: mongoose.Schema.Types.ObjectId, ref: 'Establishments', default: null },
+
   title: {
     type: String,
     required: true
@@ -141,6 +146,8 @@ const StreamSchema = new mongoose.Schema({
 
 // Активный эфир пользователя — самый частый запрос страницы трансляции
 StreamSchema.index({ userId: 1, isActive: 1 });
+// Идёт ли эфир заведения — его страница.
+StreamSchema.index({ venue: 1 }, { partialFilterExpression: { venue: { $type: 'objectId' } } });
 // Поиск эфира по ключу вещания (RTMP/OBS)
 StreamSchema.index({ streamKey: 1 });
 // Каталог: только идущие эфиры, по умолчанию по числу зрителей. Категория,

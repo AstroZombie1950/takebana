@@ -22,6 +22,7 @@ const GalleryVideo = require('../models/GalleryVideo');
 const GalleryPhoto = require('../models/GalleryPhoto');
 const Stream = require('../models/Stream');
 const Establishments = require('../models/Establishments');
+const MenuItem = require('../models/MenuItem');
 const gallery = require('../utils/gallery');
 const authors = require('../utils/authors');
 const { siteUrl } = require('../utils/site');
@@ -57,6 +58,9 @@ Disallow: /chatsPage
 Disallow: /calls
 Disallow: /company-register
 Disallow: /venue/*/edit
+Disallow: /venues/cards
+Disallow: /venues/mine
+Disallow: /venue/*/settings
 Disallow: /check
 Disallow: /calc
 Disallow: /streaming/*/grid
@@ -112,13 +116,14 @@ function videoEntry(path, v, title, date) {
 }
 
 async function collect() {
-  const [recordings, videos, photos, live, groups, venues] = await Promise.all([
-    Recording.find({ status: 'ready' }).select('userId title description isAdult thumb video hls.url duration recordedAt createdAt').lean(),
-    GalleryVideo.find({ status: 'ready' }).sort({ createdAt: -1 }).select('userId title description thumb video duration createdAt').lean(),
+  const [recordings, videos, photos, live, groups, venues, menus] = await Promise.all([
+    Recording.find({ status: 'ready' }).select('userId venue title description isAdult thumb video hls.url duration recordedAt createdAt').lean(),
+    GalleryVideo.find({ status: 'ready' }).sort({ createdAt: -1 }).select('userId venue title description thumb video duration createdAt').lean(),
     GalleryPhoto.find({}).sort({ createdAt: -1 }).select('userId url createdAt').lean(),
     Stream.distinct('userId', { isActive: true }),
     authors.groups(),
-    Establishments.find({ status: true }).select('_id').lean(),
+    Establishments.find({ status: true, about: /\S/ }).select('_id features').lean(),
+    MenuItem.distinct('venue'),
   ]);
 
   const withContent = new Set([...recordings, ...videos, ...photos].map((x) => String(x.userId)).concat(live.map(String)));
@@ -137,8 +142,20 @@ async function collect() {
 
   const pages = [{ loc: '/' }, ...Object.keys(CATEGORIES).map((c) => ({ loc: '/streaming/' + c })), { loc: '/about' }];
   if (Object.values(groups).some((g) => g.length)) pages.push({ loc: '/authors' });
-  // Карта и страницы заведений (/venue/:id, с 29.09) — одобренных.
-  if (venues.length) pages.push({ loc: '/map' }, ...venues.map((v) => ({ loc: `/venue/${v._id}` })));
+  // Раздел заведений и их страницы — одобренные и с описанием: у остальных
+  // noindex (views/venue.ejs, docs/VENUES.md п. 5). Раздел — если есть хоть одна.
+  if (venues.length) pages.push({ loc: '/venues' }, ...venues.map((v) => ({ loc: `/venue/${v._id}` })));
+  // Вкладки «Эфиры», «Видео» и включённое «Меню» заведения (29.09) — у тех
+  // же, если есть что показать.
+  const venueHas = (list) => new Set(list.filter((x) => x.venue).map((x) => String(x.venue)));
+  const withRecs = venueHas(recordings.filter((r) => !r.isAdult));
+  const withVideos = venueHas(videos);
+  const withMenu = new Set(menus.map(String));
+  for (const v of venues) {
+    if (v.features && v.features.videoMenu && withMenu.has(String(v._id))) pages.push({ loc: `/venue/${v._id}/menu` });
+    if (withRecs.has(String(v._id))) pages.push({ loc: `/venue/${v._id}/streams` });
+    if (withVideos.has(String(v._id))) pages.push({ loc: `/venue/${v._id}/videos` });
+  }
 
   const people = [];
   for (const u of users) {
@@ -161,12 +178,15 @@ async function collect() {
         people.push({ loc: `${url}/photos` + (n > 1 ? `?page=${n}` : ''), lastmod, images: urlsOf(pics.slice(skip, skip + gallery.PAGE)) });
       }
     }
-    if (vids.length > gallery.PREVIEW.videos) {
-      const { pages: total } = gallery.page(vids.length, 1);
+    // Листалка вкладок человека — по его личному: снятое от имени заведения
+    // живёт на странице заведения (utils/gallery.js).
+    const own = vids.filter((v) => !v.venue);
+    if (own.length > gallery.PREVIEW.videos) {
+      const { pages: total } = gallery.page(own.length, 1);
       for (let n = 1; n <= total; n++) people.push({ loc: `${url}/videos` + (n > 1 ? `?page=${n}` : ''), lastmod });
     }
     // Все записи (/@ник/recordings, 29.09) — так же: когда в профиль влезло не всё.
-    const recs = recsOf.get(id) || [];
+    const recs = (recsOf.get(id) || []).filter((r) => !r.venue);
     if (recs.length > gallery.PREVIEW.recordings) {
       const { pages: total } = gallery.page(recs.length, 1);
       for (let n = 1; n <= total; n++) people.push({ loc: `${url}/recordings` + (n > 1 ? `?page=${n}` : ''), lastmod });

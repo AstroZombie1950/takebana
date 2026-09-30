@@ -14,14 +14,20 @@
     </button>
   </div>
 
+  <%# Эфир заведения (29.09): лицо — заведение, ниже — кто ведёт. Подписка
+      и жалоба — по-прежнему на человека: подписки на заведение пока нет. %>
+  <% var face = locals.venue || user; %>
   <div class="tk-live__more-body" id="infoMore">
     <div class="tk-live__author">
-      <a href="<%= user.url %>" class="tk-live__avatar"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
-        <% if (user.avatarStyle.url) { %><img src="<%= user.avatarStyle.url %>" alt=""><% } else { %><%= user.avatarStyle.initial %><% } %>
+      <a href="<%= face.url %>" class="tk-live__avatar"<% if (!face.avatarStyle.url) { %> data-bg="<%= face.avatarStyle.gradient %>"<% } %>>
+        <% if (face.avatarStyle.url) { %><img src="<%= face.avatarStyle.url %>" alt=""><% } else { %><%= face.avatarStyle.initial %><% } %>
       </a>
 
       <div class="tk-live__author-body">
-        <a href="<%= user.url %>" class="tk-live__author-name"><%= user.displayName %></a>
+        <a href="<%= face.url %>" class="tk-live__author-name"><%= face.displayName %></a>
+        <% if (locals.venue) { %>
+          <span class="tk-live__host"><span data-i18n="stream.hostedBy"><%- t('stream.hostedBy') %></span> <a href="<%= user.url %>"><%= user.displayName %></a></span>
+        <% } %>
         <% if (isStreamer) { %>
           <span class="tk-live__role streamer-badge" data-i18n="stream.host"><%- t('stream.host') %></span>
         <% } %>

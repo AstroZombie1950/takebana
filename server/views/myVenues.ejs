@@ -1,0 +1,54 @@
+<%#
+  «Мои заведения» /venues/mine (29.09, docs/VENUES.md п. 7): все свои —
+  ссылками на их страницы (камера, правка, настройки — там), и можно ли подать
+  ещё одну заявку. Пункт левой панели ведёт сюда, когда заведений больше
+  одного; с одним — сразу на его страницу. Маршрут — routes/establishmentsRouter.js,
+  строки — partials/myVenueRows.ejs, вёрстка — css/company.css (та же
+  страница кабинета, что заявка).
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { titleKey: 'page.myVenues.title' }) %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/company.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-page tk-company">
+      <a href="/venues" class="tk-page__back">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        <span data-i18n="app.venues"><%- t('app.venues') %></span>
+      </a>
+      <h1 class="tk-page__h1" data-i18n="venues.mine"><%- t('venues.mine') %></h1>
+
+      <% if (venues.length) { %>
+      <section class="tk-panel">
+        <%- include('partials/myVenueRows', { venues: venues }) %>
+      </section>
+      <% } else { %>
+      <p class="tk-form__note" data-i18n="venues.mineEmpty"><%- t('venues.mineEmpty') %></p>
+      <% } %>
+
+      <%# Новая заявка — или почему её сейчас не подать. %>
+      <div class="tk-company__add">
+        <% if (apply.can) { %>
+        <a href="/company-register" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="venues.add"><%- t('venues.add') %></a>
+        <% } else if (apply.waiting) { %>
+        <p class="tk-form__note" data-i18n="company.waiting"><%- t('company.waiting') %></p>
+        <% } else { %>
+        <p class="tk-form__note" data-i18n="company.full" data-i18n-vars='<%= JSON.stringify({ n: apply.max }) %>'><%- t('company.full', { n: apply.max }) %></p>
+        <% } %>
+        <span class="tk-company__count" data-i18n="venues.mineCount" data-i18n-vars='<%= JSON.stringify({ n: apply.count, max: apply.max }) %>'><%- t('venues.mineCount', { n: apply.count, max: apply.max }) %></span>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

@@ -15,14 +15,15 @@ const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
 const User = require('../models/User');
 const userView = require('./userView');
+const { VENUE_AUTHOR, venueAuthor } = require('./venueAuthor');
 const { profileUrl } = require('./profileUrl');
 
 const PAGE = 24;
 const AUTHOR = 'nickname login email avatar';
 
 const SOURCES = [
-  { kind: 'recording', Model: Recording, href: '/recording/', extra: { isAdult: { $ne: true } }, fields: 'title duration thumb views createdAt recordedAt userId' },
-  { kind: 'video', Model: GalleryVideo, href: '/video/', extra: {}, fields: 'title duration thumb views createdAt userId' },
+  { kind: 'recording', Model: Recording, href: '/recording/', extra: { isAdult: { $ne: true } }, fields: 'title duration thumb views createdAt recordedAt userId venue' },
+  { kind: 'video', Model: GalleryVideo, href: '/video/', extra: {}, fields: 'title duration thumb views createdAt userId venue' },
 ];
 
 // before — дата последней показанной карточки (курсор из прошлой страницы).
@@ -41,6 +42,7 @@ async function page({ before = null, viewer = null, limit = PAGE } = {}) {
       .limit(limit + 1)
       .select(fields)
       .populate('userId', AUTHOR)
+      .populate('venue', VENUE_AUTHOR)
       .lean()
       .then((rows) => rows.map((r) => ({ ...r, kind, href: href + r._id })))));
 
@@ -68,7 +70,7 @@ function card(r) {
     views: r.views || 0,
     // У записи — когда шёл эфир; курсор при этом — createdAt.
     at: r.recordedAt || r.createdAt,
-    author: { displayName, url: profileUrl(user), avatarStyle: userView.avatarStyle(user, displayName) },
+    author: venueAuthor(r.venue) || { displayName, url: profileUrl(user), avatarStyle: userView.avatarStyle(user, displayName) },
   };
 }
 

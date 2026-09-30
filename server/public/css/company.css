@@ -89,6 +89,14 @@
   color: var(--tk-paper);
 }
 
+/* «Мои заведения» (/venues/mine): новая заявка и счётчик «N из 10». */
+.tk-company__add { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
+.tk-company__add .tk-form__note { margin: 0; }
+.tk-company__count { margin-left: auto; font-family: Oswald, sans-serif; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--tk-muted); }
+
+.tk-company__stop { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; border-color: var(--tk-rule); }
+.tk-company__stop p { margin: 0; }
+
 @media (max-width: 767px) {
   /* Страна и город в столбик: на узком экране два поля в ряд нечитаемы. */
   .tk-company__pair {

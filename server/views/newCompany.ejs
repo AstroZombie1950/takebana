@@ -1,6 +1,8 @@
 <%#
   Заявка на заведение (/company-register) — страница кабинета, открывается
-  с карты заведений. Раньше жила среди публичных страниц: с шапкой главной
+  из раздела заведений и «Моих заведений». Когда подать нельзя — заявка уже
+  на проверке или заведений предел (utils/venueOwner.js), — вместо формы
+  об этом сказано сразу. Раньше жила среди публичных страниц: с шапкой главной
   и без левой панели, и человек будто выпадал из кабинета. Маршрут —
   routes/pages.js, отправка — public/tk-company.js, вёрстка — css/company.css.
 %>
@@ -23,12 +25,23 @@
 
   <main class="tk-app-main">
     <div class="tk-page tk-company">
-      <a href="/map" class="tk-page__back">
+      <a href="/venues" class="tk-page__back">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
         <span data-i18n="app.venues"><%- t('app.venues') %></span>
       </a>
       <h1 class="tk-page__h1" data-i18n="company.h1"><%- t('company.h1') %></h1>
 
+      <% if (!apply.can) { %>
+      <%# Подать нельзя (utils/venueOwner.js) — говорим сразу, вместо формы. %>
+      <div class="tk-company__done tk-company__stop">
+        <% if (apply.waiting) { %>
+        <p data-i18n="company.waiting"><%- t('company.waiting') %></p>
+        <% } else { %>
+        <p data-i18n="company.full" data-i18n-vars='<%= JSON.stringify({ n: apply.max }) %>'><%- t('company.full', { n: apply.max }) %></p>
+        <% } %>
+        <a href="/venues/mine" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="venues.mine"><%- t('venues.mine') %></a>
+      </div>
+      <% } else { %>
       <%# Показывается вместо формы после успешной отправки. %>
       <p class="tk-company__done" id="tkCompanyDone" hidden data-i18n="company.finish"><%- t('company.finish') %></p>
 
@@ -94,16 +107,19 @@
         <p class="tk-form__note" data-i18n="company.reviewNote"><%- t('company.reviewNote') %></p>
         <button class="tk-btn tk-btn--primary tk-company__submit" type="submit" data-i18n="company.submit"><%- t('company.submit') %></button>
       </form>
+      <% } %>
     </div>
   </main>
 </div>
 
 <%# Центры городов — с них открывается выбор точки (public/tk-point.js).
     Сама карта (MapLibre, ~290 КБ) грузится, когда до блока доскроллили. %>
+<% if (apply.can) { %>
 <script>window.TKCityCenter = <%- JSON.stringify(catalog.CITY_CENTER) %>;</script>
 <script defer src="<%= asset('/vendor/pmtiles-4.5.0.js') %>"></script>
 <script defer src="<%= asset('/tk-map.js') %>"></script>
 <script defer src="<%= asset('/tk-point.js') %>"></script>
 <script defer src="<%= asset('/tk-company.js') %>"></script>
+<% } %>
 </body>
 </html>

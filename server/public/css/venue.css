@@ -1,6 +1,7 @@
 /* Страница заведения /venue/:id и её правка /venue/:id/edit (29.09).
  * Каркас, поля, панели, вкладки и звёзды — общие, в app.css. Здесь своё:
- * шапка с логотипом, картинка идущей камеры, пульт владельца, фото, форма.
+ * шапка с логотипом, картинка идущей камеры, пульт владельца, фото, форма,
+ * вкладки и настройки, видео-меню.
  * Правка прежде жила окном поверх карты, её сетка полей переехала сюда
  * из venues.css. */
 
@@ -64,6 +65,183 @@
 
 .tk-vp__score { font-size: 18px; font-weight: 500; color: var(--tk-paper); }
 
+/* Своя оценка (29.09, переехала сюда из карточки на карте). Звёзды в разметке
+ * от пятой к первой, row-reverse ставит их по порядку: наведённая и все
+ * «младшие» подсвечиваются селектором ~. */
+.tk-vp__vote { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
+.tk-vp__vote .tk-form__label { margin: 0; }
+
+.tk-rate {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  gap: 2px;
+}
+
+.tk-rate button {
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--tk-ink-soft);
+  transition: color .15s ease;
+}
+
+.tk-rate button.is-on,
+.tk-rate button.is-on ~ button { color: var(--tk-accent); }
+
+.tk-rate:hover button { color: var(--tk-ink-soft); }
+
+.tk-rate:hover button:hover,
+.tk-rate:hover button:hover ~ button { color: var(--tk-paper); }
+
+.tk-rate button:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
+
+/* ── Вкладки (partials/venueTabs.ejs) и настройки (venueSettings.ejs), 29.09 ── */
+.tk-vp__tabs { margin-top: 4px; }
+
+.tk-vp__head--small .tk-vp__ava { width: 64px; height: 64px; font-size: 26px; }
+
+.tk-vset__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  cursor: pointer;
+}
+
+.tk-vset__text { display: flex; flex-direction: column; gap: 4px; }
+.tk-vset__name { font-weight: 700; color: var(--tk-paper); }
+.tk-vset__hint { font-size: 13px; line-height: 1.5; color: var(--tk-muted); }
+
+/* Переключатель — настоящий чекбокс: фокус, нажатие и значение нативные. */
+.tk-vset__switch {
+  flex: none;
+  position: relative;
+  width: 44px;
+  height: 24px;
+  margin: 0;
+  appearance: none;
+  border: 1px solid var(--tk-rule);
+  background: transparent;
+  cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease;
+}
+
+.tk-vset__switch::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 14px;
+  height: 14px;
+  background: var(--tk-muted);
+  transition: transform .18s ease, background-color .18s ease;
+}
+
+.tk-vset__switch:checked { border-color: var(--tk-accent); background: rgba(227, 66, 52, .12); }
+.tk-vset__switch:checked::after { transform: translateX(20px); background: var(--tk-accent); }
+.tk-vset__switch:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
+.tk-vset__switch:disabled { opacity: .5; cursor: wait; }
+
+/* «Открыть меню» под переключателем — видна, пока меню включено. */
+.tk-vset__link { display: inline-block; margin-top: 14px; font-size: 14px; color: var(--tk-link); }
+
+/* ── Видео-меню (views/venueMenu.ejs, 29.09) ──
+ * Ролик квадратный (utils/videoEncode.js, clip) и стоит в карточке целиком,
+ * со знаком в углу. Карточки — сеткой, на телефоне в две колонки. Разделы —
+ * тегами сверху, переход — якорем: шапка липкая, отступ прокрутки её учитывает. */
+.tk-menu__nav { margin: 0; }
+.tk-menu__nav .tk-tag { text-decoration: none; }
+
+.tk-menu__sec { display: flex; flex-direction: column; gap: 14px; scroll-margin-top: calc(var(--tk-head-h) + 16px); }
+
+.tk-menu__title {
+  margin: 8px 0 0;
+  font: 600 20px/1.2 Oswald, sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--tk-paper);
+  overflow-wrap: anywhere;
+}
+
+.tk-menu__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.tk-menu__item { min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--tk-rule); background: var(--tk-ink); }
+
+.tk-menu__media { position: relative; aspect-ratio: 1; overflow: hidden; background: #131211; }
+.tk-menu__media video { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
+
+.tk-menu__ph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 56px/1 Oswald, sans-serif;
+  color: rgba(144, 113, 99, .45);
+}
+
+/* Состояние ролика — владельцу, поверх картинки. */
+.tk-menu__state {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  padding: 6px 8px;
+  background: rgba(10, 10, 10, .78);
+  font-size: 12px;
+  color: var(--tk-beige);
+}
+
+.tk-menu__state.is-bad { color: var(--tk-accent); }
+
+.tk-menu__body { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; }
+.tk-menu__top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+
+.tk-menu__name {
+  margin: 0;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--tk-paper);
+  overflow-wrap: anywhere;
+}
+
+.tk-menu__price { flex: none; max-width: 45%; font: 500 15px/1.3 Oswald, sans-serif; color: var(--tk-accent); text-align: right; overflow-wrap: anywhere; }
+
+.tk-menu__desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tk-muted);
+  overflow-wrap: anywhere;
+}
+
+.tk-menu__acts { margin-top: auto; padding-top: 4px; display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Окно позиции. Оно вне .tk-vp — hidden здесь свой, сильнее display у строк. */
+.tk-menu__form [hidden] { display: none !important; }
+.tk-menu__del { margin-left: auto; }
+.tk-menu__form .tk-form__row { align-items: stretch; }
+.tk-menu__form .tk-field { width: 100%; }
+.tk-menu__form textarea { resize: vertical; }
+.tk-menu__clip { display: flex; flex-direction: column; gap: 10px; }
+.tk-menu__clip .tk-note { margin: 0; }
+.tk-menu__preview { width: 180px; aspect-ratio: 1; object-fit: cover; background: #131211; border: 1px solid var(--tk-rule); }
+
+.tk-menu__start { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--tk-muted); }
+.tk-menu__start input { flex: 1; min-width: 0; accent-color: var(--tk-accent); }
+.tk-menu__start output { min-width: 3em; font-family: Oswald, sans-serif; color: var(--tk-paper); }
+
+.tk-menu__progress { width: 100%; height: 6px; accent-color: var(--tk-accent); }
+
 /* ── Камера идёт: обложка во всю ширину, отметка и кнопка поверх ── */
 .tk-vp__live {
   position: relative;
@@ -103,6 +281,25 @@
 @keyframes tk-vp-pulse { 50% { opacity: .3; } }
 
 .tk-vp__watch { position: absolute; left: 14px; bottom: 14px; gap: 8px; }
+
+/* Эфир заведения (29.09): его название поверх картинки, над кнопкой. */
+.tk-vp__live-title {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 20px/1.2 Oswald, sans-serif;
+  color: var(--tk-paper);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, .8);
+}
+
+/* Вкладки «Эфиры» и «Видео»: «Начать эфир» / «Загрузить видео» владельцу. */
+.tk-vp__post { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; }
+.tk-vp__post .tk-note { margin: 0; }
+.tk-vp__tabs .tk-vp__dot { display: inline-block; margin-right: 7px; vertical-align: 1px; color: var(--tk-accent); }
 
 .tk-vp__off {
   margin: 0;
@@ -220,6 +417,12 @@
   .tk-vp__own-acts { grid-auto-flow: row; }
   .tk-vp__own-acts .tk-btn { padding-top: 14px; padding-bottom: 14px; }
   .tk-vp__photos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tk-menu__nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
+  .tk-menu__nav .tk-tag { flex: none; }
+  .tk-menu__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .tk-menu__body { padding: 10px; }
+  .tk-menu__top { flex-direction: column; gap: 2px; }
+  .tk-menu__price { max-width: none; text-align: left; }
 }
 
 @media (max-width: 520px) {

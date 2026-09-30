@@ -50,6 +50,15 @@
 
 .tk-pin:focus-visible { outline: 2px solid #F5F1EA; outline-offset: 2px; }
 
+/* Наведение на карточку списка (is-hot) и выбранное заведение (is-sel) —
+ * раздел /venues. Кнопка и есть маркер (класс maplibregl-marker), а его
+ * transform занят — им MapLibre ставит метку на место, поэтому выделяем
+ * рамкой, тенью и слоем. */
+.maplibregl-marker.tk-pin.is-hot { z-index: 2; }
+.maplibregl-marker.tk-pin.is-sel { z-index: 3; }
+.tk-pin.is-hot { border-color: #F5F1EA; box-shadow: 0 0 0 3px rgba(245, 241, 234, .35), 0 2px 12px rgba(0, 0, 0, .7); }
+.tk-pin.is-sel { border-color: #E34234; box-shadow: 0 0 0 4px rgba(227, 66, 52, .4), 0 2px 14px rgba(0, 0, 0, .7); }
+
 @media (prefers-reduced-motion: reduce) {
   .tk-pin.is-live { animation: none; box-shadow: 0 0 0 3px rgba(227, 66, 52, .45); }
 }

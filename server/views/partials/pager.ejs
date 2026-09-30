@@ -1,0 +1,19 @@
+<%#
+  Листалка с номерами: вкладки галереи, все записи, вкладки заведения.
+  Ждёт page, pages и pageHref(n) — адрес страницы n. Номера вокруг текущей,
+  первая и последняя всегда; пропуски — «…». Вид — .tk-pager (gallery.css).
+%>
+<% var nums = [];
+   for (var pn = 1; pn <= pages; pn++) {
+     if (pn === 1 || pn === pages || Math.abs(pn - page) <= 2) nums.push(pn);
+     else if (nums[nums.length - 1] !== 0) nums.push(0);
+   } %>
+<nav class="tk-pager" aria-label="<%= ta('gallery.pages') %>" data-i18n-aria="gallery.pages">
+  <% if (page > 1) { %><a href="<%= pageHref(page - 1) %>" class="tk-btn tk-btn--outline tk-btn--sm" rel="prev" data-i18n="user.listPrev"><%- t('user.listPrev') %></a><% } %>
+  <% nums.forEach(function (p) { %>
+    <% if (!p) { %><span class="tk-pager__num tk-pager__gap" aria-hidden="true">…</span>
+    <% } else if (p === page) { %><span class="tk-pager__num" aria-current="page"><%= p %></span>
+    <% } else { %><a href="<%= pageHref(p) %>" class="tk-pager__num"><%= p %></a><% } %>
+  <% }); %>
+  <% if (page < pages) { %><a href="<%= pageHref(page + 1) %>" class="tk-btn tk-btn--outline tk-btn--sm" rel="next" data-i18n="user.listNext"><%- t('user.listNext') %></a><% } %>
+</nav>

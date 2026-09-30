@@ -9,12 +9,13 @@ const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
 const User = require('../models/User');
 const userView = require('./userView');
+const { VENUE_AUTHOR, venueAuthor } = require('./venueAuthor');
 
 const LIMIT = 12;
 const SAME_AUTHOR = 4;
 const KINDS = {
-  recording: { Model: Recording, href: '/recording/', fields: 'title duration thumb isAdult createdAt recordedAt views userId' },
-  video: { Model: GalleryVideo, href: '/video/', fields: 'title duration thumb createdAt views userId' },
+  recording: { Model: Recording, href: '/recording/', fields: 'title duration thumb isAdult createdAt recordedAt views userId venue' },
+  video: { Model: GalleryVideo, href: '/video/', fields: 'title duration thumb createdAt views userId venue' },
 };
 
 // kind — вид открытого ролика: 'recording' или 'video'.
@@ -30,7 +31,7 @@ async function forItem(item, kind, { adultOk }) {
     const { Model, href, fields } = KINDS[k];
     const base = { status: 'ready', ...(k === 'recording' && !adultOk ? { isAdult: false } : {}) };
     const rows = await Model.find({ ...base, ...filter, _id: { $nin: seen } })
-      .sort(sort).limit(limit).select(fields).populate('userId', 'nickname login email').lean();
+      .sort(sort).limit(limit).select(fields).populate('userId', 'nickname login email').populate('venue', VENUE_AUTHOR).lean();
     for (const r of rows) { seen.push(r._id); out.push({ ...r, kind: k, href: href + r._id }); }
   };
 
@@ -41,7 +42,7 @@ async function forItem(item, kind, { adultOk }) {
   await take(kind, others, popular, LIMIT - out.length);
   await take(other, others, popular, LIMIT - out.length);
 
-  return out.filter((r) => r.userId).map((r) => ({ ...r, authorName: userView.displayName(r.userId) }));
+  return out.filter((r) => r.userId).map((r) => ({ ...r, authorName: (venueAuthor(r.venue) || { displayName: userView.displayName(r.userId) }).displayName }));
 }
 
 module.exports = { forItem };
