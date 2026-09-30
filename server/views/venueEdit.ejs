@@ -1,12 +1,15 @@
 <%#
-  Правка заведения /venue/:id/edit (29.09) — владельцу и администратору.
-  До неё правка жила окном поверх карты. Логотип и обложка камеры ставятся
-  сразу; остальное у одобренного заведения уходит на проверку черновиком,
-  а на карте до решения остаётся прежнее (routes/establishmentsRouter.js).
+  Настройки заведения /venue/:id/edit (29.09) — владельцу и администратору.
+  До них правка жила окном поверх карты. Логотип, обложка камеры и
+  выключатели (видео-меню; до 30.09 — отдельная вкладка «Настройки»)
+  меняются сразу; остальное у одобренного заведения уходит на проверку
+  черновиком, а на карте до решения остаётся прежнее
+  (routes/establishmentsRouter.js).
   form — что показать в полях: черновик, если он есть, иначе одобренное.
   Поведение — public/tk-venue-edit.js, точка — tk-point.js, вид — venue.css.
 %>
 <% var letter = (String(venue.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase();
+   var features = venue.features || {};
    var wd = form.weekdayHours || {}, we = form.weekendHours || {};
    var loc = form.location && form.location.lat != null ? form.location : null; %>
 <!DOCTYPE html>
@@ -62,6 +65,20 @@
         <input type="file" id="venueImageInput" accept="image/png,image/jpeg,image/webp" hidden>
       </section>
 
+      <%# Разделы страницы — сразу, без проверки. Пока один: видео-меню
+          (вкладка «Меню», routes/venueMenu.js). %>
+      <section class="tk-panel tk-vset" id="settings">
+        <p class="tk-panel__title" data-i18n="venue.page.features"><%- t('venue.page.features') %></p>
+        <label class="tk-vset__row">
+          <span class="tk-vset__text">
+            <span class="tk-vset__name" data-i18n="venue.set.videoMenu"><%- t('venue.set.videoMenu') %></span>
+            <span class="tk-vset__hint" data-i18n="venue.set.videoMenuHint"><%- t('venue.set.videoMenuHint') %></span>
+          </span>
+          <input type="checkbox" class="tk-vset__switch" data-venue-feature="videoMenu"<%= features.videoMenu ? ' checked' : '' %>>
+        </label>
+        <a href="/venue/<%= venue._id %>/menu" class="tk-vset__link" data-feature-link="videoMenu"<% if (!features.videoMenu) { %> hidden<% } %> data-i18n="venue.set.openMenu"><%- t('venue.set.openMenu') %></a>
+      </section>
+
       <form class="tk-panel tk-vp__form" id="venueEditForm" novalidate
             data-lat="<%= loc ? loc.lat : '' %>" data-lng="<%= loc ? loc.lng : '' %>" data-address="<%= form.address || '' %>">
         <p class="tk-panel__title" data-i18n="venue.page.info"><%- t('venue.page.info') %></p>
@@ -74,31 +91,7 @@
           <input class="tk-field" type="text" name="name" maxlength="200" value="<%= form.name || '' %>">
         </label>
 
-        <div class="tk-vp__pair">
-          <label class="tk-form__row">
-            <span class="tk-form__label" data-i18n="venues.type"><%- t('venues.type') %></span>
-            <select class="tk-field tk-select" name="type">
-              <option value="" data-i18n="common.notPicked"><%- t('common.notPicked') %></option>
-              <% catalog.VENUE_TYPES.forEach(function (type) { %>
-              <option value="<%= type.code %>"<%= form.type === type.code ? ' selected' : '' %> data-i18n="venue.<%= type.code %>"><%= ta('venue.' + type.code, type.name) %></option>
-              <% }); %>
-            </select>
-          </label>
-          <label class="tk-form__row">
-            <span class="tk-form__label" data-i18n="venues.city"><%- t('venues.city') %></span>
-            <select class="tk-field tk-select" name="city">
-              <option value="" data-i18n="common.notPicked"><%- t('common.notPicked') %></option>
-              <% catalog.CITIES.forEach(function (city) { %>
-              <option value="<%= city.code %>"<%= form.city === city.code ? ' selected' : '' %> data-i18n="<%= city.i18n %>"><%= ta(city.i18n, city.name) %></option>
-              <% }); %>
-            </select>
-          </label>
-        </div>
-
-        <label class="tk-form__row">
-          <span class="tk-form__label" data-i18n="venues.country"><%- t('venues.country') %></span>
-          <input class="tk-field" type="text" name="country" maxlength="100" value="<%= form.country || '' %>">
-        </label>
+        <%- include('partials/venuePlace', { form: form, labeled: true }) %>
 
         <label class="tk-form__row">
           <span class="tk-form__label" data-i18n="venue.page.about"><%- t('venue.page.about') %></span>
@@ -137,11 +130,12 @@
   </main>
 </div>
 
-<%# Центры городов — чтобы выбор точки открывался на нужном городе (tk-point.js). %>
-<script>window.TKCityCenter = <%- JSON.stringify(catalog.CITY_CENTER) %>;</script>
+<%# Центры городов и стран — чтобы выбор точки открывался на нужном месте (tk-point.js). %>
+<script>window.TKPlaceCenter = <%- JSON.stringify(placeCenters()) %>;</script>
 <script defer src="<%= asset('/vendor/pmtiles-4.5.0.js') %>"></script>
 <script defer src="<%= asset('/tk-map.js') %>"></script>
 <script defer src="<%= asset('/tk-point.js') %>"></script>
+<script defer src="<%= asset('/tk-venue-place.js') %>"></script>
 <script defer src="<%= asset('/tk-venue-edit.js') %>"></script>
 </body>
 </html>

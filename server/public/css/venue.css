@@ -10,12 +10,16 @@
 .tk-vp [hidden] { display: none !important; }
 
 .tk-vp {
-  max-width: 880px;
   padding: 32px 40px 64px;
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
+
+/* Страница и вкладки — на всю ширину (30.09: в 880px на широком экране
+ * профиль жался к левому краю, справа пустело полэкрана). Форма настроек
+ * остаётся узкой: поле в 1600px не читается. */
+.tk-vp--edit { max-width: 880px; }
 
 /* ── Шапка: логотип, тип и город, название, адрес, часы, оценка ── */
 .tk-vp__head { display: flex; align-items: center; gap: 24px; }
@@ -246,6 +250,8 @@
 .tk-vp__live {
   position: relative;
   display: block;
+  /* Во всю ширину 16:9 выше экрана — не больше трёх четвертей его высоты. */
+  max-width: calc(75vh * 16 / 9);
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: #131211;
@@ -331,11 +337,10 @@
   cursor: pointer;
 }
 
-/* Кнопки пульта — одной ширины в ряд, на телефоне столбиком. */
+/* Кнопки пульта — одной ширины рядами, на телефоне столбиком. */
 .tk-vp__own-acts {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 10px;
 }
 
@@ -346,6 +351,7 @@
 .tk-vp__sec .tk-kicker { margin: 0; }
 
 .tk-vp__about {
+  max-width: 80ch;
   margin: 0;
   font-size: 15px;
   line-height: 1.6;
@@ -356,7 +362,7 @@
 
 .tk-vp__photos {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 4px;
 }
 
@@ -414,8 +420,10 @@
   .tk-vp__head { align-items: flex-start; gap: 16px; }
   .tk-vp__ava { width: 80px; height: 80px; font-size: 32px; }
   .tk-vp__name { font-size: 24px; }
-  .tk-vp__own-acts { grid-auto-flow: row; }
+  .tk-vp__own-acts { grid-template-columns: minmax(0, 1fr); }
   .tk-vp__own-acts .tk-btn { padding-top: 14px; padding-bottom: 14px; }
+  /* «Показать на карте» — во всю ширину, под палец. */
+  .tk-vp__acts .tk-btn { flex: 1; padding-top: 14px; padding-bottom: 14px; }
   .tk-vp__photos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tk-menu__nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
   .tk-menu__nav .tk-tag { flex: none; }

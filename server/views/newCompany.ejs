@@ -50,23 +50,8 @@
           <p class="tk-panel__title" data-i18n="company.kicker"><%- t('company.kicker') %></p>
 
           <input class="tk-field" type="text" name="name" placeholder="<%= ta('company.ph.name') %>" data-i18n-placeholder="company.ph.name" required>
-          <select class="tk-field tk-select" name="type" required>
-            <option value="" data-i18n="company.ph.type"><%- t('company.ph.type') %></option>
-            <% catalog.VENUE_TYPES.forEach(function (type) { %>
-            <option value="<%= type.code %>" data-i18n="venue.<%= type.code %>"><%= ta('venue.' + type.code, type.name) %></option>
-            <% }); %>
-          </select>
-
-          <%# Город и тип — закрытые списки config/catalog.js: по ним фильтрует карта. %>
-          <div class="tk-company__pair">
-            <input class="tk-field" type="text" name="country" placeholder="<%= ta('company.ph.country') %>" data-i18n-placeholder="company.ph.country" autocomplete="country-name" required>
-            <select class="tk-field tk-select" name="city" required>
-              <option value="" data-i18n="company.ph.city"><%- t('company.ph.city') %></option>
-              <% catalog.CITIES.forEach(function (city) { %>
-              <option value="<%= city.code %>" data-i18n="<%= city.i18n %>"><%= ta(city.i18n, city.name) %></option>
-              <% }); %>
-            </select>
-          </div>
+          <%# Тип, страна, город — справочник или своё (utils/places.js). %>
+          <%- include('partials/venuePlace', { form: {}, labeled: false }) %>
 
           <div class="tk-company__pair">
             <input class="tk-field" type="email" name="email" placeholder="<%= ta('company.ph.email') %>" data-i18n-placeholder="company.ph.email" value="<%= currentUser.email %>" autocomplete="email" required>
@@ -112,13 +97,14 @@
   </main>
 </div>
 
-<%# Центры городов — с них открывается выбор точки (public/tk-point.js).
+<%# Центры городов и стран — с них открывается выбор точки (public/tk-point.js).
     Сама карта (MapLibre, ~290 КБ) грузится, когда до блока доскроллили. %>
 <% if (apply.can) { %>
-<script>window.TKCityCenter = <%- JSON.stringify(catalog.CITY_CENTER) %>;</script>
+<script>window.TKPlaceCenter = <%- JSON.stringify(placeCenters()) %>;</script>
 <script defer src="<%= asset('/vendor/pmtiles-4.5.0.js') %>"></script>
 <script defer src="<%= asset('/tk-map.js') %>"></script>
 <script defer src="<%= asset('/tk-point.js') %>"></script>
+<script defer src="<%= asset('/tk-venue-place.js') %>"></script>
 <script defer src="<%= asset('/tk-company.js') %>"></script>
 <% } %>
 </body>

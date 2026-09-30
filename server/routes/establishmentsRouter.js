@@ -49,19 +49,21 @@ const { validate } = require('../middleware/validate');
 // в этом же маршруте, а приходит он обратно от формы.
 const PHOTO_URL = /^\/uploads\/establishments\/[\w.-]+$/;
 
-// Часы, координаты, город и тип — в utils/venueFields.js: те же схемы
-// нужны админке, и разъезжаться им нельзя.
-const { HOURS, LOCATION, CITY, TYPE, ABOUT_MAX, DRAFT_FIELDS, dropDraft } = require('../utils/venueFields');
+// Часы, координаты, тип, страна и город — в utils/venueFields.js: те же
+// схемы нужны админке, и разъезжаться им нельзя. Тип, страну и город сверяет
+// справочник (utils/places.js).
+const { HOURS, LOCATION, PLACE, ABOUT_MAX, DRAFT_FIELDS, dropDraft } = require('../utils/venueFields');
+const places = require('../utils/places');
 const { commonDataMiddleware } = require('./streaming/shared');
 
 const { venuesWhere, escapeRegex } = require('../utils/search');
-const { hoursState } = require('../utils/venueHours');
+const { hoursState, zoneAt } = require('../utils/venueHours');
 const venueRating = require('../utils/venueRating');
 const { applyState, stateOf } = require('../utils/venueOwner');
 const { pageVenue, tabsFor, indexableVenue } = require('../utils/venuePage');
 
 // Что нужно карточке выдачи /venues. Почты, телефона и владельца в ней нет.
-const CARD_FIELDS = 'name type city address about weekdayHours weekendHours location photos avatar cover online ratingAvg ratingCount';
+const CARD_FIELDS = 'name type typeOther city cityOther address about weekdayHours weekendHours tz location photos avatar cover online ratingAvg ratingCount';
 
 
 
@@ -87,11 +89,13 @@ const SORT = {
 
 async function listVenues(f) {
     const where = f.q ? venuesWhere(new RegExp(escapeRegex(f.q), 'i')) : { status: true };
+    // Код города однозначен сам по себе — страна при нём ничего не сужает.
     if (f.city) where.city = f.city;
+    else if (f.country) where.country = f.country;
     if (f.types.length) where.type = { $in: f.types };
     if (f.live) where.online = true;
     const venues = await Establishments.find(where).select(CARD_FIELDS).sort(SORT[f.sort]).limit(LIST_LIMIT).lean();
-    // «Открыто сейчас» — по часам и белградскому времени, в базе его нет.
+    // «Открыто сейчас» — по часам и местному времени заведения, в базе его нет.
     const now = new Date();
     for (const v of venues) v.hours = hoursState(v, now);
     return f.open ? venues.filter((v) => v.hours && v.hours.open) : venues;
@@ -99,9 +103,25 @@ async function listVenues(f) {
 
 // Каркас кабинета, поэтому commonDataMiddleware: шапке и левой панели нужны
 // профиль, подписки и уведомления. Открыт и гостю.
+// Страны и города в фильтре — только те, где есть одобренные заведения:
+// пустой пункт ведёт в пустую выдачу. Своё владельцев («Другое») в фильтр
+// не попадает, пока панель не возьмёт его в список (utils/places.js).
+async function filterPlaces(lang) {
+    const [countries, cities] = await Promise.all([
+        Establishments.distinct('country', { status: true }),
+        Establishments.distinct('city', { status: true }),
+    ]);
+    const has = (list) => (x) => list.includes(x.code);
+    return {
+        countries: places.options('country', lang).filter(has(countries)),
+        cities: places.options('city', lang).filter(has(cities)),
+    };
+}
+
 router.get('/venues', commonDataMiddleware, wrap(async (req, res) => {
     const filters = readVenueFilters(req.query);
-    res.render('venues', { filters, venues: await listVenues(filters) });
+    const [venues, where] = await Promise.all([listVenues(filters), filterPlaces(res.locals.lang)]);
+    res.render('venues', { filters, venues, where });
 }));
 
 // Карточки под новые фильтры — тот же шаблон, что в странице.
@@ -117,7 +137,7 @@ router.get('/venues/cards', wrap(async (req, res) => {
 router.get('/venues/mine', requireAuth, commonDataMiddleware, wrap(async (req, res) => {
     const [venues, apply] = await Promise.all([
         Establishments.find({ owner: req.session.userId })
-            .select('name type city status reviewedAt online avatar pending.at').sort({ _id: 1 }).lean(),
+            .select('name type typeOther city cityOther status reviewedAt online avatar pending.at').sort({ _id: 1 }).lean(),
         applyState(req.session.userId),
     ]);
     res.render('myVenues', { venues: venues.map((v) => ({ ...v, state: stateOf(v) })), apply });
@@ -135,9 +155,7 @@ router.get(['/map', '/main'], (req, res) => {
 // На карту заведение попадает после проверки: status выставляет админка.
 router.post('/register-establishment', requireAuth, validate({
     name: { type: 'string', required: true, max: 200, label: 'Название' },
-    type: { ...TYPE, required: true },
-    country: { type: 'string', required: true, max: 100, label: 'Страна' },
-    city: { ...CITY, required: true },
+    ...PLACE,
     address: { type: 'string', required: true, max: 300, label: 'Адрес' },
     email: { type: 'email', required: true, label: 'Почта' },
     phone: { type: 'string', required: true, max: 32, label: 'Телефон' },
@@ -153,13 +171,14 @@ router.post('/register-establishment', requireAuth, validate({
     if (apply.waiting) return res.status(409).json({ message: 'Заявка уже на проверке: следующую можно подать после решения по ней' });
     if (apply.full) return res.status(409).json({ message: 'Достигнут предел заведений на одного человека' });
 
-    const { name, type, country, city, address, email, phone, weekdayHours, weekendHours, lat, lng } = req.body;
+    const place = places.pick(req.body);
+    if (place.error) return res.status(400).json({ message: place.error });
+
+    const { name, address, email, phone, weekdayHours, weekendHours, lat, lng } = req.body;
 
     const establishment = new Establishments({
         name,
-        type,
-        country,
-        city,
+        ...place.fields,
         address,
         email,
         phone,
@@ -170,11 +189,12 @@ router.post('/register-establishment', requireAuth, validate({
             lat,
             lng
         },
+        tz: zoneAt({ lat, lng }) || undefined,
         owner: req.session.userId // добавляем владельца
     });
 
     const savedEstablishment = await establishment.save();
-    audit(req, 'venue.apply', { targetType: 'venue', target: savedEstablishment, meta: { city: savedEstablishment.city, type: savedEstablishment.type } });
+    audit(req, 'venue.apply', { targetType: 'venue', target: savedEstablishment, meta: { country: savedEstablishment.country || savedEstablishment.countryOther, city: savedEstablishment.city || savedEstablishment.cityOther, type: savedEstablishment.type || savedEstablishment.typeOther } });
     res.json({ message: 'Заявка отправлена', establishment: savedEstablishment });
 }));
 
@@ -220,9 +240,7 @@ router.get('/establishmentsLocation', wrap(async (req, res) => {
 // его не одобрят заново. Правку администратора не проверяет никто.
 router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments), upload.array('newPhotos', MAX_PHOTOS), validate({
     name: { type: 'string', max: 200, label: 'Название' },
-    type: TYPE,
-    country: { type: 'string', max: 100, label: 'Страна' },
-    city: CITY,
+    ...PLACE,
     address: { type: 'string', max: 300, label: 'Адрес' },
     about: { type: 'string', max: ABOUT_MAX, label: 'Описание' },
     weekdayHours: { ...HOURS, label: 'Часы по будням' },
@@ -249,8 +267,17 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
     const kept = [...new Set(req.body.uploadedPhotos)].filter((u) => had.has(u));
     const files = req.files.slice(0, MAX_PHOTOS - kept.length);
 
-    const { name, type, country, city, address, about, weekdayHours, weekendHours, location } = req.body;
+    const { name, address, about, weekdayHours, weekendHours, location } = req.body;
     const { lat, lng } = location || {};
+
+    // Тип, страна и город приходят тройкой — форма шлёт их всегда. Нет ни
+    // одного — не трогаем.
+    let place = {};
+    if (places.KINDS.some((k) => req.body[k] !== undefined || req.body[k + 'Other'] !== undefined)) {
+        const picked = places.pick(req.body);
+        if (picked.error) return res.status(400).json({ message: picked.error });
+        place = picked.fields;
+    }
 
     // Пустое тело после разбора и означает «обновлять нечего». Три JSON.parse
     // отсюда убраны: их делает схема, и кривая строка теперь даёт 400, а не 500.
@@ -268,9 +295,7 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
 
     const fields = {
         name,
-        type,
-        country,
-        city,
+        ...place,
         address,
         about,
         weekdayHours,
@@ -296,6 +321,9 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
         }
         audit(req, 'venue.pending', { targetType: 'venue', target: updated, meta: { fields: Object.keys(fields).filter((k) => fields[k] !== undefined) } });
     } else {
+        // Точка переехала — пояс за ней (utils/venueHours.js). У черновика
+        // пояс ставит принятие правки (utils/venueFields.js, applyDraft).
+        if (fields.location && zoneAt(fields.location)) fields.tz = zoneAt(fields.location);
         updated = await Establishments.findByIdAndUpdate(venue._id, fields, { returnDocument: 'after' });
         // Убранные из списка — с диска, иначе они оставались сиротами.
         for (const url of had) if (!fields.photos.includes(url)) unlinkUpload(url, 'establishments');
@@ -339,8 +367,11 @@ router.post('/rateEstablishment', requireAuth, validate({
     rating: { type: 'int', required: true, min: 1, max: 5, label: 'Оценка' },
 }), wrap(async (req, res) => {
     const { establishmentId, rating } = req.body;
-    if (!(await Establishments.exists({ _id: establishmentId, status: true }))) {
-        return res.status(404).json({ message: 'Заведение не найдено' });
+    const venue = await Establishments.findOne({ _id: establishmentId, status: true }).select('owner').lean();
+    if (!venue) return res.status(404).json({ message: 'Заведение не найдено' });
+    // Своё заведение не оценить (30.09): средняя — мнение гостей.
+    if (String(venue.owner) === String(req.session.userId)) {
+        return res.status(403).json({ message: 'Своё заведение оценить нельзя' });
     }
 
     await Rating.updateOne(
@@ -380,7 +411,7 @@ router.get('/venue/:venueId', commonDataMiddleware, wrap(async (req, res, next) 
         own,
         manage: own || admin,
         tabs: await tabsFor(venue, own || admin),
-        // Часы на сегодня — по белградскому дню недели, как в карточках выдачи.
+        // Часы на сегодня — по местному дню недели заведения, как в карточках выдачи.
         hours: hoursState(venue),
         rating: { average: venue.ratingAvg || 0, count: venue.ratingCount || 0, mine: mine ? mine.rating : 0 },
     });
@@ -430,15 +461,12 @@ router.get(['/venue/:venueId/streams', '/venue/:venueId/videos'], commonDataMidd
     });
 }));
 
-// Настройки заведения (29.09, docs/VENUES.md п. 8): свои у каждого, только
-// владельцу и администратору, меняются сразу, без проверки — как логотип.
-router.get('/venue/:venueId/settings', requireAuth, commonDataMiddleware, wrap(async (req, res, next) => {
-    const found = await pageVenue(req, res);
-    if (!found || !(found.own || found.admin)) return next();
-    res.set('X-Robots-Tag', 'noindex, nofollow');
-    res.render('venueSettings', { venue: found.venue, tabs: await tabsFor(found.venue, true) });
-}));
+// Вкладка «Настройки» (29.09) держала одно видео-меню — с 30.09 её
+// выключатель на странице правки, она и называется «Настройки».
+router.get('/venue/:venueId/settings', (req, res) => res.redirect(301, '/venue/' + encodeURIComponent(req.params.venueId) + '/edit'));
 
+// Выключатели настроек заведения (видео-меню) на странице /venue/:id/edit:
+// свои у каждого, меняются сразу, без проверки — как логотип.
 // Одна настройка за запрос — так их шлёт переключатель страницы. Пустое тело
 // ничего не меняет и не ошибка.
 // requireOwner пускает владельца и администратора, как у правки.

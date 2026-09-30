@@ -891,6 +891,20 @@ body.tk-app {
   color: var(--tk-muted);
 }
 
+/* Тип, страна и город заведения — заявка и настройки (partials/venuePlace.ejs,
+ * 30.09). Под списком — поле для своего («Другое — ввести самому»). */
+.tk-place { display: flex; flex-direction: column; gap: 14px; }
+.tk-place [hidden] { display: none !important; }
+.tk-place__pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.tk-place__one { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+/* Кроме родного <select> под своим списком (tk-listbox): он спрятан в 1px,
+ * а во всю ширину расталкивал страницу вбок. */
+.tk-place__one .tk-field:not(.tk-lb__native) { width: 100%; }
+
+@media (max-width: 767px) {
+  .tk-place__pair { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* Полоса ограниченного аккаунта: под шапкой, на всю ширину, киноварью по краю.
  * Не всплывашка — она должна висеть, пока ограничение действует. */
 .tk-banned {

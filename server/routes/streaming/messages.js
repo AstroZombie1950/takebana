@@ -379,9 +379,11 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
 
 
 // Следующая страница списка переписок — прокрутка до конца (public/chats.js).
+// Без before — первая страница: ею список сверяется, когда вкладка
+// вернулась или связь восстановилась (30.09).
 router.get('/api/dialogs', requireAuthApi, async (req, res) => {
   const before = typeof req.query.before === 'string' ? new Date(req.query.before) : null;
-  if (!before || isNaN(before)) return res.status(400).json({ message: 'Неверный запрос' });
+  if (before && isNaN(before)) return res.status(400).json({ message: 'Неверный запрос' });
   const page = await dialogPage(new ObjectId(String(req.session.userId)), before);
   res.json({ dialogs: page.list, before: page.before });
 });

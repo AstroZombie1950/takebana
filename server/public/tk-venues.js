@@ -29,9 +29,63 @@
   const follow = $('venueFollow');
   const fab = $('venueFab');
   const wide = matchMedia('(min-width: 1024px)');
+  const phone = matchMedia('(max-width: 639px)');
 
   // «Показать» нужна только без скрипта: здесь фильтр применяется сразу.
   form.querySelectorAll('[data-nojs]').forEach((el) => el.remove());
+
+  // ── Страна, потом город (30.09) ──
+  // В списке городов — только города выбранной страны; без страны он заперт.
+  // Пункты всех стран сервер кладёт разом, здесь они переставляются.
+  const country = $('venueCountry');
+  const city = $('venueCity');
+  const cityOpts = Array.from(city.options).filter((o) => o.dataset.country);
+
+  function fillCities() {
+    const c = country.value;
+    const keep = city.value;
+    cityOpts.forEach((o) => o.remove());
+    const mine = cityOpts.filter((o) => o.dataset.country === c);
+    mine.forEach((o) => city.append(o));
+    if (!mine.some((o) => o.value === keep)) city.value = '';
+    city.disabled = !c || !mine.length;
+  }
+  country.addEventListener('change', fillCities);
+  fillCities();
+
+  // ── Выпадашка с галочками ──
+  // Тип заведения; на телефоне в неё же ложатся «В эфире» и «Открыто сейчас»
+  // («Фильтры»), на широком они метками рядом. Подпись — что выбрано.
+  const more = $('venueMore');
+  const morePanel = $('venueMorePanel');
+  const moreVal = $('venueMoreVal');
+  const flags = $('venueFlags');
+  const flagsHome = flags.nextElementSibling;
+
+  function placeFlags() {
+    if (phone.matches) morePanel.append(flags);
+    else form.querySelector('.tk-venues__filters').insertBefore(flags, flagsHome);
+    paintMore();
+  }
+
+  function paintMore() {
+    const types = Array.from(morePanel.querySelectorAll('[name="type"]:checked'), (b) => b.nextElementSibling.textContent.trim());
+    const extra = phone.matches ? flags.querySelectorAll(':checked').length : 0;
+    const n = types.length + extra;
+    moreVal.removeAttribute('data-i18n');
+    moreVal.removeAttribute('data-i18n-vars');
+    if (!n) tkText(moreVal, 'venues.anyType');
+    else if (!extra && n <= 2) moreVal.textContent = types.join(', ');
+    else tkText(moreVal, 'venues.picked', { n });
+  }
+
+  phone.addEventListener('change', placeFlags);
+  placeFlags();
+  // Мимо и Escape — закрыть; галочки внутри — нет: выбирают несколько.
+  document.addEventListener('click', (e) => { if (more.open && !more.contains(e.target)) more.open = false; });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && more.open) { more.open = false; more.querySelector('summary').focus(); }
+  });
 
   // Форма слова по числу: plural(5, 'venues.count') → ключ venues.countMany.
   function plural(n, base) {
@@ -155,12 +209,16 @@
     });
 
     const q = query.value.trim();
-    const city = form.elements.city.value;
     tkText(countEl.firstElementChild, plural(n, 'venues.count'), { n });
     const scope = countEl.lastElementChild;
+    // Город или страна — подписью пункта: у добавленных панелью ключа
+    // словаря нет, текст уже на языке страницы.
+    const where = city.value ? city : country.value ? country : null;
+    const opt = where && where.options[where.selectedIndex];
     if (only) tkText(scope, 'venues.scopeView');
     else if (q) tkText(scope, 'venues.scopeQuery', { q });
-    else if (city) tkText(scope, 'city.' + city);
+    else if (opt && opt.dataset.i18n) tkText(scope, opt.dataset.i18n);
+    else if (opt) { scope.removeAttribute('data-i18n'); scope.textContent = opt.textContent; }
     else tkText(scope, 'common.allCities');
 
     empty.hidden = n > 0;
@@ -304,7 +362,9 @@
   }
 
   form.addEventListener('change', (e) => {
-    if (e.target !== query) apply(e.target.name === 'city');
+    if (e.target === query) return;
+    if (morePanel.contains(e.target)) paintMore();
+    apply(e.target.name === 'city' || e.target.name === 'country');
   });
   form.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -330,9 +390,11 @@
   reset.addEventListener('click', (e) => {
     e.preventDefault();
     query.value = '';
-    form.elements.city.value = '';
+    country.value = '';
+    fillCities();
     form.elements.sort.value = 'live';
     form.querySelectorAll('input[type="checkbox"]').forEach((box) => { box.checked = false; });
+    paintMore();
     apply(true);
   });
 

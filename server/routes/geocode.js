@@ -11,7 +11,7 @@ asyncify(router); // ошибки async-обработчиков уходят в
 
 const { requireAuthApi } = require('../middleware/auth');
 const { geocodeLimiter } = require('../middleware/rateLimit');
-const { CITY_NAME } = require('../config/catalog');
+const places = require('../utils/places');
 const geocode = require('../utils/geocode');
 const errorLog = require('../utils/errorLog');
 
@@ -31,9 +31,9 @@ router.get('/api/geocode', requireAuthApi, geocodeLimiter, async (req, res) => {
         return res.status(400).json({ message: 'Адрес короче трёх символов' });
     }
 
-    // Подсказка — только код города из закрытого списка: свободную строку
-    // из запроса в чужой сервис не передаём.
-    const hint = CITY_NAME[req.query.city] || '';
+    // Подсказка — только коды города и страны из справочника (utils/places.js):
+    // свободную строку из запроса в чужой сервис не передаём.
+    const hint = [places.name('city', req.query.city, 'ru'), places.name('country', req.query.country, 'ru')].filter(Boolean).join(', ');
 
     let point;
     try {

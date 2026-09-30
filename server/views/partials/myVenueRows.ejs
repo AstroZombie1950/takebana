@@ -12,7 +12,8 @@
       <span class="tk-myv__ava" data-user-content><% if (v.avatar) { %><img src="<%= v.avatar %>" alt=""><% } else { %><%= (String(v.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase() %><% } %></span>
       <span class="tk-myv__body">
         <span class="tk-myv__name" data-user-content><%= v.name %></span>
-        <% if (v.type || v.city) { %><span class="tk-myv__meta"><% if (v.type) { %><span data-i18n="venue.<%= v.type %>"><%= ta('venue.' + v.type, catalog.VENUE_TYPE_NAME[v.type] || '') %></span><% } %><% if (v.type && v.city) { %> · <% } %><% if (v.city) { %><span data-i18n="city.<%= v.city %>"><%= ta('city.' + v.city, catalog.CITY_NAME[v.city] || '') %></span><% } %></span><% } %>
+        <% var vmeta = [placeHtml('type', v.type, v.typeOther), placeHtml('city', v.city, v.cityOther)].filter(Boolean).join(' · '); %>
+        <% if (vmeta) { %><span class="tk-myv__meta"><%- vmeta %></span><% } %>
       </span>
       <span class="tk-myv__state <%= v.state[0] %>" data-i18n="<%= v.state[1] %>"><%- t(v.state[1]) %></span>
     </a>

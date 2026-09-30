@@ -8,7 +8,9 @@
 // Карта поднимается не при загрузке страницы, а когда блок впервые показан:
 // MapLibre — около 290 КБ, и до заявки доходят не все, кто открыл страницу.
 //
-// TKPoint.attach(root, { address, cityField }) → {
+// TKPoint.attach(root, { address, place }) → {
+//   place — блок «тип, страна, город» (TKPlace, tk-venue-place.js): с его
+//   города или страны открывается карта, им же подсказывается поиск адреса
 //   open(lat, lng) — блок показан: поднять карту, поставить метку, если есть
 //   value() — { lat, lng } или null
 // }
@@ -33,7 +35,7 @@
     var applyBtn = root.querySelector('[data-point-apply]');
     var findBtn = root.querySelector('[data-point-find]');
     var addressField = opts.address || null;
-    var cityField = opts.cityField || null;
+    var place = opts.place || null;
 
     var idle = note.textContent;
     var picker = null;
@@ -42,9 +44,10 @@
 
     function say(text) { note.textContent = text || idle; }
 
+    // Центр выбранного города, без него — столица выбранной страны.
     function cityCenter() {
-      var centers = window.TKCityCenter || {};
-      return (cityField && centers[cityField.value]) || DEFAULT;
+      var centers = window.TKPlaceCenter || {};
+      return (place && ((centers.city || {})[place.city.value] || (centers.country || {})[place.country.value])) || DEFAULT;
     }
 
     function setFields(lng, lat) {
@@ -129,8 +132,11 @@
       findBtn.disabled = true;
       say(t('point.searching'));
 
-      var url = '/api/geocode?q=' + encodeURIComponent(q) +
-                (cityField && cityField.value ? '&city=' + encodeURIComponent(cityField.value) : '');
+      // Город и страна из списка — кодами (сервер допишет их имена), свои —
+      // к адресу текстом.
+      var own = place ? place.ownText() : '';
+      var url = '/api/geocode?q=' + encodeURIComponent(own ? q + ', ' + own : q) +
+                (place ? '&city=' + encodeURIComponent(place.city.value) + '&country=' + encodeURIComponent(place.country.value) : '');
       fetch(url, { credentials: 'same-origin' })
         .then(read)
         .then(function (data) {
@@ -165,11 +171,13 @@
       });
     }
 
-    if (cityField) {
-      cityField.addEventListener('change', function () {
-        if (!picker || picker.has()) return; // метку уже поставили — не дёргаем
-        var c = cityCenter();
-        picker.center(c[0], c[1], CITY_VIEW);
+    if (place) {
+      [place.country, place.city].forEach(function (field) {
+        field.addEventListener('change', function () {
+          if (!picker || picker.has()) return; // метку уже поставили — не дёргаем
+          var c = cityCenter();
+          picker.center(c[0], c[1], CITY_VIEW);
+        });
       });
     }
 

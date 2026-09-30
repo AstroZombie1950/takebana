@@ -22,7 +22,10 @@ const ACTIONS = BOOT.actions || {};
 const CATALOG = BOOT.catalog || { cities: [], types: [], categories: {} };
 
 const CITY = new Map((CATALOG.cities || []).map((c) => [c.code, c.name]));
+const COUNTRY = new Map((CATALOG.countries || []).map((c) => [c.code, c.name]));
 const VENUE_TYPE = new Map((CATALOG.types || []).map((t) => [t.code, t.name]));
+// Город в списке заведения — со страной: «Нови-Сад · Сербия».
+const VENUE_CITY = new Map((CATALOG.cities || []).map((c) => [c.code, c.name + (COUNTRY.get(c.country) ? ' · ' + COUNTRY.get(c.country) : '')]));
 const CATEGORY = new Map(Object.entries(CATALOG.categories || {}).map(([code, c]) => [code, c.name]));
 
 const nav = document.getElementById('nav');
@@ -587,7 +590,7 @@ VIEWS.person = {
     html += '<section><h2 class="tk-panel__h2">Заведения</h2>';
     html += d.venues.length
       ? '<ul class="tk-list">' + d.venues.map((v) => '<li>' + (v.online ? dot(true) : '') + esc(v.name || 'без названия') +
-          ' <span class="tk-panel__why">' + esc(cityTitle(v.city)) + ' · ' + esc(VENUE_TYPE.get(v.type) || v.type || '') +
+          ' <span class="tk-panel__why">' + esc(cityTitle(v.city) || v.cityOther || '') + ' · ' + esc(VENUE_TYPE.get(v.type) || v.typeOther || v.type || '') +
           (v.status ? '' : ' · не активно') + '</span></li>').join('') + '</ul>'
       : note('Заведений нет');
     html += '</section></div>';
@@ -693,11 +696,14 @@ VIEWS.reports = {
 };
 
 // ── Заведения ────────────────────────────────────────────────────────────────
+// Тип, страна и город — пункт справочника или своё текстом (utils/places.js,
+// 30.09): поле своего под списком, оно в ходу, когда в списке «Своё».
+const OTHER = '__other';
 const VENUE_FIELDS = [
   { key: 'name', label: 'Название', wide: true },
-  { key: 'type', label: 'Тип', list: VENUE_TYPE },
-  { key: 'city', label: 'Город', list: CITY },
-  { key: 'country', label: 'Страна' },
+  { key: 'type', label: 'Тип', list: VENUE_TYPE, own: true },
+  { key: 'country', label: 'Страна', list: COUNTRY, own: true },
+  { key: 'city', label: 'Город', list: VENUE_CITY, own: true },
   { key: 'address', label: 'Адрес', wide: true },
   { key: 'email', label: 'Почта', type: 'email' },
   { key: 'phone', label: 'Телефон', type: 'tel' },
@@ -708,13 +714,15 @@ const VENUE_FIELDS = [
 // Правка владельца одобренного заведения ждёт решения (29.09): что
 // меняется — было и стало, новые фото картинками. Поля ниже — одобренное.
 const DRAFT_LABELS = { name: 'Название', type: 'Тип', country: 'Страна', city: 'Город', address: 'Адрес', about: 'Описание',
+  typeOther: 'Тип (своё)', countryOther: 'Страна (своё)', cityOther: 'Город (своё)',
   weekdayHours: 'Часы по будням', weekendHours: 'Часы по выходным', location: 'Точка', photos: 'Фото' };
 const draftValue = (k, x) => {
   if (x == null || x === '') return '—';
   if (k === 'weekdayHours' || k === 'weekendHours') return (x.open || '?') + '–' + (x.close || '?');
   if (k === 'location') return x.lat != null ? Number(x.lat).toFixed(5) + ', ' + Number(x.lng).toFixed(5) : '—';
-  if (k === 'type') return (CATALOG.types || []).reduce((a, t) => (t.code === x ? t.name : a), x);
-  if (k === 'city') return (CATALOG.cities || []).reduce((a, c) => (c.code === x ? c.name : a), x);
+  if (k === 'type') return VENUE_TYPE.get(x) || x;
+  if (k === 'country') return COUNTRY.get(x) || x;
+  if (k === 'city') return VENUE_CITY.get(x) || x;
   return String(x);
 };
 
@@ -735,6 +743,27 @@ function venueDraft(v) {
     '</div></div>';
 }
 
+// Своё владельца — тип, страна, город, которых нет в справочнике (30.09).
+// Взять в общий список: имя по-русски и по-английски, то же своё у других
+// заведений станет этим пунктом разом (routes/admin/venues.js). Город — после
+// страны: без неё его не к чему привязать.
+const OWN_KINDS = [['type', 'Тип'], ['country', 'Страна'], ['city', 'Город']];
+function venueOwn(v) {
+  const rows = OWN_KINDS.filter(([k]) => !v[k] && v[k + 'Other']).map(([k, title]) => {
+    const blocked = k === 'city' && !COUNTRY.has(v.country);
+    return '<div class="tk-own" data-own="' + k + '">' +
+      '<p class="tk-own__what"><b>' + esc(title) + ':</b> «' + esc(v[k + 'Other']) + '» — вписано владельцем, в списке нет</p>' +
+      (blocked ? '<p class="tk-panel__why">Сначала добавьте в список страну — город привязывается к ней.</p>'
+        : '<div class="tk-own__line">' +
+          '<input type="text" class="tk-field" data-own-ru value="' + esc(v[k + 'Other']) + '" placeholder="По-русски" maxlength="60">' +
+          '<input type="text" class="tk-field" data-own-en value="' + esc(v[k + 'Other']) + '" placeholder="По-английски" maxlength="60">' +
+          '<button type="button" class="tk-btn tk-btn--ok tk-btn--xs" data-act="venue-place" data-id="' + esc(v.id) + '" data-kind="' + k + '">Добавить в общий список</button>' +
+        '</div>') +
+    '</div>';
+  }).join('');
+  return rows ? '<div class="tk-owns">' + rows + '</div>' : '';
+}
+
 VIEWS.venues = {
   title: 'Заведения',
   admin: true,
@@ -743,7 +772,8 @@ VIEWS.venues = {
   filters: [
     { name: 'q', type: 'search', placeholder: 'Название или адрес' },
     { name: 'status', options: [{ value: '', title: 'Все' }, { value: 'active', title: 'Активные' }, { value: 'inactive', title: 'Неактивные' }, { value: 'pending', title: 'Правки на проверке' }] },
-    { name: 'city', options: () => [{ value: '', title: 'Любой город' }].concat((CATALOG.cities || []).map((c) => ({ value: c.code, title: c.name }))) },
+    { name: 'country', options: () => [{ value: '', title: 'Любая страна' }].concat((CATALOG.countries || []).map((c) => ({ value: c.code, title: c.name }))) },
+    { name: 'city', options: () => [{ value: '', title: 'Любой город' }].concat([...VENUE_CITY].map(([code, title]) => ({ value: code, title }))) },
     { name: 'type', options: () => [{ value: '', title: 'Любой тип' }].concat((CATALOG.types || []).map((t) => ({ value: t.code, title: t.name }))) },
     { name: 'online', options: [{ value: '', title: 'Камера: всё равно' }, { value: '1', title: 'Камера включена' }] },
   ],
@@ -758,7 +788,17 @@ VIEWS.venues = {
       const fields = VENUE_FIELDS.map((f) => {
         const val = String(value(f.key) == null ? '' : value(f.key));
         let control;
-        if (f.list) {
+        if (f.own) {
+          // Пункт справочника или своё: в списке «Своё», текст — в поле под ним.
+          const mine = v[f.key + 'Other'] || '';
+          const known = f.list.has(val);
+          control = '<select class="tk-field tk-select" data-field="' + f.key + '">' +
+            '<option value=""' + (known || mine ? '' : ' selected') + '>Не выбран</option>' +
+            '<option value="' + OTHER + '"' + (!known && mine ? ' selected' : '') + '>Своё — ниже</option>' +
+            [...f.list.entries()].map(([code, title]) => '<option value="' + esc(code) + '"' +
+              (code === val ? ' selected' : '') + '>' + esc(title) + '</option>').join('') + '</select>' +
+            '<input type="text" class="tk-field" data-field="' + f.key + 'Other" value="' + esc(mine) + '" placeholder="своё, если нет в списке" maxlength="60">';
+        } else if (f.list) {
           // Заведения, заполненные до закрытых списков, держат город строкой
           // и не держат типа вовсе: чужое значение показываем первой строкой,
           // чтобы его было видно и можно было заменить, а не потерять молча.
@@ -784,6 +824,7 @@ VIEWS.venues = {
         '<p class="tk-card__from">' + person(v.owner) + ' · оценка ' +
           (v.rating.count ? v.rating.avg + ' (' + v.rating.count + ')' : 'нет') + ' · фото ' + v.photos + '</p>' +
         venueDraft(v) +
+        venueOwn(v) +
         '<div class="tk-fields">' + fields + '</div>' +
         '<div class="tk-card__acts">' +
           // Заперта, пока ничего не правили: иначе «Сохранить» нажимают
@@ -1860,6 +1901,11 @@ view.addEventListener('click', async (e) => {
         const value = f.value.trim();
         if (value) body[f.dataset.field] = value;
       });
+      // Тип, страна, город — всегда шестёркой: пустое своё стирает прежнее.
+      ['type', 'country', 'city'].forEach((k) => {
+        body[k] = body[k] || '';
+        body[k + 'Other'] = body[k] === OTHER || !body[k] ? body[k + 'Other'] || '' : '';
+      });
       // Точка уходит целиком или не уходит вовсе: половина координаты
       // бессмысленна, а пустой объект сервер понял бы как «стереть».
       if (body.lat && body.lng) body.location = { lat: Number(body.lat), lng: Number(body.lng) };
@@ -1868,6 +1914,17 @@ view.addEventListener('click', async (e) => {
       await send('PUT', '/api/admin/venues/' + id, body);
       toast('Заведение сохранено', 'ok');
       return show();
+    }
+
+    if (act === 'venue-place') {
+      const box = el.closest('[data-own]');
+      const ru = box.querySelector('[data-own-ru]').value.trim();
+      const en = box.querySelector('[data-own-en]').value.trim();
+      if (!ru) return toast('Впишите название по-русски');
+      const r = await send('POST', '/api/admin/venues/' + id + '/place', { kind: el.dataset.kind, ru, en });
+      toast('Добавлено в список' + (r.venues > 1 ? ' — у заведений: ' + r.venues : ''), 'ok');
+      // Справочник панели — из страницы: новый пункт появится в списках после перезагрузки.
+      return location.reload();
     }
 
     if (act === 'venue-draft') {

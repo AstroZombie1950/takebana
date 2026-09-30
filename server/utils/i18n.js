@@ -273,6 +273,13 @@ const EN = {
     'Заведение не найдено': 'Establishment not found',
     'Заявка уже на проверке: следующую можно подать после решения по ней': 'An application is already under review: you can submit the next one once it is decided',
     'Достигнут предел заведений на одного человека': 'You have reached the limit of venues per person',
+    // Тип, страна, город — справочник или своё (utils/places.js, 30.09)
+    'Укажите тип заведения': 'Specify the type of establishment',
+    'Укажите страну': 'Specify the country',
+    'Укажите город': 'Specify the city',
+    'Своё заведение оценить нельзя': 'You cannot rate your own establishment',
+    'Своего значения у заведения нет': 'The establishment has no custom value',
+    'Сначала добавьте в список страну': 'Add the country to the list first',
     'Видео-меню': 'Video menu',
     'Вести эфир можно только от своего одобренного заведения': 'You can only stream on behalf of your own approved venue',
     'Загружать можно только от своего одобренного заведения': 'You can only upload on behalf of your own approved venue',

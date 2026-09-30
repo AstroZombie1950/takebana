@@ -8,12 +8,22 @@
   Карточки — partials/venueCard.ejs, поведение — public/tk-venues.js,
   вёрстка — css/venues.css, карта — public/tk-map.js (грузится, только когда
   её показывают: на телефоне в списке она не нужна).
+
+  Фильтры (30.09): страна, потом город; тип — одной выпадашкой с галочками;
+  «В эфире» и «Открыто сейчас» — метками рядом, а на телефоне скрипт кладёт
+  их в ту же выпадашку («Фильтры»): всё помещается без прокрутки вбок.
+  У порядка — постоянная подпись «Сортировка». where — страны и города,
+  где есть заведения (routes/establishmentsRouter.js, filterPlaces).
 %>
-<% var anyFilter = filters.q || filters.city || filters.types.length || filters.live || filters.open || filters.sort !== 'live';
+<% var anyFilter = filters.q || filters.country || filters.city || filters.types.length || filters.live || filters.open || filters.sort !== 'live';
    var count = plural(venues.length, 'venues.count');
    var scope = filters.q ? ta('venues.scopeQuery', { q: filters.q })
-             : filters.city ? ta('city.' + filters.city, catalog.CITY_NAME[filters.city])
+             : filters.city ? placeLabel('city', filters.city)
+             : filters.country ? placeLabel('country', filters.country)
              : ta('common.allCities');
+   // Подпись выпадашки типов: «Все», одно-два имени или «Выбрано: N».
+   var typeNames = filters.types.map(function (c) { return placeLabel('type', c); });
+   var typeVal = !typeNames.length ? ta('venues.anyType') : typeNames.length <= 2 ? typeNames.join(', ') : ta('venues.picked', { n: typeNames.length });
    var views = [
      ['split', 'venues.viewSplit', '<rect x="3" y="4" width="18" height="16"></rect><path d="M11 4v16"></path>'],
      ['list', 'venues.viewList', '<path d="M4 6h16M4 12h16M4 18h16"></path>'],
@@ -74,25 +84,55 @@
         </div>
       </div>
 
+      <%# Поле с подписью внутри (.tk-venues__ctl): подпись сверху мелко,
+          значение под ней. У выпадашек — свой список и на телефоне
+          (public/tk-listbox.js, data-listbox-touch). %>
       <div class="tk-venues__filters">
-        <select name="city" class="tk-field tk-select tk-venues__sel" aria-label="<%= ta('venues.city') %>" data-i18n-aria="venues.city">
-          <option value="" data-i18n="common.allCities"><%- t('common.allCities') %></option>
-          <% catalog.CITIES.forEach(function (city) { %>
-          <option value="<%= city.code %>"<%= filters.city === city.code ? ' selected' : '' %> data-i18n="<%= city.i18n %>"><%= ta(city.i18n, city.name) %></option>
-          <% }); %>
-        </select>
-        <div class="tk-venues__tags" role="group" aria-label="<%= ta('venues.type') %>" data-i18n-aria="venues.type">
-          <% catalog.VENUE_TYPES.forEach(function (type) { %>
-          <label class="tk-tag"><input type="checkbox" name="type" value="<%= type.code %>"<%= filters.types.includes(type.code) ? ' checked' : '' %>><span data-i18n="venue.<%= type.code %>"><%= ta('venue.' + type.code, type.name) %></span></label>
-          <% }); %>
+        <label class="tk-venues__ctl">
+          <span class="tk-venues__cap" data-i18n="venues.country"><%- t('venues.country') %></span>
+          <select name="country" class="tk-select tk-venues__sel" id="venueCountry" data-listbox-touch>
+            <option value="" data-i18n="common.allCountries"><%- t('common.allCountries') %></option>
+            <% where.countries.forEach(function (c) { %>
+            <option value="<%= c.code %>"<%= filters.country === c.code ? ' selected' : '' %><% if (c.i18n) { %> data-i18n="<%= c.i18n %>"<% } else { %> data-user-content<% } %>><%= c.text %></option>
+            <% }); %>
+          </select>
+        </label>
+        <%# Город — после страны: без неё заперт. Пункты всех стран здесь,
+            скрипт оставляет города выбранной (data-country). %>
+        <label class="tk-venues__ctl">
+          <span class="tk-venues__cap" data-i18n="venues.city"><%- t('venues.city') %></span>
+          <select name="city" class="tk-select tk-venues__sel" id="venueCity" data-listbox-touch<%= filters.country ? '' : ' disabled' %>>
+            <option value="" data-i18n="common.allCities"><%- t('common.allCities') %></option>
+            <% where.cities.forEach(function (c) { %>
+            <option value="<%= c.code %>" data-country="<%= c.country %>"<%= filters.city === c.code ? ' selected' : '' %><% if (c.i18n) { %> data-i18n="<%= c.i18n %>"<% } else { %> data-user-content<% } %>><%= c.text %></option>
+            <% }); %>
+          </select>
+        </label>
+        <details class="tk-venues__dd" id="venueMore">
+          <summary class="tk-venues__ctl tk-venues__ddbtn">
+            <span class="tk-venues__cap"><span class="tk-venues__wide" data-i18n="venues.type"><%- t('venues.type') %></span><span class="tk-venues__narrow" data-i18n="venues.filters"><%- t('venues.filters') %></span></span>
+            <span class="tk-venues__ddval" id="venueMoreVal"><%= typeVal %></span>
+          </summary>
+          <div class="tk-venues__ddpanel" id="venueMorePanel">
+            <div class="tk-venues__types" role="group" aria-label="<%= ta('venues.type') %>" data-i18n-aria="venues.type">
+              <% placeOptions('type').forEach(function (type) { %>
+              <label class="tk-venues__check"><input type="checkbox" name="type" value="<%= type.code %>"<%= filters.types.includes(type.code) ? ' checked' : '' %>><span<% if (type.i18n) { %> data-i18n="<%= type.i18n %>"<% } else { %> data-user-content<% } %>><%= type.text %></span></label>
+              <% }); %>
+            </div>
+          </div>
+        </details>
+        <div class="tk-venues__flags" id="venueFlags">
           <label class="tk-tag"><input type="checkbox" name="live" value="1"<%= filters.live ? ' checked' : '' %>><i class="tk-venues__dot" aria-hidden="true"></i><span data-i18n="venues.onAir"><%- t('venues.onAir') %></span></label>
           <label class="tk-tag"><input type="checkbox" name="open" value="1"<%= filters.open ? ' checked' : '' %>><span data-i18n="venues.openNow"><%- t('venues.openNow') %></span></label>
         </div>
-        <select name="sort" class="tk-field tk-select tk-venues__sel tk-venues__sort" aria-label="<%= ta('venues.sort') %>" data-i18n-aria="venues.sort">
-          <% ['live', 'rate', 'name'].forEach(function (s) { var key = 'venues.sort' + s[0].toUpperCase() + s.slice(1); %>
-          <option value="<%= s %>"<%= filters.sort === s ? ' selected' : '' %> data-i18n="<%= key %>"><%= ta(key) %></option>
-          <% }); %>
-        </select>
+        <label class="tk-venues__ctl tk-venues__sort">
+          <span class="tk-venues__cap" data-i18n="venues.sort"><%- t('venues.sort') %></span>
+          <select name="sort" class="tk-select tk-venues__sel" data-listbox-touch>
+            <% ['live', 'rate', 'name'].forEach(function (s) { var key = 'venues.sort' + s[0].toUpperCase() + s.slice(1); %>
+            <option value="<%= s %>"<%= filters.sort === s ? ' selected' : '' %> data-i18n="<%= key %>"><%= ta(key) %></option>
+            <% }); %>
+          </select>
+        </label>
         <a href="/venues" class="tk-venues__reset" data-reset<%= anyFilter ? '' : ' hidden' %> data-i18n="common.resetFilters"><%- t('common.resetFilters') %></a>
         <%# Нужна только без скрипта: со скриптом фильтр применяется сразу. %>
         <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm" data-nojs data-i18n="common.show"><%- t('common.show') %></button>
@@ -105,10 +145,12 @@
           <p class="tk-venues__count" id="venueCount"><b data-i18n="<%= count.key %>" data-i18n-vars='<%= JSON.stringify({ n: venues.length }) %>'><%= count.text %></b> <span><%= scope %></span></p>
           <%# Владельцу — его заведения (тот же адрес, что у пункта левой панели),
               остальным — заявка. %>
+          <%# Заявка — заметной красной кнопкой (30.09): ссылкой мелким шрифтом
+              её не находили. %>
           <% if (currentUser && currentUser.venuesHref) { %>
-          <a href="<%= currentUser.venuesHref %>" class="tk-venues__mine" data-i18n="venues.mine"><%- t('venues.mine') %></a>
+          <a href="<%= currentUser.venuesHref %>" class="tk-btn tk-btn--outline tk-btn--sm tk-venues__mine" data-i18n="venues.mine"><%- t('venues.mine') %></a>
           <% } else { %>
-          <a href="/company-register" class="tk-venues__mine" data-i18n="venues.register"><%- t('venues.register') %></a>
+          <a href="/company-register" class="tk-btn tk-btn--primary tk-btn--sm tk-venues__mine" data-i18n="venues.register"><%- t('venues.register') %></a>
           <% } %>
         </div>
         <div class="tk-venues__cards" id="venueCards"><%- include('partials/venueCards') %></div>

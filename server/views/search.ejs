@@ -146,9 +146,7 @@
             <span class="tk-place__body">
               <span class="tk-place__name"><%= venue.name %></span>
               <span class="tk-place__meta">
-                <% if (venue.type) { %><span data-i18n="venue.<%= venue.type %>"><%= ta('venue.' + venue.type, catalog.VENUE_TYPE_NAME[venue.type] || venue.type) %></span><% } %>
-                <% if (venue.type && venue.city && catalog.CITY_NAME[venue.city]) { %> · <% } %>
-                <% if (catalog.CITY_NAME[venue.city]) { %><span data-i18n="city.<%= venue.city %>"><%= ta('city.' + venue.city, catalog.CITY_NAME[venue.city]) %></span><% } %>
+                <%- [placeHtml('type', venue.type, venue.typeOther), placeHtml('city', venue.city, venue.cityOther)].filter(Boolean).join(' · ') %>
               </span>
               <% if (venue.address) { %><span class="tk-place__meta"><%= venue.address %></span><% } %>
             </span>

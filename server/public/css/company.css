@@ -41,7 +41,7 @@
 
 .tk-company__pair {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -98,7 +98,7 @@
 .tk-company__stop p { margin: 0; }
 
 @media (max-width: 767px) {
-  /* Страна и город в столбик: на узком экране два поля в ряд нечитаемы. */
+  /* Почта и телефон в столбик: на узком экране два поля в ряд нечитаемы. */
   .tk-company__pair {
     grid-template-columns: 1fr;
   }

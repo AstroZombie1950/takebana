@@ -201,9 +201,20 @@ const { localizeMessages, pageLocals } = require('./utils/i18n');
 app.use(localizeMessages, pageLocals);
 // Адрес страницы — шапке и панели: что подсветить и куда вернуть после входа.
 // Нужен всем страницам, а commonDataMiddleware стоит не на всех.
+const places = require('./utils/places');
 app.use((req, res, next) => {
   res.locals.path = req.path;
   res.locals.url = req.originalUrl;
+  // Тип, страна, город заведения — подписью на языке страницы: код
+  // справочника или своё владельца (utils/places.js).
+  //   placeHtml('city', v.city, v.cityOther)  — разметкой, выводить `<%-`
+  //   placeLabel('type', v.type, v.typeOther) — текстом
+  res.locals.placeHtml = (kind, code, other) => places.html(kind, code, other, res.locals.lang);
+  res.locals.placeLabel = (kind, code, other) => places.label(kind, code, other, res.locals.lang);
+  // Пункты выпадашек заявки и настроек (partials/venuePlace.ejs) и центры
+  // для выбора точки (public/tk-point.js).
+  res.locals.placeOptions = (kind, country) => places.options(kind, res.locals.lang, country);
+  res.locals.placeCenters = places.centers;
   next();
 });
 // У кого не открывается CDN — тому адреса медиа подменяются на наши
@@ -271,6 +282,10 @@ require('./utils/nickname').ensureAll(require('./models/User')).catch((e) => req
 require('./jobs/lowercaseEmails').run();
 // Средняя оценка в заведениях, заведённых до 29.09, — для карточек /venues.
 require('./utils/venueRating').backfill();
+// Справочник заведений: добавленное панелью — в память, страна заведений
+// до 30.09 — из строки в код (utils/places.js). Их часовой пояс — по точке.
+places.start();
+require('./utils/venueHours').backfill();
 // Рассылки поддержки, оборванные перезапуском, — в «прервана».
 require('./utils/support').markInterrupted().catch((e) => require('./utils/errorLog').server(e, 'support.sweep'));
 // Отрезки эфиров, оставшиеся открытыми от прошлого процесса, — закрыть,

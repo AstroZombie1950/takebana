@@ -61,27 +61,45 @@ const CATEGORIES = {
 // center — [долгота, широта] центра города: с него открывается карта, когда
 // владелец ставит точку заведения (public/tk-point.js). Без этого выбор точки
 // начинался бы с Белграда для всех или с пустого места.
+//
+// Эфиры берут город только отсюда. У заведений список длиннее: страна,
+// города по странам и то, что панель добавила из заявок (utils/places.js).
 const CITIES = [
-  { code: 'belgrade', name: 'Белград', i18n: 'city.belgrade', center: [20.4612, 44.8125] },
-  { code: 'novi-sad', name: 'Нови-Сад', i18n: 'city.novi-sad', center: [19.8335, 45.2671] },
-  { code: 'nis', name: 'Ниш', i18n: 'city.nis', center: [21.8958, 43.3209] },
-  { code: 'kragujevac', name: 'Крагуевац', i18n: 'city.kragujevac', center: [20.9114, 44.0142] },
-  { code: 'subotica', name: 'Суботица', i18n: 'city.subotica', center: [19.6650, 46.1001] },
+  { code: 'belgrade', name: 'Белград', i18n: 'city.belgrade', country: 'rs', center: [20.4612, 44.8125] },
+  { code: 'novi-sad', name: 'Нови-Сад', i18n: 'city.novi-sad', country: 'rs', center: [19.8335, 45.2671] },
+  { code: 'nis', name: 'Ниш', i18n: 'city.nis', country: 'rs', center: [21.8958, 43.3209] },
+  { code: 'kragujevac', name: 'Крагуевац', i18n: 'city.kragujevac', country: 'rs', center: [20.9114, 44.0142] },
+  { code: 'subotica', name: 'Суботица', i18n: 'city.subotica', country: 'rs', center: [19.6650, 46.1001] },
 ];
 
-// Типы заведений для карты (/main): владелец выбирает тип при регистрации
-// и в настройках, по нему фильтрует карта. Закрытый список — по той же
-// причине, что и города.
+// Страны заведений (30.09) — короткий стартовый список вокруг Сербии; чего
+// нет, владелец вписывает сам, а панель добавляет (utils/places.js). Код —
+// ISO 3166-1, center — столица: с неё открывается выбор точки, пока город
+// не выбран.
+const COUNTRIES = [
+  { code: 'rs', name: 'Сербия', i18n: 'country.rs', center: [20.4612, 44.8125] },
+  { code: 'me', name: 'Черногория', i18n: 'country.me', center: [19.2594, 42.4304] },
+  { code: 'hr', name: 'Хорватия', i18n: 'country.hr', center: [15.9819, 45.8150] },
+  { code: 'ba', name: 'Босния и Герцеговина', i18n: 'country.ba', center: [18.4131, 43.8563] },
+  { code: 'mk', name: 'Северная Македония', i18n: 'country.mk', center: [21.4254, 41.9981] },
+  { code: 'si', name: 'Словения', i18n: 'country.si', center: [14.5058, 46.0569] },
+  { code: 'hu', name: 'Венгрия', i18n: 'country.hu', center: [19.0402, 47.4979] },
+  { code: 'ro', name: 'Румыния', i18n: 'country.ro', center: [26.1025, 44.4268] },
+  { code: 'bg', name: 'Болгария', i18n: 'country.bg', center: [23.3219, 42.6977] },
+  { code: 'gr', name: 'Греция', i18n: 'country.gr', center: [23.7275, 37.9838] },
+];
+
+// Типы заведений: владелец выбирает тип при регистрации и в настройках,
+// по нему фильтрует раздел /venues. Закрытый список — по той же причине,
+// что и города; своё владелец вписывает в «Другое» (utils/places.js).
 const VENUE_TYPES = [
-  { code: 'bar', name: 'Бар' },
-  { code: 'restaurant', name: 'Ресторан' },
-  { code: 'cafe', name: 'Кафе' },
-  { code: 'club', name: 'Клуб' },
-  { code: 'pub', name: 'Паб' },
-  { code: 'hookah', name: 'Кальянная' },
+  { code: 'bar', name: 'Бар', i18n: 'venue.bar' },
+  { code: 'restaurant', name: 'Ресторан', i18n: 'venue.restaurant' },
+  { code: 'cafe', name: 'Кафе', i18n: 'venue.cafe' },
+  { code: 'club', name: 'Клуб', i18n: 'venue.club' },
+  { code: 'pub', name: 'Паб', i18n: 'venue.pub' },
+  { code: 'hookah', name: 'Кальянная', i18n: 'venue.hookah' },
 ];
-
-const VENUE_TYPE_NAME = Object.fromEntries(VENUE_TYPES.map((t) => [t.code, t.name]));
 
 // Код подкатегории → код категории. Коды подкатегорий не повторяются между
 // категориями, поэтому на общей вкладке фильтр идёт по одному полю.
@@ -91,7 +109,6 @@ for (const [cat, { subs }] of Object.entries(CATEGORIES)) {
 }
 
 const CITY_NAME = Object.fromEntries(CITIES.map((c) => [c.code, c.name]));
-const CITY_CENTER = Object.fromEntries(CITIES.map((c) => [c.code, c.center]));
 
 // Подкатегории для формы эфира: вторая выпадашка заполняется на клиенте
 // при выборе категории. Строка собирается один раз, а не на каждую страницу.
@@ -99,4 +116,4 @@ const SUBS_JSON = JSON.stringify(Object.fromEntries(
   Object.entries(CATEGORIES).map(([cat, { subs }]) => [cat, subs.map((s) => [s.code, s.name])])
 ));
 
-module.exports = { CATEGORIES, CITIES, SUB_CATEGORY, CITY_NAME, CITY_CENTER, SUBS_JSON, VENUE_TYPES, VENUE_TYPE_NAME };
+module.exports = { CATEGORIES, CITIES, COUNTRIES, SUB_CATEGORY, CITY_NAME, SUBS_JSON, VENUE_TYPES };

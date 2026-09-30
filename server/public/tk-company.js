@@ -31,22 +31,27 @@
       return el ? el.value.trim() : "";
     };
 
+    // Тип, страна и город — список или своё (public/tk-venue-place.js).
+    var place = window.TKPlace.attach(form.querySelector("[data-place]"));
+
     // Точка на карте: метка и поиск по адресу (public/tk-point.js). Без
     // координат заведение не попадает на карту вообще, поэтому метка здесь
     // обязательна — а ставить её рукой можно и без поиска адреса.
     var pointBox = form.querySelector("[data-point]");
     var point = pointBox && window.TKPoint
-      ? window.TKPoint.attach(pointBox, { address: form.elements.address, cityField: form.elements.city })
+      ? window.TKPoint.attach(pointBox, { address: form.elements.address, place: place })
       : null;
 
     form.addEventListener("submit", function (e) {
       e.preventDefault();
 
+      var where = place.value();
+      if (!where) {
+        toast(t("company.fillAll"));
+        return;
+      }
       var establishment = {
-        country: val("country"),
-        city: val("city"),
         name: val("name"),
-        type: val("type"),
         address: val("address"),
         email: val("email"),
         phone: val("phone"),
@@ -54,10 +59,11 @@
         weekendHours: { open: val("weekendOpen"), close: val("weekendClose") },
       };
 
+      Object.keys(where).forEach(function (k) { establishment[k] = where[k]; });
+
       // Сервер тоже проверяет, но здесь ответ мгновенный и без запроса.
       var required = [
-        establishment.country, establishment.city, establishment.name, establishment.type,
-        establishment.address, establishment.email, establishment.phone,
+        establishment.name, establishment.address, establishment.email, establishment.phone,
         establishment.weekdayHours.open, establishment.weekdayHours.close,
         establishment.weekendHours.open, establishment.weekendHours.close,
       ];

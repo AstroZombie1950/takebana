@@ -14,13 +14,15 @@
 //   — новые option, смена подписей при переключении языка, disabled —
 //     через MutationObserver.
 //
-// На сенсорных экранах не включается: там системный выбор — полноэкранное
-// колесо или шторка, привычные и удобные, а свой список пальцем хуже.
+// На сенсорных экранах — только у <select data-listbox-touch>: в формах там
+// системный выбор — полноэкранное колесо или шторка, привычные и удобные.
+// Фильтры раздела заведений (30.09) — исключение: системная белая шторка
+// поверх тёмной полосы фильтров читалась как «списка нет, оформления нет».
 
 (function () {
   'use strict';
 
-  if (!window.matchMedia || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  var fine = !!window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches;
 
   var uid = 0;
   var openBox = null;   // открыт может быть только один список
@@ -143,6 +145,9 @@
       var up = below < Math.min(list.scrollHeight, 280) + 12 && above > below;
       list.style.left = r.left + 'px';
       list.style.minWidth = r.width + 'px';
+      // Поле у правого края (телефон) — список не уходит за экран.
+      var over = r.left + list.offsetWidth - (innerWidth - 8);
+      if (over > 0) list.style.left = Math.max(8, r.left - over) + 'px';
       list.style.top = up ? '' : (r.bottom + 4) + 'px';
       list.style.bottom = up ? (innerHeight - r.top + 4) + 'px' : '';
       list.style.maxHeight = Math.max(120, Math.min(280, (up ? above : below) - 16)) + 'px';
@@ -267,7 +272,7 @@
   }, true);
 
   function init(root) {
-    (root || document).querySelectorAll('select.tk-select').forEach(enhance);
+    (root || document).querySelectorAll(fine ? 'select.tk-select' : 'select.tk-select[data-listbox-touch]').forEach(enhance);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { init(); });

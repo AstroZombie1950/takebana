@@ -95,6 +95,23 @@ window.tkChatBadge = function (part) {
   d.calls = c;
   badge.textContent = m + c > 99 ? '99+' : String(m + c);
   badge.classList.toggle('hidden', !(m + c));
+  // Точное «ничего непрочитанного» — уведомлениям в шторке делать нечего.
+  if (part.messages === 0) window.tkClearPush((tag) => /^(msg|group)-/.test(tag) && !/^group-call-/.test(tag));
+  if (part.calls === 0) window.tkClearPush((tag) => /^(call|group-call)-/.test(tag));
+};
+
+// Системные уведомления о том, что уже прочитано, — из шторки (30.09).
+// Заказчик на Android: пришёл пуш, зашёл с иконки на домашнем экране,
+// прочитал — а уведомление висит, и на иконке приложения по-прежнему
+// точка: Android рисует её, пока уведомление не убрано. Само оно уходит,
+// только если нажать на него. Метки — utils/push.js и вызывающие:
+// msg-<собеседник>, group-<группа>, call-<кто звонил>, group-call-<группа>.
+window.tkClearPush = function (match) {
+  if (!navigator.serviceWorker) return;
+  navigator.serviceWorker.getRegistration()
+    .then((reg) => (reg ? reg.getNotifications() : []))
+    .then((list) => list.forEach((n) => { if (match(n.tag || '')) n.close(); }))
+    .catch(() => {});
 };
 
 window.setNotificationDot = function (on) {
@@ -569,7 +586,21 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
 
     // Связь вернулась после обрыва: за это время могло прийти что-то, чего
     // сокет уже не доставит.
-    let connectedOnce = false;
+    //
+    // Страница, открытая кнопкой «назад», может прийти не с сервера, а из
+    // дискового кэша браузера — со значками и списками на момент первого
+    // показа (30.09: прочитанное снова «непрочитано», пока не обновишь).
+    // Такой странице полная сверка нужна сразу, на первом же подключении.
+    // Из bfcache она возвращается иначе — pageshow с persisted, ниже.
+    const nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+    const fromHistory = !!nav && nav.type === 'back_forward';
+    let connectedOnce = fromHistory;
+    // Свежая страница — числа от сервера точные: прочитанное где-то ещё
+    // (на компьютере, в другой вкладке) — уведомлениям в шторке делать нечего.
+    const chatBadge = document.querySelector('[data-chat-badge]');
+    if (chatBadge && !fromHistory) {
+      window.tkChatBadge({ messages: Number(chatBadge.dataset.messages) || 0, calls: Number(chatBadge.dataset.calls) || 0 });
+    }
     socket.on('connect', () => {
       if (connectedOnce) resync();
       connectedOnce = true;

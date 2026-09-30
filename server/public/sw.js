@@ -99,9 +99,14 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
     // Вкладка с сайтом уже открыта — ведём её, а не плодим вторую поверх
     // первой: иначе каждый тап по уведомлению открывает новое окно.
+    // navigate() отказывает окну, которым worker не управляет (открыто до
+    // его установки), — тогда новое окно, а не тап впустую.
     for (const client of list) {
       if (new URL(client.url).origin !== self.location.origin) continue;
-      return client.focus().then((c) => (c && 'navigate' in c ? c.navigate(url) : c));
+      return client.focus()
+        .then((c) => (c && 'navigate' in c ? c.navigate(url) : c))
+        .then((c) => c || self.clients.openWindow(url))
+        .catch(() => self.clients.openWindow(url));
     }
     return self.clients.openWindow(url);
   }));

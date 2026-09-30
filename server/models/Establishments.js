@@ -2,9 +2,16 @@ const mongoose = require('mongoose');
 
 const EstablishmentsSchema = new mongoose.Schema({
     name: String, // название
-    type: String, // тип — код из VENUE_TYPES в config/catalog.js; по нему фильтрует карта
-    country: String, // страна
-    city: String, // город — код из CITIES в config/catalog.js, как у эфиров
+    // Тип, страна и город — коды справочника (utils/places.js), по ним
+    // фильтрует раздел /venues. Чего в справочнике нет, владелец вписывает
+    // сам (30.09): тогда код пустой, а текст — в *Other, пока панель не
+    // возьмёт его в общий список.
+    type: String,
+    typeOther: String,
+    country: String,
+    countryOther: String,
+    city: String,
+    cityOther: String,
     address: String, // адрес
     email: String, // email
     phone: String, // номер телефона
@@ -31,6 +38,9 @@ const EstablishmentsSchema = new mongoose.Schema({
         lat: Number, // широта
         lng: Number // долгота
     },
+    // Часовой пояс по точке (30.09): часы работы — местные, и «открыто
+    // сейчас» считается по ним, где бы ни был посетитель (utils/venueHours.js).
+    tz: String,
     owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     photos: [String], // массив ссылок на фотографии
     // Обложка камеры (28.09): заставка страницы /venue/:id/live, пока нет
@@ -59,8 +69,11 @@ const EstablishmentsSchema = new mongoose.Schema({
         name: String,
         // Объектом: голое `type: String` Mongoose принял бы за тип всего pending.
         type: { type: String },
+        typeOther: String,
         country: String,
+        countryOther: String,
         city: String,
+        cityOther: String,
         address: String,
         about: String,
         weekdayHours: { open: String, close: String },

@@ -770,6 +770,9 @@
     var now = new Date().toISOString();
     messages.forEach(function (m) { if (m.sender === peer.id && !m.readAt) m.readAt = now; });
     if (badge) { badge.textContent = '0'; badge.classList.add('hidden'); }
+    // Прочитано здесь — уведомление о нём из шторки телефона (tk-app.js).
+    var tag = 'msg-' + peer.id;
+    if (window.tkClearPush) window.tkClearPush(function (t) { return t === tag; });
     post('/messages/read', { peerId: peer.id })
       .then(function (r) {
         if (window.setNotificationDot) window.setNotificationDot(r.unread > 0);
@@ -790,6 +793,8 @@
     if (!unseen && !(badge && !badge.classList.contains('hidden'))) return;
     groupReadAt = new Date().toISOString();
     if (badge) { badge.textContent = '0'; badge.classList.add('hidden'); }
+    var tag = 'group-' + id;
+    if (window.tkClearPush) window.tkClearPush(function (t) { return t === tag; });
     post('/api/groups/' + encodeURIComponent(id) + '/read', {})
       .then(function (r) { if (window.tkChatBadge) window.tkChatBadge({ messages: r.unreadMessages }); })
       .catch(function (e) { console.error('group read:', e); });
@@ -903,6 +908,50 @@
   }
   list.addEventListener('scroll', moreDialogs, { passive: true });
   moreDialogs();
+
+  // ── Сверка списка диалогов (30.09) ────────────────────────────────────
+  // Открытый диалог сверяется сам (softSync), а список слева жил только
+  // событиями сокета. Телефон замораживает приложение, сокет умирает, и
+  // вернувшийся с иконки видел список часовой давности: без новых
+  // сообщений, со счётчиками, которых уже нет, и без тех, что появились.
+  // Поэтому при возвращении и после обрыва первая страница списка — с
+  // сервера, поверх: строки обновляются и встают в его порядке наверх.
+  // Открытый диалог счётчик не несёт — его читает markRead.
+  function syncDialogs() {
+    fetch('/api/dialogs', { headers: { Accept: 'application/json' } })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) {
+        var fresh = [];
+        d.dialogs.slice().reverse().forEach(function (c) {
+          var el, open;
+          if (c.group) {
+            el = groupEl(c.group.id);
+            if (el) paintGroupRow(el, c.group); else el = groupNode(c.group);
+            el.querySelector('.tk-dialog__last').innerHTML = groupRowLast(c.last);
+            open = group && group.id === c.group.id;
+          } else {
+            var p = c.interlocutor;
+            el = dialogEl(p.id);
+            if (el) el.querySelector('.tk-dialog__last').innerHTML = lastHtml(c.last);
+            else { el = filledDialog(c); fresh.push(p.id); }
+            open = peer && peer.id === p.id;
+          }
+          var when = el.querySelector('.tk-dialog__when');
+          when.setAttribute('data-time', c.lastActivity);
+          when.textContent = timeAgo(c.lastActivity);
+          var badge = el.querySelector('.tk-dialog__unread');
+          var n = open ? 0 : c.unread;
+          badge.textContent = String(n);
+          badge.classList.toggle('hidden', !n);
+          list.prepend(el);
+        });
+        if (d.dialogs.length) $('conversationsEmpty').classList.add('hidden');
+        if (fresh.length && window.subscribePresence) window.subscribePresence(fresh);
+      })
+      .catch(function (e) { console.error('[chats] список не сверился:', e); });
+  }
+  document.addEventListener('tk:wake', syncDialogs);
+  document.addEventListener('tk:reconnect', syncDialogs);
 
   list.addEventListener('click', function (e) {
     var el = e.target.closest('.tk-dialog');

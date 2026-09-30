@@ -42,12 +42,14 @@
 
 <%# Всё, что панели нужно знать заранее: её права, закрытые списки каталога
     (иначе она разойдётся с фильтрами карты) и подписи действий журнала —
-    они же список для его фильтра. %>
+    они же список для его фильтра. Страны, города и типы заведений — из
+    справочника (utils/places.js): основа и добавленное панелью. %>
+<% var pl = function (kind) { return placeOptions(kind).map(function (o) { return { code: o.code, name: o.text, country: o.country }; }); }; %>
 <script>
 window.TKPanel = <%- JSON.stringify({
   isAdmin: isAdmin,
   me: me,
-  catalog: { cities: catalog.CITIES, types: catalog.VENUE_TYPES, categories: catalog.CATEGORIES },
+  catalog: { cities: pl('city'), countries: pl('country'), types: pl('type'), categories: catalog.CATEGORIES },
   actions: actions
 }).replace(/</g, '\\u003c') %>;
 </script>

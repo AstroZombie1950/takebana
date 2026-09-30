@@ -136,7 +136,7 @@ router.get('/users/:id', requireModerator, async (req, res) => {
         failed: { $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] } },
       } },
     ]),
-    Establishments.find({ owner: id }).select('name city type status online').lean(),
+    Establishments.find({ owner: id }).select('name city cityOther type typeOther status online').lean(),
     Report.aggregate([
       { $match: { targetType: 'user', targetId: id } },
       { $group: { _id: '$status', n: { $sum: 1 } } },

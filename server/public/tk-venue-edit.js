@@ -1,11 +1,11 @@
-// Страница заведения и её правка (views/venue.ejs, views/venueEdit.ejs, 29.09).
+// Страница заведения и её настройки (views/venue.ejs, views/venueEdit.ejs, 29.09).
 //
 // На странице заведения — пульт владельца: удалить (без проверки, сразу)
-// и отозвать правку, которая ещё ждёт проверки. На странице настроек
-// (views/venueSettings.ejs) — переключатели, сохраняются сразу. На странице правки —
-// логотип и обложка камеры (сразу, отдельными запросами), поля, точка
-// на карте (tk-point.js) и фото; «Сохранить» у одобренного заведения
-// отправляет правку на проверку, у неодобренного — сразу в заведение.
+// и отозвать правку, которая ещё ждёт проверки. На странице настроек —
+// логотип, обложка камеры и выключатели разделов (видео-меню; сразу,
+// отдельными запросами), поля, точка на карте (tk-point.js) и фото;
+// «Сохранить» у одобренного заведения отправляет правку на проверку,
+// у неодобренного — сразу в заведение.
 // До 29.09 всё это жило окном поверх карты (tk-venues.js).
 (function () {
   'use strict';
@@ -49,8 +49,8 @@
     }
   });
 
-  // ── Настройки заведения (/venue/:id/settings) ──
-  // Переключатель сохраняется сразу; не сохранилось — возвращаем как было.
+  // ── Выключатели разделов (видео-меню) ──
+  // Сохраняются сразу (PUT /venue/:id/settings); не сохранилось — возвращаем как было.
   document.addEventListener('change', function (e) {
     var box = e.target.closest('[data-venue-feature]');
     if (!box) return;
@@ -125,9 +125,12 @@
     });
   });
 
+  // Тип, страна и город — список или своё (public/tk-venue-place.js).
+  var place = window.TKPlace.attach(form.querySelector('[data-place]'));
+
   // Точка на карте: метка и поиск по адресу (public/tk-point.js).
   var pointBox = form.querySelector('[data-point]');
-  var point = pointBox && window.TKPoint ? window.TKPoint.attach(pointBox, { address: f.address, cityField: f.city }) : null;
+  var point = pointBox && window.TKPoint ? window.TKPoint.attach(pointBox, { address: f.address, place: place }) : null;
   var lat = parseFloat(form.getAttribute('data-lat'));
   var lng = parseFloat(form.getAttribute('data-lng'));
   if (point) point.open(Number.isFinite(lat) ? lat : undefined, Number.isFinite(lng) ? lng : undefined);
@@ -176,8 +179,11 @@
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
+    var where = place.value();
+    if (!where) { toast(t('company.fillAll')); return; }
     var data = new FormData();
-    ['name', 'type', 'city', 'country', 'address', 'about'].forEach(function (k) { data.append(k, f[k].value); });
+    ['name', 'address', 'about'].forEach(function (k) { data.append(k, f[k].value); });
+    Object.keys(where).forEach(function (k) { data.append(k, where[k]); });
     data.append('weekdayHours', JSON.stringify({ open: f.weekdayOpen.value, close: f.weekdayClose.value }));
     data.append('weekendHours', JSON.stringify({ open: f.weekendOpen.value, close: f.weekendClose.value }));
     data.append('uploadedPhotos', JSON.stringify(photos.filter(function (p) { return p.url; }).map(function (p) { return p.url; })));

@@ -10,7 +10,7 @@
    // заставкой служит первое фото заведения.
    var cover = venue.cover || photo;
    var day = new Date().getDay(), hours = day === 0 || day === 6 ? venue.weekendHours : venue.weekdayHours;
-   var meta = [venue.type ? t('venue.' + venue.type) : '', venue.city ? t('city.' + venue.city) : ''].filter(Boolean).join(' · '); %>
+   var meta = [placeLabel('type', venue.type, venue.typeOther), placeLabel('city', venue.city, venue.cityOther)].filter(Boolean).join(' · '); %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>

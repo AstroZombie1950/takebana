@@ -9,7 +9,8 @@
 // `json: true` нужен из-за multipart в настройках владельца — там всё
 // приходит строками. На телах JSON это ничего не меняет.
 
-const { CITY_NAME, VENUE_TYPE_NAME } = require('../config/catalog');
+const places = require('./places');
+const { zoneAt } = require('./venueHours');
 
 // Часы — только «ЧЧ:ММ»: строка уходит в разметку страницы камеры
 // подстановкой словаря, а там innerHTML. Прежде проходило любое в пять
@@ -27,17 +28,22 @@ const LOCATION = { type: 'object', json: true, label: 'Координаты', sc
     lng: { type: 'number', min: -180, max: 180 },
 } };
 
-// Город и тип — закрытые списки config/catalog.js: по ним фильтрует карта,
-// свободный ввод дал бы «Белград», «Beograd» и «белград » тремя городами.
-const CITY = { type: 'string', values: Object.keys(CITY_NAME), label: 'Город' };
-const TYPE = { type: 'string', values: Object.keys(VENUE_TYPE_NAME), label: 'Тип заведения' };
+// Тип, страна и город — код справочника или своё текстом (utils/places.js):
+// сверяет их places.pick уже в маршруте, здесь — только строки. Пустая
+// строка — «не это»: выбрали из списка — «своё» стирается.
+const PLACE = Object.fromEntries([
+  ['type', 'Тип заведения'], ['country', 'Страна'], ['city', 'Город'],
+].flatMap(([k, label]) => [
+  [k, { type: 'string', max: 60, allowEmpty: true, label }],
+  [k + 'Other', { type: 'string', max: places.OTHER_MAX, allowEmpty: true, label }],
+]));
 
 // Описание на странице заведения (/venue/:id).
 const ABOUT_MAX = 1000;
 
 // ── Черновик правки одобренного заведения (Establishments.pending, 29.09) ──
 // Поля черновика — те же, что правит владелец; фото — полный новый список.
-const DRAFT_FIELDS = ['name', 'type', 'country', 'city', 'address', 'about', 'weekdayHours', 'weekendHours', 'location', 'photos'];
+const DRAFT_FIELDS = ['name', 'type', 'typeOther', 'country', 'countryOther', 'city', 'cityOther', 'address', 'about', 'weekdayHours', 'weekendHours', 'location', 'photos'];
 
 // Лениво: utils/userDelete тянет за собой камеры и эфиры, а эти схемы
 // нужны и формам, которым всё это ни к чему.
@@ -56,7 +62,9 @@ function applyDraft(venue) {
   const set = {};
   for (const k of DRAFT_FIELDS) if (p[k] !== undefined && p[k] !== null) set[k] = p[k];
   if (set.photos) for (const url of venue.photos || []) if (!set.photos.includes(url)) unlink(url);
+  // Точка переехала — пояс за ней (utils/venueHours.js).
+  if (set.location && zoneAt(set.location)) set.tz = zoneAt(set.location);
   return set;
 }
 
-module.exports = { HOURS, LOCATION, CITY, TYPE, ABOUT_MAX, DRAFT_FIELDS, dropDraft, applyDraft };
+module.exports = { HOURS, LOCATION, PLACE, ABOUT_MAX, DRAFT_FIELDS, dropDraft, applyDraft };

@@ -3,7 +3,8 @@
 //
 // Правка заведения из панели обязана попадать в те же закрытые списки, что
 // и заявка владельца, иначе заведение выпадает из фильтров карты — схемы
-// полей общие, utils/venueFields.js.
+// полей общие, utils/venueFields.js. Своё владельца («Другое» в заявке)
+// панель может взять в общий список — POST /venues/:id/place (30.09).
 
 const express = require('express');
 const router = express.Router();
@@ -14,7 +15,9 @@ const Establishments = require('../../models/Establishments');
 const Rating = require('../../models/Rating');
 const { validate } = require('../../middleware/validate');
 const { audit } = require('../../utils/audit');
-const { HOURS, LOCATION, CITY, TYPE, DRAFT_FIELDS, applyDraft, dropDraft } = require('../../utils/venueFields');
+const { HOURS, LOCATION, PLACE, DRAFT_FIELDS, applyDraft, dropDraft } = require('../../utils/venueFields');
+const places = require('../../utils/places');
+const { zoneAt } = require('../../utils/venueHours');
 const { removeVenue } = require('../../utils/userDelete');
 const { stopCamera } = require('../venueLive');
 const { requireAdmin, paging, list, needle, namesFor, csvRoute, nameOf } = require('./shared');
@@ -31,6 +34,7 @@ async function loadVenues(req) {
   // Одобренные с правкой на проверке (Establishments.pending, 29.09).
   else if (req.query.status === 'pending') filter['pending.at'] = { $exists: true };
   if (req.query.online === '1') filter.online = true;
+  if (req.query.country) filter.country = String(req.query.country).slice(0, 50);
   if (req.query.city) filter.city = String(req.query.city).slice(0, 50);
   if (req.query.type) filter.type = String(req.query.type).slice(0, 50);
   if (req.query.owner && OBJECT_ID.test(req.query.owner)) filter.owner = req.query.owner;
@@ -57,8 +61,11 @@ async function loadVenues(req) {
     id: String(v._id),
     name: v.name || '',
     type: v.type || '',
+    typeOther: v.typeOther || '',
     country: v.country || '',
+    countryOther: v.countryOther || '',
     city: v.city || '',
+    cityOther: v.cityOther || '',
     address: v.address || '',
     email: v.email || '',
     phone: v.phone || '',
@@ -94,9 +101,9 @@ function draftDiff(v) {
 router.get('/venues', requireAdmin, async (req, res) => res.json(await loadVenues(req)));
 csvRoute(router, '/venues', requireAdmin, 'venues', loadVenues, [
   ['Название', (v) => v.name],
-  ['Тип', (v) => v.type],
-  ['Страна', (v) => v.country],
-  ['Город', (v) => v.city],
+  ['Тип', (v) => v.type || v.typeOther],
+  ['Страна', (v) => v.country || v.countryOther],
+  ['Город', (v) => v.city || v.cityOther],
   ['Адрес', (v) => v.address],
   ['Почта', (v) => v.email],
   ['Телефон', (v) => v.phone],
@@ -110,13 +117,12 @@ csvRoute(router, '/venues', requireAdmin, 'venues', loadVenues, [
   ['Владелец', (v) => nameOf(v.owner)],
 ]);
 
-// Город и тип — списками каталога: правка свободной строкой выводила
-// заведение из фильтров карты, а типа панель не знала вовсе.
+// Тип, страна и город — справочником или своим текстом, как у владельца
+// (utils/places.js): правка свободной строкой выводила заведение из
+// фильтров карты, а типа панель не знала вовсе.
 router.put('/venues/:id', requireAdmin, byId, validate({
   name: { type: 'string', max: 200, label: 'Название' },
-  type: TYPE,
-  country: { type: 'string', max: 100, label: 'Страна' },
-  city: CITY,
+  ...PLACE,
   address: { type: 'string', max: 300, label: 'Адрес' },
   email: { type: 'email', label: 'Почта' },
   phone: { type: 'string', max: 32, label: 'Телефон' },
@@ -129,10 +135,19 @@ router.put('/venues/:id', requireAdmin, byId, validate({
   // правка карточки гасила заведение, хотя переключатель оставался включённым.
   const fields = { ...req.body };
 
+  // Тип, страна, город — тройкой: панель шлёт их всегда.
+  if (places.KINDS.some((k) => fields[k] !== undefined || fields[k + 'Other'] !== undefined)) {
+    const picked = places.pick(fields);
+    if (picked.error) return res.status(400).json({ message: picked.error });
+    for (const k of places.KINDS) { delete fields[k]; delete fields[k + 'Other']; }
+    Object.assign(fields, picked.fields);
+  }
+
   // Точка обновляется целиком: половина координаты бессмысленна, а пустой
   // объект дошёл бы до базы как «стереть координаты».
   const { lat, lng } = fields.location || {};
   if (lat === undefined || lng === undefined) delete fields.location;
+  else if (zoneAt(fields.location)) fields.tz = zoneAt(fields.location);
 
   if (!Object.keys(fields).length) {
     return res.status(400).json({ message: 'Пожалуйста, укажите хотя бы одно поле для обновления' });
@@ -143,6 +158,30 @@ router.put('/venues/:id', requireAdmin, byId, validate({
 
   audit(req, 'venue.update', { targetType: 'venue', target: venue, meta: { fields: Object.keys(fields), byAdmin: true } });
   res.json({ ok: true });
+});
+
+// Своё владельца — в общий список (30.09): тип, страна или город, которых
+// не было в справочнике. Пункт заводится с именами на двух языках, и то же
+// своё у всех заведений (и в их правках на проверке) становится им. Город —
+// только в стране из списка: иначе его не к чему привязать в фильтре.
+router.post('/venues/:id/place', requireAdmin, byId, validate({
+  kind: { type: 'string', required: true, values: places.KINDS, label: 'Объект' },
+  ru: { type: 'string', required: true, max: places.OTHER_MAX, label: 'Название' },
+  en: { type: 'string', max: places.OTHER_MAX, label: 'Название' },
+}), async (req, res) => {
+  const { kind, ru, en } = req.body;
+  const venue = await Establishments.findById(req.params.id).lean();
+  if (!venue) return res.status(404).json({ message: 'Заведение не найдено' });
+  const other = venue[kind + 'Other'];
+  if (!other) return res.status(409).json({ message: 'Своего значения у заведения нет' });
+  if (kind === 'city' && !places.find('country', venue.country)) {
+    return res.status(409).json({ message: 'Сначала добавьте в список страну' });
+  }
+  const loc = venue.location && Number.isFinite(venue.location.lat) ? [venue.location.lng, venue.location.lat] : null;
+  const code = await places.add(kind, { ru, en, country: venue.country, center: loc });
+  const moved = await places.adopt(kind, code, other, venue.country);
+  audit(req, 'venue.place', { targetType: 'venue', target: venue, meta: { kind, code, other, venues: moved } });
+  res.json({ ok: true, code, venues: moved });
 });
 
 router.put('/venues/:id/status', requireAdmin, byId, validate({

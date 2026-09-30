@@ -121,7 +121,9 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
   // Заведение — не настройка «по умолчанию»: следующий эфир из шапки личный.
   // Город у эфира заведения — его город, если свой не выбран.
   fields.venue = venue ? venue._id : null;
-  if (venue && !fields.city) fields.city = venue.city || '';
+  // Город эфира — только из списка эфиров: у заведений справочник шире
+  // (utils/places.js), и чужой код выпал бы из фильтра каталога.
+  if (venue && !fields.city && CITY_NAME[venue.city]) fields.city = venue.city;
   // Ключ создаёт ещё студия, когда показывает его для OBS; здесь — страховка.
   if (!user.streamKey) user.streamKey = uuidv4();
   await user.save();

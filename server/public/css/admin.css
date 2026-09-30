@@ -603,6 +603,14 @@ body.tk-panel {
 .tk-draft__pics { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .tk-draft__pics img { width: 64px; height: 48px; object-fit: cover; display: block; }
 
+/* Своё владельца, которого нет в справочнике (30.09): взять в общий список. */
+.tk-owns { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px dashed var(--tk-rule); }
+.tk-own { display: flex; flex-direction: column; gap: 6px; }
+.tk-own__what { margin: 0; font-size: 13px; color: var(--tk-beige); }
+.tk-own__line { display: flex; flex-wrap: wrap; gap: 6px; }
+.tk-own__line .tk-field { flex: 1 1 140px; min-width: 0; padding: 7px 10px; font-size: 13px; }
+.tk-field-row .tk-field + .tk-field { margin-top: 4px; }
+
 /* ── Поля в карточке заведения ────────────────────────────────────────── */
 .tk-fields {
   display: grid;

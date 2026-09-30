@@ -1,0 +1,41 @@
+<%#
+  Тип, страна и город заведения (30.09) — общий блок заявки (/company-register)
+  и настроек заведения (/venue/:id/edit). Списки — справочник utils/places.js;
+  в каждом первым пунктом «Другое — ввести самому»: под списком появляется
+  поле, и владелец пишет своё. В фильтры раздела своё попадает, когда панель
+  возьмёт его в общий список.
+
+  Город выбирается после страны: в списке — города выбранной страны (скрипт
+  переставляет пункты, у каждого data-country). Своя страна или у страны
+  городов в списке нет — город только вписать.
+
+  Ждёт form — текущие значения (у заявки пусто) и labeled — подписи над
+  полями (настройки) или подсказки в самих полях (заявка).
+  Поведение — public/tk-venue-place.js, вид — css/app.css (.tk-place).
+%>
+<% var f = locals.form || {}, labeled = !!locals.labeled, OTHER = '__other';
+   var groups = [
+     { kind: 'type', label: 'venues.type', ph: 'company.ph.type', other: 'place.otherType', otherPh: 'place.typePh' },
+     { kind: 'country', label: 'venues.country', ph: 'company.ph.country', other: 'place.otherCountry', otherPh: 'place.countryPh' },
+     { kind: 'city', label: 'venues.city', ph: 'company.ph.city', other: 'place.otherCity', otherPh: 'place.cityPh' },
+   ]; %>
+<div class="tk-place" data-place>
+  <% groups.forEach(function (g, i) {
+       var own = !f[g.kind] && !!f[g.kind + 'Other'];
+       var opts = placeOptions(g.kind); %>
+  <% if (i === 1) { %><div class="tk-place__pair"><% } %>
+  <div class="tk-place__one">
+    <% if (labeled) { %><span class="tk-form__label" data-i18n="<%= g.label %>"><%- t(g.label) %></span><% } %>
+    <select class="tk-field tk-select" name="<%= g.kind %>" data-place-select="<%= g.kind %>" aria-label="<%= ta(g.label) %>" data-i18n-aria="<%= g.label %>" required>
+      <option value="" data-i18n="<%= g.ph %>"><%- t(g.ph) %></option>
+      <option value="<%= OTHER %>"<%= own ? ' selected' : '' %> data-i18n="<%= g.other %>"><%- t(g.other) %></option>
+      <% opts.forEach(function (o) { %>
+      <option value="<%= o.code %>"<%= f[g.kind] === o.code ? ' selected' : '' %><% if (o.country) { %> data-country="<%= o.country %>"<% } %><% if (o.i18n) { %> data-i18n="<%= o.i18n %>"<% } else { %> data-user-content<% } %>><%= o.text %></option>
+      <% }); %>
+    </select>
+    <input class="tk-field" type="text" name="<%= g.kind %>Other" maxlength="60" value="<%= own ? f[g.kind + 'Other'] : '' %>" data-place-other="<%= g.kind %>"
+           placeholder="<%= ta(g.otherPh) %>" data-i18n-placeholder="<%= g.otherPh %>"<%= own ? '' : ' hidden' %>>
+  </div>
+  <% if (i === 2) { %></div><% } %>
+  <% }); %>
+</div>

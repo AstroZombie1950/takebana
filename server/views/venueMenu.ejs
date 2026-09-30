@@ -42,7 +42,7 @@
       <%- include('partials/venueTabs') %>
 
       <% if (manage && !on) { %>
-      <p class="tk-vp__off"><span data-i18n="venue.menu.off"><%- t('venue.menu.off') %></span> <a href="/venue/<%= venue._id %>/settings" data-i18n="venue.tab.settings"><%- t('venue.tab.settings') %></a></p>
+      <p class="tk-vp__off"><span data-i18n="venue.menu.off"><%- t('venue.menu.off') %></span> <a href="/venue/<%= venue._id %>/edit#settings" data-i18n="venue.tab.settings"><%- t('venue.tab.settings') %></a></p>
       <% } %>
       <% if (manage && venue.status !== true) { %>
       <p class="tk-vp__off" data-i18n="venue.menu.unapproved"><%- t('venue.menu.unapproved') %></p>
