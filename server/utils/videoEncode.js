@@ -1,6 +1,7 @@
-// Пережатие загруженного видео со знаком — общее у галереи профиля
-// (utils/galleryVideo.js), вложений переписки (utils/attachments.js)
-// и роликов видео-меню заведений (utils/venueMenu.js).
+// Пережатие видео со знаком — общее у галереи профиля
+// (utils/galleryVideo.js), вложений переписки (utils/attachments.js),
+// роликов видео-меню заведений (utils/venueMenu.js) и записей эфиров
+// со знаком поверх плеера (utils/recording.js).
 //
 // Файл от человека не выкладывается как есть: водяной знак обязан быть
 // на всём видео сайта (требование торговой марки), а положить его можно
@@ -10,7 +11,7 @@
 //   — звук AAC 128 кбит/с, если он был;
 //   — MP4 с индексом в начале (faststart), обложка — кадр с третьей секунды.
 //
-// Кодирование — по одному ролику за раз в каждой из двух очередей
+// Кодирование — по одному ролику за раз в каждой из очередей
 // (schedule), nice 19 и два потока: на сервере идут эфиры, их транскод важнее.
 
 const { spawn } = require('child_process');
@@ -111,13 +112,19 @@ function fit(w, h) {
   return { w: even(w), h: even(h) };
 }
 
+// Склейка кусков записи (format 'concat', utils/recording.js): кусок другого
+// размера пересобирает фильтры, а картинка знака к тому времени прочитана —
+// дальше видео шло бы без знака (проверено 01.10 на 4.4 и 9). Поэтому там
+// знак зациклен, и выход кончается вместе с видео (shortest).
 function ffmpegArgs(src, out, info) {
   const size = fit(info.width, info.height);
   const wm = Math.max(16, Math.round(Math.min(size.w, size.h) * WATERMARK_SHARE));
-  const args = ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', ...input(src, info.format), '-i', WATERMARK,
+  const loop = info.format === 'concat';
+  const args = ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', ...input(src, info.format),
+    ...(loop ? ['-loop', '1'] : []), '-i', WATERMARK,
     '-filter_complex',
     `[0:v]scale=${size.w}:${size.h},setsar=1[v];[1:v]scale=-1:${wm}[wm];` +
-    `[v][wm]overlay=W-w-${WATERMARK_MARGIN}:${WATERMARK_MARGIN}[out]`,
+    `[v][wm]overlay=W-w-${WATERMARK_MARGIN}:${WATERMARK_MARGIN}${loop ? ':shortest=1' : ''}[out]`,
     '-map', '[out]', '-fpsmax', '30',
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
     '-pix_fmt', 'yuv420p', '-threads', '2'];
@@ -214,12 +221,14 @@ async function encode(src, dir, { maxSeconds, round = false, clip = false, log =
 // Очереди пережатия. До 24.09.2026 она была одна на всё приложение:
 // человек, загрузивший в галерею несколько часовых роликов, на часы
 // оставлял всех без кружков и видео в переписке («Обрабатываем…»).
-// Теперь их две и они идут параллельно, каждая по одному заданию:
-//   chat    — вложения переписки: кружок — секунды, видео — до 10 минут;
-//   gallery — видео галереи: до часа на ролик.
+// Теперь их несколько и они идут параллельно, каждая по одному заданию:
+//   chat      — вложения переписки: кружок — секунды, видео — до 10 минут;
+//   gallery   — видео галереи: до часа на ролик;
+//   recording — записи эфиров со знаком поверх плеера (utils/recording.js):
+//               знак в кадр, часы на запись.
 // Внутри очереди люди чередуются: следующим берётся задание не того, чьё
 // шло только что, — тридцать роликов одного не ставят остальных в хвост.
-const lanes = { chat: { busy: false, last: '', jobs: [] }, gallery: { busy: false, last: '', jobs: [] } };
+const lanes = Object.fromEntries(['chat', 'gallery', 'recording'].map((k) => [k, { busy: false, last: '', jobs: [] }]));
 
 function pump(lane) {
   if (lane.busy || !lane.jobs.length) return;
@@ -233,7 +242,7 @@ function pump(lane) {
   });
 }
 
-// schedule(job, { lane: 'chat' | 'gallery', owner: userId }) → результат job.
+// schedule(job, { lane: 'chat' | 'gallery' | 'recording', owner: userId }) → результат job.
 function schedule(job, { lane = 'chat', owner = '' } = {}) {
   return new Promise((resolve, reject) => {
     lanes[lane].jobs.push({ job, owner: String(owner), resolve, reject });

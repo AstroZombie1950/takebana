@@ -6,6 +6,8 @@
 // запись» — куски склеиваются в один MP4 (паузы вырезаны сами: во время
 // паузы ничего не пишется), к нему снимается кадр-обложка, оба уходят
 // в хранилище (utils/storage.js). «Завершить без записи» — куски удаляются.
+// Эфир со знаком поверх плеера пишет куски без знака — при склейке они
+// пережимаются со знаком в кадре (burnMark ниже).
 //
 // Место на диске во время эфира: ~1,2 ГБ в час на эфир (720p, 2,5 Мбит/с).
 // Куски живут до конца эфира и склейки, дольше — нет.
@@ -21,6 +23,7 @@ const errorLog = require('./errorLog');
 const Recording = require('../models/Recording');
 const engagement = require('./engagement');
 const recordingHls = require('./recordingHls');
+const videoEncode = require('./videoEncode');
 const ioHolder = require('./io');
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
@@ -33,18 +36,19 @@ function dirFor(streamKey) {
   return isPlainFileName(streamKey) ? path.join(REC_ROOT, streamKey) : null;
 }
 
-// Отметка в каталоге кусков: хоть один шёл без знака в кадре
-// (utils/streamWatermark.js) — запись покажет знак поверх плеера.
-const OVERLAY_MARK = 'overlay-mark';
+// Отметка в каталоге кусков: хоть один шёл без знака в кадре — эфир со
+// знаком поверх плеера (utils/streamWatermark.js). Такая запись при
+// склейке пережимается, и знак ложится в кадр (finalize ниже).
+const UNMARKED = 'unmarked';
 
 // Путь нового куска для ffmpeg. null — не пишем (каталог не создать):
 // эфир от этого не страдает, только записи не будет.
-function newPart(streamKey, { overlayMark = false } = {}) {
+function newPart(streamKey, { unmarked = false } = {}) {
   const dir = dirFor(streamKey);
   if (!dir) return null;
   try {
     fs.mkdirSync(dir, { recursive: true });
-    if (overlayMark) fs.writeFileSync(path.join(dir, OVERLAY_MARK), '');
+    if (unmarked) fs.writeFileSync(path.join(dir, UNMARKED), '');
   } catch (e) {
     errorLog.media(e, 'recording.dir', { streamKey });
     return null;
@@ -71,7 +75,8 @@ function run(bin, args) {
 }
 
 // Склейка, обложка, выгрузка. Идёт после ответа ведущему: на часовом эфире
-// копирование — секунды, выгрузка в хранилище — минуты.
+// копирование — секунды, пережатие со знаком — десятки минут, выгрузка
+// в хранилище — минуты.
 // cover — обложка эфира (/uploads/thumbnails/…): есть — она и становится
 // обложкой записи (21.09); до этого обложкой всегда был кадр с третьей
 // секунды, случайный кусок видео.
@@ -89,14 +94,21 @@ async function finalize(rec, dir, cover) {
     if (!nonEmpty.length) throw new Error('кусков записи нет');
 
     await fs.promises.mkdir(work, { recursive: true });
-    const list = path.join(work, 'list.txt');
-    await fs.promises.writeFile(list, nonEmpty.map((n) => `file '${path.join(dir, n)}'\n`).join(''));
+    // Список — рядом с кусками и по именам: так его принимает concat без
+    // -safe 0, и тот же список годится пережатию (videoEncode.input).
+    const list = path.join(dir, 'list.txt');
+    await fs.promises.writeFile(list, nonEmpty.map((n) => `file '${n}'\n`).join(''));
 
     const video = path.join(work, 'video.mp4');
     const thumb = path.join(work, 'thumb.jpg');
-    // faststart — индекс в начале файла: плеер начинает играть, не скачав всё.
-    await run(FFMPEG, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
-      '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', video]);
+    if (fs.existsSync(path.join(dir, UNMARKED))) {
+      await burnMark(rec, dir, nonEmpty, list, video);
+    } else {
+      // Знак уже в кадре (utils/hls.js) — склейка копией, секунды.
+      // faststart — индекс в начале файла: плеер начинает играть, не скачав всё.
+      await run(FFMPEG, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
+        '-f', 'concat', '-i', list, '-c', 'copy', '-movflags', '+faststart', video]);
+    }
 
     const duration = Math.round(Number(await run(FFPROBE, ['-v', 'error', '-show_entries', 'format=duration',
       '-of', 'default=noprint_wrappers=1:nokey=1', video])) || 0);
@@ -155,6 +167,35 @@ async function finalize(rec, dir, cover) {
   }
 }
 
+// Запись эфира, шедшего со знаком поверх плеера: в кусках знака нет, и без
+// пережатия запись ушла бы в хранилище чистой — скачал и унёс. Здесь знак
+// ложится в кадр тем же пережатием, что у загруженного видео
+// (utils/videoEncode.js): до 1280×720 и 30 кадров, знак в правом верхнем
+// углу. Решение 01.10.2026: во время эфира процессор не тратим (знак
+// поверх плеера), зато всё, что сохраняется, пережимается со знаком.
+//
+// Очередь своя (lane 'recording'), по одной записи, nice 19 и два потока:
+// эфиры важнее. Пока идёт пережатие, запись «обрабатывается».
+// Куски разного размера (эфир шёл то лестницей 720p, то копией 1080p) кадр
+// приводит к одному размеру — копией такие склеивались бы битым файлом.
+// Кусок из режима «в кадре» в такой записи (настройку сменили посреди
+// эфира, между паузами) получит знак ещё раз, в тот же угол — почти точно
+// поверх прежнего.
+async function burnMark(rec, dir, parts, list, video) {
+  let seconds = 0;
+  for (const n of parts) {
+    const p = await videoEncode.probe(path.join(dir, n), { format: 'mpegts' });
+    seconds += (p && p.duration) || 0;
+  }
+  // Размер кадра и звук — по первому куску, как у склейки копией.
+  const info = await videoEncode.probe(list, { format: 'concat' });
+  if (!info || !info.video) throw new Error('в кусках записи нет видео');
+  const started = Date.now();
+  await videoEncode.schedule(() => videoEncode.run(FFMPEG, videoEncode.ffmpegArgs(list, video, { ...info, format: 'concat' }),
+    { timeout: Math.max(600, 4 * seconds) }), { lane: 'recording', owner: rec.userId });
+  console.log(`[rec ${rec._id}] знак в кадре: ${Math.round(seconds)} с записи за ${Math.round((Date.now() - started) / 1000)} с`);
+}
+
 // Эфир завершён с сохранением. Конвейер к этому моменту остановлен
 // (routes/streaming/streams.js ждёт hls.stopped): куски закрыты. Каталог
 // сразу переименовывается — следующий эфир того же ключа начнёт писать
@@ -162,7 +203,6 @@ async function finalize(rec, dir, cover) {
 async function save(stream) {
   const dir = dirFor(stream.streamKey);
   const rec = await Recording.create({
-    overlayMark: !!dir && fs.existsSync(path.join(dir, OVERLAY_MARK)),
     userId: stream.userId,
     venue: stream.venue || null, // эфир заведения — и запись его (29.09)
     title: stream.title,

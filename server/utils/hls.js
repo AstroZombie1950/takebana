@@ -342,7 +342,7 @@ const TIMING = [
 function spawnFfmpeg(streamKey, job) {
     const dir = dirFor(streamKey);
     // Каждый запуск — новый кусок записи: после паузы и перезапуска тоже.
-    const part = job.input ? null : recording.newPart(streamKey, { overlayMark: job.mark === 'overlay' });
+    const part = job.input ? null : recording.newPart(streamKey, { unmarked: job.mark === 'overlay' });
     const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.profile, part, job.audio, job.input, job.mark === 'frame'), { stdio: ['ignore', 'ignore', 'pipe'] });
     job.proc = proc;
     // О каких видах разъезда уже сказали в этом запуске — чтобы не повторяться.

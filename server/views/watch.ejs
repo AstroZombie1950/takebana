@@ -55,7 +55,7 @@
       <div class="tk-watch__stage">
         <div class="tk-live__player tk-watch__player">
           <% if (ready) { %>
-            <%- include('partials/player', { mode: 'vod', src: src, poster: rec.thumb.url, theater: true, mark: kind === 'recording' && rec.overlayMark }) %>
+            <%- include('partials/player', { mode: 'vod', src: src, poster: rec.thumb.url, theater: true }) %>
           <% } else { %>
             <% var stateKey = k + (rec.status === 'failed' ? '.failedNote' : '.processingNote'); %>
             <p class="tk-rec__state" data-i18n="<%= stateKey %>"><%- t(stateKey) %></p>
