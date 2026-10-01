@@ -1331,6 +1331,41 @@ VIEWS.retention = {
   },
 };
 
+// ── Водяной знак ─────────────────────────────────────────────────────────────
+//
+// Где у эфиров знак — поверх плеера или в кадре (routes/admin/watermark.js,
+// utils/streamWatermark.js). Рядом — что идёт сейчас и сколько ядер это
+// стоит: ради процессора выбор и сделан.
+VIEWS.watermark = {
+  title: 'Водяной знак',
+  admin: true,
+  async render() {
+    const d = await api('/watermark');
+    const c = d.usage.count;
+    const streams = (c.full || 0) + (c.lite || 0) + (c.copy || 0);
+    const inFrame = d.mode === 'frame';
+
+    let html = '<div class="tk-tiles">';
+    html += tile('Знак эфиров', inFrame ? 'в кадре' : 'поверх плеера', inFrame
+      ? 'кладёт сервер, каждый эфир пережимается'
+      : 'кладёт браузер зрителя, по прямой ссылке на поток знака нет');
+    html += tile('Эфиров сейчас', num(streams), [
+      c.full ? c.full + ' в трёх качествах' : '',
+      c.lite ? c.lite + ' облегчённо, 480p' : '',
+      c.copy ? c.copy + ' копией' : '',
+      c.venue ? count(c.venue, 'камера', 'камеры', 'камер') + ' заведений' : '',
+    ].filter(Boolean).join(', ') || 'ни одного');
+    html += tile('Процессор на видео', '≈ ' + d.usage.cores.toFixed(1).replace('.', ',') + ' из 4 ядер', 'оценка по замерам; выше 3 — запись в журнал ошибок');
+    html += '</div>';
+
+    html += '<div class="tk-card"><label class="tk-switch tk-switch--wrap"><input type="checkbox" data-act="wm-frame"' + (inFrame ? ' checked' : '') + '> Знак в кадре — пережимать каждый эфир на сервере</label></div>';
+    html += '<p class="tk-panel__why"><b>Поверх плеера</b> — первые два эфира идут в трёх качествах (720p, 480p, 360p), остальные — копией того, что прислал вещатель: одно качество, процессора почти не тратят. Одновременно — десятки эфиров. Знак рисует страница: на экране и на записи экрана он есть, но по прямой ссылке на поток или запись его нет.</p>';
+    html += '<p class="tk-panel__why"><b>В кадре</b> — знак вшит в видео, убрать его нельзя. Первые два эфира — в трёх качествах, остальные — одним 480p. Каждый эфир стоит процессора: при четырёх-пяти одновременно сервер у предела, тормозит и сайт.</p>';
+    html += '<p class="tk-panel__why">Смена действует на эфиры, начатые после неё; идущие доходят как начались. Записи помнят, каким шёл эфир. Камеры заведений — всегда со знаком в кадре: их пережимаем в любом случае.</p>';
+    return { html, sub: d.updatedAt ? 'Изменено ' + when(d.updatedAt) : 'По умолчанию — поверх плеера' };
+  },
+};
+
 // ── Система ──────────────────────────────────────────────────────────────────
 VIEWS.system = {
   title: 'Система',
@@ -1638,7 +1673,7 @@ function serverParams(params) {
   return out;
 }
 
-const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'support', 'broadcast', 'venues', 'recordings', 'audit', 'errors', 'costs', 'storage', 'retention', 'system'];
+const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'support', 'broadcast', 'venues', 'recordings', 'audit', 'errors', 'costs', 'storage', 'retention', 'watermark', 'system'];
 
 function drawNav(active) {
   nav.innerHTML = ORDER.filter((name) => !VIEWS[name].admin || IS_ADMIN).map((name) => {
@@ -1984,6 +2019,13 @@ view.addEventListener('change', async (e) => {
     if (el.dataset.act === 'sup-welcome') {
       await send('POST', '/api/admin/support/welcome', { on: el.checked });
       toast(el.checked ? 'Новичкам — приветствие' : 'Приветствие выключено', 'ok');
+    }
+
+    if (el.dataset.act === 'wm-frame') {
+      if (el.checked && !await confirmDialog('Пережимать каждый эфир со знаком? При четырёх-пяти эфирах сразу сервер будет у предела процессора.', { okText: 'Включить' })) return show();
+      await send('PUT', '/api/admin/watermark', { mode: el.checked ? 'frame' : 'overlay' });
+      toast(el.checked ? 'Знак — в кадре, с новых эфиров' : 'Знак — поверх плеера, с новых эфиров', 'ok');
+      return show();
     }
 
     if (el.dataset.act === 'role') {

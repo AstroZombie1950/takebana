@@ -57,11 +57,14 @@ const MAX_RESTARTS = 5;        // дальше молчим: чинить над
 // как было с одним качеством: 2 × 1,12 ≈ 3 × 0,78, Node, Mongo и nginx
 // по-прежнему остаются два ядра из четырёх.
 //
-// Сверх этого числа видео раньше копировалось. Так больше нельзя: копия идёт
-// мимо фильтров, то есть без водяного знака, а знак обязателен на всяком
-// видео (требование по товарному знаку, 17.09.2026). Поэтому дальнейшие
-// эфиры кодируются облегчённо — одно качество 480p: хуже картинка, но знак
-// на месте и сервер жив. По тому же замеру 0,54 от 720p, ~0,42 ядра.
+// Что сверх этого числа — зависит от того, где водяной знак
+// (utils/streamWatermark.js, настройка в панели):
+//   — знак поверх плеера: видео копируется как пришло — одно качество,
+//     процессора почти не ест, эфиров одновременно — десятки;
+//   — знак в кадре: копия шла бы мимо фильтров, то есть без знака, поэтому
+//     дальнейшие эфиры кодируются облегчённо — одно качество 480p, по тому
+//     же замеру 0,54 от 720p, ~0,42 ядра. Хуже картинка, но знак на месте
+//     и сервер жив — до четвёртого-пятого эфира.
 const MAX_FULL_TRANSCODES = 2;
 
 // Качество — подпапка /live/<ключ>/<высота>/, index.m3u8 в корне эфира —
@@ -79,6 +82,14 @@ const PROFILES = {
         watermarkHeight: 38,
         renditions: [{ height: 480, bitrate: 1200, preset: 'ultrafast' }],
     },
+    // Копия без перекодирования — только когда знак поверх плеера. Сегмент
+    // режется по ключевому кадру вещателя: у OBS с интервалом «авто» это
+    // 8,3 с вместо двух, и задержка растёт до полуминуты. Битрейт и размер
+    // кадра — какие прислал вещатель. Подпапка — src: высоты мы не знаем.
+    copy: {
+        copy: true,
+        renditions: [{ height: 'src' }],
+    },
     // Камера заведения (utils/venueCam.js): без записи, 15 кадров — это
     // вид зала, а не эфир. Из VP8 браузера — 0,14 от одного 720p эфира
     // (замер 25.09), ~0,11 ядра, и только пока камеру смотрят.
@@ -93,19 +104,23 @@ const PROFILES = {
 // Сколько ядер ест конвейер каждого вида — по замерам выше. Сумма больше
 // CPU_WARN — пишем в журнал: Node, Mongo и nginx остаются без процессора,
 // тормозят и эфиры, и сайт. Повтор — только после спада ниже CPU_CALM.
-const CORES = { full: 1.12, lite: 0.42, venue: 0.11 };
+// У копии — только звук и упаковка в сегменты: 0,04 от полного (замер
+// 30.09 на 1080p30). Там же: знак в кадре добавляет к полному меньше
+// процента — процессор ест пережатие, а не знак.
+const CORES = { full: 1.12, lite: 0.42, venue: 0.11, copy: 0.05 };
 const CPU_WARN = 3;
 const CPU_CALM = 2.5;
 let cpuWarned = false;
 
-// Знак — готовый PNG с прозрачностью, собран из public/img/logo.svg. Кладём
-// в кадр при кодировании: наложение поверх плеера снималось бы вместе
-// со страницей, а из кадра его так просто не убрать. Правый верхний угол:
-// там реже всего оказывается лицо ведущего и подписи.
+// Знак — готовый PNG с прозрачностью, собран из public/img/logo.svg. В кадре
+// его так просто не убрать, поверх плеера он снимается вместе со страницей;
+// что выбрано — utils/streamWatermark.js. Правый верхний угол: там реже
+// всего оказывается лицо ведущего и подписи.
 // Файл и размеры знака — utils/watermark.js, общий на все медиа.
 const { WATERMARK, WATERMARK_MARGIN } = require('./watermark');
+const streamWatermark = require('./streamWatermark');
 
-// streamKey -> { proc, restarts, stopping, timer, transcode }
+// streamKey -> { proc, restarts, stopping, timer, profile, mark, … }
 const jobs = new Map();
 
 function dirFor(streamKey) {
@@ -122,9 +137,9 @@ function clean(dir) {
         return;
     }
     for (const e of entries) {
-        // Подпапки качеств (720, 480, 360) — внутрь, но только их.
+        // Подпапки качеств (720, 480, 360, src у копии) — внутрь, но только их.
         if (e.isDirectory()) {
-            if (/^\d+$/.test(e.name)) clean(path.join(dir, e.name));
+            if (/^(\d+|src)$/.test(e.name)) clean(path.join(dir, e.name));
             continue;
         }
         if (!e.name.endsWith('.ts') && !e.name.endsWith('.m3u8')) continue;
@@ -134,13 +149,13 @@ function clean(dir) {
     }
 }
 
-// Видео пережимаем всегда. Во-первых, при копировании сегмент режется только
-// по ключевому кадру OBS: при интервале «авто» это 8,3 с вместо двух —
-// задержка под полминуты. Во-вторых, водяной знак кладётся в кадр, а это
-// возможно только при кодировании. Выход заодно не зависит от настроек
-// вещателя: не больше 720p и 30 кадров (вниз, без растяжения), 2500 кбит/с —
-// на эту цифру посчитан трафик CDN. -fpsmax есть с ffmpeg 4.4, на сервере
-// 4.4.2 из apt.
+// Пережимаем, пока хватает процессора, а при знаке в кадре — всегда.
+// Во-первых, при копировании сегмент режется только по ключевому кадру OBS:
+// при интервале «авто» это 8,3 с вместо двух — задержка под полминуты.
+// Во-вторых, знак в кадр кладётся только при кодировании. Выход заодно не
+// зависит от настроек вещателя: не больше 720p и 30 кадров (вниз, без
+// растяжения), 2500 кбит/с — на эту цифру посчитан трафик CDN. -fpsmax есть
+// с ffmpeg 4.4, на сервере 4.4.2 из apt.
 //
 // Знак — второй вход ffmpeg. Высота у него в пикселях, а не долей кадра:
 // доля потребовала бы scale2ref, а его в новых сборках ffmpeg уже нет,
@@ -194,11 +209,14 @@ function exactScale(short) {
 // 1280×720 → 854×480 выходит с неквадратным пикселем (SAR 1280/1281) —
 // так было и у облегчённого 480p до 25.09.
 // Ключи кодека с номером потока (-b:v:1) — по одному на качество.
-function videoArgs(profile) {
+// inFrame — класть ли знак: false, когда он поверх плеера.
+function videoArgs(profile, inFrame) {
     const { renditions, watermarkHeight, exact } = PROFILES[profile];
-    let graph = `[0:v]${(exact ? exactScale : fitScale)(renditions[0].height)},setsar=1[v];` +
-        `[1:v]scale=-1:${watermarkHeight}[wm];` +
-        `[v][wm]overlay=W-w-${WATERMARK_MARGIN}:${WATERMARK_MARGIN}`;
+    let graph = `[0:v]${(exact ? exactScale : fitScale)(renditions[0].height)},setsar=1`;
+    if (inFrame) {
+        graph += `[v];[1:v]scale=-1:${watermarkHeight}[wm];` +
+            `[v][wm]overlay=W-w-${WATERMARK_MARGIN}:${WATERMARK_MARGIN}`;
+    }
     if (renditions.length === 1) {
         graph += '[v0]';
     } else {
@@ -206,7 +224,7 @@ function videoArgs(profile) {
         graph += renditions.slice(1).map((r, i) => `;[s${i + 1}]${fitScale(r.height)},setsar=1[v${i + 1}]`).join('');
     }
     const args = [
-        '-i', WATERMARK,
+        ...(inFrame ? ['-i', WATERMARK] : []),
         '-filter_complex', graph,
         '-fpsmax', String(PROFILES[profile].fps || 30),
         '-c:v', 'libx264', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p',
@@ -253,8 +271,8 @@ function inputArgs(streamKey, input) {
     return ['-i', `rtmp://127.0.0.1:1935/live/${streamKey}`];
 }
 
-function ffmpegArgs(streamKey, dir, profile, part, audio, input) {
-    const { renditions } = PROFILES[profile];
+function ffmpegArgs(streamKey, dir, profile, part, audio, input, inFrame) {
+    const { renditions, copy } = PROFILES[profile];
     const variants = renditions.map((r, i) => `v:${i}${audio ? `,a:${i}` : ''},name:${r.height}`).join(' ');
     const hlsOut = '[f=hls' +
         `:hls_time=${SEGMENT_SECONDS}` +
@@ -278,7 +296,7 @@ function ffmpegArgs(streamKey, dir, profile, part, audio, input) {
         '-fflags', 'nobuffer',
         ...inputArgs(streamKey, input),
 
-        ...videoArgs(profile),
+        ...(copy ? ['-c:v', 'copy'] : videoArgs(profile, inFrame)),
         '-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-af', AUDIO_SYNC,
 
         // Очередь мультиплексора. Когда одна дорожка обгоняет другую (а после
@@ -290,9 +308,9 @@ function ffmpegArgs(streamKey, dir, profile, part, audio, input) {
         '-max_muxing_queue_size', '1024',
 
         // tee сам потоки не выбирает: без -map ffmpeg не знает, что ему отдать.
-        // Видео берём с выходов фильтра — там оно уже со знаком; звук — по
-        // копии на качество.
-        ...renditions.flatMap((_, i) => ['-map', `[v${i}]`]),
+        // Видео берём с выходов фильтра — там оно уже со знаком (копия —
+        // прямо со входа); звук — по копии на качество.
+        ...(copy ? ['-map', '0:v'] : renditions.flatMap((_, i) => ['-map', `[v${i}]`])),
         ...(audio ? renditions.flatMap(() => ['-map', '0:a']) : []),
         '-f', 'tee',
         part ? `${hlsOut}|${recordOut}` : hlsOut,
@@ -324,8 +342,8 @@ const TIMING = [
 function spawnFfmpeg(streamKey, job) {
     const dir = dirFor(streamKey);
     // Каждый запуск — новый кусок записи: после паузы и перезапуска тоже.
-    const part = job.input ? null : recording.newPart(streamKey);
-    const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.profile, part, job.audio, job.input), { stdio: ['ignore', 'ignore', 'pipe'] });
+    const part = job.input ? null : recording.newPart(streamKey, { overlayMark: job.mark === 'overlay' });
+    const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.profile, part, job.audio, job.input, job.mark === 'frame'), { stdio: ['ignore', 'ignore', 'pipe'] });
     job.proc = proc;
     // О каких видах разъезда уже сказали в этом запуске — чтобы не повторяться.
     job.warned = new Set();
@@ -398,7 +416,9 @@ function spawnFfmpeg(streamKey, job) {
     });
 }
 
-function cpuCheck() {
+// Сколько конвейеров каждого вида идёт и сколько ядер они едят по замерам —
+// для журнала ниже и вкладки «Водяной знак» в панели.
+function usage() {
     let cores = 0;
     const count = {};
     for (const j of jobs.values()) {
@@ -406,10 +426,15 @@ function cpuCheck() {
         cores += CORES[j.profile];
         count[j.profile] = (count[j.profile] || 0) + 1;
     }
+    return { cores, count };
+}
+
+function cpuCheck() {
+    const { cores, count } = usage();
     if (cores < CPU_CALM) cpuWarned = false;
     if (cpuWarned || cores < CPU_WARN) return;
     cpuWarned = true;
-    errorLog.media(new Error(`Перекодирование близко к пределу процессора: ~${cores.toFixed(1)} ядра из 4 (эфиров ${(count.full || 0) + (count.lite || 0)}, камер ${count.venue || 0})`),
+    errorLog.media(new Error(`Перекодирование близко к пределу процессора: ~${cores.toFixed(1)} ядра из 4 (эфиров ${(count.full || 0) + (count.lite || 0) + (count.copy || 0)}, камер ${count.venue || 0})`),
         'hls.cpu', { cores, ...count });
 }
 
@@ -433,9 +458,14 @@ function start(streamKey, opts = {}) {
     // Сегменты прошлого эфира: плеер иначе подхватит их как начало текущего.
     clean(dir);
 
-    // Без файла знака эфир не начинаем: видео без знака отдавать нельзя,
+    // Где знак — решается раз на запуск конвейера: перезапуски после обрыва
+    // идут так же. Камера заведения — всегда в кадре: её пережимаем в любом
+    // случае (VP8 браузера), и знак там ничего не стоит.
+    const mark = opts.profile === 'venue' ? 'frame' : streamWatermark.mode();
+
+    // Без файла знака такой эфир не начинаем: видео без знака отдавать нельзя,
     // а молча продолжить — значит нарушить это правило незаметно.
-    if (!fs.existsSync(WATERMARK)) {
+    if (mark === 'frame' && !fs.existsSync(WATERMARK)) {
         errorLog.media(new Error(`нет файла водяного знака ${WATERMARK}`), 'hls.watermark', { streamKey });
         return;
     }
@@ -443,14 +473,23 @@ function start(streamKey, opts = {}) {
     // Останавливаемый конвейер уже не в счёте: его ffmpeg выходит до 5 с.
     let full = 0;
     for (const j of jobs.values()) if (j.profile === 'full' && !j.stopping) full++;
-    const profile = opts.profile || (full < MAX_FULL_TRANSCODES ? 'full' : 'lite');
+    const profile = opts.profile || (full < MAX_FULL_TRANSCODES ? 'full' : mark === 'frame' ? 'lite' : 'copy');
 
-    const job = { proc: null, restarts: 0, stopping: false, timer: null, profile, input: opts.input || null, audio: true, silent: false };
+    const job = { proc: null, restarts: 0, stopping: false, timer: null, profile, mark, input: opts.input || null, audio: true, silent: false };
     job.done = new Promise((resolve) => { job.resolve = resolve; });
     jobs.set(streamKey, job);
     spawnFfmpeg(streamKey, job);
     cpuCheck();
-    console.log(`[hls ${streamKey}] транскод ${PROFILES[profile].renditions.map((r) => r.height + 'p').join('/')} со знаком${profile === 'lite' ? ' (лимит полных транскодов)' : profile === 'venue' ? ' (камера заведения)' : ''} → /live/${streamKey}/index.m3u8`);
+    const what = profile === 'copy' ? 'копия видео' : 'транскод ' + PROFILES[profile].renditions.map((r) => r.height + 'p').join('/');
+    const why = profile === 'lite' || profile === 'copy' ? ' (лимит полных транскодов)' : profile === 'venue' ? ' (камера заведения)' : '';
+    console.log(`[hls ${streamKey}] ${what}, знак ${mark === 'frame' ? 'в кадре' : 'поверх плеера'}${why} → /live/${streamKey}/index.m3u8`);
+}
+
+// Знак этого эфира — поверх плеера (страница зрителя кладёт его сама).
+// Конвейера нет — эфир ещё не начат: по настройке, с ней он и начнётся.
+function overlayMark(streamKey) {
+    const job = jobs.get(streamKey);
+    return (job && !job.stopping ? job.mark : streamWatermark.mode()) === 'overlay';
 }
 
 function stop(streamKey) {
@@ -486,4 +525,4 @@ function stopped(streamKey) {
 }
 
 // Знак и отступ — ещё и видео галереи (utils/galleryVideo.js): один знак на всё видео сайта.
-module.exports = { start, stop, stopped, HLS_ROOT, hlsBase };
+module.exports = { start, stop, stopped, overlayMark, usage, HLS_ROOT, hlsBase };

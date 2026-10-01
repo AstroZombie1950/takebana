@@ -37,6 +37,9 @@ const recordingSchema = new Schema({
     files: { type: [String], default: undefined },
   },
   thumb: { type: fileSchema, default: () => ({}) },
+  // Знака в кадре нет — эфир шёл со знаком поверх плеера
+  // (utils/streamWatermark.js): страница записи кладёт его так же.
+  overlayMark: { type: Boolean, default: false },
   recordedAt: { type: Date, default: null }, // первый выход в эфир
   // Счётчики для страницы и карточек; источники — RecordingView,
   // RecordingReaction, RecordingComment. Дизлайки видит только автор.

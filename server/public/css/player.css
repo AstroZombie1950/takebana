@@ -32,6 +32,17 @@
 .tk-player.is-idle,
 .tk-player.is-idle .tk-player__video { cursor: none; }
 
+/* Водяной знак поверх картинки — у эфира и записи без знака в кадре.
+ * Высоту и отступы от угла картинки ставит tk-player.js; ширина — по
+ * пропорции файла (592×300). Ниже кнопок, нажатия не перехватывает. */
+.tk-player__wm {
+  position: absolute;
+  z-index: 1;
+  aspect-ratio: 592 / 300;
+  background: url("/img/watermark.png") no-repeat center / contain;
+  pointer-events: none;
+}
+
 /* ── Большая кнопка до первого запуска и на паузе ── */
 .tk-player__big {
   position: absolute;

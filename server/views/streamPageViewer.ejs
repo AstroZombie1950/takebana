@@ -47,7 +47,7 @@
                 карточкой не ждём: после остановки он доигрывал бы хвост
                 плейлиста и прятал карточку. О старте придёт stream:update. %>
             <% if (playable) { %>
-              <%- include('partials/player', { mode: 'live' }) %>
+              <%- include('partials/player', { mode: 'live', mark: overlayMark }) %>
               <%# Ведущий в другом приложении: картинки нет, звук идёт. Полоса
                   плеера остаётся поверх — звук включают ею. tk-viewer.js. %>
               <div class="tk-live__hint tk-live__away" id="hostAway"<% if (!stream.hostAway) { %> hidden<% } %>>

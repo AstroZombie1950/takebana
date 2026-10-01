@@ -17,6 +17,7 @@ const catalog = require('../../config/catalog');
 const { commonDataMiddleware } = require('./shared');
 const { requireAuth } = require('../../middleware/auth');
 const recording = require('../../utils/recording');
+const hls = require('../../utils/hls');
 const { randomUUID } = require('crypto');
 const userView = require('../../utils/userView');
 const { profileUrl } = require('../../utils/profileUrl');
@@ -152,7 +153,11 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
   // — но без плеера, чата и ключа эфира. По ключу собирается адрес
   // плейлиста и заходят в комнату чата — чужому он не нужен.
   const locked = !(await restriction.canWatch(page.stream, req.session.userId));
-  res.render('streamPageViewer', { ...page, isSubscribed, locked, streamKey: locked ? '' : page.stream.streamKey });
+  res.render('streamPageViewer', {
+    ...page, isSubscribed, locked,
+    streamKey: locked ? '' : page.stream.streamKey,
+    overlayMark: hls.overlayMark(page.stream.streamKey),
+  });
 });
 
 module.exports = router;

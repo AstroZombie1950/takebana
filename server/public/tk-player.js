@@ -2,8 +2,8 @@
  * Разметка — views/partials/player.ejs, вёрстка — css/player.css.
  *
  * Родных кнопок браузера нет: с ними уходила кнопка «Скачать». Полностью
- * видео так не спрятать — адрес виден в инструментах разработчика, — но
- * защита у нас в кадре: водяной знак (utils/hls.js).
+ * видео так не спрятать — адрес виден в инструментах разработчика. Защита —
+ * водяной знак: в кадре (utils/hls.js) или поверх картинки (placeMark ниже).
  *
  * Источник: MP4 или плейлист HLS. Плейлист собирает hls.js (/tk-hls.js,
  * TKHls.load), свой HLS браузера — только где нет MediaSource. Качество
@@ -399,6 +399,33 @@
     ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) {
       document.addEventListener(ev, syncFullscreen);
     });
+
+    // ── Водяной знак поверх картинки ──
+    // Только у эфира и записи без знака в кадре (utils/streamWatermark.js).
+    // Ставим по углу самой картинки, а не плеера: у вертикального видео
+    // в широком плеере угол плеера — на чёрном поле, и знак выпадал бы
+    // из записи экрана, обрезанной по видео. Размер и отступ — те же доли
+    // короткой стороны, что у знака в кадре (utils/watermark.js): 54 и 24
+    // на 720. В «картинке в картинке» знака нет — окно рисует браузер.
+    var mark = q('.tk-player__wm');
+    function placeMark() {
+      var vw = video.videoWidth, vh = video.videoHeight;
+      var cw = video.clientWidth, ch = video.clientHeight;
+      mark.hidden = !vw || !cw;
+      if (mark.hidden) return;
+      var k = Math.min(cw / vw, ch / vh);
+      var pw = vw * k, ph = vh * k, short = Math.min(pw, ph);
+      var gap = Math.max(6, short * 24 / 720);
+      mark.style.height = Math.max(14, short * 54 / 720) + 'px';
+      mark.style.top = (ch - ph) / 2 + gap + 'px';
+      mark.style.right = (cw - pw) / 2 + gap + 'px';
+    }
+    if (mark) {
+      // resize у <video> — сменился размер кадра (вещатель повернул телефон).
+      ['loadedmetadata', 'resize', 'emptied'].forEach(function (ev) { video.addEventListener(ev, placeMark); });
+      if (window.ResizeObserver) new ResizeObserver(placeMark).observe(video);
+      else window.addEventListener('resize', placeMark);
+    }
 
     var pipBtn = q('[data-act="pip"]');
     if (document.pictureInPictureEnabled && !video.disablePictureInPicture) pipBtn.hidden = false;

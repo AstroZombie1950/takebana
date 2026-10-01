@@ -33,13 +33,18 @@ function dirFor(streamKey) {
   return isPlainFileName(streamKey) ? path.join(REC_ROOT, streamKey) : null;
 }
 
+// Отметка в каталоге кусков: хоть один шёл без знака в кадре
+// (utils/streamWatermark.js) — запись покажет знак поверх плеера.
+const OVERLAY_MARK = 'overlay-mark';
+
 // Путь нового куска для ffmpeg. null — не пишем (каталог не создать):
 // эфир от этого не страдает, только записи не будет.
-function newPart(streamKey) {
+function newPart(streamKey, { overlayMark = false } = {}) {
   const dir = dirFor(streamKey);
   if (!dir) return null;
   try {
     fs.mkdirSync(dir, { recursive: true });
+    if (overlayMark) fs.writeFileSync(path.join(dir, OVERLAY_MARK), '');
   } catch (e) {
     errorLog.media(e, 'recording.dir', { streamKey });
     return null;
@@ -157,6 +162,7 @@ async function finalize(rec, dir, cover) {
 async function save(stream) {
   const dir = dirFor(stream.streamKey);
   const rec = await Recording.create({
+    overlayMark: !!dir && fs.existsSync(path.join(dir, OVERLAY_MARK)),
     userId: stream.userId,
     venue: stream.venue || null, // эфир заведения — и запись его (29.09)
     title: stream.title,

@@ -10,6 +10,9 @@
     src      адрес MP4 или плейлиста .m3u8 (у эфира источник ставит tk-viewer.js).
     poster   обложка, необязательно.
     theater  показывать кнопку широкого режима (страница записи).
+    mark     водяной знак поверх картинки: эфир и запись, у которых его нет
+             в кадре (utils/streamWatermark.js). Встаёт по углу самой
+             картинки, а не плеера, — tk-player.js.
 
   Родных кнопок браузера нет — с ними уходит и «Скачать».
 %>
@@ -19,11 +22,13 @@
   var pSrc = typeof src !== 'undefined' ? src : '';
   var pPoster = typeof poster !== 'undefined' ? poster : '';
   var pTheater = typeof theater !== 'undefined' && theater;
+  var pMark = typeof mark !== 'undefined' && mark;
   var ico = 'viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"';
 %>
 <div class="tk-player" data-mode="<%= pMode %>"<% if (pSrc) { %> data-src="<%= pSrc %>"<% } %> tabindex="-1">
   <video class="tk-player__video" id="video" playsinline preload="metadata"<% if (pPoster) { %> poster="<%= pPoster %>"<% } %>
          controlslist="nodownload noremoteplayback noplaybackrate" disableremoteplayback></video>
+  <% if (pMark) { %><span class="tk-player__wm" aria-hidden="true" hidden></span><% } %>
 
   <div class="tk-player__spinner" hidden></div>
   <p class="tk-player__error" hidden data-i18n="player.error"><%- t('player.error') %></p>
