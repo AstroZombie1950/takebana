@@ -842,3 +842,40 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.5 12.3l3 3 6-6.3' fill='none' stroke='%23000' stroke-width='2.2'/%3E%3C/svg%3E") center/contain no-repeat;
   mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.5 12.3l3 3 6-6.3' fill='none' stroke='%23000' stroke-width='2.2'/%3E%3C/svg%3E") center/contain no-repeat;
 }
+
+/* ── Связь с сервером (public/tk-net.js, docs/NOTICES.md) ──
+ * Полоса «нет интернета / нет связи с сервером» — под шапкой, пока связь
+ * не вернётся. Кнопка, ждущая ответа дольше секунды, — .tk-busy. */
+.tk-netbar {
+  position: fixed;
+  z-index: 9999;
+  top: calc(var(--tk-head-h) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  /* По тексту, но не шире экрана: без width при left: 50% полосе
+     доставалась половина ширины, и на телефоне фраза ломалась надвое. */
+  width: max-content;
+  max-width: calc(100vw - 32px - var(--tk-safe-l) - var(--tk-safe-r));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--tk-ink);
+  color: var(--tk-paper);
+  border: 1px solid var(--tk-rule);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .5);
+  font: 500 13px/1.4 'Golos Text', Helvetica, sans-serif;
+}
+.tk-netbar[hidden] { display: none; }
+.tk-netbar::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tk-accent);
+  animation: tk-netbar 1s ease-in-out infinite alternate;
+}
+@keyframes tk-netbar { to { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .tk-netbar::before { animation: none; } }
+.tk-busy { opacity: .7; cursor: progress; pointer-events: none; }

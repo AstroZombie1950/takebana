@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var watch = function (el, id) {
       setTimeout(function () {
         if (!el.isConnected) return;
-        fetch('/profile/gallery/video/' + encodeURIComponent(id), { headers: { Accept: 'application/json' } })
+        tkFetch('/profile/gallery/video/' + encodeURIComponent(id), { headers: { Accept: 'application/json' } })
           .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
           .then(function (d) {
             if (d.video.status === 'processing') return watch(el, id);

@@ -41,14 +41,7 @@
   var ID = root.getAttribute('data-venue');
   var BASE = '/venue/' + encodeURIComponent(ID) + '/menu';
 
-  function api(url, opts) {
-    return fetch(url, opts).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (body) {
-        if (!r.ok) throw new Error(body.message || t('common.failedCode', { code: r.status }));
-        return body;
-      });
-    });
-  }
+  var api = TKNet.json;
   var json = function (method, body) {
     return { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) };
   };

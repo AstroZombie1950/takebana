@@ -30,16 +30,7 @@
   }
 
   function post(url, body) {
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {})
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (d) {
-        if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status);
-        return d;
-      });
-    });
+    return TKNet.json(url, { method: 'POST', body: body || {} });
   }
 
   function current() {

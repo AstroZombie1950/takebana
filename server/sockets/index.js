@@ -43,6 +43,7 @@ const CALL_GRACE_MS = 20000;
 // Минута (решение 21.09.2026): телефон на секунды теряет сеть в лифте
 // и метро, и мигать «вне сети» из-за этого незачем. Смотреть видео или
 // печатать — это открытая вкладка, то есть «в сети» и без отсрочки.
+// Та же минута — после того как человек свернул приложение (02.10).
 const PRESENCE_GRACE_MS = 60000;
 
 // Сигналы своего пути (SDP, кандидаты) — объект от браузера. SDP звонка —
@@ -68,7 +69,6 @@ const TURN_WARN_SHARE = 0.8;
 // Возвращает общие хранилища, чтобы app.js положил их в app.set(...):
 // маршрут /api/calls/create достаёт их оттуда.
 function registerSockets(io) {
-  const userConnections = new Map(); // userId -> count
   const userRooms = new Map(); // userId -> Set(socketIds)
   const pendingCalls = new Map(); // callId -> {callerId, calleeId, type, createdAt}
   // callId -> {callerId, calleeId, type, engine: 'daily'|'own', roomName,
@@ -76,6 +76,8 @@ function registerSockets(io) {
   //            invited: Map(userId -> время приглашения)}
   const activeCalls = new Map();
   const offlineTimers = new Map(); // userId -> таймер отсрочки офлайна
+  const shownOnline = new Set(); // кого показываем «в сети»
+  const leftAt = new Map(); // userId -> когда ушёл с экрана: это его lastSeen
   const presenceWrites = new Map(); // userId -> последняя запись присутствия в очереди
 
   // Присутствие в базу — по очереди на человека и всегда то, что есть в эту
@@ -85,9 +87,10 @@ function registerSockets(io) {
   function syncPresence(userId) {
     const prev = presenceWrites.get(userId) || Promise.resolve();
     const next = prev.then(async () => {
-      const isOnline = userConnections.has(userId) || offlineTimers.has(userId);
-      const set = isOnline ? { isOnline } : { isOnline, lastSeen: new Date() };
+      const isOnline = shownOnline.has(userId);
+      const set = isOnline ? { isOnline } : { isOnline, lastSeen: leftAt.get(userId) || new Date() };
       const before = await User.findOneAndUpdate({ _id: userId }, { $set: set }, { projection: { isOnline: 1 } }).lean();
+      if (!isOnline) leftAt.delete(userId);
       if (before && !!before.isOnline === isOnline) return; // ничего не поменялось — и звать некого
       io.to(`presence:${userId}`).emit('presence:update', { userId, isOnline, lastSeen: set.lastSeen });
     }).catch((e) => errorLog.server(e, 'socket.presence'));
@@ -98,8 +101,41 @@ function registerSockets(io) {
   // После перезапуска в базе остаются «в сети» те, кто был подключён к прошлому
   // процессу. Кто жив — переподключится за секунды и вернёт себе отметку.
   User.updateMany({ isOnline: true }, { $set: { isOnline: false, lastSeen: new Date() } })
-    .then(() => { for (const userId of userConnections.keys()) syncPresence(userId); })
+    .then(() => { for (const userId of shownOnline) syncPresence(userId); })
     .catch((e) => errorLog.server(e, 'socket.presenceReset'));
+
+  // «В сети» — вкладка на экране, а не живой сокет (02.10). Android держит
+  // соединение свёрнутого приложения с иконки долго, компьютер — у фоновой
+  // вкладки бесконечно, и человек часами висел «в сети» (жалоба заказчика
+  // 01.10). Свернул, спрятал, заблокировал экран (tk:away, public/tk-app.js)
+  // или закрыл — через минуту отсрочки «не в сети» с временем ухода.
+  function anyOnScreen(userId) {
+    for (const id of userRooms.get(userId) || []) {
+      const s = io.sockets.sockets.get(id);
+      if (s && !s.data.away) return true;
+    }
+    return false;
+  }
+
+  // Зовётся на подключении, отключении и tk:away. Вернулся в пределах
+  // отсрочки (переход по ссылке, лифт) — для всех он и не уходил.
+  function updatePresence(userId) {
+    if (anyOnScreen(userId)) {
+      clearTimeout(offlineTimers.get(userId));
+      offlineTimers.delete(userId);
+      if (shownOnline.has(userId)) return;
+      shownOnline.add(userId);
+      syncPresence(userId);
+    } else if (shownOnline.has(userId) && !offlineTimers.has(userId)) {
+      const since = new Date();
+      offlineTimers.set(userId, setTimeout(() => {
+        offlineTimers.delete(userId);
+        shownOnline.delete(userId);
+        leftAt.set(userId, since);
+        syncPresence(userId);
+      }, PRESENCE_GRACE_MS).unref());
+    }
+  }
 
   // Зрители эфира — люди в его комнате (utils/io.js, viewers); вкладки
   // самого ведущего не считаются.
@@ -347,6 +383,13 @@ function registerSockets(io) {
     // У звонков аргумент — объект; null, строка, число, массив — пустой.
     const onCall = (event, fn) => on(event, (d, ...rest) => fn(d && typeof d === 'object' && !Array.isArray(d) ? d : {}, ...rest));
 
+    // Вкладка ушла с экрана или вернулась (public/tk-app.js). Пуши
+    // (utils/push.js, onScreen) и «в сети» смотрят на это, а не на живой
+    // сокет: свёрнутое приложение держит соединение ещё долго, а человек уже
+    // не смотрит. Первое значение — из рукопожатия: страница может
+    // подключиться, будучи в фоне.
+    socket.data.away = !!(socket.handshake.auth && socket.handshake.auth.away === true);
+
     // Presence connect (только для аутентифицированных)
     try {
       const userId = socket.data.userId;
@@ -355,20 +398,9 @@ function registerSockets(io) {
         const set = userRooms.get(userId) || new Set();
         set.add(socket.id);
         userRooms.set(userId, set);
-        const count = (userConnections.get(userId) || 0) + 1;
-        userConnections.set(userId, count);
-        if (count === 1) {
-          // Вернулся в пределах отсрочки (обычный переход по ссылке) — для всех
-          // он и не уходил: ни записи, ни события.
-          if (offlineTimers.has(userId)) {
-            clearTimeout(offlineTimers.get(userId));
-            offlineTimers.delete(userId);
-          } else {
-            // Без await: обработчики ниже обязаны встать в момент подключения.
-            syncPresence(userId);
-          }
-          markDelivered(userId).catch((e) => errorLog.server(e, 'socket.delivered'));
-        }
+        // Без await: обработчики ниже обязаны встать в момент подключения.
+        updatePresence(userId);
+        if (set.size === 1) markDelivered(userId).catch((e) => errorLog.server(e, 'socket.delivered'));
       }
     } catch (e) {
       errorLog.server(e, 'socket.presence');
@@ -406,13 +438,10 @@ function registerSockets(io) {
     // молчания, за которые человек успеет решить, что сайт не работает.
     on('tk:alive', (ack) => { if (typeof ack === 'function') ack(); });
 
-    // Вкладка ушла с экрана или вернулась (public/tk-app.js). Пуши смотрят
-    // на это, а не на живой сокет (utils/push.js, onScreen): свёрнутое
-    // приложение держит соединение ещё секунды, а человек уже не смотрит.
-    // Первое значение — из рукопожатия: страница может подключиться,
-    // будучи в фоне.
-    socket.data.away = !!(socket.handshake.auth && socket.handshake.auth.away === true);
-    on('tk:away', (away) => { socket.data.away = away === true; });
+    on('tk:away', (away) => {
+      socket.data.away = away === true;
+      if (socket.data.userId) updatePresence(socket.data.userId);
+    });
 
     on('presence:unsubscribe', (ids) => {
       if (!Array.isArray(ids)) return;
@@ -516,17 +545,7 @@ function registerSockets(io) {
             }, CALL_GRACE_MS).unref();
           }
 
-          const cur = (userConnections.get(userId) || 1) - 1;
-          if (cur <= 0) {
-            userConnections.delete(userId);
-            clearTimeout(offlineTimers.get(userId));
-            offlineTimers.set(userId, setTimeout(() => {
-              offlineTimers.delete(userId);
-              if (!userConnections.has(userId)) syncPresence(userId);
-            }, PRESENCE_GRACE_MS).unref());
-          } else {
-            userConnections.set(userId, cur);
-          }
+          updatePresence(userId);
         }
       } catch (e) {
         errorLog.server(e, 'socket.disconnect');
@@ -780,7 +799,7 @@ function registerSockets(io) {
     streamLog.sample(samples, SAMPLE_MS / 1000);
   }, SAMPLE_MS).unref();
 
-  return { userConnections, userRooms, pendingCalls, activeCalls };
+  return { userRooms, pendingCalls, activeCalls };
 }
 
 module.exports = { registerSockets };

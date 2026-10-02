@@ -392,6 +392,7 @@ VIEWS.live = {
 
     const rows = d.streams.map((s) => '<tr data-stream="' + esc(s.id) + '">' +
       '<td>' + dot(true) + '<a href="/stream/' + esc(s.id) + '" target="_blank" rel="noopener">' + esc(s.title || 'без названия') + '</a>' +
+        (IS_ADMIN && s.session ? '<a class="tk-tag" href="' + href('stream', { id: s.session }) + '">хронология</a>' : '') +
         (s.isAdult ? '<span class="tk-tag tk-tag--bad">18+</span>' : '') + '</td>' +
       '<td>' + person(s.owner) + '</td>' +
       '<td><span class="tk-tag">' + esc(s.source === 'obs' ? 'OBS' : 'веб') + '</span></td>' +
@@ -447,7 +448,8 @@ VIEWS.streams = {
     { title: 'Средний', cls: 'tk-num' }, { title: 'Чат', cls: 'tk-num' }, { title: 'Итог' },
   ],
   row: (s) => '<tr>' +
-    '<td>' + esc(s.title || 'без названия') + (s.isAdult ? '<span class="tk-tag tk-tag--bad">18+</span>' : '') +
+    '<td>' + (IS_ADMIN ? '<a href="' + href('stream', { id: s.id }) + '">' + esc(s.title || 'без названия') + '</a>' : esc(s.title || 'без названия')) +
+      (s.isAdult ? '<span class="tk-tag tk-tag--bad">18+</span>' : '') +
       (s.recording ? '<a class="tk-tag" href="/recording/' + esc(s.recording) + '" target="_blank" rel="noopener">запись</a>' : '') + '</td>' +
     '<td>' + person(s.owner) + '</td>' +
     '<td><span class="tk-tag">' + esc(s.source === 'obs' ? 'OBS' : 'веб') + '</span></td>' +
@@ -1052,6 +1054,200 @@ view.addEventListener('click', async (e) => {
   } catch (err) {
     toast(err.message || 'Не получилось', 'error');
   }
+});
+
+// ── Попытки (телеметрия) ─────────────────────────────────────────────────────
+// Одна строка — одна попытка человека: посмотреть эфир, выйти в эфир…
+// (docs/TELEMETRY.md, models/Trace.js). Только администратору: адреса.
+const KIND_TITLE = {
+  'live.view': 'эфир · зритель', 'live.host': 'эфир · ведущий', 'venue.view': 'камера · зритель',
+  'venue.host': 'камера · заведение', call: 'звонок', upload: 'загрузка', 'chat.media': 'медиа в переписке', notice: 'сбой связи',
+};
+const OUTCOME_TITLE = { open: 'идёт', ok: 'вышло', fail: 'ошибка', gave_up: 'не дождался', partial: 'оборвалось' };
+const REASON_TITLE = {
+  no_manifest: 'плейлист не пришёл', no_frame: 'плейлист есть, картинки нет', fallback_busy: 'запасной путь переполнен',
+  error: 'ошибка', no_camera: 'нет камеры',
+};
+const STEP_TITLE = {
+  manifest: 'плейлист', frame: 'кадр', camera: 'камера', joined: 'вошёл в Daily', live: 'в эфире', slow: 'Daily грузится',
+  fallback: 'запасной путь', busy: 'запасной путь занят', reset: 'перезапуск плеера', reconnect: 'переподключение',
+  net_good: 'сеть хорошая', net_low: 'сеть слабая', net_bad: 'сеть плохая', out_drop: 'выход оборвался', out_lost: 'выход потерян',
+};
+const STAT_TITLE = {
+  stalls: 'подвисаний', stallMs: 'стоял, мс', resets: 'перезапусков', player: 'плеер', height: 'качество', lastErr: 'ошибка',
+  reconnects: 'переподключений', media: 'камера/микрофон',
+};
+const sec = (ms) => (ms / 1000).toFixed(1).replace('.', ',') + ' с';
+
+function outcomeTag(t) {
+  const bad = ['fail', 'gave_up', 'partial'].includes(t.outcome);
+  return '<span class="tk-tag' + (bad ? ' tk-tag--bad' : t.outcome === 'ok' ? ' tk-tag--on' : '') + '">' + esc(OUTCOME_TITLE[t.outcome] || t.outcome) + '</span>' +
+    (t.reason ? '<span class="tk-panel__why">' + esc(REASON_TITLE[t.reason] || t.reason) + '</span>' : '');
+}
+
+function stepsText(steps) {
+  return (steps || []).map((x) => esc(STEP_TITLE[x.s] || x.s) + ' ' + sec(x.ms)).join(' · ');
+}
+
+function statsText(stats) {
+  return Object.entries(stats || {}).filter(([, v]) => v !== '' && v != null && v !== 0)
+    .map(([k, v]) => esc(STAT_TITLE[k] || k) + ': ' + esc(k === 'height' ? v + 'p' : String(v))).join(' · ');
+}
+
+// Сеть: страна · провайдер, часовой пояс, «VPN?» — догадка (utils/netInfo.js).
+function netText(t) {
+  const n = t.net || {};
+  return esc([n.country, n.org].filter(Boolean).join(' · ') || '—') +
+    (n.vpn ? '<span class="tk-tag tk-tag--bad" title="адрес хостинга или пояс браузера не совпадает со страной">VPN?</span>' : '') +
+    (n.tz ? '<span class="tk-panel__why">' + esc(n.tz + (n.type ? ' · ' + n.type : '')) + '</span>' : '');
+}
+
+function traceRow(t, withKind) {
+  return '<tr>' +
+    '<td class="tk-nowrap">' + esc(when(t.at)) + '</td>' +
+    (withKind ? '<td>' + esc(KIND_TITLE[t.kind] || t.kind) + '</td>' : '') +
+    '<td>' + (t.user ? person(t.user) : '<span class="tk-panel__gone">гость</span>') + '</td>' +
+    '<td>' + outcomeTag(t) + '</td>' +
+    '<td>' + esc(t.route || '—') + '</td>' +
+    '<td><span class="tk-panel__why">' + stepsText(t.steps) + '</span>' +
+      (Object.keys(t.stats || {}).length ? '<span class="tk-panel__why">' + statsText(t.stats) + '</span>' : '') + '</td>' +
+    '<td>' + netText(t) + '</td>' +
+    '<td>' + esc(t.device || '—') + (t.standalone ? '<span class="tk-tag">с иконки</span>' : '') + '</td>' +
+    '<td class="tk-nowrap">' + (t.ip ? '<a href="' + href('traces', { ip: t.ip }) + '">' + esc(t.ip) + '</a>' : '—') + '</td>' +
+  '</tr>';
+}
+
+const TRACE_HEAD = (withKind) => [{ title: 'Когда' }].concat(withKind ? [{ title: 'Что' }] : [],
+  [{ title: 'Кто' }, { title: 'Исход' }, { title: 'Путь' }, { title: 'Этапы и числа' }, { title: 'Сеть' }, { title: 'Устройство' }, { title: 'Адрес' }]);
+
+const DBIP = '<p class="tk-panel__why">Страна и провайдер: <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a></p>';
+
+VIEWS.traces = {
+  title: 'Попытки',
+  admin: true,
+  api: '/traces',
+  csv: true,
+  filters: [
+    { name: 'kind', options: [{ value: '', title: 'Все направления' }].concat(Object.entries(KIND_TITLE).map(([value, title]) => ({ value, title }))) },
+    { name: 'outcome', options: [{ value: '', title: 'Любой исход' }, { value: 'bad', title: 'Не вышло' }].concat(
+      Object.entries(OUTCOME_TITLE).map(([value, title]) => ({ value, title }))) },
+    { name: 'route', options: [{ value: '', title: 'Любой путь' }, { value: 'cdn', title: 'CDN' }, { value: 'fallback', title: 'Запасной' }, { value: 'daily', title: 'Daily' }, { value: 'own', title: 'Свой' }] },
+    { name: 'vpn', options: [{ value: '', title: 'VPN: всё равно' }, { value: '1', title: 'Похоже на VPN' }] },
+    { name: 'period', options: PERIOD },
+  ],
+  sub: (d) => 'попыток: ' + num(d.total) + (d.total >= 10000 ? '+' : ''),
+  render2(d) {
+    return table(TRACE_HEAD(true), d.items.map((t) => traceRow(t, true))) + DBIP;
+  },
+};
+
+// ── Карточка эфира ───────────────────────────────────────────────────────────
+// Хронология конвейера, ведущий (с выжимкой журнала Daily по кнопке)
+// и зрители строками — routes/admin/traces.js.
+const EVENT_TITLE = {
+  'daily.out.start': 'выход Daily запущен', 'daily.out.drop': 'выход Daily оборвался', 'daily.out.retry': 'перезапуск выхода',
+  'daily.out.back': 'выход вернулся', 'daily.out.lost': 'выход не вернулся', 'rtmp.in': 'поток пришёл', 'rtmp.out': 'поток ушёл',
+  'hls.start': 'конвейер запущен', 'hls.ready': 'первый плейлист', 'hls.late': 'плейлиста нет минуту', 'hls.exit': 'ffmpeg вышел',
+  'hls.stop': 'конвейер остановлен', 'host.away': 'ведущий свернул', 'host.back': 'ведущий вернулся',
+};
+const PROFILE_TITLE = { full: '720/480/360', lite: '480p', copy: 'копия', venue: 'камера' };
+
+// Подробности события — по-русски, без пустого и «нет»: «режим 720/480/360 ·
+// знак поверх · режим до обрыва», «без видео 42,0 с · попыток 4».
+const EVENT_KEYS = { ms: 'за', downMs: 'без видео', sec: 'шёл', tries: 'попыток', n: 'попытка', attempt: 'с попытки',
+  status: 'ответ Daily', msg: '', code: 'код', signal: 'сигнал', restart: 'перезапуск' };
+function eventMeta(e) {
+  const d = e.d || {};
+  const out = [];
+  if (d.profile) out.push('режим ' + (PROFILE_TITLE[d.profile] || d.profile));
+  if (d.mark) out.push(d.mark === 'frame' ? 'знак в кадре' : 'знак поверх');
+  if (d.kept) out.push('режим до обрыва');
+  if (d.daily) out.push('от Daily');
+  if (d.ok) out.push('Daily согласился');
+  if (d.host != null) out.push(d.host ? 'ведущий в комнате' : d.host === false ? 'ведущего нет в комнате' : 'есть ли ведущий — неизвестно');
+  Object.entries(d).forEach(([k, v]) => {
+    if (!(k in EVENT_KEYS) || v == null || v === '') return;
+    const val = k === 'ms' || k === 'downMs' ? sec(v) : k === 'sec' ? dur(v) : String(v);
+    out.push((EVENT_KEYS[k] ? EVENT_KEYS[k] + ' ' : '') + val);
+  });
+  return esc(out.join(' · '));
+}
+
+VIEWS.stream = {
+  title: 'Эфир',
+  hidden: true,
+  admin: true,
+  async render(params) {
+    if (!params.id) return { html: note('Эфир не выбран') };
+    const d = await api('/streams/' + encodeURIComponent(params.id) + '/detail');
+    const s = d.session;
+    const t0 = new Date(s.startedAt).getTime();
+    const rel = (at) => { const x = Math.round((new Date(at).getTime() - t0) / 1000); return (x < 0 ? '−' : '') + dur(Math.abs(x)); };
+    const fact = (k, v) => '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>';
+
+    let html = '<a class="tk-panel__back" href="' + href('streams') + '">← ко всем эфирам</a>';
+    html += '<div class="tk-dossier__cols"><section><h2 class="tk-panel__h2">Эфир</h2><dl class="tk-facts">' +
+      fact('Ведущий', s.owner ? person(s.owner) : '—') +
+      fact('Источник', esc(s.source === 'obs' ? 'OBS' : 'веб')) +
+      fact('Начало', esc(when(s.startedAt))) +
+      fact('Длительность', esc(s.endedAt ? dur(s.duration) : 'идёт')) +
+      fact('Пик зрителей', num(s.peakViewers)) +
+      fact('Итог', esc({ owner: 'завершён', moderation: 'погашен', cleanup: 'брошен', restart: 'перезапуск' }[s.endedBy] || '—')) +
+      '</dl></section>';
+
+    html += '<section><h2 class="tk-panel__h2">Ведущий</h2>' +
+      (d.host.length ? table(TRACE_HEAD(false), d.host.map((t) => traceRow(t, false))) : note('Попыток ведущего нет — эфир до 2 октября или OBS')) +
+      (s.room ? '<p><button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="stream-daily" data-id="' + esc(s.id) + '">Журнал Daily</button></p><div data-daily></div>' : '') +
+      '</section></div>';
+
+    html += '<h2 class="tk-panel__h2">Хронология</h2>' + (s.events.length
+      ? table([{ title: 'От начала' }, { title: 'Что' }, { title: 'Подробности' }], s.events.map((e) =>
+          '<tr><td class="tk-nowrap tk-num">' + esc(rel(e.at)) + '</td><td>' + esc(EVENT_TITLE[e.e] || e.e) + '</td>' +
+          '<td><span class="tk-panel__why">' + eventMeta(e) + '</span></td></tr>'))
+      : note('Хронологии нет — эфир до 2 октября'));
+
+    const v = d.viewers;
+    const count = (o) => v.filter((t) => t.outcome === o).length;
+    html += '<h2 class="tk-panel__h2">Зрители</h2>' +
+      (v.length ? '<p class="tk-panel__why">' + esc('просмотров: ' + v.length + ' · вышло: ' + count('ok') + ' · не дождались: ' + count('gave_up') +
+        ' · оборвалось: ' + count('partial') + ' · запасной путь: ' + v.filter((t) => t.route === 'fallback').length) + '</p>' : '') +
+      (v.length ? table(TRACE_HEAD(false), v.map((t) => traceRow(t, false))) : note('Зрителей с телеметрией нет')) + DBIP;
+
+    return { html, title: s.title || 'Эфир без названия' };
+  },
+};
+
+function dailyDigest(m) {
+  const fact = (k, v) => '<dt>' + esc(k) + '</dt><dd>' + esc(v == null || v === '' ? '—' : String(v)) + '</dd>';
+  return '<dl class="tk-facts">' +
+    fact('Встреча', when(m.start) + ', ' + dur(m.duration)) +
+    fact('Устройство', [m.os, m.browser].filter(Boolean).join(' · ')) +
+    fact('Часовой пояс', m.tz) +
+    fact('Загрузка Daily', m.bundleMs == null ? null : sec(m.bundleMs) + (m.failedOver ? ', через запасной домен' : '')) +
+    fact('Первый кадр отправлен', m.ttfmMs == null ? null : sec(m.ttfmMs)) +
+    fact('Камера', m.cameraDenied ? 'доступ запрещён' : '') +
+    fact('Доступная отдача', m.availKbps == null ? null : m.availKbps + ' кбит/с (минимум ' + m.availMinKbps + ')') +
+    fact('Отправлял', m.sentKbps == null ? null : m.sentKbps + ' кбит/с') +
+    fact('Кадр', m.frames.join(', ')) +
+    fact('Сеть по Daily', m.net.join(', ')) +
+    fact('Переподключения', m.reconnects + (m.stale ? ', связь пропадала ' + m.stale + ' раз' : '')) +
+    fact('Ошибок в журнале', m.errors) +
+    '</dl>';
+}
+
+view.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-act="stream-daily"]');
+  if (!btn) return;
+  const box = view.querySelector('[data-daily]');
+  btn.disabled = true;
+  box.innerHTML = note('Спрашиваем Daily…');
+  try {
+    const d = await api('/streams/' + encodeURIComponent(btn.dataset.id) + '/daily');
+    box.innerHTML = d.meetings.length ? d.meetings.map(dailyDigest).join('') : note('У Daily нет встреч этой комнаты');
+  } catch (err) {
+    box.innerHTML = note(err.message);
+  }
+  btn.disabled = false;
 });
 
 // ── Расходы ──────────────────────────────────────────────────────────────────
@@ -1673,12 +1869,12 @@ function serverParams(params) {
   return out;
 }
 
-const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'support', 'broadcast', 'venues', 'recordings', 'audit', 'errors', 'costs', 'storage', 'retention', 'watermark', 'system'];
+const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'support', 'broadcast', 'venues', 'recordings', 'audit', 'errors', 'traces', 'costs', 'storage', 'retention', 'watermark', 'system'];
 
 function drawNav(active) {
   nav.innerHTML = ORDER.filter((name) => !VIEWS[name].admin || IS_ADMIN).map((name) => {
     const v = VIEWS[name];
-    const on = name === active || (active === 'person' && name === 'people');
+    const on = name === active || (active === 'person' && name === 'people') || (active === 'stream' && name === 'streams');
     return '<a class="tk-panel__tab' + (on ? ' is-on' : '') + '" href="' + href(name) + '" data-tab="' + name + '">' +
            esc(v.title) + '<span class="tk-panel__badge" data-badge="' + name + '" hidden></span></a>';
   }).join('');

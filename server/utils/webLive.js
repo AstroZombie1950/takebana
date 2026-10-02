@@ -11,6 +11,9 @@ const daily = require('./daily');
 const { buildObsStreamKey } = require('./rtmpAuth');
 const Stream = require('../models/Stream');
 const errorLog = require('./errorLog');
+const streamLog = require('./streamLog');
+const hls = require('./hls');
+const ioHolder = require('./io');
 
 // Выход сразу таким, каким его отдаёт наш транскод: 720p30, 2500 кбит/с —
 // по умолчанию Daily шлёт 1080p30 на 5 Мбит/с, и мы бы гоняли лишнее.
@@ -36,12 +39,28 @@ const START_TRIES = 10;
 const START_RETRY_MS = 1500;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Обрыв RTMP между Daily и нами посреди эфира — выход запускается заново.
-// Не больше трёх раз подряд: дальше чинить надо не перезапуском.
-const RESTART_DELAY_MS = 5000;
-const MAX_RESTARTS = 3;
+// Обрыв выхода посреди эфира: RTMP от Daily к нам закрылся.
+//
+// До 02.10 выход перезапускали три раза за ~15 с, а ответ 404 «does not
+// seem to be hosting a call» считали уходом ведущего и бросали эфир. Журналы
+// Daily за 01.10 показали обратное: ведущий оставался в комнате ещё 12 минут,
+// просто его телефон каждые 20–30 с терял связь с Daily и поднимал её снова
+// (c45cd7d9). Эфир при этом числился идущим, а у зрителей был чёрный экран.
+// Тот же 404 Daily отдаёт и живому ведущему — на старте каждого эфира выход
+// шёл со второй попытки.
+//
+// Теперь пробуем, пока эфир идёт, с паузами RETRY_MS (последняя повторяется),
+// но не дольше RECOVER_MS. Зрители и пульт видят «переподключаемся»
+// (stream:update reconnecting), а не чёрный экран; каждый шаг — в хронологии
+// эфира. Не вернулся — «связь потеряна»: ведущий был в комнате — запись
+// в журнал ошибок, не было — он ушёл, эфир подберёт уборка.
+const RETRY_MS = [3000, 5000, 10000, 15000, 20000, 30000];
+const RECOVER_MS = 5 * 60 * 1000;
+// Daily ответил «запущено», а RTMP к нам так и не пришёл — попытка не удалась.
+const ARRIVE_MS = 30 * 1000;
 
-// streamKey -> { room, rtmpUrl, portrait, restarts }
+// streamKey -> { room, rtmpUrl, portrait, down, tries, timer }
+//   down — когда выход оборвался (null — идёт), tries — попыток с тех пор.
 const outputs = new Map();
 
 function ingestUrl(host, streamKey) {
@@ -60,70 +79,134 @@ function launch(room, rtmpUrl, portrait) {
   });
 }
 
+// Зрителям и пульту — состояние выхода (tk-viewer.js, tk-console.js).
+function signal(streamKey, payload) {
+  const io = ioHolder.get();
+  if (io) io.to(`stream:${streamKey}`).emit('stream:update', { streamKey, ...payload });
+}
+
+// Есть ли ведущий в комнате, по мнению Daily. Ошибка — «неизвестно»: это
+// подробность для хронологии, а не условие перезапуска.
+function hostPresence(room) {
+  return daily.presence(room)
+    .then((r) => ({ host: (r.total_count || 0) > 0 }))
+    .catch(() => ({ host: null }));
+}
+
 // Ведущий уже в комнате: без звонка Daily выход не запустит. Хост — как
 // у адреса приёма для OBS (utils/site.js, publicHost).
 async function start({ streamKey, dailyRoomName, portrait }, host) {
   const rtmpUrl = ingestUrl(host, streamKey);
+  const t0 = Date.now();
   for (let attempt = 1; ; attempt++) {
     try {
       await launch(dailyRoomName, rtmpUrl, portrait);
       if (attempt > 1) console.log(`[webLive ${streamKey}] выход Daily запущен с попытки ${attempt}`);
+      streamLog.event(streamKey, 'daily.out.start', { attempt, ms: Date.now() - t0 });
       break;
     } catch (err) {
       if (err.status !== 404 || attempt >= START_TRIES) throw err;
       await sleep(START_RETRY_MS);
     }
   }
-  outputs.set(streamKey, { room: dailyRoomName, rtmpUrl, portrait, restarts: 0 });
+  const prev = outputs.get(streamKey);
+  if (prev) clearTimeout(prev.timer);
+  outputs.set(streamKey, { room: dailyRoomName, rtmpUrl, portrait, down: null, tries: 0, timer: null });
 }
 
 // Ведущий остановил эфир. Удаление комнаты гасит выход и само, но пауза
-// может разойтись с удалением — гасим явно.
+// может разойтись с удалением — гасим явно. Место конвейера больше не держим.
 async function stop({ streamKey, dailyRoomName }) {
+  const out = outputs.get(streamKey);
+  if (out) clearTimeout(out.timer);
   outputs.delete(streamKey);
+  hls.release(streamKey);
   if (dailyRoomName) await daily.stopLiveStreaming(dailyRoomName);
 }
 
 // Публикация Daily закончилась (mediaServer.js, donePublish). Если ведущий
-// эфир не останавливал — это обрыв, и выход запускается снова в ту же комнату.
-//
-// absent — прошлый перезапуск получил 404 «does not seem to be hosting
-// a call»: ведущего в комнате уже нет (закрыл вкладку, пропала сеть).
-// Это не поломка — пробуем ещё, вдруг вернётся, а не вернулся — тихо
-// бросаем: выход Daily и так гаснет сам через минуту без ведущего
-// (IDLE_TIMEOUT_S), эфир подберёт уборка. В журнале 26.09 такое лежало
-// внешней ошибкой, хотя делать с ней было нечего.
-function ended(streamKey, absent = false) {
+// эфир не останавливал — это обрыв. true — выход будем поднимать, и конвейеру
+// есть смысл держать свой режим (utils/hls.js, held); false — выхода мы не
+// знаем (процесс перезапускали посреди эфира), поднимать некому.
+function ended(streamKey) {
   const out = outputs.get(streamKey);
-  if (!out) return;
-  if (out.restarts >= MAX_RESTARTS) {
-    outputs.delete(streamKey);
-    if (absent) return console.warn(`[webLive ${streamKey}] ведущего нет в комнате Daily, выход больше не запускаем`);
-    errorLog.external(new Error(`выход Daily обрывается подряд ${MAX_RESTARTS} раза, больше не запускаем`), 'webLive.restarts', { streamKey });
-    return;
+  if (!out) return false;
+  if (!out.down) {
+    out.down = Date.now();
+    out.tries = 0;
+    signal(streamKey, { reconnecting: true });
+    hostPresence(out.room).then((p) => streamLog.event(streamKey, 'daily.out.drop', p));
   }
-  out.restarts++;
-  setTimeout(async () => {
-    if (outputs.get(streamKey) !== out) return;
-    try {
-      const stream = await Stream.findOne({ streamKey }).select('isActive dailyRoomName streamType').lean();
-      if (!stream || !stream.isActive || stream.streamType !== 'daily-stream' || stream.dailyRoomName !== out.room) {
-        outputs.delete(streamKey);
-        return;
-      }
-      console.warn(`[webLive ${streamKey}] выход Daily оборвался, запуск ${out.restarts}/${MAX_RESTARTS}`);
-      await launch(out.room, out.rtmpUrl, out.portrait);
-    } catch (err) {
-      if (err.status === 404) return ended(streamKey, true);
-      errorLog.external(err, 'webLive.restart', { streamKey });
-    }
-  }, RESTART_DELAY_MS).unref();
+  schedule(streamKey, out);
+  return true;
 }
 
-// Публикация Daily пошла — счётчик обрывов подряд обнуляется.
+function schedule(streamKey, out) {
+  clearTimeout(out.timer);
+  out.timer = setTimeout(() => retry(streamKey, out), RETRY_MS[Math.min(out.tries, RETRY_MS.length - 1)]);
+  out.timer.unref();
+}
+
+async function retry(streamKey, out) {
+  if (outputs.get(streamKey) !== out || !out.down) return;
+  let stream;
+  try {
+    stream = await Stream.findOne({ streamKey }).select('isActive dailyRoomName streamType').lean();
+  } catch (err) {
+    errorLog.server(err, 'webLive.restart', { streamKey });
+    return schedule(streamKey, out);
+  }
+  // Эфир уже не идёт: погасила модерация (она удаляет комнату, и выход
+  // рвётся), ведущий ушёл на паузу, эфир удалён. Место конвейера отпускаем.
+  if (!stream || !stream.isActive || stream.streamType !== 'daily-stream' || stream.dailyRoomName !== out.room) {
+    outputs.delete(streamKey);
+    hls.release(streamKey);
+    return;
+  }
+  if (Date.now() - out.down > RECOVER_MS) return giveUp(streamKey, out);
+
+  out.tries++;
+  console.warn(`[webLive ${streamKey}] выход Daily оборвался, запуск ${out.tries}`);
+  try {
+    await launch(out.room, out.rtmpUrl, out.portrait);
+    streamLog.event(streamKey, 'daily.out.retry', { n: out.tries, ok: true });
+    clearTimeout(out.timer);
+    out.timer = setTimeout(() => { if (outputs.get(streamKey) === out && out.down) schedule(streamKey, out); }, ARRIVE_MS);
+    out.timer.unref();
+  } catch (err) {
+    streamLog.event(streamKey, 'daily.out.retry', { n: out.tries, status: err.status || 0, msg: String(err.message || '').slice(0, 120) });
+    // 400 — Daily считает прежний выход ещё живым: гасим его, следующая
+    // попытка запустит заново. 404 — звонка у ведущего сейчас нет (связь
+    // рвётся) — просто ждём.
+    if (err.status === 400) await daily.stopLiveStreaming(out.room).catch(() => {});
+    else if (err.status !== 404 && !(err.status >= 500) && err.status) errorLog.external(err, 'webLive.restart', { streamKey });
+    schedule(streamKey, out);
+  }
+}
+
+async function giveUp(streamKey, out) {
+  outputs.delete(streamKey);
+  hls.release(streamKey);
+  const p = await hostPresence(out.room);
+  const downMs = Date.now() - out.down;
+  streamLog.event(streamKey, 'daily.out.lost', { ...p, downMs, tries: out.tries });
+  signal(streamKey, { reconnecting: false, lost: true });
+  if (p.host === false) return console.warn(`[webLive ${streamKey}] ведущего нет в комнате Daily, выход больше не запускаем`);
+  errorLog.external(new Error(`выход Daily не вернулся за ${Math.round(downMs / 60000)} мин, ведущий ${p.host ? 'в комнате' : 'неизвестно где'}`),
+    'webLive.lost', { streamKey, tries: out.tries });
+}
+
+// Публикация Daily пошла — выход вернулся (или пошёл впервые).
 function published(streamKey) {
   const out = outputs.get(streamKey);
-  if (out) out.restarts = 0;
+  if (!out) return;
+  clearTimeout(out.timer);
+  if (out.down) {
+    streamLog.event(streamKey, 'daily.out.back', { downMs: Date.now() - out.down, tries: out.tries });
+    signal(streamKey, { reconnecting: false });
+  }
+  out.down = null;
+  out.tries = 0;
 }
 
 module.exports = { start, stop, ended, published };

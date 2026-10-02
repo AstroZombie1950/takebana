@@ -54,7 +54,7 @@
     ready
       .then(function (answer) {
         if (answer) body.task = answer;
-        return fetch(url, {
+        return tkFetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",

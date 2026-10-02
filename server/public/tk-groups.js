@@ -19,29 +19,11 @@
   var searchTimer = null;
 
   function post(url, body) {
-    var form = body instanceof FormData;
-    return fetch(url, {
-      method: 'POST',
-      headers: form ? { Accept: 'application/json' } : { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: form ? body : JSON.stringify(body || {})
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (d) {
-        if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status);
-        return d;
-      });
-    });
+    return TKNet.json(url, { method: 'POST', body: body || {} });
   }
 
-  function getJson(url) {
-    return fetch(url, { headers: { Accept: 'application/json' } }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (d) {
-        if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status);
-        return d;
-      });
-    });
-  }
-
-  function fail(e) { toast(e.message || t('common.noNetwork'), 'error'); }
+  var getJson = TKNet.json;
+  var fail = TKNet.say;
 
   // Человек или группа с сервера ({ displayName|title, avatarStyle }) — в вид
   // для аватара из chats.js.

@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var messageButton = document.getElementById('message-button');
   if (messageButton) {
     messageButton.addEventListener('click', function () {
-      fetch('/start-conversation', {
+      tkFetch('/start-conversation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recipientId: P.userId })
@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(function (r) {
           return r.json().catch(function () { return {}; }).then(function (data) {
             // Ограничение доступа (utils/restrict.js) — отказ с объяснением.
-            if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+            if (!r.ok) throw new Error(data.message || TKNet.explain(r));
             return data;
           });
         })
@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', function () {
     async function toggleSubscription() {
       var off = subscribeButton.classList.contains('unsubscribe');
       try {
-        var response = await fetch(off ? '/unsubscribe' : '/subscribe', {
+        var response = await tkFetch(off ? '/unsubscribe' : '/subscribe', {
           method: off ? 'DELETE' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: P.userId })
@@ -130,13 +130,13 @@ document.addEventListener('DOMContentLoaded', function () {
       ask.then(function (yes) {
         if (!yes) return;
         if (owner) owner.dataset.access = on ? 'me' : '';
-        return fetch('/restrict', {
+        return tkFetch('/restrict', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: P.userId, on: on })
         }).then(function (r) {
           return r.json().catch(function () { return {}; }).then(function (data) {
-            if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+            if (!r.ok) throw new Error(data.message || TKNet.explain(r));
             restrictButton.setAttribute('data-on', on ? '1' : '');
             // Ограничение закрывает и общение — кнопки «Написать» и звонков
             // уходят вместе с ним и возвращаются, когда доступ вернули.
@@ -165,13 +165,13 @@ document.addEventListener('DOMContentLoaded', function () {
         : confirmDialog(pt('contacts.removeQ', { name: P.displayName }), { okText: pt('contacts.remove') });
       ask.then(function (yes) {
         if (!yes) return;
-        return fetch(on ? '/api/contacts/add' : '/api/contacts/remove', {
+        return tkFetch(on ? '/api/contacts/add' : '/api/contacts/remove', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(on ? { peerId: P.userId, source: 'profile' } : { peerId: P.userId })
         }).then(function (r) {
           return r.json().catch(function () { return {}; }).then(function (data) {
-            if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+            if (!r.ok) throw new Error(data.message || TKNet.explain(r));
             contactButton.setAttribute('data-on', on ? '1' : '');
             window.tkText(contactButton.querySelector('[data-i18n]'), on ? 'contacts.remove' : 'contacts.add');
             if (on) toast(pt('contacts.added', { name: P.displayName }), 'ok');

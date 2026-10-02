@@ -23,6 +23,7 @@
     "express-rate-limit": "^8.7.0",
     "express-session": "^1.17.3",
     "helmet": "^8.3.0",
+    "mmdb-lib": "^3.0.3",
     "mongoose": "^9.10.2",
     "multer": "^2.4.0",
     "node-media-server": "^2.7.0",

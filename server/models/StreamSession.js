@@ -53,6 +53,14 @@ const StreamSessionSchema = new mongoose.Schema({
   // считается место в хранилище на вкладке расходов.
   recording: { type: mongoose.Schema.Types.ObjectId, ref: 'Recording', default: null },
   recordingSize: { type: Number, default: 0 },
+
+  // Комната Daily веб-эфира: по ней панель достаёт у Daily журнал ведущего —
+  // загрузка, камера, отдача, переподключения (routes/admin/streams.js).
+  room: { type: String, default: '' },
+  // Хронология конвейера (utils/streamLog.js, event): выход Daily, приём RTMP,
+  // ffmpeg, «ведущий отошёл». До 02.10 это жило только в журнале pm2 —
+  // неделю и без связи с эфиром; разбор тестов 01.10 собирали по нему руками.
+  events: [{ _id: false, at: Date, e: String, d: mongoose.Schema.Types.Mixed }],
 }, { versionKey: false });
 
 // Эфиры пользователя в досье и подсчёт его часов

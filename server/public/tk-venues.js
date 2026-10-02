@@ -344,7 +344,7 @@
     if (loading) loading.abort();
     const ctrl = loading = new AbortController();
     root.classList.add('is-loading');
-    fetch('/venues/cards' + (qs ? '?' + qs : ''), { signal: ctrl.signal })
+    tkFetch('/venues/cards' + (qs ? '?' + qs : ''), { signal: ctrl.signal })
       .then((r) => {
         if (!r.ok) throw new Error(t('common.failedCode', { code: r.status }));
         return r.text();

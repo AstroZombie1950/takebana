@@ -164,6 +164,11 @@
     (public/tk-i18n.js). Второй язык подгружается при переключении. %>
 <script defer src="<%= asset('/tk-i18n-' + lang + '.js') %>"></script>
 <script defer src="<%= asset('/tk-i18n.js') %>"></script>
+<%# Связь с сервером: полоса «нет интернета / нет связи», tkFetch с тайм-аутом
+    и «Отправляем…» у кнопок (docs/NOTICES.md). До скриптов страниц — они
+    зовут tkFetch; телеметрия — до него, сбои пишутся в неё. %>
+<script defer src="<%= asset('/tk-trace.js') %>"></script>
+<script defer src="<%= asset('/tk-net.js') %>"></script>
 <%# Свой раскрывающийся список у всех <select class="tk-select">: системный
     рисуется мимо дизайна. До скриптов страниц — те заполняют списки уже
     поверх него, и он это видит. %>

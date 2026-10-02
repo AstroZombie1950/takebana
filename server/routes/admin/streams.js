@@ -31,7 +31,7 @@ router.get('/live', requireModerator, async (req, res) => {
 
   // Пик с начала отрезка: в Stream его нет, он копится в журнале эфиров.
   const open = await StreamSession.find({ streamKey: { $in: streams.map((s) => s.streamKey) }, endedAt: null })
-    .select('streamKey peakViewers viewerSeconds startedAt')
+    .select('_id streamKey peakViewers viewerSeconds startedAt')
     .lean();
   const byKey = new Map(open.map((o) => [o.streamKey, o]));
 
@@ -46,6 +46,8 @@ router.get('/live', requireModerator, async (req, res) => {
         city: s.city || '',
         viewers: s.viewers || 0,
         peakViewers: session ? session.peakViewers : 0,
+        // Карточка эфира в панели: хронология и зрители (routes/admin/traces.js).
+        session: session ? String(session._id) : null,
         source: s.streamProvider === 'obs' ? 'obs' : 'web',
         isAdult: !!s.isAdult,
         // startedAt сбрасывается паузой, firstLiveAt — нет: по нему видно,

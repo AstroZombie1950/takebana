@@ -45,7 +45,7 @@
   function loadStyle(l) {
     if (styles[l]) return styles[l];
     var origin = location.origin;
-    styles[l] = fetch('/map/style.' + l + '.json')
+    styles[l] = tkFetch('/map/style.' + l + '.json')
       .then(function (r) { return r.json(); })
       .then(function (s) {
         s.glyphs = origin + '/basemap/fonts/{fontstack}/{range}.pbf';

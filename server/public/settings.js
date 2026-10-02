@@ -15,13 +15,9 @@
   // JSON, а не страницей: иначе отказ загрузки («Только изображения JPEG…»)
   // доходил до человека как безликое «HTTP 400».
   function send(url, options) {
-    options = options || {};
-    options.headers = Object.assign({ Accept: 'application/json' }, options.headers);
-    return fetch(url, options).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (data) {
-        if (!r.ok || data.success === false) throw new Error(data.message || 'HTTP ' + r.status);
-        return data;
-      });
+    return TKNet.json(url, options).then(function (data) {
+      if (data.success === false) throw new Error(data.message || t('notice.server'));
+      return data;
     });
   }
 
@@ -88,7 +84,7 @@
     nickSay('settings.nick.checking', null, '');
     var seq = ++nickSeq;
     nickTimer = setTimeout(function () {
-      fetch('/api/nickname/check?n=' + encodeURIComponent(v))
+      tkFetch('/api/nickname/check?n=' + encodeURIComponent(v))
         .then(function (r) { return r.json(); })
         .then(function (r) {
           if (seq !== nickSeq) return; // уже печатают дальше
@@ -108,7 +104,7 @@
     if (!NICK_RULE.test(v)) { nickReason('format'); return nick.focus(); }
     var btn = e.target.querySelector('[type="submit"]');
     btn.disabled = true;
-    fetch('/update-profile', json({ login: $('profileName').value.trim(), nickname: v }))
+    tkFetch('/update-profile', json({ login: $('profileName').value.trim(), nickname: v }))
       .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
       .then(function (x) {
         if (!x.ok) {
@@ -141,7 +137,7 @@
     });
     var btn = aboutForm.querySelector('[type="submit"]');
     btn.disabled = true;
-    fetch('/settings/about', json({ bio: bio.value, links: links }))
+    tkFetch('/settings/about', json({ bio: bio.value, links: links }))
       .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
       .then(function (x) {
         if (!x.ok) {
@@ -511,13 +507,13 @@
     if (!btn) return;
     var row = btn.closest('[data-restricted]');
     btn.disabled = true;
-    fetch('/restrict', {
+    tkFetch('/restrict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: row.getAttribute('data-restricted'), on: false })
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (data) {
-        if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+        if (!r.ok) throw new Error(data.message || TKNet.explain(r));
         row.remove();
         if (!panel.querySelector('[data-restricted]')) {
           panel.querySelector('.tk-set__people').hidden = true;
@@ -544,13 +540,13 @@
       var key = field.getAttribute('data-privacy');
       var body = {};
       body[key] = box ? field.checked : field.value;
-      fetch('/settings/privacy', {
+      tkFetch('/settings/privacy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(body)
       }).then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (data) {
-          if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+          if (!r.ok) throw new Error(data.message || TKNet.explain(r));
           was = box ? field.checked : field.value;
           toast(t('settings.privSaved'), 'ok');
         });

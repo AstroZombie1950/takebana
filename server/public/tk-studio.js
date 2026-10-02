@@ -25,7 +25,7 @@
     btn.addEventListener('click', function () {
       confirmDialog(t('stream.keyRotateQ'), { okText: t('stream.keyRotate') }).then(function (yes) {
         if (!yes) return;
-        return fetch('/stream-key/rotate', { method: 'POST' }).then(function (r) {
+        return tkFetch('/stream-key/rotate', { method: 'POST' }).then(function (r) {
           if (r.ok) return location.reload();
           return r.json().catch(function () { return {}; }).then(function (d) { toast(d.message || t('stream.keyRotateFailed'), 'error'); });
         });
@@ -168,12 +168,12 @@
     var body = new FormData();
     body.append('streamId', streamId);
     body.append('thumbnail', coverFile);
-    return fetch('/upload-thumbnail', { method: 'POST', headers: { Accept: 'application/json' }, body: body })
+    return tkFetch('/upload-thumbnail', { method: 'POST', headers: { Accept: 'application/json' }, body: body })
       .then(function (r) {
         if (r.ok) return;
-        return r.json().catch(function () { return {}; }).then(function (b) { toast(t('app.errorShort', { message: b.message || 'HTTP ' + r.status }), 'error'); });
+        return r.json().catch(function () { return {}; }).then(function (b) { toast(t('app.errorShort', { message: b.message || TKNet.explain(r) }), 'error'); });
       })
-      .catch(function () {});
+      .catch(TKNet.say); // эфир идёт и без обложки, но человек должен знать
   }
 
   // ── Выйти в эфир ──────────────────────────────────────────────────────
@@ -185,7 +185,7 @@
       return;
     }
     go.disabled = true;
-    fetch('/start-stream', {
+    tkFetch('/start-stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

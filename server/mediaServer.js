@@ -269,6 +269,7 @@ nms.on('postPublish', async (id, streamPath, args) => {
     });
     if (fromDaily) webLive.published(streamKey);
     else markObsStreamStarted(streamKey);
+    streamLog.event(streamKey, 'rtmp.in', { daily: fromDaily });
 
     // HLS: единственный формат, который играет на iPhone. HTTP-FLV там не
     // работает в принципе — flv.js собирает поток через MSE, а Media Source
@@ -284,9 +285,12 @@ nms.on('donePublish', (id, streamPath, args) => {
     // она не начинала, и заканчивать нечего.
     if (!live || live.id !== id) return;
     activeStreams.delete(streamKey);
-    hls.stop(streamKey);
-    if (live.fromDaily) webLive.ended(streamKey);
-    else markObsStreamEnded(streamKey);
+    streamLog.event(streamKey, 'rtmp.out', { sec: Math.round((Date.now() - live.startTime) / 1000) });
+    // Обрыв выхода Daily, который будем поднимать, — конвейер вернётся в том
+    // же режиме (utils/hls.js, held). OBS отключился — эфир кончился.
+    const retrying = live.fromDaily && webLive.ended(streamKey);
+    hls.stop(streamKey, { hold: retrying });
+    if (!live.fromDaily) markObsStreamEnded(streamKey);
 });
 
 nms.on('error', (err) => {

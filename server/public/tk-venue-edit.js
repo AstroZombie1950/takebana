@@ -17,14 +17,7 @@
   var NAME = root.getAttribute('data-name') || '';
   var esc = function (s) { return escapeHtml(String(s == null ? '' : s)); };
 
-  function api(url, opts) {
-    return fetch(url, opts).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (body) {
-        if (!r.ok) throw new Error(body.message || 'HTTP ' + r.status);
-        return body;
-      });
-    });
-  }
+  var api = TKNet.json;
 
   // ── Пульт на странице заведения ──
   document.addEventListener('click', function (e) {

@@ -41,8 +41,8 @@
   document.getElementById('ageConfirm').addEventListener('click', async function () {
     this.disabled = true;
     try {
-      const res = await fetch('/api/age/confirm', { method: 'POST' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const res = await tkFetch('/api/age/confirm', { method: 'POST' });
+      if (!res.ok) throw new Error(TKNet.explain(res));
       location.reload();
     } catch (err) {
       this.disabled = false;

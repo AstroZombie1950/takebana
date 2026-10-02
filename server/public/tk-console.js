@@ -17,19 +17,12 @@
   var OBS = data.source === 'obs';
   var everLive = data.firstLive === '1';
 
+  // Текст сервера — на языке интерфейса: «сервис видео не запустил
+  // трансляцию» ведущему понятнее, чем HTTP 502 (tk-net.js его и оставляет).
+  // Выход в эфир (/set-active) сервер держит до двух минут: Daily
+  // запускает выход не с первой попытки (utils/webLive.js, START_TRIES).
   function post(url, body) {
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (b) {
-        // Текст сервера — на языке интерфейса: «сервис видео не запустил
-        // трансляцию» ведущему понятнее, чем HTTP 502.
-        if (!r.ok) throw new Error(b.message || 'HTTP ' + r.status);
-        return b;
-      });
-    });
+    return TKNet.json(url, { method: 'POST', body: body || {}, timeout: 120000 });
   }
 
   // Адрес ?go=1 нужен один раз: обновление страницы не должно снова выводить в эфир.
@@ -116,7 +109,7 @@
     if (rotate) rotate.addEventListener('click', function () {
       confirmDialog(t('stream.keyRotateQ'), { okText: t('stream.keyRotate') }).then(function (yes) {
         if (!yes) return;
-        return fetch('/stream-key/rotate', { method: 'POST' }).then(function (r) {
+        return tkFetch('/stream-key/rotate', { method: 'POST' }).then(function (r) {
           if (r.ok) return location.reload();
           return r.json().catch(function () { return {}; }).then(function (d) { toast(d.message || t('stream.keyRotateFailed'), 'error'); });
         });
@@ -177,6 +170,8 @@
   // сторон (проверка 23.09). Ждём настоящий кадр — и только если его нет,
   // спрашиваем дорожку и экран.
   var FRAME_WAIT_MS = 2000;
+  // Сколько ждать камеру после входа в комнату, прежде чем сказать «камеры нет».
+  var CAMERA_WAIT_MS = 4000;
   var FRAME_POLL_MS = 100;
 
   // Настоящий кадр — только из предпросмотра. Дорожка и экран ниже: к ним
@@ -339,6 +334,21 @@
     tkText(startBtn, 'studio.connecting');
     showHint('studio.connecting');
     var first = null;
+    // Телеметрия выхода в эфир (docs/TELEMETRY.md): сколько грузился Daily,
+    // пришла ли камера, как держалась связь. Подробный журнал ведущего есть
+    // у самого Daily — панель достаёт его по комнате эфира.
+    var tr = window.TKTrace ? TKTrace.start('live.host', streamKey) : null;
+    if (tr) {
+      tr.route = 'daily';
+      tr.onLeave = function () { if (tr.outcome === 'open') tr.outcome = 'gave_up'; };
+    }
+    self.trace = tr;
+    // Вход в Daily обычно — 2–5 секунд. Из России скрипт Daily грузился
+    // и 105 секунд (01.10): ведущий должен видеть, что это не мы зависли.
+    var slow = setTimeout(function () {
+      showHint('stream.slowLoad');
+      if (tr) tr.mark('slow');
+    }, 10000);
     // Камера из студии. Её id есть среди камер — Daily сразу входит с ней;
     // иначе (известна только сторона или камеры уже нет) — переключаем
     // после входа, как раньше.
@@ -371,14 +381,27 @@
               first = null;
               return Promise.resolve(a);
             },
-            onTrack: function (tr, p, on) {
-              if (!p.local || tr.kind !== 'video') return;
-              track = on ? tr : null;
+            onTrack: function (mt, p, on) {
+              if (!p.local || mt.kind !== 'video') return;
+              track = on ? mt : null;
+              if (on && tr) tr.step('camera');
               if (ready) showLocal(track);
             },
-            onMediaError: function () { toast(t('stream.mediaDeniedObs'), 'error'); },
+            onMediaError: function (e) {
+              if (tr) tr.set('media', String((e && e.error && e.error.type) || 'error').slice(0, 40));
+              toast(t('stream.mediaDeniedObs'), 'error');
+            },
+            onNetwork: function (state) {
+              if (tr) tr.mark('net_' + state);
+              if (state === 'bad' && self.connected) weakNet();
+            },
             onState: function (state) {
-              if (state === 'live') resolve();
+              if (tr && state === 'reconnecting') { tr.mark('reconnect'); tr.set('reconnects', (tr.stats.reconnects || 0) + 1); }
+              if (state === 'live') {
+                clearTimeout(slow);
+                if (tr) tr.step('joined');
+                resolve();
+              }
               if (state !== 'ended') return;
               reject(new Error(t('stream.serviceDown')));
               if (self.connected) {
@@ -396,8 +419,20 @@
       .then(function () {
         ready = true;
         if (track) showLocal(track);
+        // Камера приходит следом за входом — даём ей несколько секунд.
+        return track ? null : new Promise(function (r) { setTimeout(r, CAMERA_WAIT_MS); });
       })
-      .then(function () { return frame(track); })
+      .then(function () {
+        // Без камеры в эфир не выходим. 30.09 два эфира с Android пошли
+        // с запрещённой камерой: десять минут чёрного экрана у зрителей,
+        // а ведущий об этом не знал.
+        if (!track) {
+          var err = new Error(t('stream.noCamera'));
+          err.code = 'no_camera';
+          throw err;
+        }
+        return frame(track);
+      })
       .then(function (f) {
         // Размер кадра уходит вместе с ответом: в журнале панели видно,
         // чем эфир решил свою ориентацию, — иначе разбирать нечем.
@@ -409,6 +444,7 @@
       })
       .then(function () {
         self.connected = true;
+        if (tr) { tr.step('live'); tr.end('ok'); }
         live(true);
         startBtn.hidden = true;
         pauseBtn.hidden = false;
@@ -418,6 +454,8 @@
         return fillCameras();
       })
       .catch(function (error) {
+        clearTimeout(slow);
+        if (tr) tr.end('fail', error.code || 'error');
         if (self.session) { self.session.leave(); self.session = null; }
         showHint('stream.pausedHint');
         tkText(startBtn, everLive ? 'stream.resume' : 'studio.go');
@@ -458,6 +496,28 @@
   };
 
   streamer = new Streamer();
+
+  // Слабая связь у ведущего — зрители видят мыло (01.10: отдача 200–300
+  // кбит/с, кадр 180×320). Говорим об этом не чаще раза в минуту.
+  var weakAt = 0;
+  function weakNet() {
+    if (Date.now() - weakAt < 60000) return;
+    weakAt = Date.now();
+    toast(t('stream.weakNet'), 'error');
+  }
+
+  // Выход зрителям оборвался и восстанавливается (utils/webLive.js). Раньше
+  // ведущий узнавал об этом только от зрителей.
+  TKStream.onUpdate(function (u) {
+    if (!streamer.connected) return;
+    if (u.reconnecting === true) showHint('stream.outReconnecting');
+    else if (u.reconnecting === false) showHint(null);
+    if (u.lost) {
+      showHint(null);
+      toast(t('stream.outLost'), 'error');
+    }
+    if (streamer.trace && (u.reconnecting === true || u.lost)) streamer.trace.mark(u.lost ? 'out_lost' : 'out_drop');
+  });
 
   startBtn.addEventListener('click', function () { streamer.start(); });
   pauseBtn.addEventListener('click', function () {

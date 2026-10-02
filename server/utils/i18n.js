@@ -267,6 +267,10 @@ const EN = {
     'Сервис видео перегружен запросами, попробуйте через несколько секунд': 'The video service is overloaded, try again in a few seconds',
     'Сервис видео не запустил трансляцию, попробуйте ещё раз': 'The video service did not start the broadcast, please try again',
     'Комната эфира не создана': 'The stream room has not been created',
+    'Нет такого эфира': 'No such stream',
+    'У эфира нет комнаты Daily — OBS или эфир до 2 октября': 'The stream has no Daily room — OBS or a stream before October 2',
+    'Daily не ответил': 'Daily did not respond',
+    'Нет такого режима': 'No such mode',
     'Комната эфира — только для ведущего': 'The stream room is for the host only',
 
     // Заведения и адреса

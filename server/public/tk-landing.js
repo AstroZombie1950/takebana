@@ -79,7 +79,7 @@
             if (pending) pending.abort();
             var ctrl = pending = new AbortController();
             var q = "bl_lat=" + b.south + "&bl_lng=" + b.west + "&tr_lat=" + b.north + "&tr_lng=" + b.east;
-            fetch("/establishmentsLocation?" + q, { signal: ctrl.signal })
+            tkFetch("/establishmentsLocation?" + q, { signal: ctrl.signal })
               .then(function (r) { return r.json(); })
               .then(function (list) {
                 venues = list;

@@ -104,6 +104,22 @@ async function stopLiveStreaming(name) {
   }
 }
 
+// Кто сейчас в комнате, по мнению Daily: { total_count, data: [{ user_id, joined_at, duration }] }.
+// Выход в эфир на обрыве спрашивает это, чтобы в хронологии было видно,
+// был ли ведущий на месте (utils/webLive.js).
+function presence(name) {
+  return api('GET', `/rooms/${encodeURIComponent(name)}/presence`);
+}
+
+// Встречи комнаты и журнал участника — для карточки эфира в панели:
+// загрузка, камера, отдача, переподключения ведущего (routes/admin/streams.js).
+function meetings(room) {
+  return api('GET', `/meetings?room=${encodeURIComponent(room)}&limit=20`);
+}
+function logs(mtgSessionId) {
+  return api('GET', `/logs?mtgSessionId=${encodeURIComponent(mtgSessionId)}&includeLogs=true&includeMetrics=true&limit=2000`);
+}
+
 function roomUrl(name) {
   return `https://${process.env.DAILY_DOMAIN}.daily.co/${name}`;
 }
@@ -151,5 +167,5 @@ async function meetingToken({ room, userId, owner = false, canSend = false, pres
 
 module.exports = {
   configured, createRoom, deleteRoom, roomExists, roomUrl, meetingToken,
-  startLiveStreaming, stopLiveStreaming,
+  startLiveStreaming, stopLiveStreaming, presence, meetings, logs,
 };

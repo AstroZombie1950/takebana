@@ -25,13 +25,9 @@
   var MIN_LEN = 1;          // короче секунды обрезать нельзя (сервер проверяет то же)
 
   function json(url, options) {
-    options = options || {};
-    options.headers = Object.assign({ Accept: 'application/json' }, options.headers);
-    return fetch(url, options).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (d) {
-        if (!r.ok || d.success === false) throw new Error(d.message || 'HTTP ' + r.status);
-        return d;
-      });
+    return TKNet.json(url, options).then(function (d) {
+      if (d.success === false) throw new Error(d.message || t('notice.server'));
+      return d;
     });
   }
 
@@ -172,7 +168,7 @@
         try { d = JSON.parse(xhr.responseText); } catch (_) {}
         if (xhr.status !== 200 || d.success === false) {
           end();
-          return toast(t('app.errorShort', { message: d.message || 'HTTP ' + xhr.status }), 'error');
+          return toast(t('app.errorShort', { message: d.message || TKNet.explain(xhr) }), 'error');
         }
         photos.splice(0, part.length).forEach(function (p) { URL.revokeObjectURL(p.url); });
         done += size;

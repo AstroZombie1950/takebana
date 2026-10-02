@@ -46,7 +46,7 @@
   // Токен с сервера. Отказ 4xx — окончательный: эфир кончился, камеру
   // выключили, доступа нет. 5xx и сеть — временные, пробуем ещё.
   function requestAccess(url, body) {
-    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+    return tkFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (d) {
           if (r.ok && d.token) return { url: d.url, token: d.token };

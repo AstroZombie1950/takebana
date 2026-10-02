@@ -85,7 +85,7 @@
 
     function askAddress(p) {
       say(t('point.locating'));
-      fetch('/api/geocode/reverse?lat=' + p.lat.toFixed(6) + '&lng=' + p.lng.toFixed(6),
+      tkFetch('/api/geocode/reverse?lat=' + p.lat.toFixed(6) + '&lng=' + p.lng.toFixed(6),
             { credentials: 'same-origin' })
         .then(read)
         .then(function (data) {
@@ -137,7 +137,7 @@
       var own = place ? place.ownText() : '';
       var url = '/api/geocode?q=' + encodeURIComponent(own ? q + ', ' + own : q) +
                 (place ? '&city=' + encodeURIComponent(place.city.value) + '&country=' + encodeURIComponent(place.country.value) : '');
-      fetch(url, { credentials: 'same-origin' })
+      tkFetch(url, { credentials: 'same-origin' })
         .then(read)
         .then(function (data) {
           return ensure([data.lng, data.lat]).then(function (p) {

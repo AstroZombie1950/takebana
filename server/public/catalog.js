@@ -36,9 +36,9 @@ document.addEventListener('DOMContentLoaded', function () {
       var ctrl = pending = new AbortController();
       results.setAttribute('aria-busy', 'true');
 
-      fetch(form.dataset.grid + qs, { signal: ctrl.signal })
+      tkFetch(form.dataset.grid + qs, { signal: ctrl.signal })
         .then(function (res) {
-          if (!res.ok) throw new Error('HTTP ' + res.status);
+          if (!res.ok) throw new Error(TKNet.explain(res));
           return res.text();
         })
         .then(function (html) {
@@ -116,9 +116,9 @@ document.addEventListener('DOMContentLoaded', function () {
       e.preventDefault();
       if (more.getAttribute('aria-busy')) return;
       more.setAttribute('aria-busy', 'true');
-      fetch('/feed?before=' + encodeURIComponent(more.dataset.next))
+      tkFetch('/feed?before=' + encodeURIComponent(more.dataset.next))
         .then(function (res) {
-          if (!res.ok) throw new Error('HTTP ' + res.status);
+          if (!res.ok) throw new Error(TKNet.explain(res));
           var next = res.headers.get('X-Feed-Next');
           return res.text().then(function (html) { return { html: html, next: next }; });
         })

@@ -16,6 +16,7 @@ const path = require('path');
 const { isPlainFileName } = require('./safePath');
 const recording = require('./recording');
 const errorLog = require('./errorLog');
+const streamLog = require('./streamLog');
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 
@@ -122,6 +123,48 @@ const streamWatermark = require('./streamWatermark');
 
 // streamKey -> { proc, restarts, stopping, timer, profile, mark, … }
 const jobs = new Map();
+
+// Режим конвейера закреплён за эфиром, а не за запуском ffmpeg. Обрыв выхода
+// Daily останавливает конвейер, и через секунды он запускается заново. До
+// 02.10 режим при этом выбирался с нуля: эфир, пока переподключался, отдавал
+// своё место полного транскода другому и возвращался копией (b5df47de,
+// 01.10 19:05). Плейлист менял состав качеств, и плеер айфона на этом вставал
+// кружком. Теперь место держится за эфиром HOLD_MS — но только когда
+// конвейер остановлен обрывом выхода Daily (stop с hold, mediaServer.js).
+// Любая другая остановка — конец эфира, пауза, модерация, уборка, OBS
+// отключился — закрепление снимает: иначе следующий эфир с тем же ключом
+// унаследовал бы прежний режим знака и шёл бы без знака в кадре, когда
+// панель уже включила «в кадре» (зонд водяного знака, 02.10).
+// streamKey -> { profile, mark, until }
+const held = new Map();
+const HOLD_MS = 10 * 60 * 1000;
+
+function heldFor(streamKey) {
+    const h = held.get(streamKey);
+    if (h && h.until > Date.now()) return h;
+    if (h) held.delete(streamKey);
+    return null;
+}
+
+function release(streamKey) {
+    held.delete(streamKey);
+}
+
+// Плейлист появился: ffmpeg пишет index.m3u8 после первых сегментов. Это
+// миг, когда зритель может начать смотреть, — в хронологию эфира, со
+// временем от запуска. Не появился за READY_MS — тоже событие.
+const READY_MS = 60 * 1000;
+function watchReady(streamKey, job) {
+    const t0 = Date.now();
+    const file = path.join(dirFor(streamKey), 'index.m3u8');
+    const tick = () => {
+        if (job.stopping || jobs.get(streamKey) !== job) return;
+        if (fs.existsSync(file)) return streamLog.event(streamKey, 'hls.ready', { ms: Date.now() - t0 });
+        if (Date.now() - t0 > READY_MS) return streamLog.event(streamKey, 'hls.late', { ms: READY_MS });
+        setTimeout(tick, 500).unref();
+    };
+    setTimeout(tick, 500).unref();
+}
 
 function dirFor(streamKey) {
     return path.join(HLS_ROOT, streamKey);
@@ -345,6 +388,7 @@ function spawnFfmpeg(streamKey, job) {
     const part = job.input ? null : recording.newPart(streamKey, { unmarked: job.mark === 'overlay' });
     const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.profile, part, job.audio, job.input, job.mark === 'frame'), { stdio: ['ignore', 'ignore', 'pipe'] });
     job.proc = proc;
+    if (!job.input) watchReady(streamKey, job);
     // О каких видах разъезда уже сказали в этом запуске — чтобы не повторяться.
     job.warned = new Set();
 
@@ -401,6 +445,7 @@ function spawnFfmpeg(streamKey, job) {
 
         job.restarts++;
         console.warn(`[hls ${streamKey}] ffmpeg завершился (code=${code} signal=${signal}), перезапуск ${job.restarts}/${MAX_RESTARTS}`);
+        if (!job.input) streamLog.event(streamKey, 'hls.exit', { code, signal, restart: job.restarts });
         // В журнал — каждый перезапуск, а не только последний. Один перезапуск
         // это пять секунд без картинки у всех зрителей сразу: зритель уходит,
         // ведущий уверен, что «сайт лагает», и никто об этом не говорит.
@@ -458,10 +503,11 @@ function start(streamKey, opts = {}) {
     // Сегменты прошлого эфира: плеер иначе подхватит их как начало текущего.
     clean(dir);
 
-    // Где знак — решается раз на запуск конвейера: перезапуски после обрыва
-    // идут так же. Камера заведения — всегда в кадре: её пережимаем в любом
+    // Где знак — решается раз на эфир: перезапуски после обрыва идут так же
+    // (held выше). Камера заведения — всегда в кадре: её пережимаем в любом
     // случае (VP8 браузера), и знак там ничего не стоит.
-    const mark = opts.profile === 'venue' ? 'frame' : streamWatermark.mode();
+    const kept = opts.profile ? null : heldFor(streamKey);
+    const mark = opts.profile === 'venue' ? 'frame' : kept ? kept.mark : streamWatermark.mode();
 
     // Без файла знака такой эфир не начинаем: видео без знака отдавать нельзя,
     // а молча продолжить — значит нарушить это правило незаметно.
@@ -471,9 +517,15 @@ function start(streamKey, opts = {}) {
     }
 
     // Останавливаемый конвейер уже не в счёте: его ffmpeg выходит до 5 с.
+    // Место эфира на переподключении — в счёте (held).
     let full = 0;
     for (const j of jobs.values()) if (j.profile === 'full' && !j.stopping) full++;
-    const profile = opts.profile || (full < MAX_FULL_TRANSCODES ? 'full' : mark === 'frame' ? 'lite' : 'copy');
+    for (const [key, h] of held) {
+        const j = jobs.get(key);
+        if (key !== streamKey && h.profile === 'full' && h.until > Date.now() && !(j && !j.stopping)) full++;
+    }
+    const profile = opts.profile || (kept && kept.profile) || (full < MAX_FULL_TRANSCODES ? 'full' : mark === 'frame' ? 'lite' : 'copy');
+    if (!opts.profile) held.set(streamKey, { profile, mark, until: Infinity });
 
     const job = { proc: null, restarts: 0, stopping: false, timer: null, profile, mark, input: opts.input || null, audio: true, silent: false };
     job.done = new Promise((resolve) => { job.resolve = resolve; });
@@ -481,23 +533,31 @@ function start(streamKey, opts = {}) {
     spawnFfmpeg(streamKey, job);
     cpuCheck();
     const what = profile === 'copy' ? 'копия видео' : 'транскод ' + PROFILES[profile].renditions.map((r) => r.height + 'p').join('/');
-    const why = profile === 'lite' || profile === 'copy' ? ' (лимит полных транскодов)' : profile === 'venue' ? ' (камера заведения)' : '';
+    const why = kept ? ' (режим эфира до обрыва)' : profile === 'lite' || profile === 'copy' ? ' (лимит полных транскодов)' : profile === 'venue' ? ' (камера заведения)' : '';
     console.log(`[hls ${streamKey}] ${what}, знак ${mark === 'frame' ? 'в кадре' : 'поверх плеера'}${why} → /live/${streamKey}/index.m3u8`);
+    if (!opts.input) streamLog.event(streamKey, 'hls.start', { profile, mark, kept: !!kept });
 }
 
 // Знак этого эфира — поверх плеера (страница зрителя кладёт его сама).
 // Конвейера нет — эфир ещё не начат: по настройке, с ней он и начнётся.
 function overlayMark(streamKey) {
     const job = jobs.get(streamKey);
-    return (job && !job.stopping ? job.mark : streamWatermark.mode()) === 'overlay';
+    const h = heldFor(streamKey);
+    return (job && !job.stopping ? job.mark : h ? h.mark : streamWatermark.mode()) === 'overlay';
 }
 
-function stop(streamKey) {
+// opts.hold — обрыв выхода Daily: эфир идёт, конвейер вернётся (held выше).
+function stop(streamKey, opts = {}) {
+    const h = held.get(streamKey);
+    if (h && opts.hold) h.until = Date.now() + HOLD_MS;
+    else held.delete(streamKey);
+
     const job = jobs.get(streamKey);
     if (!job) return;
 
     job.stopping = true;
     if (job.timer) clearTimeout(job.timer);
+    if (!job.input) streamLog.event(streamKey, 'hls.stop');
 
     if (job.proc && job.proc.exitCode === null) {
         job.proc.kill('SIGTERM');
@@ -525,4 +585,4 @@ function stopped(streamKey) {
 }
 
 // Знак и отступ — ещё и видео галереи (utils/galleryVideo.js): один знак на всё видео сайта.
-module.exports = { start, stop, stopped, overlayMark, usage, HLS_ROOT, hlsBase };
+module.exports = { start, stop, release, stopped, overlayMark, usage, HLS_ROOT, hlsBase };

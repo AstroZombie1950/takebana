@@ -39,6 +39,8 @@ async function open(stream) {
       source: sourceOf(stream),
       startedAt: stream.startedAt || new Date(),
       heartbeatAt: new Date(),
+      room: stream.dailyRoomName || '',
+      events: takePending(stream.streamKey),
     });
   } catch (e) {
     errorLog.server(e, 'streamLog.open');
@@ -158,4 +160,40 @@ async function sweep() {
   }
 }
 
-module.exports = { open, close, attachRecording, recordingSize, sample, sweep };
+// ── Хронология эфира ─────────────────────────────────────────────────────────
+//
+// Что происходило с конвейером: выход Daily запущен, оборвался, вернулся;
+// RTMP пришёл и ушёл; ffmpeg стартовал, выдал первый плейлист, упал. Пишется
+// в открытый отрезок, до EVENTS_MAX последних. Панель показывает это в
+// карточке эфира рядом с его зрителями (routes/admin/streams.js).
+//
+// Веб-эфир запускает выход Daily раньше, чем открывается отрезок
+// (/set-active), и RTMP может прийти, пока отрезка ещё нет. Такие события
+// ждут его здесь до минуты и уходят в него при открытии.
+const EVENTS_MAX = 200;
+const PENDING_MS = 60 * 1000;
+const pending = new Map(); // streamKey -> [{ at, e, d }]
+
+function takePending(streamKey) {
+  const list = pending.get(streamKey) || [];
+  pending.delete(streamKey);
+  const fresh = Date.now() - PENDING_MS;
+  return list.filter((x) => x.at.getTime() > fresh);
+}
+
+function event(streamKey, e, d) {
+  if (!streamKey) return;
+  const item = { at: new Date(), e, ...(d ? { d } : {}) };
+  StreamSession.updateOne({ streamKey, endedAt: null }, { $push: { events: { $each: [item], $slice: -EVENTS_MAX } } })
+    .then((r) => {
+      if (r.matchedCount) return;
+      const list = pending.get(streamKey) || [];
+      if (list.length < 20) list.push(item);
+      pending.set(streamKey, list);
+      // Отрезок так и не открылся (выход в эфир не удался) — не копим.
+      if (list.length === 1) setTimeout(() => { if (pending.get(streamKey) === list) pending.delete(streamKey); }, PENDING_MS).unref();
+    })
+    .catch((err) => errorLog.server(err, 'streamLog.event'));
+}
+
+module.exports = { open, close, attachRecording, recordingSize, sample, sweep, event };

@@ -75,20 +75,7 @@
   }
 
   function post(url, body) {
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (data) {
-        if (!r.ok) {
-          var err = new Error(data.message || 'HTTP ' + r.status);
-          err.status = r.status;
-          throw err;
-        }
-        return data;
-      });
-    });
+    return TKNet.json(url, { method: 'POST', body: body });
   }
 
   // ── Аватар ────────────────────────────────────────────────────────────
@@ -587,8 +574,8 @@
   // Страница истории: сообщения старше before (без него — последние)
   // и звонки за тот же отрезок.
   function load(recipientId, before) {
-    return fetch('/getMessages?recipientId=' + encodeURIComponent(recipientId) + (before ? '&before=' + encodeURIComponent(before) : ''))
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+    return tkFetch('/getMessages?recipientId=' + encodeURIComponent(recipientId) + (before ? '&before=' + encodeURIComponent(before) : ''))
+      .then(function (r) { if (!r.ok) throw new Error(TKNet.explain(r)); return r.json(); });
   }
 
   // Страница открытого чата — личного или группы, в одном виде. У группы
@@ -596,8 +583,8 @@
   // карточка с моей ролью.
   function loadChat(before) {
     if (!group) return load(peer.id, before);
-    return fetch('/api/groups/' + encodeURIComponent(group.id) + '/messages' + (before ? '?before=' + encodeURIComponent(before) : ''))
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    return tkFetch('/api/groups/' + encodeURIComponent(group.id) + '/messages' + (before ? '?before=' + encodeURIComponent(before) : ''))
+      .then(function (r) { if (!r.ok) throw new Error(TKNet.explain(r)); return r.json(); })
       .then(function (page) {
         Object.assign(people, page.people || {});
         seen(page.seenUntil);
@@ -876,8 +863,8 @@
   function moreDialogs() {
     if (!dialogsBefore || dialogsLoading || list.scrollTop + list.clientHeight < list.scrollHeight - list.clientHeight) return;
     dialogsLoading = true;
-    fetch('/api/dialogs?before=' + encodeURIComponent(dialogsBefore), { headers: { Accept: 'application/json' } })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    tkFetch('/api/dialogs?before=' + encodeURIComponent(dialogsBefore), { headers: { Accept: 'application/json' } })
+      .then(function (r) { if (!r.ok) throw new Error(TKNet.explain(r)); return r.json(); })
       .then(function (d) {
         var ids = [];
         d.dialogs.forEach(function (c) {
@@ -918,8 +905,8 @@
   // сервера, поверх: строки обновляются и встают в его порядке наверх.
   // Открытый диалог счётчик не несёт — его читает markRead.
   function syncDialogs() {
-    fetch('/api/dialogs', { headers: { Accept: 'application/json' } })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    tkFetch('/api/dialogs', { headers: { Accept: 'application/json' } })
+      .then(function (r) { if (!r.ok) throw new Error(TKNet.explain(r)); return r.json(); })
       .then(function (d) {
         var fresh = [];
         d.dialogs.slice().reverse().forEach(function (c) {
@@ -1041,8 +1028,8 @@
     setTab('messages');
     requestsRows.innerHTML = '';
     $('requestsEmpty').hidden = true;
-    return fetch('/api/requests', { headers: { Accept: 'application/json' } })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    return tkFetch('/api/requests', { headers: { Accept: 'application/json' } })
+      .then(function (r) { if (!r.ok) throw new Error(TKNet.explain(r)); return r.json(); })
       .then(function (d) {
         d.dialogs.forEach(function (c) {
           requestPeers[c.interlocutor.id] = true;
@@ -1188,7 +1175,7 @@
     var presence = $('chatHeaderPresence');
     presence.setAttribute('data-presence-user', peer.id);
     if (window.subscribePresence) window.subscribePresence([peer.id]);
-    fetch('/api/presence?ids=' + encodeURIComponent(peer.id))
+    tkFetch('/api/presence?ids=' + encodeURIComponent(peer.id))
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var u = (data.users || [])[0];
@@ -1432,7 +1419,7 @@
         return;
       }
       (u.groupId
-        ? fetch('/api/groups/' + encodeURIComponent(u.groupId) + '/messages').then(function (r) { return r.json(); })
+        ? tkFetch('/api/groups/' + encodeURIComponent(u.groupId) + '/messages').then(function (r) { return r.json(); })
         : load(u.peerId)).then(function (page) {
         var found = page.messages.some(function (m) {
           return m.sender === ME && new Date(m.sentAt).getTime() >= since &&
@@ -2150,11 +2137,11 @@
   function openSealed(id) {
     var m = findMessage(id);
     if (!m || m.sender === ME || m.expired || revealed[id]) return;
-    fetch('/messages/' + encodeURIComponent(id) + '/open', { method: 'POST', headers: { Accept: 'application/json' } })
+    tkFetch('/messages/' + encodeURIComponent(id) + '/open', { method: 'POST', headers: { Accept: 'application/json' } })
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
       .then(function (res) {
         if (res.status === 410) { m.expired = true; m.limit = null; render(); return; }
-        if (!res.ok) throw new Error(res.d.message || 'HTTP ' + res.status);
+        if (!res.ok) throw new Error(res.d.message || TKNet.explain(res));
         var d = res.d;
         var a = d.attachment;
         var kind = a ? a.kind : 'text';
@@ -2745,8 +2732,8 @@
   }
 
   function loadContacts(withSuggest) {
-    return fetch('/api/contacts' + (withSuggest ? '?suggest=1' : ''))
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    return tkFetch('/api/contacts' + (withSuggest ? '?suggest=1' : ''))
+      .then(function (r) { if (!r.ok) throw new Error(TKNet.explain(r)); return r.json(); })
       .then(function (data) {
         contacts = (data.contacts || []).map(asPeer);
         suggest = (data.suggest || []).map(asPeer);
@@ -2814,8 +2801,8 @@
     var q = norm(contactSearch.value.trim().replace(/^@/, ''));
     if (q.length < 2 || q === foundFor) return;
     findTimer = setTimeout(function () {
-      fetch('/api/search?type=people&limit=10&q=' + encodeURIComponent(q))
-        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      tkFetch('/api/search?type=people&limit=10&q=' + encodeURIComponent(q))
+        .then(function (r) { if (!r.ok) throw new Error(TKNet.explain(r)); return r.json(); })
         .then(function (data) {
           if (norm(contactSearch.value.trim().replace(/^@/, '')) !== q) return;
           found = (data.people || []).map(asPeer);
@@ -2831,8 +2818,8 @@
   // счётчики и, если больше нечего читать, колокольчик.
   function loadJournal() {
     journalStale = false;
-    fetch('/api/calls')
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    tkFetch('/api/calls')
+      .then(function (r) { if (!r.ok) throw new Error(TKNet.explain(r)); return r.json(); })
       .then(function (data) {
         journal = data.calls;
         renderJournal();
@@ -3573,7 +3560,7 @@
     if (q.length < 2) return;
     fwdTimer = setTimeout(function () {
       // Тот же поиск, что в шапке (utils/search.js); пересылке нужны только люди.
-      fetch('/api/search?type=people&limit=7&q=' + encodeURIComponent(q))
+      tkFetch('/api/search?type=people&limit=7&q=' + encodeURIComponent(q))
         .then(function (r) { return r.json(); })
         .then(function (found) {
           var users = found.people || [];
@@ -3653,7 +3640,7 @@
   var target = peerId && dialogEl(peerId);
   var groupId = params.get('group');
   if (groupId && !groupEl(groupId)) {
-    fetch('/api/groups/' + encodeURIComponent(groupId)).then(function (r) { return r.ok ? r.json() : null; })
+    tkFetch('/api/groups/' + encodeURIComponent(groupId)).then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { if (d) window.TKChats.openGroup(d.group); });
   } else if (groupId) target = groupEl(groupId);
   var onContactsTab = params.get('tab') === 'contacts';

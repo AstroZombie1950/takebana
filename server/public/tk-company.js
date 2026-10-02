@@ -86,7 +86,7 @@
       var button = form.querySelector('[type="submit"]');
       button.disabled = true;
 
-      fetch("/register-establishment", {
+      tkFetch("/register-establishment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",

@@ -56,7 +56,7 @@
   // и после каждого входа в комнату, то есть и после обрыва. Повторы
   // отсекаются по data-message-id.
   function fetchMissed() {
-    fetch('/api/chat/messages/new?streamId=' + streamId + '&lastMessageTime=' + encodeURIComponent(lastMessageTime))
+    tkFetch('/api/chat/messages/new?streamId=' + streamId + '&lastMessageTime=' + encodeURIComponent(lastMessageTime))
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (list) { list.forEach(render); })
       .catch(function (e) { console.error('[stream] чат не догрузился:', e); });
@@ -66,7 +66,7 @@
   function send() {
     var text = input.value.trim();
     if (!text) return;
-    fetch('/chat/message', {
+    tkFetch('/chat/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ streamId: streamId, message: text }),
@@ -180,7 +180,7 @@
     }
   });
   if (slowPick) slowPick.addEventListener('change', function () {
-    fetch('/chat/slow-mode', {
+    tkFetch('/chat/slow-mode', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ streamId: streamId, seconds: Number(slowPick.value) }),

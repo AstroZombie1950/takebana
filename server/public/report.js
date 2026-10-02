@@ -67,7 +67,7 @@ sendButton.addEventListener('click', async function () {
 
   sendButton.disabled = true;
   try {
-    var res = await fetch('/api/reports', {
+    var res = await tkFetch('/api/reports', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

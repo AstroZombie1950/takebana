@@ -95,17 +95,9 @@
   }
 
   function json(url, options) {
-    options = options || {};
-    options.headers = Object.assign({ Accept: 'application/json' }, options.headers);
-    return fetch(url, options).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (d) {
-        if (!r.ok || d.success === false) {
-          var e = new Error(d.message || 'HTTP ' + r.status);
-          e.status = r.status;
-          throw e;
-        }
-        return d;
-      });
+    return TKNet.json(url, options).then(function (d) {
+      if (d.success === false) throw new Error(d.message || t('notice.server'));
+      return d;
     });
   }
 
@@ -173,7 +165,7 @@
         // Черновик удалили (на профиле или в другой вкладке) — всё.
         if (r.status === 404) return finish(job, 'gone');
         if (r.status >= 400 && r.status < 500 && r.status !== 408 && r.status !== 429) {
-          return finish(job, 'failed', r.body.message || 'HTTP ' + r.status);
+          return finish(job, 'failed', r.body.message || TKNet.explain(r));
         }
         emit(job);
         return Promise.race([wait(pause), new Promise(function (res) { window.addEventListener('online', res, { once: true }); })])

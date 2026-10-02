@@ -31,16 +31,7 @@
   }
 
   function send(method, url, body) {
-    return fetch(url, {
-      method: method,
-      headers: body ? { 'Content-Type': 'application/json' } : {},
-      body: body ? JSON.stringify(body) : undefined,
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (b) {
-        if (!r.ok) throw new Error(b.message || 'HTTP ' + r.status);
-        return b;
-      });
-    }, function () { throw new Error(t('common.noNetwork')); });
+    return TKNet.json(url, { method: method, body: body });
   }
 
   function fail(e) { toast(t('app.errorShort', { message: e.message }), 'error'); }

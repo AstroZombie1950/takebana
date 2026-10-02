@@ -61,6 +61,7 @@ router.post('/stream/away/:streamId', requireAuth, requireOwner(Stream, { param:
     { returnDocument: 'after' }
   );
   if (stream) {
+    streamLog.event(stream.streamKey, away ? 'host.away' : 'host.back');
     const io = req.app.get('io');
     if (io) {
       io.to(`stream:${stream.streamKey}`).emit('stream:update', { streamKey: stream.streamKey, away });

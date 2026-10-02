@@ -23,7 +23,7 @@
       location.href = '/login?next=' + encodeURIComponent(location.pathname);
       return;
     }
-    fetch('/rateEstablishment', {
+    tkFetch('/rateEstablishment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ establishmentId: venueId, rating: Number(b.dataset.value) }),

@@ -2,16 +2,7 @@
 // и ограничить доступ к каналу. Маршруты — routes/streaming/subscriptions.js.
 (function () {
   function post(url, body) {
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (data) {
-        if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
-        return data;
-      });
-    });
+    return TKNet.json(url, { method: 'POST', body: body });
   }
 
   // Число на вкладке «Подписчики» — свежее от сервера.

@@ -217,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
       notificationsContent.innerHTML = note('modal.notifications.loading');
 
       try {
-        const response = await fetch('/api/notifications');
+        const response = await tkFetch('/api/notifications');
         if (!response.ok) throw new Error(response.status);
         const notifications = await response.json();
 
@@ -257,7 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (notifications.some((n) => !n.isRead)) {
-          fetch('/api/notifications/read', { method: 'PUT' }).catch(() => {});
+          tkFetch('/api/notifications/read', { method: 'PUT' }).catch(() => {});
         }
         window.setNotificationDot(false);
       } catch (error) {
@@ -270,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (clearNotifications && notificationsContent) {
     clearNotifications.addEventListener('click', async () => {
       try {
-        const r = await fetch('/api/notifications', { method: 'DELETE' });
+        const r = await tkFetch('/api/notifications', { method: 'DELETE' });
         if (!r.ok) throw new Error(r.status);
         notificationsContent.innerHTML = note('modal.notifications.empty');
         clearNotifications.classList.add('hidden');
@@ -378,7 +378,7 @@ document.addEventListener('DOMContentLoaded', function () {
       .map((el) => el.getAttribute('data-presence-user'));
     if (ids.length && window.subscribePresence) {
       window.subscribePresence(ids);
-      fetch('/api/presence?ids=' + encodeURIComponent(ids.join(',')))
+      tkFetch('/api/presence?ids=' + encodeURIComponent(ids.join(',')))
         .then((r) => (r.ok ? r.json() : { users: [] }))
         .then((d) => (d.users || []).forEach((u) => window.dispatchEvent(new CustomEvent('presence:init', { detail: u }))))
         .catch(() => {});
@@ -404,7 +404,7 @@ document.addEventListener('DOMContentLoaded', function () {
       timer = setTimeout(() => {
         if (ctrl) ctrl.abort();
         const own = ctrl = new AbortController();
-        fetch('/api/search?q=' + encodeURIComponent(q), { signal: own.signal })
+        tkFetch('/api/search?q=' + encodeURIComponent(q), { signal: own.signal })
           .then((r) => (r.ok ? r.json() : null))
           .then((data) => { if (data) render(box, data); })
           .catch((e) => { if (e.name !== 'AbortError') console.error('[search]', e); });
@@ -494,9 +494,12 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     });
     window.callSocket = socket;
     console.log('[client] socket init');
-    socket.on('connect', () => console.log('[client] socket connected id=', socket.id));
-    socket.on('connect_error', (err) => console.warn('[client] socket connect_error', err.message)); // сеть пропала — штатно, переподключится сам
-    socket.on('disconnect', (reason) => console.log('[client] socket disconnected', reason));
+    // Обрыв дольше пяти секунд — полоса «нет связи с сервером» (tk-net.js):
+    // переписка, счётчики и звонки без сокета молча стоят, и человек должен
+    // это знать.
+    socket.on('connect', () => { console.log('[client] socket connected id=', socket.id); window.TKNet.socket(true); });
+    socket.on('connect_error', (err) => { console.warn('[client] socket connect_error', err.message); window.TKNet.socket(false); }); // сеть пропала — переподключится сам
+    socket.on('disconnect', (reason) => { console.log('[client] socket disconnected', reason); window.TKNet.socket(false); });
 
     // Переписка: события сокета уходят в document как tk:<событие>, их слушает
     // страница переписки (chats.js). Колокольчик зажигается на любой странице.
@@ -551,7 +554,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     // перерисовывает ленту и уводит её вниз, и делать это на каждом
     // возвращении к вкладке значило бы терять место, где человек читал.
     function refreshCounters() {
-      fetch('/api/badge', { headers: { Accept: 'application/json' } })
+      tkFetch('/api/badge', { headers: { Accept: 'application/json' } })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (!d) return;
@@ -563,7 +566,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       const ids = Array.from(document.querySelectorAll('[data-presence-user]'))
         .map((el) => el.getAttribute('data-presence-user')).filter(Boolean);
       if (!ids.length) return;
-      fetch('/api/presence?ids=' + encodeURIComponent(ids.slice(0, 200).join(',')))
+      tkFetch('/api/presence?ids=' + encodeURIComponent(ids.slice(0, 200).join(',')))
         .then((r) => (r.ok ? r.json() : { users: [] }))
         .then((d) => {
           (d.users || []).forEach((u) => {
@@ -774,8 +777,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
 
     async function startCall(calleeId, type) {
       try {
-        const res = await fetch('/api/calls/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calleeId, type, own: ownPath() }) });
-        const data = await res.json();
+        const data = await TKNet.json('/api/calls/create', { method: 'POST', body: { calleeId, type, own: ownPath() } });
         if (!data.success) throw new Error(data.message || data.error || 'call_create_failed');
         window.currentCallId = data.callId;
         window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('call.waitingAnswer');
@@ -789,9 +791,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     window.startGroupCall = async (g, type) => {
       window.showOutgoingCall({ displayName: g.title, avatarUrl: g.url || '', callType: type });
       try {
-        const res = await fetch('/api/groups/' + encodeURIComponent(g.id) + '/call', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ type }) });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.message || 'HTTP ' + res.status);
+        const data = await TKNet.json('/api/groups/' + encodeURIComponent(g.id) + '/call', { method: 'POST', body: { type } });
         window.currentCallId = data.callId;
         window.updateOutgoingCallStatus && window.updateOutgoingCallStatus('call.waitingAnswer');
       } catch (e) {
@@ -899,7 +899,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     window.subscribePresence(counted);
     if (ids.length) {
       window.subscribePresence(ids);
-      fetch('/api/presence?ids=' + encodeURIComponent(ids.join(',')))
+      tkFetch('/api/presence?ids=' + encodeURIComponent(ids.join(',')))
         .then(r => r.json())
         .then(data => {
           (data.users || []).forEach(u => setPresence(String(u._id), !!u.isOnline, u.lastSeen));
@@ -1559,7 +1559,7 @@ document.addEventListener('DOMContentLoaded', function(){
   // Прочитано: человек читает сообщение в звонке — значок в шапке должен
   // погаснуть так же, как от страницы переписки. Точное число даёт сервер.
   function markChatRead(s) {
-    fetch('/messages/read', {
+    tkFetch('/messages/read', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ peerId: s.peerId }),
@@ -1574,7 +1574,7 @@ document.addEventListener('DOMContentLoaded', function(){
   function loadChat(s) {
     if (s.chatLoaded || !s.peerId) return;
     s.chatLoaded = true;
-    fetch('/getMessages?recipientId=' + encodeURIComponent(s.peerId))
+    tkFetch('/getMessages?recipientId=' + encodeURIComponent(s.peerId))
       // 404 — переписки ещё не было: это не ошибка, а пустая лента.
       .then((r) => (r.status === 404 ? { messages: [] } : r.json()))
       .then((d) => {
@@ -1591,7 +1591,7 @@ document.addEventListener('DOMContentLoaded', function(){
     const content = s.chatInput.value.trim();
     if (!content || s.chatBusy || !s.peerId) return;
     s.chatBusy = true;
-    const post = (url, body) => fetch(url, {
+    const post = (url, body) => tkFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -1600,7 +1600,7 @@ document.addEventListener('DOMContentLoaded', function(){
     send()
       // Первое сообщение этому человеку: диалога ещё нет, заводим и шлём снова.
       .then((r) => (r.status === 404 ? post('/start-conversation', { recipientId: s.peerId }).then(send) : r))
-      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then((r) => { if (!r.ok) throw new Error(TKNet.explain(r)); return r.json(); })
       .then((m) => {
         s.chatInput.value = '';
         addChatMessage(s, m);
@@ -1795,7 +1795,7 @@ document.addEventListener('DOMContentLoaded', function(){
     invite.classList.remove('hidden');
     if (free <= 0) return;
     inviteSearch.focus();
-    fetch('/api/contacts')
+    tkFetch('/api/contacts')
       .then((r) => r.json())
       .then((data) => inviteRows((data.contacts || []).map(asInvitee)))
       .catch(() => inviteRows([]));
@@ -1812,7 +1812,7 @@ document.addEventListener('DOMContentLoaded', function(){
     const q = inviteSearch.value.trim();
     if (q.length < 2) return;
     inviteTimer = setTimeout(() => {
-      fetch('/api/search?type=people&limit=8&q=' + encodeURIComponent(q))
+      tkFetch('/api/search?type=people&limit=8&q=' + encodeURIComponent(q))
         .then((r) => r.json())
         .then((found) => {
           if (inviteSearch.value.trim() !== q) return;

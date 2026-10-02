@@ -230,6 +230,8 @@ require('./db');
 // разбора JSON: у маршрута свой предел тела 16 КБ, а общий (100 КБ) успевал
 // разобрать тело раньше, и свой не действовал.
 app.use(require('./routes/clientErrors'));
+// Телеметрия (docs/TELEMETRY.md) — по той же причине до общего разбора.
+app.use(require('./routes/telemetry'));
 app.use(express.json());
 app.use(require('./routes/userRoutes'));
 app.use(require('./routes/passwordReset'));

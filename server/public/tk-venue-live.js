@@ -31,16 +31,7 @@
   var narrow = matchMedia('(max-width: 1023px)');
 
   function json(url, method, body) {
-    return fetch(url, {
-      method: method || 'GET',
-      headers: body ? { 'Content-Type': 'application/json', Accept: 'application/json' } : { Accept: 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (d) {
-        if (!r.ok) { var e = new Error(d.message || 'HTTP ' + r.status); e.status = r.status; throw e; }
-        return d;
-      });
-    });
+    return TKNet.json(url, { method: method || 'GET', body: body });
   }
 
   // ── Картинка и заставка ────────────────────────────────────────────────
@@ -527,8 +518,8 @@
         if (file.size > 5 * 1024 * 1024) return toast(t('studio.coverHeavy'), 'error');
         var body = new FormData();
         body.append('cover', file);
-        return fetch('/api/venues/' + ID + '/cover', { method: 'POST', headers: { Accept: 'application/json' }, body: body })
-          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status); return d; }); })
+        return tkFetch('/api/venues/' + ID + '/cover', { method: 'POST', headers: { Accept: 'application/json' }, body: body })
+          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || TKNet.explain(r)); return d; }); })
           .then(function (d) { showCover(d.cover); toast(t('vlive.coverSaved'), 'ok'); });
       }).catch(function (err) { toast(err.message, 'error'); });
     });

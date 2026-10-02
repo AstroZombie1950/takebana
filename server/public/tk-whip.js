@@ -44,14 +44,14 @@
       .then(function (offer) { return pc.setLocalDescription(offer); })
       .then(function () { return gathered(pc); })
       .then(function () {
-        return fetch(url, {
+        return tkFetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/sdp' },
           body: pc.localDescription.sdp,
         });
       })
       .then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        if (!res.ok) throw new Error(TKNet.explain(res));
         var place = res.headers.get('Location') || '';
         return res.text().then(function (sdp) {
           return pc.setRemoteDescription({ type: 'answer', sdp: sdp }).then(function () {

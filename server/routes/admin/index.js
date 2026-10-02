@@ -5,7 +5,8 @@
 //
 // Права проверяет каждая вкладка сама (shared.js): модератору открыты люди,
 // жалобы и эфиры, администратору — ещё журнал, ошибки, заведения, расходы,
-// хранилище, сроки хранения, водяной знак, система, поддержка и рассылка.
+// хранилище, сроки хранения, водяной знак, система, поддержка, рассылка
+// и телеметрия (попытки и карточка эфира).
 
 const express = require('express');
 const router = express.Router();
@@ -13,6 +14,7 @@ const router = express.Router();
 router.use('/api/admin', require('./summary'));
 router.use('/api/admin', require('./people'));
 router.use('/api/admin', require('./streams'));
+router.use('/api/admin', require('./traces'));
 router.use('/api/admin', require('./venues'));
 router.use('/api/admin', require('./reports'));
 router.use('/api/admin', require('./journal'));
