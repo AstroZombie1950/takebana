@@ -26,6 +26,7 @@ const userView = require('../utils/userView');
 const daily = require('../utils/daily');
 const mediamtx = require('../utils/mediamtx');
 const venueCam = require('../utils/venueCam');
+const venueLog = require('../utils/venueLog');
 const { hlsBase } = require('../utils/hls');
 const Establishments = require('../models/Establishments');
 const User = require('../models/User');
@@ -55,6 +56,7 @@ function announceState(req, id, online) {
 // а вещатель на своём приёме (MediaMTX) продолжал вещать, зрители — смотреть.
 async function stopCamera(venueId) {
   await Establishments.updateOne({ _id: venueId }, { $set: { online: false } });
+  venueLog.close(venueId, 'moderation');
   const io = require('../utils/io').get();
   // reason — пульту владельца: камеру выключил не он и не его другая вкладка.
   if (io) io.to(`venue:${venueId}`).emit('venue:state', { venueId: String(venueId), online: false, reason: 'moderation' });
@@ -122,6 +124,9 @@ router.post('/api/venues/:id/live', requireAuth, requireNotBanned, ownVenue, asy
     await mediamtx.kick(mediamtx.pathOf(req.params.id));
     await Establishments.updateOne({ _id: req.params.id }, { $set: { online: true } });
     audit(req, 'venue.live.on', { targetType: 'venue', target: req.resource });
+    // Сеанс — до switchedOn: просьба камеры зрителям, которые уже ждут, —
+    // первое событие в нём.
+    await venueLog.open(req.params.id, req.session.userId, { viewers: venueCam.count(req.params.id) });
     announceState(req, req.params.id, true);
     venueCam.switchedOn(req.params.id, venueCam.count(req.params.id));
     return res.json({ engine: 'whip', demand: venueCam.wanted(req.params.id) });
@@ -138,6 +143,7 @@ router.post('/api/venues/:id/live', requireAuth, requireNotBanned, ownVenue, asy
   }
   await Establishments.updateOne({ _id: req.params.id }, { $set: { online: true } });
   audit(req, 'venue.live.on', { targetType: 'venue', target: req.resource });
+  venueLog.open(req.params.id, req.session.userId, { engine: 'daily' });
   announceState(req, req.params.id, true);
   res.json({ url: daily.roomUrl(name), token });
 });
@@ -146,6 +152,7 @@ router.post('/api/venues/:id/live', requireAuth, requireNotBanned, ownVenue, asy
 router.delete('/api/venues/:id/live', requireAuth, ownVenue, async (req, res) => {
   await Establishments.updateOne({ _id: req.params.id }, { $set: { online: false } });
   audit(req, 'venue.live.off', { targetType: 'venue', target: req.resource });
+  venueLog.close(req.params.id, 'owner');
   announceState(req, req.params.id, false);
   if (mediamtx.configured()) {
     venueCam.switchedOff(req.params.id);
@@ -192,6 +199,7 @@ router.post('/api/venues/:id/watch', watchLimiter, async (req, res) => {
     // вкладка умерла, не успев сказать, — камера на деле выключена.
     if (!venueCam.ownerHere(req.params.id)) {
       await Establishments.updateOne({ _id: req.params.id }, { $set: { online: false } });
+      venueLog.close(req.params.id, 'absent');
       announceState(req, req.params.id, false);
       return offline(res);
     }

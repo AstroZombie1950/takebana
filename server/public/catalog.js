@@ -83,9 +83,13 @@ document.addEventListener('DOMContentLoaded', function () {
           pending = null;
           results.removeAttribute('aria-busy');
           // Сессия истекла или сервер ответил ошибкой на выбор человека —
-          // обычный переход, дальше сервер сам решит, что показать. Тихому
-          // обновлению — следующая попытка (TKNet уже показал полосу связи).
-          if (!quiet) location.href = pageUrl;
+          // обычный переход, дальше сервер сам решит, что показать. Сбой
+          // связи (у ошибки tkFetch есть reason) — переход не откроется
+          // тоже: говорим причину, выбор остаётся, можно нажать снова.
+          // Тихому обновлению — следующая попытка (TKNet показал полосу связи).
+          if (quiet) return;
+          if (err.reason) TKNet.say(err);
+          else location.href = pageUrl;
         });
     };
 
@@ -197,6 +201,7 @@ document.addEventListener('DOMContentLoaded', function () {
           box.querySelectorAll('[data-bg]').forEach(function (el) { el.style.background = el.getAttribute('data-bg'); });
           while (box.firstElementChild) feed.appendChild(box.firstElementChild);
           if (page.next) {
+            tkText(more, 'feed.more');
             more.dataset.next = page.next;
             more.href = '/?before=' + encodeURIComponent(page.next) + '#feedTitle';
             more.removeAttribute('aria-busy');
@@ -204,7 +209,14 @@ document.addEventListener('DOMContentLoaded', function () {
             more.remove();
           }
         })
-        .catch(function () { location.href = more.href; });
+        // Не загрузилось — кнопка остаётся и говорит об этом (NOTICES.md,
+        // «Остальное»): раньше уводила на /?before=…, и без связи вместо
+        // ленты открывалась ошибка браузера. Причина — тостом.
+        .catch(function (err) {
+          more.removeAttribute('aria-busy');
+          tkText(more, 'feed.moreFailed');
+          TKNet.say(err);
+        });
     });
   }
 

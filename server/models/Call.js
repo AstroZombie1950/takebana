@@ -34,6 +34,19 @@ const callSchema = new Schema({
   // Звонок группе из переписки (routes/groups.js): callee — кто ответил
   // первым. Такой звонок — не разговор двоих, в их личную ленту не идёт.
   chat: { type: Schema.Types.ObjectId, ref: 'Group', default: null },
+  // Свой TURN глазами coturn, по людям (utils/turnLog.js): сколько реле
+  // выдано, сколько ещё открыто, сколько КБ прошло к собеседнику и от
+  // него, отказы по кодам (486, 508, auth). Пусто — звонок шёл через Daily
+  // или журнал coturn не читается.
+  turn: [{
+    _id: false,
+    user: { type: Schema.Types.ObjectId, ref: 'User' },
+    allocs: Number,
+    open: Number,
+    inKB: Number,
+    outKB: Number,
+    errors: Schema.Types.Mixed,
+  }],
   participants: [{
     user: { type: Schema.Types.ObjectId, ref: 'User' },
     joinedAt: { type: Date, default: Date.now },

@@ -14,11 +14,15 @@ asyncify(router); // ошибки async-обработчиков уходят в
 
 const Trace = require('../../models/Trace');
 const StreamSession = require('../../models/StreamSession');
+const Call = require('../../models/Call');
+const VenueSession = require('../../models/VenueSession');
+const Establishments = require('../../models/Establishments');
 const daily = require('../../utils/daily');
 const errorLog = require('../../utils/errorLog');
 const { requireAdmin, paging, list, period, namesFor, csvRoute, nameOf } = require('./shared');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
+const CALL_ID = /^[a-f\d-]{36}$/i;
 const OUTCOMES = ['open', 'ok', 'fail', 'gave_up', 'partial'];
 
 // Устройство одной строкой: «iOS 18 · Safari», «Android 16 · Chrome».
@@ -202,21 +206,115 @@ function digest(logs, metrics) {
   return r;
 }
 
+// Встречи комнаты у Daily с выжимкой журнала. Сторона — участник встречи:
+// у эфира он один (ведущий), у звонка двое, и журнал Daily отдаёт их
+// строки вперемешку — делим по userSessionId (= participant_id встречи).
+async function dailyMeetings(room, names) {
+  const m = await daily.meetings(room);
+  const out = [];
+  for (const mt of (m.data || []).slice(0, 5)) {
+    const d = await daily.logs(mt.id);
+    const logs = d.logs || [];
+    const metrics = d.metrics || [];
+    const people = (mt.participants || []).filter((p) => logs.some((x) => x.userSessionId === p.participant_id));
+    const sides = people.length > 1
+      ? people.map((p) => ({
+        user: names.get(String(p.user_id)) || null,
+        ...digest(logs.filter((x) => x.userSessionId === p.participant_id),
+          metrics.filter((x) => !x.userSessionId || x.userSessionId === p.participant_id)),
+      }))
+      : [{ user: people[0] ? names.get(String(people[0].user_id)) || null : null, ...digest(logs, metrics) }];
+    out.push({ id: mt.id, start: mt.start_time * 1000, duration: mt.duration, sides });
+  }
+  return out;
+}
+
 router.get('/streams/:id/daily', requireAdmin, async (req, res) => {
   if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Нет такого эфира' });
-  const s = await StreamSession.findById(req.params.id).select('room').lean();
+  const s = await StreamSession.findById(req.params.id).select('room user').lean();
   if (!s || !s.room) return res.status(404).json({ message: 'У эфира нет комнаты Daily — OBS или эфир до 2 октября' });
   try {
-    const m = await daily.meetings(s.room);
-    const out = [];
-    for (const mt of (m.data || []).slice(0, 5)) {
-      const d = await daily.logs(mt.id);
-      out.push({ id: mt.id, start: mt.start_time * 1000, duration: mt.duration, ...digest(d.logs || [], d.metrics || []) });
-    }
-    res.json({ meetings: out });
+    // Ведущий, переподключившись, у Daily — второй участник: две стороны.
+    res.json({ meetings: await dailyMeetings(s.room, await namesFor([s.user])) });
   } catch (e) {
     // Подробность — в журнал ошибок: там её видно целиком.
     errorLog.external(e, 'daily.logs', { session: req.params.id });
+    res.status(502).json({ message: 'Daily не ответил' });
+  }
+});
+
+// ── Карточка камеры заведения ────────────────────────────────────────────────
+// Сеансы камеры (utils/venueLog.js): выбранный — с хронологией сервера,
+// рядом попытки владельца и зрителей в его окне. Без ?s= — последний.
+router.get('/venues/:id/camera', requireAdmin, async (req, res) => {
+  if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Нет такого заведения' });
+  const [venue, sessions] = await Promise.all([
+    Establishments.findById(req.params.id).select('name owner online').lean(),
+    VenueSession.find({ venue: req.params.id }).sort({ startedAt: -1 }).limit(30).select('-events').lean(),
+  ]);
+  if (!venue) return res.status(404).json({ message: 'Нет такого заведения' });
+  const pick = OBJECT_ID.test(req.query.s || '') ? req.query.s : sessions[0] && String(sessions[0]._id);
+  const s = pick ? await VenueSession.findOne({ _id: pick, venue: req.params.id }).lean() : null;
+  const traces = s ? await Trace.find({
+    target: req.params.id, kind: { $in: ['venue.view', 'venue.host'] },
+    startedAt: { $gte: new Date(s.startedAt.getTime() - 60000), $lte: new Date((s.endedAt || new Date()).getTime() + 60000) },
+  }).sort({ startedAt: 1 }).limit(1000).lean() : [];
+  const names = await namesFor([venue.owner, ...traces.map((t) => t.user)]);
+  const brief = (x) => ({ id: String(x._id), startedAt: x.startedAt, endedAt: x.endedAt, endedBy: x.endedBy || '', peakViewers: x.peakViewers || 0 });
+  res.json({
+    venue: { id: String(venue._id), name: venue.name || '', owner: names.get(String(venue.owner)) || null, online: !!venue.online },
+    sessions: sessions.map(brief),
+    session: s && { ...brief(s), events: s.events || [] },
+    host: traces.filter((t) => t.kind === 'venue.host').map((t) => traceView(t, names)),
+    viewers: traces.filter((t) => t.kind === 'venue.view').map((t) => traceView(t, names)),
+  });
+});
+
+// ── Карточка звонка ──────────────────────────────────────────────────────────
+// Запись журнала звонков (кто, путь, почему ушли с Daily, чем кончилось),
+// реле TURN по людям глазами coturn (utils/turnLog.js) и попытки сторон.
+// Журнал Daily — по кнопке, по комнате call_<callId> (sockets/index.js):
+// комнату удаляют сразу после звонка, а встречи у Daily остаются.
+router.get('/calls/:id/detail', requireAdmin, async (req, res) => {
+  if (!CALL_ID.test(req.params.id)) return res.status(404).json({ message: 'Нет такого звонка' });
+  const [c, traces] = await Promise.all([
+    Call.findOne({ callId: req.params.id }).lean(),
+    Trace.find({ kind: 'call', target: req.params.id }).sort({ startedAt: 1 }).limit(20).lean(),
+  ]);
+  if (!c && !traces.length) return res.status(404).json({ message: 'Нет такого звонка' });
+  const ids = c ? [c.caller, c.callee, ...(c.participants || []).map((p) => p.user), ...(c.turn || []).map((t) => t.user)] : [];
+  const names = await namesFor([...ids, ...traces.map((t) => t.user)]);
+  const who = (id) => names.get(String(id)) || null;
+  res.json({
+    call: c && {
+      id: c.callId,
+      type: c.type,
+      status: c.status,
+      path: c.path,
+      fallback: c.fallback || '',
+      group: !!c.group,
+      chat: !!c.chat,
+      startedAt: c.startedAt,
+      answeredAt: c.answeredAt,
+      endedAt: c.endedAt,
+      duration: c.answeredAt && c.endedAt ? Math.round((c.endedAt - c.answeredAt) / 1000) : 0,
+      caller: who(c.caller),
+      callee: who(c.callee),
+      people: (c.participants || []).map((p) => ({ user: who(p.user), joinedAt: p.joinedAt, leftAt: p.leftAt })),
+      turn: (c.turn || []).map((t) => ({ user: who(t.user), allocs: t.allocs, open: t.open, inKB: t.inKB, outKB: t.outKB, errors: t.errors || {} })),
+    },
+    sides: traces.map((t) => traceView(t, names)),
+  });
+});
+
+router.get('/calls/:id/daily', requireAdmin, async (req, res) => {
+  if (!CALL_ID.test(req.params.id)) return res.status(404).json({ message: 'Нет такого звонка' });
+  const c = await Call.findOne({ callId: req.params.id }).select('caller callee participants').lean();
+  const names = await namesFor(c ? [c.caller, c.callee, ...(c.participants || []).map((p) => p.user)] : []);
+  try {
+    res.json({ meetings: await dailyMeetings(`call_${req.params.id}`, names) });
+  } catch (e) {
+    errorLog.external(e, 'daily.logs', { call: req.params.id });
     res.status(502).json({ message: 'Daily не ответил' });
   }
 });

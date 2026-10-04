@@ -21,6 +21,7 @@ const { createHmac } = require('crypto');
 const Establishments = require('../models/Establishments');
 const mediamtx = require('./mediamtx');
 const hls = require('./hls');
+const venueLog = require('./venueLog');
 const ioHolder = require('./io');
 const errorLog = require('./errorLog');
 
@@ -86,12 +87,14 @@ function setDemand(venueId, on) {
   if (!!demand.get(venueId) === on) return;
   if (on) demand.set(venueId, true); else demand.delete(venueId);
   emit(venueId, 'venue:demand', { on });
+  venueLog.event(venueId, 'cam.demand', { on, viewers: count(venueId) });
 }
 
 // Число зрителей на странице изменилось (sockets/index.js). Просим
 // камеру, только если она включена владельцем.
 async function viewers(venueId, count) {
   venueId = String(venueId);
+  venueLog.viewers(venueId, count);
   if (count > 0) {
     clearTimeout(idle.get(venueId));
     idle.delete(venueId);
@@ -134,13 +137,15 @@ const wasLapsed = (venueId) => lapsed.has(String(venueId));
 function ownerLeft(venueId) {
   venueId = String(venueId);
   if (gone.has(venueId)) return;
+  venueLog.event(venueId, 'owner.left');
   gone.set(venueId, setTimeout(async () => {
     gone.delete(venueId);
-    if (ownerHere(venueId)) return;
+    if (ownerHere(venueId)) return venueLog.event(venueId, 'owner.back');
     try {
       const r = await Establishments.updateOne({ _id: venueId, online: true }, { $set: { online: false } });
       if (!r.modifiedCount) return;
       emit(venueId, 'venue:state', { online: false, reason: 'lapsed' });
+      venueLog.close(venueId, 'lapsed');
       switchedOff(venueId);
       lapsed.add(venueId);
       await mediamtx.kick(mediamtx.pathOf(venueId));
@@ -154,12 +159,15 @@ function ownerLeft(venueId) {
 function available(path) {
   const venueId = venueOf(path);
   if (!venueId) return;
-  hls.start(hlsKey(venueId), { input: mediamtx.readUrl(path), profile: 'venue' });
+  venueLog.event(venueId, 'mtx.ready');
+  hls.start(hlsKey(venueId), { input: mediamtx.readUrl(path), profile: 'venue', log: (e, d) => venueLog.event(venueId, e, d) });
 }
 
 function unavailable(path) {
   const venueId = venueOf(path);
-  if (venueId) hls.stop(hlsKey(venueId));
+  if (!venueId) return;
+  venueLog.event(venueId, 'mtx.gone');
+  hls.stop(hlsKey(venueId));
 }
 
 // Перезапуск приложения: MediaMTX о публикациях, начатых до него, ещё

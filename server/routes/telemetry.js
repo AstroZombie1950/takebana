@@ -11,6 +11,7 @@
 // адресом бывает десяток телефонов (бар, офис).
 
 const express = require('express');
+const net = require('net');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const Trace = require('../models/Trace');
@@ -30,6 +31,35 @@ const CODE = /^[a-z][\w.]{0,39}$/;
 const ROUTES = ['', 'cdn', 'fallback', 'daily', 'own', 'whip']; // whip — камера заведения на наш приёмник (03.10)
 const OUTCOMES = ['open', 'ok', 'fail', 'gave_up', 'partial'];
 const DAY_MS = 86400000;
+
+// Адрес человека в попытке (решение Ивана 02.10, TELEMETRY.md «Решено»):
+// на время тестов — целиком, перед открытым запуском — TRACE_IP=net (только
+// сеть: IPv4 до /24, IPv6 до /48 — видно «десяток телефонов из одного бара»,
+// но не человека) или off (не пишем). Страна и провайдер считаются по
+// полному адресу в момент приёма и остаются при любом режиме.
+const IP_MODE = ['net', 'off'].includes(process.env.TRACE_IP) ? process.env.TRACE_IP : 'full';
+
+function ipToKeep(raw) {
+  const ip = String(raw || '').replace(/^::ffff:/, '');
+  if (IP_MODE === 'full') return ip;
+  if (IP_MODE === 'off') return '';
+  if (net.isIPv4(ip)) return ip.split('.').slice(0, 3).join('.') + '.0/24';
+  if (!net.isIPv6(ip)) return '';
+  // Развернуть «::», взять первые три группы.
+  const [head, tail = ''] = ip.split('::');
+  const a = head ? head.split(':') : [];
+  const b = tail ? tail.split(':') : [];
+  const groups = ip.includes('::') ? [...a, ...Array(8 - a.length - b.length).fill('0'), ...b] : a;
+  return groups.slice(0, 3).map((g) => g || '0').join(':') + '::/48';
+}
+
+// Режим сменили — записанное раньше приводим к нему сразу, не дожидаясь,
+// пока попытки уйдут сами (30 дней): net стирает полные адреса (сеть с «/»
+// уже обезличена), off — всё.
+if (IP_MODE !== 'full') {
+  Trace.updateMany({ ip: IP_MODE === 'off' ? { $ne: '' } : { $nin: [''], $not: /\// } }, { $set: { ip: '' } })
+    .catch((e) => errorLog.server(e, 'telemetry.ip'));
+}
 
 const cut = (v, n) => String(v == null ? '' : v).slice(0, n);
 const ms = (v) => (Number.isFinite(v) ? Math.max(0, Math.min(DAY_MS, Math.round(v))) : null);
@@ -70,7 +100,7 @@ router.post('/api/t', limiter, express.text({ limit: '8kb', type: () => true }),
       kind: b.kind,
       target: cut(b.target, 60),
       user: (req.session && req.session.userId) || null,
-      ip,
+      ip: ipToKeep(ip),
       ua: cut(req.get('user-agent'), 300),
       net: { ...netInfo.lookup(ip, tz), tz, type: cut(b.conn, 12), down: Number(b.down) || 0 },
       standalone: b.standalone === true,

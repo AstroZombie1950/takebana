@@ -214,6 +214,11 @@ router.post('/set-active', requireAuth, requireNotBanned, validate({
     try {
       await webLive.start({ ...current, portrait }, publicHost(req));
     } catch (err) {
+      // Звонка ведущего у Daily так и не стало — связь ведущего, а не
+      // сбой сервиса: в журнал ошибок не пишем, причина — в его попытке.
+      if (err.hostLost) {
+        return res.status(409).json({ code: 'host_lost', message: 'Связь с видеосервисом прервалась — проверьте интернет и нажмите ещё раз' });
+      }
       errorLog.external(err, 'webLive.start', { stream: String(current._id) });
       return res.status(502).json({ message: 'Сервис видео не запустил трансляцию, попробуйте ещё раз' });
     }

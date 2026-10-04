@@ -1335,10 +1335,20 @@
     var quoted = replyTo;
     var key = chatKey();
     var gid = group && group.id;
+    // Ответа нет дольше SLOW_SEND_MS — текст встаёт в ленту заглушкой
+    // «Отправляется…» (NOTICES.md, «Переписка»): из поля он уже ушёл,
+    // и без неё медленная сеть выглядела как пропавшее сообщение.
+    var pend = { ref: 'text-' + Date.now(), chat: key, text: content, state: 'sending' };
+    var slow = setTimeout(function () {
+      uploads.push(pend);
+      if (chatKey() === key) { render(); scrollToBottom(); }
+    }, SLOW_SEND_MS);
+    var unpend = function () { clearTimeout(slow); if (uploads.indexOf(pend) >= 0) dropUpload(pend.ref); };
     (gid
       ? post('/api/groups/' + encodeURIComponent(gid) + '/send', { content: content, replyTo: takeReply() || undefined })
       : post('/sendMessage', { recipientId: peer.id, content: content, limit: limit, replyTo: takeReply() || undefined }))
       .then(function (m) {
+        unpend();
         if (chatKey() === key) {
           merge([m]);
           render();
@@ -1348,10 +1358,13 @@
         if (el) (gid ? setGroupLast : setLast)(el, m);
       })
       .catch(function (err) {
+        unpend();
         console.error('sendMessage:', err);
         if (!input.value) { input.value = content; setLimit(limit); syncActs(); if (quoted && !replyTo) setReply(quoted); } // текст не теряем
-        // Ограничение доступа (utils/restrict.js) — сервер объясняет сам.
-        toast(err.status === 403 && err.message ? err.message : t('chats.sendFailed'), 'error');
+        // Ограничение доступа (utils/restrict.js) — сервер объясняет сам;
+        // иначе — что не ушло и почему: сеть, тайм-аут, сервер (TKNet).
+        toast(err.status === 403 && err.message ? err.message
+          : err.reason || err.status ? t('chats.notSent', { why: err.message }) : t('chats.sendFailed'), 'error');
       });
   });
 
@@ -1360,7 +1373,8 @@
   // стоит заглушка с полосой загрузки. Текст из поля — подпись к первому.
   // Видео сервер пережимает со знаком: ответ 202 приходит сразу, а готовое
   // сообщение — сокетом, с тем же ref (tk:message:new или tk:message:failed).
-  var uploads = [];         // { ref, peerId, name, kind, pct, state, xhr, error, tr }
+  var uploads = [];         // { ref, peerId, name, kind, pct, state, xhr, error, tr }; текст — { ref, chat, text }
+  var SLOW_SEND_MS = 3000;
   var sending = false;
   // Прогресс стоит столько — отправку обрываем с «Повторить», а не держим
   // «Загрузка 37%» вечно: у XHR без тайм-аута зависший запрос живёт часами.
@@ -1386,6 +1400,10 @@
   }
 
   function uploadHtml(u) {
+    if (u.text != null) {
+      return '<div class="tk-msg tk-msg--out tk-msg--pending" data-ref="' + escapeHtml(u.ref) + '"><div class="tk-msg__bubble">' +
+        '<p class="tk-msg__text">' + escapeHtml(u.text) + '</p><span class="tk-upload__state">' + escapeHtml(t('chats.sendingText')) + '</span></div></div>';
+    }
     var state = u.state === 'failed' ? escapeHtml(u.error || t('chats.uploadFailed'))
       : u.state === 'processing' ? escapeHtml(t('chats.processing'))
       : escapeHtml(t('chats.uploading')) + ' ' + u.pct + '%';

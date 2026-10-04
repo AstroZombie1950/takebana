@@ -38,6 +38,54 @@ else console.warn('Пуши выключены: нет VAPID_PUBLIC / VAPID_PRIV
 // «началось» ведёт на уже кончившееся.
 const TTL = { message: 4 * 3600, call: 4 * 3600, follow: 24 * 3600, live: 30 * 60 };
 
+// Счётчик на значке приложения (этап 3): непрочитанные сообщения +
+// пропущенные звонки — то же число, что у иконки переписки в шапке
+// (public/tk-app.js, tkChatBadge). Едет в пушах о сообщении и звонке:
+// закрытое приложение иначе узнало бы его, только открывшись. Эфир
+// и подписчик числа не меняют — им и считать незачем.
+const BADGE_TOPICS = new Set(['message', 'call']);
+async function badgeFor(userId) {
+  // Лениво: groups и callLog сами шлют пуши через этот модуль.
+  const [unread, missed] = await Promise.all([
+    require('./groups').unreadTotal(userId),
+    require('./callLog').missedCount(userId),
+  ]);
+  return unread + missed;
+}
+
+// Уборка (этап 3): подписка, куда год ничего не дошло и с которой год не
+// заходили. lastOkAt обновляют и успешная отправка, и сверка подписки при
+// каждом заходе (public/tk-push.js), поэтому год тишины — это устройство,
+// которого больше нет: выброшенный телефон, браузер, переустановленный без
+// отписки. Пуш-сервис о них не всегда отвечает 410 — отказ бывает другим
+// (403, 400) и повторяется вечно.
+const STALE_MS = 365 * 24 * 3600 * 1000;
+const SWEEP_MS = 24 * 3600 * 1000;
+
+async function sweep() {
+  try {
+    const r = await PushSubscription.deleteMany({ lastOkAt: { $lt: new Date(Date.now() - STALE_MS) } });
+    if (r.deletedCount) console.log(`[push] убрано молчащих подписок: ${r.deletedCount}`);
+  } catch (e) {
+    errorLog.server(e, 'push.sweep');
+  }
+}
+
+function start() {
+  setTimeout(sweep, 60 * 1000).unref();
+  setInterval(sweep, SWEEP_MS).unref();
+}
+
+// Устройство в списке настроек — по строке браузера: «iPhone · Safari».
+function deviceName(ua) {
+  const s = String(ua || '');
+  const os = /iPhone/.test(s) ? 'iPhone' : /iPad/.test(s) ? 'iPad' : /Android/.test(s) ? 'Android'
+    : /Mac OS X/.test(s) ? 'Mac' : /Windows/.test(s) ? 'Windows' : /CrOS/.test(s) ? 'ChromeOS' : /Linux/.test(s) ? 'Linux' : '';
+  const browser = /YaBrowser/.test(s) ? 'Yandex' : /SamsungBrowser/.test(s) ? 'Samsung' : /Edg\//.test(s) ? 'Edge'
+    : /OPR\//.test(s) ? 'Opera' : /FxiOS|Firefox/.test(s) ? 'Firefox' : /CriOS|Chrome\//.test(s) ? 'Chrome' : /Safari\//.test(s) ? 'Safari' : '';
+  return [os, browser].filter(Boolean).join(' · ');
+}
+
 // Полезная нагрузка ограничена примерно четырьмя килобайтами, и длинный
 // текст на экране всё равно обрежет система. 120 знаков — то же правило,
 // по которому показывает уведомление открытая вкладка (public/tk-notify.js):
@@ -156,13 +204,23 @@ async function sendMany(userIds, note) {
   }
   if (!subs.length) return { sent: 0, gone: 0 };
 
+  // Число на значке — по человеку, а не по устройству; ошибка подсчёта
+  // пуш не держит — уйдёт без числа, значок поправит открытая страница.
+  const badges = new Map();
+  if (BADGE_TOPICS.has(topic)) {
+    await Promise.all([...new Set(subs.map((x) => String(x.user)))].map((id) =>
+      badgeFor(id).then((n) => badges.set(id, n), (e) => errorLog.server(e, 'push.badge'))));
+  }
+
   const results = await Promise.all(subs.map(async (sub) => {
+    const badge = badges.get(String(sub.user));
     const payload = JSON.stringify({
       title: titleFor(sub, note),
       body: bodyFor(sub, note),
       tag: note.tag || topic,
       url: note.url || '/',
       renotify: !!note.renotify,
+      ...(badge != null ? { badge } : {}),
     });
     try {
       // urgency: high у всех. Пониженная срочность разрешает пуш-сервису
@@ -197,4 +255,4 @@ async function sendMany(userIds, note) {
   };
 }
 
-module.exports = { pushConfigured, publicKey: PUBLIC, subscribe, unsubscribe, setPrefs, send, sendMany, onScreen, short };
+module.exports = { pushConfigured, publicKey: PUBLIC, subscribe, unsubscribe, setPrefs, send, sendMany, onScreen, short, start, sweep, deviceName };

@@ -35,8 +35,15 @@ const SIGN_TTL_DAYS = 1;
 // Ведущий уже вошёл в комнату, а API Daily ещё несколько секунд отвечает
 // 404 «does not seem to be hosting a call» — звонок у него не успел
 // появиться. Замечено 15.09.2026 на первом же прогоне. Ждём до ~15 с.
+//
+// 400 «session was closed after command sent» — то же самое с другой
+// стороны: команда ушла в звонок ведущего, а его сеанс у Daily в этот миг
+// закрылся (переподключение или ушёл). 29.09 так и было: ведущий пробыл
+// в комнате 5 секунд. Это не сбой Daily — повторяем, как 404; не вышло —
+// err.hostLost, маршрут говорит ведущему про связь и в журнал не пишет.
 const START_TRIES = 10;
 const START_RETRY_MS = 1500;
+const notInCall = (err) => err.status === 404 || (err.status === 400 && /session was closed/i.test(err.message || ''));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Обрыв выхода посреди эфира: RTMP от Daily к нам закрылся.
@@ -120,7 +127,8 @@ async function start({ streamKey, dailyRoomName, portrait }, host) {
       streamLog.event(streamKey, 'daily.out.start', { attempt, ms: Date.now() - t0 });
       break;
     } catch (err) {
-      if (err.status !== 404 || attempt >= START_TRIES) throw err;
+      if (!notInCall(err)) throw err;
+      if (attempt >= START_TRIES) { err.hostLost = true; throw err; }
       await sleep(START_RETRY_MS);
     }
   }

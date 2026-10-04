@@ -377,11 +377,59 @@
         .catch(function () {});
     };
 
+    // Устройства, куда приходят пуши: это — помечено (его выключает
+    // тумблер выше), остальные можно убрать. Список пуст — блока нет.
+    var devBox = $('pushDevices');
+    var devList = $('pushDeviceList');
+    var day = { day: 'numeric', month: 'short', year: 'numeric' };
+    var pushDevices = function (endpoint) {
+      return send('/api/push/devices' + (endpoint ? '?endpoint=' + encodeURIComponent(endpoint) : ''))
+        .then(function (d) {
+          devList.textContent = '';
+          d.devices.forEach(function (x) {
+            var li = document.createElement('li');
+            li.className = 'tk-set__person';
+            var info = document.createElement('div');
+            info.className = 'tk-set__dev';
+            var name = document.createElement('span');
+            name.className = 'tk-set__person-name';
+            name.textContent = x.name || t('settings.pushUnknown');
+            var meta = document.createElement('span');
+            meta.className = 'tk-note';
+            meta.textContent = t('settings.pushSince', { date: tkDate(x.createdAt, day) }) + ' · ' + t('settings.pushLast', { date: tkDate(x.lastOkAt, day) });
+            info.append(name, meta);
+            li.append(info);
+            if (x.current) {
+              var tag = document.createElement('span');
+              tag.className = 'tk-note';
+              tag.textContent = t('settings.pushThis');
+              li.append(tag);
+            } else {
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'tk-btn tk-btn--outline tk-btn--xs';
+              btn.textContent = t('settings.pushRemove');
+              btn.addEventListener('click', function () {
+                btn.disabled = true;
+                send('/api/push/devices/' + x.id, { method: 'DELETE' })
+                  .then(function () { li.remove(); devBox.hidden = !devList.children.length; })
+                  .catch(function (e) { btn.disabled = false; toast(t('settings.pushFail', { message: e.message }), 'error'); });
+              });
+              li.append(btn);
+            }
+            devList.append(li);
+          });
+          devBox.hidden = !d.devices.length;
+        })
+        .catch(function () {});
+    };
+
     P.state().then(function (st) {
       pushBoxes.on.checked = st.on;
       pushLock(st.on);
       pushSay(!st.supported ? 'settings.pushNone' : st.permission === 'denied' ? 'settings.pushDenied' : '');
       if (st.on) pushPrefs(st.endpoint);
+      pushDevices(st.endpoint);
     });
 
     pushBoxes.on.addEventListener('change', function () {
@@ -391,6 +439,7 @@
         .then(function (sub) {
           pushLock(on);
           pushSay('');
+          pushDevices(on && sub ? sub.endpoint : '');
           if (on && sub) return pushPrefs(sub.endpoint);
         })
         .catch(function (e) {

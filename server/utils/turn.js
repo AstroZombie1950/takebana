@@ -23,9 +23,12 @@ function configured() {
 // TURN — когда напрямую не выходит. Порядок адресов TURN — порядок
 // предпочтения: UDP, потом TCP, потом TLS.
 // ttl — короче для проверки связи (utils/netCheck.js): ключ живёт на странице.
-function iceServers(userId, ttl = TTL_S) {
+// callId — третьим полем имени: coturn пишет имя в каждую строку журнала,
+// и по нему utils/turnLog.js раскладывает реле по звонкам. Подпись
+// считается от имени целиком, срок coturn берёт из числа до первого «:».
+function iceServers(userId, { ttl = TTL_S, callId = '' } = {}) {
   const host = process.env.TURN_HOST;
-  const username = Math.floor(Date.now() / 1000 + ttl) + ':' + userId;
+  const username = Math.floor(Date.now() / 1000 + ttl) + ':' + userId + (callId ? ':' + callId : '');
   const credential = createHmac('sha1', process.env.TURN_SECRET).update(username).digest('base64');
   return [
     { urls: `stun:${host}:3478` },

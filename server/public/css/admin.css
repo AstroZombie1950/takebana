@@ -146,6 +146,13 @@ body.tk-panel {
   color: var(--tk-beige);
 }
 
+/* Сторона встречи Daily в карточке звонка: участник над своей выжимкой. */
+.tk-panel__h3 {
+  margin: 16px 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .tk-panel__tools {
   display: flex;
   align-items: center;

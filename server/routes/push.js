@@ -64,6 +64,30 @@ router.post('/api/push/prefs', requireAuthApi, async (req, res) => {
   res.json({ ok: true, preview: saved.preview, live: saved.live });
 });
 
+// Устройства, куда приходят пуши (этап 3): узнать своё и убрать забытое —
+// старый телефон, чужой ноутбук, где вошли и не вышли. endpoint — подписка
+// этого устройства, её помечаем «это устройство»: её выключает тумблер выше,
+// а не кнопка в списке.
+router.get('/api/push/devices', requireAuthApi, async (req, res) => {
+  const here = String(req.query.endpoint || '');
+  const subs = await PushSubscription.find({ user: req.session.userId })
+    .select('endpoint ua createdAt lastOkAt').sort({ lastOkAt: -1 }).limit(50).lean();
+  res.json({ devices: subs.map((x) => ({
+    id: String(x._id),
+    name: push.deviceName(x.ua),
+    createdAt: x.createdAt,
+    lastOkAt: x.lastOkAt,
+    current: !!here && x.endpoint === here,
+  })) });
+});
+
+router.delete('/api/push/devices/:id', requireAuthApi, async (req, res) => {
+  if (!/^[a-f\d]{24}$/i.test(req.params.id)) return res.status(404).json({ message: 'Запись не найдена' });
+  const r = await PushSubscription.deleteOne({ _id: req.params.id, user: req.session.userId });
+  if (!r.deletedCount) return res.status(404).json({ message: 'Запись не найдена' });
+  res.json({ ok: true });
+});
+
 // «Проверить» в настройках. Остаётся насовсем: когда на новом телефоне
 // уведомления молчат, это единственный способ отличить «не дошло» от
 // «выключено в системе», не трогая чужую переписку.

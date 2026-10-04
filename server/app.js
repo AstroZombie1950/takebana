@@ -369,6 +369,10 @@ async function startServer() {
     // окно, тем меньше теряется (жалоба 21.09: «прочитано» не приходило).
     pingInterval: 10000,
     pingTimeout: 10000,
+    // Самое большое, что шлёт страница, — сигнал звонка до 32 КБ
+    // (sockets/index.js, SIGNAL_MAX). Умолчание Socket.IO — мегабайт на
+    // сообщение: лишняя память на каждое соединение того, кто засыпает.
+    maxHttpBufferSize: 100 * 1024,
   });
 
   // Сокеты читают ту же сессию, что и Express: иначе socket.data.userId
@@ -394,6 +398,10 @@ async function startServer() {
   require('./utils/messageLimit').start(io);
   // Нагрузка сервера раз в минуту — «Система» в панели (utils/loadStats.js).
   require('./utils/loadStats').start({ calls: activeCalls });
+  // Реле TURN по звонкам — из журнала coturn (utils/turnLog.js).
+  require('./utils/turnLog').start();
+  // Пуши: раз в сутки убрать подписки, куда год ничего не доходило.
+  require('./utils/push').start();
 
   // Хуки node-media-server шлют зрителям смену типа эфира при старте OBS.
   try {

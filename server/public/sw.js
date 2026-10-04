@@ -81,6 +81,12 @@ self.addEventListener('push', (event) => {
   let note = {};
   try { note = event.data ? event.data.json() : {}; } catch (e) {}
   const title = note.title || 'Takebana';
+  // Число на значке приложения (utils/push.js, badge) — у пушей о сообщении
+  // и звонке. Где значков нет (вкладка браузера, Android), вызов молча
+  // отказывает: уведомление важнее, его не ждём из-за этого.
+  if (typeof note.badge === 'number' && self.navigator.setAppBadge) {
+    (note.badge ? self.navigator.setAppBadge(note.badge) : self.navigator.clearAppBadge()).catch(() => {});
+  }
   event.waitUntil(self.registration.showNotification(title, {
     body: note.body || '',
     icon: ICON,

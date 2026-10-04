@@ -63,6 +63,36 @@ nginx, coturn и MediaMTX `deploy.sh` не трогает: изменился
 `mediamtx/mediamtx.yml` — переложить и `systemctl restart mediamtx`, сверив,
 что `webrtcAdditionalHosts` на бою — внешний IP (в репозитории там `[]`).
 
+### coturn: журнал для сайта (с 4 октября)
+
+Сайт читает журнал coturn (`server/utils/turnLog.js`) и показывает реле по
+каждому звонку в панели. Нужен один раз, из root-сессии; перезапуск coturn
+рвёт идущие разговоры своим путём, поэтому — когда звонков нет:
+
+```bash
+install -d -o turnserver -g takebana -m 750 /var/log/turnserver
+cp /etc/turnserver.conf /root/turnserver.conf.bak-$(date +%Y%m%d)
+sed "s|__TURN_SECRET__|$(grep -E '^TURN_SECRET=' /srv/takebana/server/.env | cut -d= -f2-)|" \
+  /srv/takebana/ops/coturn/turnserver.conf > /etc/turnserver.conf
+cat > /etc/logrotate.d/turnserver-takebana <<'ROTATE'
+/var/log/turnserver/turn.log {
+  daily
+  rotate 7
+  compress
+  delaycompress
+  missingok
+  notifempty
+  copytruncate
+}
+ROTATE
+systemctl restart coturn && sleep 2 && tail -n 3 /var/log/turnserver/turn.log
+sudo -u takebana head -c 1 /var/log/turnserver/turn.log >/dev/null && echo читается
+```
+
+Если в `/etc/logrotate.d/coturn` уже есть правило на `/var/log/turnserver/*.log`,
+его убрать: два правила на один файл logrotate не любит. Журнал не читается —
+в журнале ошибок панели одна запись `turn.log`.
+
 ## Порядок на чистом сервере
 
 Проделано 9 сентября 2026 при переезде; полный разбор с граблями —

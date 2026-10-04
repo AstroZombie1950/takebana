@@ -35,7 +35,7 @@ router.get('/check', commonDataMiddleware, (req, res) => {
   res.render('check', {
     check: {
       ...netCheck.targets(),
-      ice: userId && turn.configured() ? turn.iceServers(userId, 10 * 60)[1] : null,
+      ice: userId && turn.configured() ? turn.iceServers(userId, { ttl: 10 * 60 })[1] : null,
     },
   });
 });

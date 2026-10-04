@@ -841,6 +841,7 @@ VIEWS.venues = {
           // по привычке и шлют на сервер карточку без изменений.
           '<button type="button" class="tk-btn tk-btn--primary tk-btn--xs" data-act="venue-save" data-id="' + esc(v.id) + '" disabled>Сохранить</button>' +
           '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="venue-delete" data-id="' + esc(v.id) + '">Удалить</button>' +
+          '<a class="tk-btn tk-btn--outline tk-btn--xs" href="' + href('camera', { id: v.id }) + '">Камера: хронология</a>' +
         '</div></article>';
     }).join('') + '</div>';
   },
@@ -1071,11 +1072,18 @@ const KIND_TITLE = {
   'live.view': 'эфир · зритель', 'live.host': 'эфир · ведущий', 'venue.view': 'камера · зритель',
   'venue.host': 'камера · заведение', call: 'звонок', upload: 'загрузка', 'chat.media': 'медиа в переписке', notice: 'сбой связи',
 };
+// Попытка ведёт на карточку того, к чему относится: звонка, камеры.
+const KIND_LINK = {
+  call: (id) => href('call', { id }),
+  'venue.view': (id) => href('camera', { id }),
+  'venue.host': (id) => href('camera', { id }),
+};
 const OUTCOME_TITLE = { open: 'идёт', ok: 'вышло', fail: 'ошибка', gave_up: 'не дождался', partial: 'оборвалось' };
 const REASON_TITLE = {
   no_manifest: 'плейлист не пришёл', no_frame: 'плейлист есть, картинки нет', fallback_busy: 'запасной путь переполнен',
   error: 'ошибка', no_camera: 'нет камеры',
   camera_denied: 'камера запрещена', no_publish: 'видео не дошло до сервера ни разу',
+  host_lost: 'ведущий выпал из Daily, пока запускали выход',
   lost: 'связь пропала и не вернулась', not_connected: 'не соединились',
   canceled: 'отменили', too_big: 'слишком большой', novideo: 'не видео', long: 'слишком длинное', encode: 'пережатие', store: 'хранилище',
   processing: 'не обработалось на сервере', processing_timeout: 'обработка дольше 5 минут', stalled: 'отправка встала',
@@ -1101,6 +1109,7 @@ const STAT_TITLE = {
   what: 'что', kb: 'КБ', type: 'тип', files: 'файлов', pages: 'страниц', bytes: 'байт дошло', sendMs: 'отправка, мс',
   kbps: 'кбит/с', retries: 'повторов', ms: 'всего, мс', dir: 'куда', group: 'в группе', retry: 'повтор №', tries: 'попыток открыть',
   video: 'с видео', role: 'сторона', size: 'участников', stuck: 'почему ушли с Daily', heard: 'звук через 10 с', heardEnd: 'звук в конце',
+  relay: 'реле TURN дано', turnErr: 'отказы TURN',
 };
 const sec = (ms) => (ms / 1000).toFixed(1).replace('.', ',') + ' с';
 
@@ -1143,7 +1152,9 @@ function netText(t) {
 function traceRow(t, withKind) {
   return '<tr>' +
     '<td class="tk-nowrap">' + esc(when(t.at)) + '</td>' +
-    (withKind ? '<td>' + esc(KIND_TITLE[t.kind] || t.kind) + '</td>' : '') +
+    (withKind ? '<td>' + (KIND_LINK[t.kind] && t.target
+      ? '<a href="' + KIND_LINK[t.kind](t.target) + '">' + esc(KIND_TITLE[t.kind]) + '</a>'
+      : esc(KIND_TITLE[t.kind] || t.kind)) + '</td>' : '') +
     '<td>' + (t.user ? person(t.user) : '<span class="tk-panel__gone">гость</span>') + '</td>' +
     '<td>' + outcomeTag(t) + '</td>' +
     '<td>' + esc(t.route || '—') + '</td>' +
@@ -1189,14 +1200,20 @@ const EVENT_TITLE = {
   'hls.start': 'конвейер запущен', 'hls.ready': 'первый плейлист', 'hls.late': 'плейлиста нет минуту', 'hls.exit': 'ffmpeg вышел',
   'hls.stop': 'конвейер остановлен', 'host.away': 'ведущий свернул', 'host.back': 'ведущий вернулся',
   'rtmp.info': 'параметры потока', 'rtmp.low': 'вещатель шлёт мало данных', 'rtmp.ok': 'поток выровнялся',
+  'hls.giveup': 'ffmpeg сдался после 5 перезапусков',
+  // Камера заведения (utils/venueLog.js).
+  'cam.on': 'камеру включили', 'cam.off': 'камеру выключили', 'owner.left': 'страница владельца отключилась',
+  'owner.back': 'владелец вернулся за минуту', 'mtx.ready': 'публикация пришла в MediaMTX', 'mtx.gone': 'публикация кончилась',
 };
+const ENDED_BY = { owner: 'кнопкой', moderation: 'модерация', lapsed: 'владелец пропал', absent: 'владельца нет на странице', restart: 'сменён новым' };
+const eventTitle = (e) => (e.e === 'cam.demand' ? (e.d && e.d.on ? 'попросили видео у владельца' : 'зрителей нет — видео не просим') : EVENT_TITLE[e.e] || e.e);
 const PROFILE_TITLE = { full: '720/480/360', lite: '480p', copy: 'копия', venue: 'камера' };
 
 // Подробности события — по-русски, без пустого и «нет»: «режим 720/480/360 ·
 // знак поверх · режим до обрыва», «без видео 42,0 с · попыток 4».
 const EVENT_KEYS = { ms: 'за', downMs: 'без видео', sec: 'шёл', tries: 'попыток', n: 'попытка', attempt: 'с попытки',
   status: 'ответ Daily', msg: '', code: 'код', signal: 'сигнал', restart: 'перезапуск',
-  size: 'кадр', codec: '', fps: 'кадров/с', of: 'из', kbps: 'кбит/с', want: 'заявлено', lowSec: 'плохо было' };
+  size: 'кадр', codec: '', fps: 'кадров/с', of: 'из', kbps: 'кбит/с', want: 'заявлено', lowSec: 'плохо было', viewers: 'зрителей' };
 function eventMeta(e) {
   const d = e.d || {};
   const out = [];
@@ -1206,6 +1223,8 @@ function eventMeta(e) {
   if (d.daily) out.push('от Daily');
   if (d.ok) out.push('Daily согласился');
   if (d.host != null) out.push(d.host ? 'ведущий в комнате' : d.host === false ? 'ведущего нет в комнате' : 'есть ли ведущий — неизвестно');
+  if (d.by) out.push(ENDED_BY[d.by] || d.by);
+  if (d.engine === 'daily') out.push('комната Daily');
   Object.entries(d).forEach(([k, v]) => {
     if (!(k in EVENT_KEYS) || v == null || v === '') return;
     const val = k === 'ms' || k === 'downMs' ? sec(v) : k === 'sec' || k === 'lowSec' ? dur(v) : String(v);
@@ -1243,7 +1262,7 @@ VIEWS.stream = {
 
     html += '<h2 class="tk-panel__h2">Хронология</h2>' + (s.events.length
       ? table([{ title: 'От начала' }, { title: 'Что' }, { title: 'Подробности' }], s.events.map((e) =>
-          '<tr><td class="tk-nowrap tk-num">' + esc(rel(e.at)) + '</td><td>' + esc(EVENT_TITLE[e.e] || e.e) + '</td>' +
+          '<tr><td class="tk-nowrap tk-num">' + esc(rel(e.at)) + '</td><td>' + esc(eventTitle(e)) + '</td>' +
           '<td><span class="tk-panel__why">' + eventMeta(e) + '</span></td></tr>'))
       : note('Хронологии нет — эфир до 2 октября'));
 
@@ -1258,10 +1277,108 @@ VIEWS.stream = {
   },
 };
 
+// Встреча у Daily: у эфира одна сторона (ведущий), у звонка — по стороне
+// на участника (routes/admin/traces.js, dailyMeetings).
+// ── Карточка камеры заведения ────────────────────────────────────────────────
+// Сеансы камеры от «включить» до «выключить», выбранный — с хронологией
+// сервера (utils/venueLog.js), владелец и зрители — попытками в его окне.
+VIEWS.camera = {
+  title: 'Камера',
+  hidden: true,
+  admin: true,
+  async render(params) {
+    if (!params.id) return { html: note('Заведение не выбрано') };
+    const d = await api('/venues/' + encodeURIComponent(params.id) + '/camera' + (params.s ? '?s=' + encodeURIComponent(params.s) : ''));
+    const v = d.venue;
+    const s = d.session;
+    const fact = (k, x) => '<dt>' + esc(k) + '</dt><dd>' + x + '</dd>';
+    const length = (x) => (x.endedAt ? dur(Math.round((new Date(x.endedAt) - new Date(x.startedAt)) / 1000)) : 'идёт');
+
+    let html = '<a class="tk-panel__back" href="' + href('venues', { q: v.name }) + '">← к заведениям</a>';
+    html += '<dl class="tk-facts">' + fact('Владелец', v.owner ? person(v.owner) : '—') +
+      fact('Камера сейчас', v.online ? '<span class="tk-tag tk-tag--on">включена</span>' : 'выключена') + '</dl>';
+    if (!d.sessions.length) return { html: html + note('Сеансов нет — камеру не включали с 4 октября'), title: v.name || 'Камера' };
+
+    html += '<h2 class="tk-panel__h2">Сеансы</h2>' + table([{ title: 'Начало' }, { title: 'Шёл' }, { title: 'Пик зрителей' }, { title: 'Выключили' }],
+      d.sessions.map((x) => '<tr><td class="tk-nowrap">' +
+        (s && x.id === s.id ? esc(when(x.startedAt)) : '<a href="' + href('camera', { id: v.id, s: x.id }) + '">' + esc(when(x.startedAt)) + '</a>') + '</td>' +
+        '<td class="tk-num">' + esc(length(x)) + '</td><td class="tk-num">' + num(x.peakViewers) + '</td>' +
+        '<td>' + esc(x.endedAt ? ENDED_BY[x.endedBy] || x.endedBy || '—' : '—') + '</td></tr>'));
+
+    const t0 = new Date(s.startedAt).getTime();
+    const rel = (at) => { const x = Math.round((new Date(at).getTime() - t0) / 1000); return (x < 0 ? '−' : '') + dur(Math.abs(x)); };
+    html += '<h2 class="tk-panel__h2">Хронология · ' + esc(when(s.startedAt)) + '</h2>' +
+      table([{ title: 'От начала' }, { title: 'Что' }, { title: 'Подробности' }], s.events.map((e) =>
+        '<tr><td class="tk-nowrap tk-num">' + esc(rel(e.at)) + '</td><td>' + esc(eventTitle(e)) + '</td>' +
+        '<td><span class="tk-panel__why">' + eventMeta(e) + '</span></td></tr>'));
+    html += '<h2 class="tk-panel__h2">Владелец</h2>' +
+      (d.host.length ? table(TRACE_HEAD(false), d.host.map((t) => traceRow(t, false))) : note('Попыток владельца в этом сеансе нет'));
+    html += '<h2 class="tk-panel__h2">Зрители</h2>' +
+      (d.viewers.length ? table(TRACE_HEAD(false), d.viewers.map((t) => traceRow(t, false))) : note('Зрителей с телеметрией нет')) + DBIP;
+    return { html, title: v.name || 'Камера' };
+  },
+};
+
+// ── Карточка звонка ──────────────────────────────────────────────────────────
+// Запись журнала звонков, реле TURN по людям (utils/turnLog.js), попытки
+// сторон и журнал Daily по кнопке — routes/admin/traces.js.
+const CALL_STATUS = { ringing: 'звонит', answered: 'разговор был', declined: 'отклонён', canceled: 'отменён', missed: 'не ответили', failed: 'не поднялся' };
+const TURN_ERR = { 486: 'квота на человека', 508: 'порты кончились', auth: 'неверный ключ' };
+
+function turnRow(t) {
+  const errs = Object.entries(t.errors).map(([k, v]) => (TURN_ERR[k] || k) + (v > 1 ? ' ×' + v : '')).join(', ');
+  return '<tr><td>' + (t.user ? person(t.user) : '—') + '</td>' +
+    '<td class="tk-num">' + num(t.allocs) + (t.open ? '<span class="tk-panel__why">открыто ' + num(t.open) + '</span>' : '') + '</td>' +
+    '<td class="tk-num">' + num(t.inKB) + '</td><td class="tk-num">' + num(t.outKB) + '</td>' +
+    '<td>' + (errs ? '<span class="tk-tag tk-tag--bad">' + esc(errs) + '</span>' : '—') + '</td></tr>';
+}
+
+VIEWS.call = {
+  title: 'Звонок',
+  hidden: true,
+  admin: true,
+  async render(params) {
+    if (!params.id) return { html: note('Звонок не выбран') };
+    const d = await api('/calls/' + encodeURIComponent(params.id) + '/detail');
+    const c = d.call;
+    const fact = (k, v) => '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>';
+
+    let html = '<a class="tk-panel__back" href="' + href('traces', { kind: 'call' }) + '">← к попыткам звонков</a>';
+    if (c) {
+      html += '<h2 class="tk-panel__h2">Звонок</h2><dl class="tk-facts">' +
+        fact('Кто звонил', c.caller ? person(c.caller) : '—') +
+        fact(c.chat ? 'Ответил первым' : 'Кому', c.callee ? person(c.callee) : '—') +
+        (c.people.length ? fact('Ещё в разговоре', c.people.map((p) => (p.user ? person(p.user) : '—')).join(' ')) : '') +
+        fact('Тип', esc((c.type === 'video' ? 'с видео' : 'голосом') + (c.group ? ', группа' : '') + (c.chat ? ', звонок группе' : ''))) +
+        fact('Начало', esc(when(c.startedAt))) +
+        fact('Итог', esc((CALL_STATUS[c.status] || c.status) + (c.duration ? ', ' + dur(c.duration) : ''))) +
+        fact('Путь', esc(c.path === 'own' ? 'свой сервер' : 'Daily') + (c.fallback ? '<span class="tk-panel__why">ушли с Daily: ' + esc(c.fallback) + '</span>' : '')) +
+        '</dl>';
+      html += '<h2 class="tk-panel__h2">Наш TURN</h2>' + (c.turn.length
+        ? table([{ title: 'Кто' }, { title: 'Реле' }, { title: 'От собеседника, КБ' }, { title: 'К собеседнику, КБ' }, { title: 'Отказы' }], c.turn.map(turnRow)) +
+          '<p class="tk-panel__why">Реле браузер берёт всегда, даже если пошёл напрямую; через реле шло, если КБ не ноль.</p>'
+        : note(c.path === 'own' ? 'Строк coturn нет — журнал coturn не читается или звонок до 4 октября' : 'Через наш TURN не шло'));
+    } else {
+      html += note('Записи в журнале звонков нет — только попытки');
+    }
+
+    html += '<h2 class="tk-panel__h2">Стороны</h2>' +
+      (d.sides.length ? table(TRACE_HEAD(false), d.sides.map((t) => traceRow(t, false))) : note('Попыток нет — разговор не начался или до 3 октября')) + DBIP;
+    if (c && (c.path === 'daily' || c.fallback)) {
+      html += '<p><button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="call-daily" data-id="' + esc(c.id) + '">Журнал Daily</button></p><div data-daily></div>';
+    }
+    return { html };
+  },
+};
+
 function dailyDigest(m) {
+  return '<p class="tk-panel__why">' + esc('Встреча ' + when(m.start) + ', ' + dur(m.duration)) + '</p>' +
+    m.sides.map((x) => (m.sides.length > 1 ? '<h3 class="tk-panel__h3">' + (x.user ? person(x.user) : 'участник') + '</h3>' : '') + dailySide(x)).join('');
+}
+
+function dailySide(m) {
   const fact = (k, v) => '<dt>' + esc(k) + '</dt><dd>' + esc(v == null || v === '' ? '—' : String(v)) + '</dd>';
   return '<dl class="tk-facts">' +
-    fact('Встреча', when(m.start) + ', ' + dur(m.duration)) +
     fact('Устройство', [m.os, m.browser].filter(Boolean).join(' · ')) +
     fact('Часовой пояс', m.tz) +
     fact('Загрузка Daily', m.bundleMs == null ? null : sec(m.bundleMs) + (m.failedOver ? ', через запасной домен' : '')) +
@@ -1277,13 +1394,13 @@ function dailyDigest(m) {
 }
 
 view.addEventListener('click', async (e) => {
-  const btn = e.target.closest('[data-act="stream-daily"]');
+  const btn = e.target.closest('[data-act="stream-daily"], [data-act="call-daily"]');
   if (!btn) return;
   const box = view.querySelector('[data-daily]');
   btn.disabled = true;
   box.innerHTML = note('Спрашиваем Daily…');
   try {
-    const d = await api('/streams/' + encodeURIComponent(btn.dataset.id) + '/daily');
+    const d = await api((btn.dataset.act === 'call-daily' ? '/calls/' : '/streams/') + encodeURIComponent(btn.dataset.id) + '/daily');
     box.innerHTML = d.meetings.length ? d.meetings.map(dailyDigest).join('') : note('У Daily нет встреч этой комнаты');
   } catch (err) {
     box.innerHTML = note(err.message);

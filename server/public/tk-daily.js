@@ -306,7 +306,15 @@
 
     function start() {
       setState(attempt ? 'reconnecting' : 'connecting');
-      return Promise.all([load(), opts.access(), dying]).then(function (r) {
+      // Скрипт Daily не загрузился — входить нечем: о сбое браузер говорит
+      // сразу (onerror), и у звонка это повод уйти на свой сервер в ту же
+      // секунду, а не досиживать JOIN_MS на «Подключаемся…» (зонд
+      // probe-notices-1004: было 10 с).
+      var lib = load().catch(function (e) {
+        if (diag && !diag.joined) trouble('скрипт Daily не загрузился');
+        throw e;
+      });
+      return Promise.all([lib, opts.access(), dying]).then(function (r) {
         if (closed) return;
         var Daily = r[0];
         var access = r[1];

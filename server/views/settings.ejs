@@ -286,6 +286,13 @@
             <p class="tk-note tk-set__foot" data-i18n="settings.pushHint"><%- t('settings.pushHint') %></p>
             <p class="tk-note" data-i18n="settings.pushMobile"><%- t('settings.pushMobile') %></p>
             <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" id="pushTest" data-i18n="settings.pushTest"><%- t('settings.pushTest') %></button>
+            <%# Куда ещё приходят уведомления (этап 3): список рисует
+                public/settings.js по /api/push/devices. %>
+            <div id="pushDevices" hidden>
+              <p class="tk-kicker" data-i18n="settings.pushDevices"><%- t('settings.pushDevices') %></p>
+              <ul class="tk-set__people" id="pushDeviceList"></ul>
+              <p class="tk-note" data-i18n="settings.pushDevicesHint"><%- t('settings.pushDevicesHint') %></p>
+            </div>
           </div>
         </section>
         <% } %>

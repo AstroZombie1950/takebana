@@ -162,13 +162,18 @@ function release(streamKey) {
 // миг, когда зритель может начать смотреть, — в хронологию эфира, со
 // временем от запуска. Не появился за READY_MS — тоже событие.
 const READY_MS = 60 * 1000;
+
+// Хронология: эфира — его отрезок (utils/streamLog.js), камеры заведения —
+// её сеанс (opts.log из utils/venueCam.js → utils/venueLog.js).
+const note = (streamKey, job, e, d) => (job.log ? job.log(e, d) : streamLog.event(streamKey, e, d));
+
 function watchReady(streamKey, job) {
     const t0 = Date.now();
     const file = path.join(dirFor(streamKey), 'index.m3u8');
     const tick = () => {
         if (job.stopping || jobs.get(streamKey) !== job) return;
-        if (fs.existsSync(file)) return streamLog.event(streamKey, 'hls.ready', { ms: Date.now() - t0 });
-        if (Date.now() - t0 > READY_MS) return streamLog.event(streamKey, 'hls.late', { ms: READY_MS });
+        if (fs.existsSync(file)) return note(streamKey, job, 'hls.ready', { ms: Date.now() - t0 });
+        if (Date.now() - t0 > READY_MS) return note(streamKey, job, 'hls.late', { ms: READY_MS });
         setTimeout(tick, 500).unref();
     };
     setTimeout(tick, 500).unref();
@@ -240,6 +245,17 @@ function clean(dir) {
 // (камера просыпается дольше микрофона), начало добивается тишиной, а не
 // уезжает вперёд на эту разницу до конца эфира.
 const AUDIO_SYNC = 'aresample=async=1000:first_pts=0';
+
+// Камере заведения first_pts=0 вредит (STATUS, 4 октября). Айфон, вернувшись
+// из фона, отдаёт новый микрофон, и формат звука меняется посреди потока
+// (моно ↔ стерео): ffmpeg пересобирает фильтр, а с first_pts=0 метки звука
+// начинаются заново с нуля. Мультиплексор прижимает каждый пакет к прежней
+// метке — звук сломан на столько, сколько камера шла до этого (29.09 — 10
+// и 100 с, «Non-monotonous DTS … current: 320»). Выравнивать начало камере
+// незачем: звук и картинка идут от одного вещателя через MediaMTX с общей
+// шкалой. Эфиру смена формата не грозит: OBS при этом переподключается,
+// веб-эфир берёт звук копией.
+const AUDIO_SYNC_VENUE = 'aresample=async=1000';
 
 // Ужать по короткой стороне: вертикальный кадр (телефон ведущего, 720×1280)
 // остаётся 720×1280, а не 405×720. Только вниз — меньшее не растягиваем.
@@ -358,7 +374,7 @@ function ffmpegArgs(streamKey, dir, profile, part, audio, input, inFrame, audioC
         ...inputArgs(streamKey, input),
 
         ...(copy ? ['-c:v', 'copy'] : videoArgs(profile, inFrame)),
-        ...(audioCopy ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-af', AUDIO_SYNC]),
+        ...(audioCopy ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-af', profile === 'venue' ? AUDIO_SYNC_VENUE : AUDIO_SYNC]),
 
         // Очередь мультиплексора. Когда одна дорожка обгоняет другую (а после
         // обрыва RTMP это норма), ffmpeg копит пакеты опережающей, пока не
@@ -406,7 +422,9 @@ function spawnFfmpeg(streamKey, job) {
     const part = job.input ? null : recording.newPart(streamKey, { unmarked: job.mark === 'overlay' });
     const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.profile, part, job.audio, job.input, job.mark === 'frame', job.daily), { stdio: ['ignore', 'ignore', 'pipe'] });
     job.proc = proc;
-    if (!job.input) watchReady(streamKey, job);
+    // Плейлист ждём раз на конвейер: перезапуск ffmpeg каталог не стирает,
+    // и прежний index.m3u8 давал «первый плейлист» после каждого обрыва.
+    if (!job.watched) { job.watched = true; watchReady(streamKey, job); }
     // О каких видах разъезда уже сказали в этом запуске — чтобы не повторяться.
     job.warned = new Set();
 
@@ -427,6 +445,12 @@ function spawnFfmpeg(streamKey, job) {
         for (const [kind, rx] of TIMING) {
             if (!rx.test(text)) continue;
             if (job.warned.has(kind)) break;
+            // Шаг назад на десятки миллисекунд — перекрытие на стыке, когда
+            // ffmpeg пересобрал звуковой фильтр (смена формата у камеры, см.
+            // AUDIO_SYNC_VENUE): мультиплексор его поправит, звук цел. Сбой —
+            // скачок от полусекунды (метки в 1/48000 у звука, 1/90000 у картинки).
+            const back = text.match(/previous: (\d+), current: (\d+)/);
+            if (kind === 'dts' && back && Number(back[1]) - Number(back[2]) < 45000) break;
             job.warned.add(kind);
             errorLog.media(new Error(`ffmpeg: ${kind} — ${text.split('\n')[0].slice(0, 200)}`),
                 'hls.timing', { streamKey, kind, profile: job.profile });
@@ -457,6 +481,7 @@ function spawnFfmpeg(streamKey, job) {
         // Эфир идёт, а ffmpeg вышел — обрыв связи с RTMP или сбой кодека.
         if (job.restarts >= MAX_RESTARTS) {
             errorLog.media(new Error(`ffmpeg падает подряд ${MAX_RESTARTS} раз, транскод остановлен`), 'hls.restarts', { streamKey, code });
+            note(streamKey, job, 'hls.giveup', { code, signal });
             finish(streamKey, job);
             // Старый плейлист — долой: иначе новый зритель получал ~12 с
             // прошлого видео и вставал, а не «видео ещё не пришло» (зонд
@@ -467,7 +492,7 @@ function spawnFfmpeg(streamKey, job) {
 
         job.restarts++;
         console.warn(`[hls ${streamKey}] ffmpeg завершился (code=${code} signal=${signal}), перезапуск ${job.restarts}/${MAX_RESTARTS}`);
-        if (!job.input) streamLog.event(streamKey, 'hls.exit', { code, signal, restart: job.restarts });
+        note(streamKey, job, 'hls.exit', { code, signal, restart: job.restarts });
         // В журнал — каждый перезапуск, а не только последний. Один перезапуск
         // это пять секунд без картинки у всех зрителей сразу: зритель уходит,
         // ведущий уверен, что «сайт лагает», и никто об этом не говорит.
@@ -507,7 +532,7 @@ function cpuCheck() {
 
 // Эфир — на postPublish, то есть после проверки подписи и ключа.
 // Камера заведения — по готовности потока в MediaMTX (utils/venueCam.js):
-// opts.input — его адрес, opts.profile — 'venue'.
+// opts.input — его адрес, opts.profile — 'venue', opts.log — её хронология.
 function start(streamKey, opts = {}) {
     if (!isPlainFileName(streamKey)) {
         console.error(`[hls] некорректный streamKey, транскод не запущен: ${streamKey}`);
@@ -553,7 +578,7 @@ function start(streamKey, opts = {}) {
     const profile = opts.profile || (kept && kept.profile) || (full < MAX_FULL_TRANSCODES && room ? 'full' : mark === 'frame' ? 'lite' : 'copy');
     if (!opts.profile) held.set(streamKey, { profile, mark, until: Infinity });
 
-    const job = { proc: null, restarts: 0, stopping: false, timer: null, profile, mark, input: opts.input || null, daily: !!opts.daily, audio: true, silent: false };
+    const job = { proc: null, restarts: 0, stopping: false, timer: null, profile, mark, input: opts.input || null, log: opts.log || null, daily: !!opts.daily, audio: true, silent: false };
     job.done = new Promise((resolve) => { job.resolve = resolve; });
     jobs.set(streamKey, job);
     spawnFfmpeg(streamKey, job);
@@ -561,7 +586,7 @@ function start(streamKey, opts = {}) {
     const what = profile === 'copy' ? 'копия видео' : 'транскод ' + PROFILES[profile].renditions.map((r) => r.height + 'p').join('/');
     const why = kept ? ' (режим эфира до обрыва)' : profile === 'lite' || profile === 'copy' ? ' (лимит полных транскодов)' : profile === 'venue' ? ' (камера заведения)' : '';
     console.log(`[hls ${streamKey}] ${what}, знак ${mark === 'frame' ? 'в кадре' : 'поверх плеера'}${why} → /live/${streamKey}/index.m3u8`);
-    if (!opts.input) streamLog.event(streamKey, 'hls.start', { profile, mark, kept: !!kept });
+    note(streamKey, job, 'hls.start', { profile, mark, kept: !!kept });
 }
 
 // Знак этого эфира — поверх плеера (страница зрителя кладёт его сама).
@@ -583,7 +608,7 @@ function stop(streamKey, opts = {}) {
 
     job.stopping = true;
     if (job.timer) clearTimeout(job.timer);
-    if (!job.input) streamLog.event(streamKey, 'hls.stop');
+    note(streamKey, job, 'hls.stop');
 
     if (job.proc && job.proc.exitCode === null) {
         job.proc.kill('SIGTERM');

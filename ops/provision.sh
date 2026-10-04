@@ -325,8 +325,19 @@ directories() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Пределы соединений nginx (нагрузочный тест 04.10.2026, docs/GOALS.md):
+# у пакета 768 на рабочий процесс — вебсокет держит два соединения (к
+# клиенту и к приложению), и 1 000 зрителей на четырёх процессах шли впритык.
+nginx_limits() {
+  local conf=/etc/nginx/nginx.conf
+  sed -i -E 's/^([[:space:]]*)worker_connections[[:space:]]+[0-9]+;/\1worker_connections 8192;/' "$conf"
+  grep -q '^worker_rlimit_nofile' "$conf" || sed -i 's/^worker_processes auto;/worker_processes auto;\nworker_rlimit_nofile 65535;/' "$conf"
+  ok "worker_connections 8192, worker_rlimit_nofile 65535"
+}
+
 nginx_setup() {
   step "nginx"
+  nginx_limits
 
   install -m 644 "$SCRIPT_DIR/nginx/proxy_params_takebana" /etc/nginx/proxy_params_takebana
   install -d -m 755 /var/www/html   # сюда certbot кладёт файл проверки

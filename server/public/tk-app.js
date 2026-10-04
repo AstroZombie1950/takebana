@@ -81,6 +81,33 @@ document.addEventListener('DOMContentLoaded', () => {
 // Счётчик у иконки переписки в шапке: непрочитанные сообщения + пропущенные
 // звонки. part — точные числа { messages, calls } или приращения
 // { addMessages, addCalls }; обе части хранятся в data-атрибутах значка.
+// Сообщение для следующей страницы: действие кончается переходом, и тост
+// уходил вместе со старой страницей, не успев показаться (запись эфира
+// после «Завершить», NOTICES.md). Ключ словаря — в sessionStorage, новая
+// страница показывает его один раз.
+window.tkNoticeNext = function (key, kind) {
+  try { sessionStorage.setItem('tk:notice', JSON.stringify({ key, kind })); } catch (e) { /* приватный режим */ }
+};
+document.addEventListener('DOMContentLoaded', () => {
+  let n = null;
+  try { n = JSON.parse(sessionStorage.getItem('tk:notice') || 'null'); sessionStorage.removeItem('tk:notice'); } catch (e) { /* нет хранилища */ }
+  if (n && n.key) toast(t(n.key), n.kind || 'ok');
+});
+
+// То же число — на значок приложения на экране «Домой» и в доке (пуши,
+// этап 3). Закрытому приложению его ставит пуш (public/sw.js), открытое
+// держит здесь. Где значков нет, вызов отказывает — молча.
+function appBadge(n) {
+  if (!navigator.setAppBadge) return;
+  (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+}
+// Страница пришла с сервера с точными числами — значок по ним; гость
+// (вышел из аккаунта) — значок гасим: чужие числа на нём не нужны.
+document.addEventListener('DOMContentLoaded', () => {
+  if (document.querySelector('[data-chat-badge]')) window.tkChatBadge({});
+  else if (!(window.TK && TK.userId)) appBadge(0);
+});
+
 window.tkChatBadge = function (part) {
   const badge = document.querySelector('[data-chat-badge]');
   if (!badge) return;
@@ -95,6 +122,7 @@ window.tkChatBadge = function (part) {
   d.calls = c;
   badge.textContent = m + c > 99 ? '99+' : String(m + c);
   badge.classList.toggle('hidden', !(m + c));
+  appBadge(m + c);
   // Те же числа порознь — у пунктов левой панели и у вкладки «Звонки».
   const put = (sel, n) => document.querySelectorAll(sel).forEach((el) => {
     el.textContent = n > 99 ? '99+' : String(n);
@@ -412,10 +440,25 @@ document.addEventListener('DOMContentLoaded', function () {
         if (ctrl) ctrl.abort();
         const own = ctrl = new AbortController();
         tkFetch('/api/search?q=' + encodeURIComponent(q), { signal: own.signal })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((data) => { if (data) render(box, data); })
-          .catch((e) => { if (e.name !== 'AbortError') console.error('[search]', e); });
+          .then((r) => { if (!r.ok) throw new Error(TKNet.explain(r)); return r.json(); })
+          .then((data) => render(box, data))
+          .catch((e) => { if (e.name !== 'AbortError' && own === ctrl) failed(e); });
       }, 200);
+    });
+
+    // Не нашлось — одно, не загрузилось — другое (NOTICES.md, «Остальное»):
+    // раньше сбой уходил в консоль, а выпадашка оставалась пустой, и это
+    // читалось как «ничего не найдено». Причина — словами TKNet.
+    const failed = (e) => {
+      box.innerHTML = `<div class="tk-found__empty">
+           <p class="tk-found__name" data-i18n="app.searchFailed">${escapeHtml(t('app.searchFailed'))}</p>
+           <p class="tk-note">${escapeHtml(e.message || '')}</p>
+         </div>
+         <button type="button" class="tk-found__all" data-search-retry data-i18n="common.retry">${escapeHtml(t('common.retry'))}</button>`;
+      box.classList.remove('hidden');
+    };
+    box.addEventListener('click', (e) => {
+      if (e.target.closest('[data-search-retry]')) input.dispatchEvent(new Event('input'));
     });
 
     input.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
@@ -1340,6 +1383,11 @@ document.addEventListener('DOMContentLoaded', function(){
           if (silent && tr) tr.step('notice_silent');
           paint();
         }
+      },
+      // Свой путь: каким путём пошло (напрямую или через наш TURN), дал ли
+      // TURN реле, его отказы (tk-peer.js). В группе — последнее соединение.
+      onIce: (x) => {
+        if (tr) Object.keys(x).forEach((k) => tr.set(k, x[k]));
       },
       onNetwork: (n) => {
         if (tr && n !== 'good') tr.step('net_' + n);

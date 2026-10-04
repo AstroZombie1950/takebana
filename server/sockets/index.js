@@ -21,6 +21,7 @@ const userView = require('../utils/userView');
 const restriction = require('../utils/restrict');
 const privacy = require('../utils/privacy');
 const { LIVE_ROOM } = require('../utils/liveSignal');
+const socketLimit = require('../utils/socketLimit');
 
 // Список подписок приходит от клиента, поэтому и формат, и длина проверяются.
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -198,20 +199,20 @@ function registerSockets(io) {
   // Кто кому делает предложение: тот, кто вошёл в разговор раньше. На двоих
   // это звонящий, в группе — все, кто уже разговаривал, навстречу новичку.
   // Правило одно на всех, поэтому гонок «оба предложили» не бывает.
-  function ownAccess(call, userId) {
+  function ownAccess(callId, call, userId) {
     const mine = call.members.get(userId);
     const peers = [];
     for (const [id, m] of call.members) {
       if (id === userId) continue;
       peers.push({ userId: id, offerer: m.joinedAt > mine.joinedAt });
     }
-    return { type: call.type, engine: 'own', group: call.members.size > 2, ice: turn.iceServers(userId), peers };
+    return { type: call.type, engine: 'own', group: call.members.size > 2, ice: turn.iceServers(userId, { callId }), peers };
   }
 
   function goOwn(callId, call, event) {
     call.engine = 'own';
     for (const userId of call.members.keys()) {
-      io.to(`user:${userId}`).emit(event, { callId, ...ownAccess(call, userId) });
+      io.to(`user:${userId}`).emit(event, { callId, ...ownAccess(callId, call, userId) });
     }
     turnLoad();
   }
@@ -286,7 +287,7 @@ function registerSockets(io) {
     // Новичку — весь состав разом, остальным — только он.
     socket.emit('call:accepted', {
       callId,
-      ...ownAccess(call, userId),
+      ...ownAccess(callId, call, userId),
       cards: [...cards.values()].filter((c) => c.userId !== userId),
     });
     // roster — весь состав: у двоих, что говорили до этого, имени друг
@@ -295,7 +296,7 @@ function registerSockets(io) {
     for (const id of call.members.keys()) {
       if (id === userId) continue;
       io.to(`user:${id}`).emit('call:peer:join', {
-        callId, peer: cards.get(userId), roster, offerer: true, ice: turn.iceServers(id),
+        callId, peer: cards.get(userId), roster, offerer: true, ice: turn.iceServers(id, { callId }),
       });
     }
     // Остальные вкладки вошедшего перестают звонить.
@@ -367,6 +368,8 @@ function registerSockets(io) {
     // присылает клиент и подделывает как угодно.
     const forwarded = String(socket.handshake.headers['x-forwarded-for'] || '').split(',').pop().trim();
     socket.data.ip = forwarded || socket.handshake.address;
+    // Частота событий с соединения — до любых обработчиков (utils/socketLimit.js).
+    socket.use(socketLimit(socket));
 
     // Все обработчики — через on(). Socket.IO зовёт их без перехвата, и
     // исключение уходило в uncaughtException, где процесс выходит: одним

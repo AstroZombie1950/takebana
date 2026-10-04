@@ -45,6 +45,11 @@
   // сравнение с ним ломалось бы на английском. onOk — для ответа без перехода
   // (письмо восстановления). 428 — нужна задача, а её не было или она
   // устарела: решаем присланную и повторяем запрос сами, один раз.
+  //
+  // Запрос — общим TKNet.json (NOTICES.md, «Остальное»): «Отправляем…» на
+  // кнопке, тайм-аут, и на сбое — его причина своим текстом («время вышло»,
+  // «нет интернета», «сервер занят» на 429), а не одно «нет связи» на всё;
+  // ответ nginx страницей вместо JSON больше не роняет разбор.
   function submit(url, body, button, onOk, retried) {
     button.disabled = true;
     var label = button.innerHTML;
@@ -54,31 +59,25 @@
     ready
       .then(function (answer) {
         if (answer) body.task = answer;
-        return tkFetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify(body),
-        });
+        return TKNet.json(url, { method: "POST", body: body });
       })
-      .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, status: r.status, data: data }; }); })
-      .then(function (res) {
-        var data = res.data;
+      .then(function (data) {
         if (data.redirectUrl) {
           window.location.href = data.redirectUrl;
           return; // кнопку не возвращаем: уходим со страницы
         }
         button.innerHTML = label;
-        if (data.task) task = solve(data.task);
-        if (res.status === 428 && !retried) return submit(url, body, button, onOk, true);
         button.disabled = false;
-        if (res.ok && onOk) onOk();
+        if (onOk) onOk();
         else toast(data.message);
       })
-      .catch(function () {
+      .catch(function (e) {
+        var data = e.data || {};
         button.innerHTML = label;
+        if (data.task) task = solve(data.task);
+        if (e.status === 428 && !retried) return submit(url, body, button, onOk, true);
         button.disabled = false;
-        toast(t("auth.noServer"));
+        toast(e.message || t("auth.noServer"));
       });
   }
 

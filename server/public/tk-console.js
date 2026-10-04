@@ -90,7 +90,8 @@
         .then(function () { return post('/terminate-stream', { streamId: streamId, save: choice === 'save' }); })
         .then(function (b) {
           if (b.recordingId) {
-            toast(t('stream.saving'), 'ok');
+            // Тост переход бы унёс — его покажет профиль (tk-app.js, tkNoticeNext).
+            window.tkNoticeNext('stream.saving', 'ok');
             location.href = '/userPage/' + data.userId + '#recordings';
           } else {
             location.href = '/';
@@ -475,7 +476,9 @@
       })
       .catch(function (error) {
         clearTimeout(slow);
-        if (tr) tr.end('fail', error.code || 'error');
+        // Причина — своя (no_camera) или от сервера (host_lost: ведущий
+        // выпал из Daily, пока запускали выход), иначе — сеть или ответ.
+        if (tr) tr.end('fail', error.code || (error.data && error.data.code) || error.reason || 'error');
         if (self.session) { self.session.leave(); self.session = null; }
         showHint(error.code === 'no_camera' ? cameraHelp() : 'stream.pausedHint');
         tkText(startBtn, everLive ? 'stream.resume' : 'studio.go');

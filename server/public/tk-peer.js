@@ -246,14 +246,27 @@
     };
 
     // ── Сигналы ──
+    // В попытку звонка (onIce, tk-app.js), когда кандидаты собраны: дал ли
+    // наш TURN реле и с какими отказами. 701 (не достучались) Chrome шлёт
+    // с каждого лишнего интерфейса — в счёт, только если реле так и не дали.
+    // Реле запоминается: перезапуск ICE собирает кандидатов заново и не
+    // всегда просит реле снова.
+    var relayGot = false;
+    var turnCodes = {};
     pc.onicecandidate = function (e) {
-      if (!e.candidate) return note('свои кандидаты собраны: ' + list(found.mine));
+      if (!e.candidate) {
+        var codes = Object.keys(turnCodes).filter(function (c) { return !relayGot || c !== '701'; });
+        emit('onIce', { relay: relayGot ? 'yes' : 'no', turnErr: codes.join(',') });
+        return note('свои кандидаты собраны: ' + list(found.mine));
+      }
+      if (e.candidate.type === 'relay') relayGot = true;
       count(found.mine, kind(e.candidate.candidate) + (e.candidate.relayProtocol ? ' через ' + e.candidate.relayProtocol : ''));
       send({ t: 'ice', c: e.candidate.toJSON() });
     };
     pc.onicecandidateerror = function (e) {
       count(found.errors, e.errorCode + ' ' + (e.url || '') + ' ' + (e.errorText || ''));
       if (FULL[e.errorCode]) turnFull(e.errorCode);
+      if (/^turns?:/.test(e.url || '')) turnCodes[e.errorCode] = 1;
     };
 
     function offer(restart) {
@@ -379,7 +392,10 @@
           if (s.type !== 'candidate-pair' || !s.nominated || s.state !== 'succeeded') return;
           var lc = stats.get(s.localCandidateId);
           var rc = stats.get(s.remoteCandidateId);
-          if (lc && rc) note('путь: ' + lc.candidateType + '/' + (lc.relayProtocol || lc.protocol) + ' → ' + rc.candidateType);
+          if (!lc || !rc) return;
+          var via = lc.candidateType + '/' + (lc.relayProtocol || lc.protocol) + ' → ' + rc.candidateType;
+          note('путь: ' + via);
+          emit('onIce', { ice: via });
         });
       }).catch(noop);
     }
@@ -569,6 +585,7 @@
         onPeers: function () { emit('onPeers', ids().length); },
         onNetwork: function (n) { emit('onNetwork', n, id); },
         onAudio: function (sound) { emit('onAudio', sound, id); },
+        onIce: function (x) { emit('onIce', x, id); },
         onMediaError: onMediaError,
         onState: function (st) {
           // Соединение сдалось. Вдвоём это конец разговора, втроём —
