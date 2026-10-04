@@ -4,12 +4,12 @@
   который ещё едет или ждёт «Опубликовать», — на страницу загрузки.
   Незаконченное видит только владелец; проценты загрузки и конец
   пережатия ставит public/gallery.js (по data-video-id).
-  Параметр: v — видео (utils/gallery.js).
+  Параметры: v — видео (utils/gallery.js), who — имя автора для подписи обложки.
 %>
 <% var st = v.status; var href = st === 'uploading' || st === 'draft' ? '/upload#v' + v._id : '/video/' + v._id; %>
 <a href="<%= href %>" class="tk-recard<%= st !== 'ready' ? ' is-' + st : '' %>" data-video-id="<%= v._id %>">
   <span class="tk-recard__thumb">
-    <% if (v.thumb && v.thumb.url) { %><img src="<%= v.thumb.url %>" alt="" loading="lazy" decoding="async"><% } %>
+    <% if (v.thumb && v.thumb.url) { %><img src="<%= v.thumb.url %>" alt="<%= ta('alt.cover', { title: mediaTitle(v.title, 'video', who, v.createdAt) }) %>" loading="lazy" decoding="async"><% } %>
     <% if (st === 'ready') { %>
       <span class="tk-recard__len"><%= clock(v.duration) %></span>
     <% } else if (st === 'uploading') { var pct = v.upload && v.upload.size ? Math.floor(v.upload.received / v.upload.size * 100) : 0; %>
@@ -18,7 +18,7 @@
       <span class="tk-recard__state" data-i18n="<%= vKey %>"><%- t(vKey) %></span>
     <% } %>
   </span>
-  <span class="tk-recard__title"><%= v.title || ta('video.untitled', { date: date(v.createdAt, { day: 'numeric', month: 'long', year: 'numeric' }) }) %></span>
+  <span class="tk-recard__title"><%= meaningful(v.title) ? v.title : ta('video.untitled', { date: date(v.createdAt, { day: 'numeric', month: 'long', year: 'numeric' }) }) %></span>
   <span class="tk-recard__date">
     <% if (st === 'ready') { var vv = plural(v.views || 0, 'rec.views'); %><span data-i18n="<%= vv.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(v.views) }) %>'><%= vv.text %></span> · <% } %>
     <time><%= date(v.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></time>

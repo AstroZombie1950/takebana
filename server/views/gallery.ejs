@@ -74,7 +74,7 @@
       </div>
       <% } else { %>
       <div class="tk-recs">
-        <% items.forEach(function (v) { %><%- include('partials/galleryVideo', { v: v }) %><% }); %>
+        <% items.forEach(function (v) { %><%- include('partials/galleryVideo', { v: v, who: owner.displayName }) %><% }); %>
       </div>
       <% } %>
 

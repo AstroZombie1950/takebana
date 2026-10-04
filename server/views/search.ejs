@@ -99,7 +99,7 @@
           <% group.items.forEach(function (stream, i) { %>
           <a href="/stream/<%= stream._id %>" class="tk-card" style="animation-delay: <%= i * 70 %>ms">
             <div class="tk-card__shot">
-              <% if (stream.thumbnail) { %><img src="<%= stream.thumbnail %>" alt="" loading="lazy">
+              <% if (stream.thumbnail) { %><img src="<%= stream.thumbnail %>" alt="<%= ta('alt.live', { title: meaningful(stream.title) ? stream.title : stream.author.displayName }) %>" loading="lazy">
               <% } else { %><svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg><% } %>
               <span class="tk-card__live">LIVE</span>
               <span class="tk-card__eyes">
@@ -139,7 +139,7 @@
           <% group.items.forEach(function (venue) { %>
           <a href="/venue/<%= venue._id %>" class="tk-place">
             <span class="tk-place__shot">
-              <% if (venue.photo) { %><img src="<%= venue.photo %>" alt="" loading="lazy">
+              <% if (venue.photo) { %><img src="<%= venue.photo %>" alt="<%= ta('alt.venuePhoto', { name: venue.name }) %>" loading="lazy">
               <% } else { %><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square" aria-hidden="true"><path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg><% } %>
               <% if (venue.online) { %><span class="tk-place__live" data-i18n="venues.liveNow"><%- t('venues.liveNow') %></span><% } %>
             </span>

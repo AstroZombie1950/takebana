@@ -52,7 +52,7 @@
             <div class="tk-live__hint tk-live__hint--paused" id="venueHint">
               <%# Без картинки src нет вовсе: пустой src браузер считает ошибкой
                   загрузки, и её ловит журнал ошибок (public/tk-app.js). %>
-              <img class="tk-live__thumb" id="venueCover"<% if (cover) { %> src="<%= cover %>"<% } else { %> hidden<% } %> data-photo="<%= photo || '' %>" alt="">
+              <img class="tk-live__thumb" id="venueCover"<% if (cover) { %> src="<%= cover %>"<% } else { %> hidden<% } %> data-photo="<%= photo || '' %>" alt="<%= ta('alt.venueCam', { name: venue.name }) %>">
               <%# Заголовок коротко, объяснение — обычным текстом. %>
               <% var hint = restricted ? ['', 'restricted.text']
                    : isOwner ? (!approved ? ['venues.pending', 'venues.pendingNote'] : venue.online ? ['stream.hintLive', 'vlive.elsewhere'] : ['vlive.offBadge', 'vlive.ownerOff'])

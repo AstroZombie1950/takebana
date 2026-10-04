@@ -22,8 +22,12 @@
     него страница — название и адрес, поиску в ней нечего взять. Фото, видео
     и эфиры в условие не входят нарочно: они появляются и пропадают, и
     страница выпадала бы из индекса при каждом удалении. %>
-<%- include('partials/tkHead', { title: venue.name + ' — Takebana', description: [meta, venue.address].filter(Boolean).join(' · '),
-      seo: { path: '/venue/' + venue._id, robots: !approved ? 'noindex, nofollow' : String(venue.about || '').trim() ? '' : 'noindex, follow', image: venue.cover || photos[0] || venue.avatar, imageAlt: venue.name } }) %>
+<%# Описание для поиска (04.10): «Бар · Белград: {описание заведения}»;
+    без описания страница вне индекса, там хватает типа, города и адреса. %>
+<% var described = meaningful(venue.about); // то же правило, что utils/venuePage.js, indexableVenue %>
+<%- include('partials/tkHead', { title: venue.name + ' — Takebana',
+      description: described ? snippet((meta ? meta + ': ' : '') + venue.about) : [meta, venue.address].filter(Boolean).join(' · '),
+      seo: { path: '/venue/' + venue._id, robots: !approved ? 'noindex, nofollow' : described ? '' : 'noindex, follow', image: venue.cover || photos[0] || venue.avatar, imageAlt: venue.name } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/venue.css') %>">
 </head>
@@ -77,7 +81,7 @@
       <%# Эфир от имени заведения (29.09) — первым: его ведут, камера лишь смотрит в зал. %>
       <% if (tabs.live) { %>
       <a href="/stream/<%= tabs.live._id %>" class="tk-vp__live">
-        <% if (tabs.live.thumbnail) { %><img src="<%= tabs.live.thumbnail %>" alt=""><% } %>
+        <% if (tabs.live.thumbnail) { %><img src="<%= tabs.live.thumbnail %>" alt="<%= ta('alt.venueCam', { name: venue.name }) %>"><% } %>
         <span class="tk-vp__badge"><i class="tk-vp__dot" aria-hidden="true"></i><span data-i18n="venues.onAir"><%- t('venues.onAir') %></span></span>
         <span class="tk-vp__live-title" data-user-content><%= tabs.live.title %></span>
         <span class="tk-btn tk-btn--primary tk-btn--sm tk-vp__watch" data-i18n="venue.page.watchStream"><%- t('venue.page.watchStream') %></span>
@@ -87,7 +91,7 @@
       <%# Камера: идёт — картинкой и кнопкой «Смотреть», нет — строкой. %>
       <% if (approved && venue.online) { %>
       <a href="/venue/<%= venue._id %>/live" class="tk-vp__live">
-        <% if (shot) { %><img src="<%= shot %>" alt=""><% } %>
+        <% if (shot) { %><img src="<%= shot %>" alt="<%= ta('alt.venuePhoto', { name: venue.name }) %>"><% } %>
         <span class="tk-vp__badge"><i class="tk-vp__dot" aria-hidden="true"></i><span data-i18n="venues.onAir"><%- t('venues.onAir') %></span></span>
         <span class="tk-btn tk-btn--primary tk-btn--sm tk-vp__watch" data-i18n="venues.watch"><%- t('venues.watch') %></span>
       </a>
@@ -140,7 +144,7 @@
         <h2 class="tk-kicker" data-i18n="venue.page.photos"><%- t('venue.page.photos') %></h2>
         <div class="tk-vp__photos">
           <% photos.forEach(function (src, i) { %>
-          <a href="<%= src %>" target="_blank" rel="noopener" aria-label="<%= ta('venues.photoN', { n: i + 1 }) %>"><img src="<%= src %>" alt="" loading="lazy"></a>
+          <a href="<%= src %>" target="_blank" rel="noopener"><img src="<%= src %>" alt="<%= ta('alt.venuePhotoN', { name: venue.name, n: i + 1 }) %>" loading="lazy"></a>
           <% }); %>
         </div>
       </section>

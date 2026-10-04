@@ -1,13 +1,14 @@
 <%#
   Карточка записи эфира — в профиле (начало ленты) и на странице всех
-  записей /@ник/recordings. Нужна r — запись из utils/gallery.js (recordings).
+  записей /@ник/recordings. Нужна r — запись из utils/gallery.js (recordings),
+  who — имя автора (профиль или заведение): из него подпись обложки.
 %>
 <%# data-rec-id — чтобы profile.js нашёл карточку, когда придёт
     recording:status: склейка идёт минуты, и до 20.09.2026 автор
     не узнавал о её конце без перезагрузки. %>
 <a href="/recording/<%= r._id %>" class="tk-recard<%= r.status !== 'ready' ? ' is-' + r.status : '' %>" data-rec-id="<%= r._id %>">
   <span class="tk-recard__thumb">
-    <% if (r.thumb && r.thumb.url) { %><img src="<%= r.thumb.url %>" alt="" loading="lazy"><% } %>
+    <% if (r.thumb && r.thumb.url) { %><img src="<%= r.thumb.url %>" alt="<%= ta('alt.cover', { title: mediaTitle(r.title, 'recording', who, r.recordedAt || r.createdAt) }) %>" loading="lazy"><% } %>
     <% if (r.status === 'ready') { %>
       <span class="tk-recard__len"><%= clock(r.duration) %></span>
     <% } else { %>
@@ -16,7 +17,7 @@
     <% } %>
     <% if (r.isAdult) { %><span class="tk-recard__adult">18+</span><% } %>
   </span>
-  <span class="tk-recard__title"><%= r.title %></span>
+  <span class="tk-recard__title"><%= mediaTitle(r.title, 'recording', who, r.recordedAt || r.createdAt) %></span>
   <span class="tk-recard__date">
     <% if (r.status === 'ready') { var rv = plural(r.views || 0, 'rec.views'); %><span data-i18n="<%= rv.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(r.views) }) %>'><%= rv.text %></span> · <% } %>
     <time><%= date(r.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></time>

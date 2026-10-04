@@ -52,7 +52,7 @@
       <p class="tk-note tk-note--center" data-i18n="rec.empty"><%- t('rec.empty') %></p>
       <% } else { %>
       <div class="tk-recs">
-        <% items.forEach(function (r) { %><%- include('partials/recordingCard', { r: r }) %><% }); %>
+        <% items.forEach(function (r) { %><%- include('partials/recordingCard', { r: r, who: owner.displayName }) %><% }); %>
       </div>
       <% } %>
 

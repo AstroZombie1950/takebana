@@ -11,15 +11,20 @@
 <%
   var nextUrl = encodeURIComponent(base);
   var when = date(rec.createdAt, { day: 'numeric', month: 'long', year: 'numeric' });
-  var headTitle = rec.caption ? rec.caption.replace(/\s+/g, ' ').slice(0, 70) : ta('photo.titleBy', { name: author.displayName, date: when });
-  var alt = rec.caption ? rec.caption.slice(0, 125) : ta('photo.alt', { name: author.displayName });
+  // Без подписи — с номером снимка у автора, от старого к новому (не меняется,
+  // когда появляются новые): два фото за день иначе давали одинаковые
+  // заголовки (04.10). Подпись из одних знаков — то же, что никакой.
+  var captioned = meaningful(rec.caption);
+  var headTitle = captioned ? snippet(rec.caption, 70)
+    : ta('photo.titleByN', { name: author.displayName, k: around.total - around.n + 1, date: when });
+  var alt = captioned ? snippet(rec.caption, 125) : headTitle;
   var commentsN = plural(rec.comments || 0, 'rec.comments');
   var liked = myReaction === 1;
 %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: snippet(rec.caption) || ta('seo.photoDesc', { name: author.displayName, date: when }), seo: { path: base, type: 'article', image: rec.url, imageAlt: alt, robots: rec.userId.banned ? 'noindex, follow' : '',
+<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: describe(rec.caption, ta('seo.photoDesc', { name: author.displayName, date: when })), seo: { path: base, type: 'article', image: rec.url, imageAlt: alt, robots: rec.userId.banned ? 'noindex, follow' : '',
          jsonld: ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [ta('gallery.photos'), author.url + '/photos'], [headTitle, base]]) } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
@@ -43,6 +48,9 @@
          data-prev="<%= around.prev %>"
          data-next="<%= around.next %>">
 
+      <%# Заголовок страницы — для поиска и чтения с экрана; глазу его
+          заменяют снимок и подпись под ним, как в Инстаграме. %>
+      <h1 class="tk-vh"><%= headTitle %></h1>
       <div class="tk-watch__stage tk-photo__stage" id="photoStage">
         <img class="tk-photo__img" src="<%= rec.url %>" alt="<%= alt %>" decoding="async">
         <% if (around.prev) { %>

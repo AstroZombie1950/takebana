@@ -191,8 +191,9 @@ app.locals.metrika = { id: /^\d+$/.test(process.env.METRIKA_ID || '') ? process.
 app.locals.ld = require('./utils/jsonld');
 // Стили с версией по содержимому: после выкладки браузер не держит старые (utils/assets.js).
 app.locals.asset = require('./utils/assets').asset;
-// Описание страницы для <meta name="description"> (utils/snippet.js).
-app.locals.snippet = require('./utils/snippet').snippet;
+// Описание страницы и проверка «текст что-то говорит» — description, alt
+// и заголовки (utils/snippet.js).
+Object.assign(app.locals, require('./utils/snippet'));
 // Гость по умолчанию. Шапка и левая панель (header.ejs, leftBar.ejs) есть и на
 // страницах без commonDataMiddleware — вход, документы; вошедшему эти поля
 // перекрывает он же (routes/streaming/shared.js).

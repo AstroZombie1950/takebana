@@ -7,6 +7,7 @@ const Stream = require('../models/Stream');
 const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
 const MenuItem = require('../models/MenuItem');
+const { meaningful } = require('./snippet');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
@@ -42,7 +43,8 @@ async function tabsFor(venue, manage) {
   return { live, streams: mine || !!live || !!recs, videos: mine || !!videos, menu: menuOn && (mine || !!menu) };
 }
 
-// Вкладка идёт в индекс, как сама страница заведения: одобрено и есть описание.
-const indexableVenue = (venue) => venue.status === true && !!String(venue.about || '').trim();
+// Вкладка идёт в индекс, как сама страница заведения: одобрено и есть описание
+// (из одних знаков — не описание; 04.10). Правило одно на шаблоны и карту сайта.
+const indexableVenue = (venue) => venue.status === true && meaningful(venue.about);
 
 module.exports = { pageVenue, tabsFor, indexableVenue };

@@ -17,7 +17,7 @@
    var hv = v.hours ? (v.hours.open ? { to: v.hours.to } : { from: v.hours.from }) : null; %>
 <article class="tk-vc<%= v.online ? ' is-live' : '' %>" data-id="<%= id %>" data-name="<%= v.name %>"<% if (loc) { %> data-lat="<%= loc.lat %>" data-lng="<%= loc.lng %>"<% } %><% if (pin) { %> data-pin="<%= pin %>"<% } %>>
   <a class="tk-vc__media" href="/venue/<%= id %>" tabindex="-1" aria-hidden="true">
-    <% if (shot) { %><img src="<%= shot %>" alt="" loading="lazy"><% } else { %><span class="tk-vc__letter"><%= letter %></span><% } %>
+    <% if (shot) { %><img src="<%= shot %>" alt="<%= ta('alt.venuePhoto', { name: v.name }) %>" loading="lazy"><% } else { %><span class="tk-vc__letter"><%= letter %></span><% } %>
     <% if (v.online) { %><span class="tk-vc__live"><i></i><span data-i18n="venues.onAir"><%- t('venues.onAir') %></span></span><% } %>
   </a>
   <div class="tk-vc__body">

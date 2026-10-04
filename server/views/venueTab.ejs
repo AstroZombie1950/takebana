@@ -46,7 +46,7 @@
       <% if (tab === 'streams' && tabs.live) { %>
       <%# Идёт эфир от имени заведения. %>
       <a href="/stream/<%= tabs.live._id %>" class="tk-vp__live">
-        <% if (tabs.live.thumbnail) { %><img src="<%= tabs.live.thumbnail %>" alt=""><% } %>
+        <% if (tabs.live.thumbnail) { %><img src="<%= tabs.live.thumbnail %>" alt="<%= ta('alt.venueCam', { name: venue.name }) %>"><% } %>
         <span class="tk-vp__badge"><i class="tk-vp__dot" aria-hidden="true"></i><span data-i18n="venues.onAir"><%- t('venues.onAir') %></span></span>
         <span class="tk-vp__live-title" data-user-content><%= tabs.live.title %></span>
         <span class="tk-btn tk-btn--primary tk-btn--sm tk-vp__watch" data-i18n="venue.page.watchStream"><%- t('venue.page.watchStream') %></span>
@@ -67,7 +67,7 @@
 
       <% if (items.length) { %>
       <div class="tk-recs">
-        <% items.forEach(function (x) { %><%- tab === 'streams' ? include('partials/recordingCard', { r: x }) : include('partials/galleryVideo', { v: x }) %><% }); %>
+        <% items.forEach(function (x) { %><%- tab === 'streams' ? include('partials/recordingCard', { r: x, who: venue.name }) : include('partials/galleryVideo', { v: x, who: venue.name }) %><% }); %>
       </div>
       <% if (pages > 1) { %><%- include('partials/pager') %><% } %>
       <% } else if (!tabs.live) { %>

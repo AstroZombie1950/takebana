@@ -446,6 +446,7 @@ function localizeMessages(req, res, next) {
 }
 
 const TK_I18N = { ru: require('../public/tk-i18n-ru'), en: require('../public/tk-i18n-en') };
+const { meaningful } = require('./snippet');
 const LOCALE = { ru: 'ru-RU', en: 'en-US' }; // как tkDate в браузере
 
 // Строка словаря по языку, без запроса. Шаблонам её подаёт pageLocals ниже
@@ -495,6 +496,12 @@ function pageLocals(req, res, next) {
     };
     res.locals.date = (value, opts) =>
         new Date(value).toLocaleString(LOCALE[lang], { ...opts, timeZone: timeZoneOf(req) });
+    // Название записи или видео для h1, <title>, alt и разметки: своё, если
+    // оно что-то говорит, иначе «Запись эфира {ник} от {даты}» / «Видео {ник}
+    // от {даты}». «.», «)» и пустое — одинаково безымянные (docs/seo, 04.10).
+    res.locals.mediaTitle = (title, kind, name, at) => meaningful(title) ? String(title).trim()
+        : res.locals.ta(kind === 'recording' ? 'rec.untitledBy' : 'video.untitledBy',
+            { name, date: res.locals.date(at, { day: 'numeric', month: 'long', year: 'numeric' }) });
     // Одна и та же ссылка отдаёт разные страницы: кэш между сервером
     // и браузером (CDN) обязан различать их по cookie.
     const render = res.render;

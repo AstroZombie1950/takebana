@@ -2,7 +2,7 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName }, description: snippet(user.bio) || ta('seo.profileDesc', { name: user.displayName }),
+<%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName }, description: describe(user.bio, ta('seo.profileDesc', { name: user.displayName })),
          seo: { path: user.url, type: 'profile', robots: indexable ? '' : 'noindex, follow', image: ogImage, imageStd: !!ogImage, imageAlt: user.displayName,
          jsonld: ld.profile({ url: user.url, name: user.displayName, image: user.avatarStyle.url, followers: user.followersCount,
            description: user.bio, sameAs: user.links.map(function (l) { return l.url; }) }) } }) %>
@@ -247,7 +247,7 @@
         <% if (recordings.length) { %>
         <div class="tk-recs">
           <% recordings.forEach(function (r) { %>
-          <%- include('partials/recordingCard', { r: r }) %>
+          <%- include('partials/recordingCard', { r: r, who: user.displayName }) %>
           <% }); %>
         </div>
         <%# Вся лента — своей страницей, кнопкой всегда, когда есть что
@@ -301,7 +301,7 @@
         <div class="tk-gal__pane" role="tabpanel" id="galPane-videos" aria-labelledby="galTab-videos" hidden>
           <% if (videos.length) { %>
           <div class="tk-recs">
-            <% videos.forEach(function (v) { %><%- include('partials/galleryVideo', { v: v }) %><% }); %>
+            <% videos.forEach(function (v) { %><%- include('partials/galleryVideo', { v: v, who: user.displayName }) %><% }); %>
           </div>
           <% } else { %>
           <p class="tk-note tk-note--center" data-i18n="gallery.videosEmpty"><%- t('gallery.videosEmpty') %></p>

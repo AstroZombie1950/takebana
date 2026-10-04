@@ -23,6 +23,8 @@ const GalleryPhoto = require('../models/GalleryPhoto');
 const Stream = require('../models/Stream');
 const Establishments = require('../models/Establishments');
 const MenuItem = require('../models/MenuItem');
+const { indexableVenue } = require('../utils/venuePage');
+const { meaningful, describe } = require('../utils/snippet');
 const gallery = require('../utils/gallery');
 const authors = require('../utils/authors');
 const { siteUrl } = require('../utils/site');
@@ -87,17 +89,17 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const tag = (name, value) => `<${name}>${esc(value)}</${name}>`;
 const newest = (dates) => dates.reduce((a, b) => (b && (!a || b > a) ? b : a), null);
 
-// Заголовок безымянного видео — как в <title> его страницы (views/watch.ejs),
-// без «— Takebana». Язык — тот, что видит робот: без cookie и Accept-Language
+// Название и описание видео — те же, что в разметке его страницы
+// (views/watch.ejs, mediaTitle и describe): своё, если оно что-то говорит,
+// иначе наше. Язык — тот, что видит робот: без cookie и Accept-Language
 // сайт отвечает по-английски (utils/i18n.js, langOf).
 const ROBOT = langOf({ headers: {} });
-const untitled = (v, name) => text(ROBOT, 'video.untitledBy', {
-  name,
-  date: new Date(v.createdAt).toLocaleString(ROBOT === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' }),
-});
+const longDate = (d) => new Date(d).toLocaleString(ROBOT === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' });
 
-function videoEntry(path, v, title, date) {
+function videoEntry(path, v, kind, name, date) {
   const entry = { loc: path, lastmod: date };
+  const vars = { name, date: longDate(date) };
+  const title = meaningful(v.title) ? v.title.trim() : text(ROBOT, kind === 'recording' ? 'rec.untitledBy' : 'video.untitledBy', vars);
   // Без превью и файла Google видео не примет; страница в карте остаётся.
   // Файл — то же, что играет плеер (routes/watch.js, KINDS.src): у записи
   // после нарезки — плейлист HLS, MP4 тогда уже удалён.
@@ -106,7 +108,7 @@ function videoEntry(path, v, title, date) {
     entry.video = {
       thumbnail_loc: siteUrl(v.thumb.url),
       title,
-      description: (v.description || title).slice(0, 2048),
+      description: describe(v.description, text(ROBOT, kind === 'recording' ? 'seo.recordingDesc' : 'seo.videoDesc', vars)),
       content_loc: siteUrl(src),
       duration: v.duration > 0 ? Math.min(Math.round(v.duration), 28800) : null,
       publication_date: date.toISOString(),
@@ -122,7 +124,7 @@ async function collect() {
     GalleryPhoto.find({}).sort({ createdAt: -1 }).select('userId url createdAt').lean(),
     Stream.distinct('userId', { isActive: true }),
     authors.groups(),
-    Establishments.find({ status: true }).select('_id features about').lean(),
+    Establishments.find({ status: true }).select('_id status features about').lean(),
     MenuItem.distinct('venue'),
   ]);
 
@@ -147,7 +149,7 @@ async function collect() {
   // у остальных noindex (views/venue.ejs, docs/VENUES.md п. 5). До 04.10
   // раздел шёл в карту только при заведении с описанием и выпадал из неё,
   // оставаясь в индексе.
-  const described = venues.filter((v) => /\S/.test(v.about || ''));
+  const described = venues.filter(indexableVenue);
   if (venues.length) pages.push({ loc: '/venues' });
   pages.push(...described.map((v) => ({ loc: `/venue/${v._id}` })));
   // Вкладки «Эфиры», «Видео» и включённое «Меню» заведения (29.09) — у тех
@@ -204,9 +206,9 @@ async function collect() {
 
   const watch = [
     ...[...recsOf.values()].flat().filter((r) => !r.isAdult)
-      .map((r) => videoEntry(`/recording/${r._id}`, r, r.title, r.recordedAt || r.createdAt)),
+      .map((r) => videoEntry(`/recording/${r._id}`, r, 'recording', names.get(String(r.userId)), r.recordedAt || r.createdAt)),
     ...[...videosOf.values()].flat()
-      .map((v) => videoEntry(`/video/${v._id}`, v, v.title || untitled(v, names.get(String(v.userId))), v.createdAt)),
+      .map((v) => videoEntry(`/video/${v._id}`, v, 'video', names.get(String(v.userId)), v.createdAt)),
   ];
 
   return { pages, users: people, photos: photoPages, video: watch };

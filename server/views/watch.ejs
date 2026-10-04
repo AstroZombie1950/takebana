@@ -16,22 +16,31 @@
   var commentsN = plural(rec.comments || 0, 'rec.comments');
   var nextUrl = encodeURIComponent(base);
   // Видео без названия подписываем датой — ни одно не остаётся безымянным.
+  // Название из одних знаков («.», «)») — то же, что никакого.
   var untitled = function (item) { return ta('video.untitled', { date: date(item.createdAt, { day: 'numeric', month: 'long', year: 'numeric' }) }); };
-  var title = rec.title || untitled(rec);
-  // В <title> и поиске безымянное подписано ещё и автором: «Видео от 21
-  // сентября» у сотни роликов — сотня одинаковых заголовков в выдаче.
-  var headTitle = rec.title || ta('video.untitledBy', { name: author.displayName, date: date(rec.createdAt, { day: 'numeric', month: 'long', year: 'numeric' }) });
+  var named = function (item) { return meaningful(item.title) ? item.title : untitled(item); };
+  var when = date(at, { day: 'numeric', month: 'long', year: 'numeric' });
+  // Название для поиска и разметки: своё или «Запись эфира {ник} от {даты}».
+  var mediaName = mediaTitle(rec.title, kind, author.displayName, at);
+  // h1: у безымянной записи — то же, что для поиска; у видео — «Видео от …»
+  // (автор подписан ниже).
+  var title = kind === 'recording' ? mediaName : named(rec);
+  // В <title> — ещё автор и дата (04.10): человек выходит в эфир под одним
+  // названием много раз, и пять «Vvv — Takebana» в выдаче неразличимы.
+  var headTitle = meaningful(rec.title) ? ta(k + '.headTitle', { title: mediaName, name: author.displayName, date: when }) : mediaName;
+  // Описание есть всегда: своё, а короткое или пустое — с нашим (utils/snippet.js).
+  var headDescription = describe(rec.description, ta(kind === 'recording' ? 'seo.recordingDesc' : 'seo.videoDesc', { name: author.displayName, date: when }));
   var jsonld = [
-    ld.video({ path: base, title: headTitle, description: rec.description, thumb: rec.thumb && rec.thumb.url,
+    ld.video({ path: base, title: mediaName, description: headDescription, thumb: rec.thumb && rec.thumb.url,
                src: src, seconds: rec.duration, date: at, views: rec.views,
                author: { url: author.url, name: author.displayName, org: !!author.venue } }),
-    ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [headTitle, base]]),
+    ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [mediaName, base]]),
   ].filter(Boolean);
 %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: snippet(rec.description) || ta(kind === 'recording' ? 'seo.recordingDesc' : 'seo.videoDesc', { name: author.displayName, date: date(at, { day: 'numeric', month: 'long', year: 'numeric' }) }), seo: { path: base, type: 'video.other', image: rec.thumb && rec.thumb.url, imageAlt: headTitle, robots: rec.userId.banned ? 'noindex, follow' : '', jsonld: jsonld } }) %>
+<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: headDescription, seo: { path: base, type: 'video.other', image: rec.thumb && rec.thumb.url, imageAlt: mediaName, robots: rec.userId.banned ? 'noindex, follow' : '', jsonld: jsonld } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/player.css') %>">
@@ -176,12 +185,12 @@
           <li>
             <a class="tk-watch__card" href="<%= r.href %>">
               <span class="tk-watch__thumb">
-                <% if (r.thumb && r.thumb.url) { %><img src="<%= r.thumb.url %>" alt="" loading="lazy"><% } %>
+                <% if (r.thumb && r.thumb.url) { %><img src="<%= r.thumb.url %>" alt="<%= ta('alt.cover', { title: named(r) }) %>" loading="lazy"><% } %>
                 <span class="tk-watch__len"><%= clock(r.duration) %></span>
                 <% if (r.isAdult) { %><span class="tk-watch__card-adult">18+</span><% } %>
               </span>
               <span class="tk-watch__card-body">
-                <span class="tk-watch__card-title"><%= r.title || untitled(r) %></span>
+                <span class="tk-watch__card-title"><%= named(r) %></span>
                 <span class="tk-watch__card-meta"><%= r.authorName %></span>
                 <span class="tk-watch__card-meta"><span data-i18n="<%= rv.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(r.views) }) %>'><%= rv.text %></span> · <%= date(r.recordedAt || r.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric' }) %></span>
               </span>
