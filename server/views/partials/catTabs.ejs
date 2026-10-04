@@ -1,0 +1,13 @@
+<%#
+  Вкладки «Популярного» (04.10): все эфиры и три категории. Это одна витрина
+  с фильтром по категории, поэтому категории — не пункты левой панели,
+  а вкладки здесь, на главной и в каждом разделе. Обычные ссылки: поисковик
+  с главной доходит до разделов, а они в индексе (docs/seo/DECISIONS.md).
+  current — код открытой категории, на главной пусто.
+%>
+<nav class="tk-tabs tk-cat__tabs" aria-label="<%= ta('cat.tabsAria') %>" data-i18n-aria="cat.tabsAria">
+  <a href="/" class="tk-tabs__item<%= current ? '' : ' tk-tabs__item--on' %>"<%- current ? '' : ' aria-current="page"' %> data-i18n="cat.all"><%- t('cat.all') %></a>
+  <% Object.keys(catalog.CATEGORIES).forEach(function (code) { var on = current === code; %>
+  <a href="/streaming/<%= code %>" class="tk-tabs__item<%= on ? ' tk-tabs__item--on' : '' %>"<%- on ? ' aria-current="page"' : '' %> data-i18n="<%= catalog.CATEGORIES[code].i18n %>"><%- t(catalog.CATEGORIES[code].i18n) %></a>
+  <% }); %>
+</nav>

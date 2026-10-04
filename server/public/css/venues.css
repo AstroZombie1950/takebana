@@ -43,7 +43,7 @@
 
 .tk-venues__h1 {
   margin: 0;
-  font-size: 30px;
+  font-size: 32px;
   line-height: 1;
   letter-spacing: -.02em;
   font-weight: 900;
@@ -675,7 +675,7 @@
 
 /* ── Планшет и телефон: «Список / Карта» ─────────────────────────────── */
 @media (max-width: 1023px) {
-  .tk-venues__bar { padding: 12px calc(16px + var(--tk-safe-r)) 10px calc(16px + var(--tk-safe-l)); gap: 10px; }
+  .tk-venues__bar { padding: 12px calc(20px + var(--tk-safe-r)) 10px calc(20px + var(--tk-safe-l)); gap: 10px; }
 
   /* Заголовок и переключатель — строкой, поиск под ними. */
   .tk-venues__top {
@@ -695,7 +695,7 @@
 
   .tk-venues__sort { margin-left: 0; }
 
-  .tk-venues__list { padding: 12px calc(16px + var(--tk-safe-r)) calc(32px + var(--tk-safe-b)) calc(16px + var(--tk-safe-l)); }
+  .tk-venues__list { padding: 12px calc(20px + var(--tk-safe-r)) calc(32px + var(--tk-safe-b)) calc(20px + var(--tk-safe-l)); }
 
   .tk-venues[data-view="map"] .tk-vc { width: min(360px, calc(100vw - 48px)); }
   /* Пальцем масштаб — щипком; кнопки легли бы под ленту. */

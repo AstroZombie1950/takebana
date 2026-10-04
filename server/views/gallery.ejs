@@ -16,7 +16,9 @@
 <head>
 <%# Каждая страница листалки — canonical на себя. Пока всё помещается
     в профиль, вкладка его повторяет — вне индекса (indexable). %>
-<%- include('partials/tkHead', { titleKey: 'page.' + tab + '.title', titleVars: { name: owner.displayName }, seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow',
+<%- include('partials/tkHead', { titleKey: 'page.' + tab + '.title', titleVars: { name: owner.displayName },
+         description: ta('seo.' + tab + 'Desc', { name: owner.displayName }) + (page > 1 ? ' ' + ta('seo.page', { n: page }) : ''),
+         seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow',
          jsonld: ld.crumbs([['Takebana', '/'], [owner.displayName, owner.url], [ta(tabKey), pageHref(1)]]) } }) %>
 <% if (page > 1) { %><link rel="prev" href="<%= pageHref(page - 1) %>"><% } %>
 <% if (page < pages) { %><link rel="next" href="<%= pageHref(page + 1) %>"><% } %>

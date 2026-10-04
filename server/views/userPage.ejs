@@ -2,7 +2,7 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName }, description: user.bio.replace(/\s+/g, ' ').slice(0, 160),
+<%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName }, description: snippet(user.bio) || ta('seo.profileDesc', { name: user.displayName }),
          seo: { path: user.url, type: 'profile', robots: indexable ? '' : 'noindex, follow', image: ogImage, imageStd: !!ogImage, imageAlt: user.displayName,
          jsonld: ld.profile({ url: user.url, name: user.displayName, image: user.avatarStyle.url, followers: user.followersCount,
            description: user.bio, sameAs: user.links.map(function (l) { return l.url; }) }) } }) %>

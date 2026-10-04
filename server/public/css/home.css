@@ -4,7 +4,7 @@
 
 /* Ленте ширина нужна больше, чем витрине разделов (catalog.css, 1440):
  * на 1920 справа оставалось 220px пустоты — туда встаёт пятая колонка. */
-.tk-home { max-width: 1760px; padding-top: 28px; }
+.tk-home { max-width: 1760px; }
 
 /* ── Секции ── */
 .tk-home__sec { padding-top: 40px; }
@@ -222,7 +222,6 @@
 
 /* ── Узкие экраны ── */
 @media (max-width: 767px) {
-  .tk-home { padding-top: 20px; }
   .tk-home__authors { margin: 0 -20px; padding: 0 20px 4px; }
   .tk-home__sec { padding-top: 32px; }
   .tk-feed { grid-template-columns: 1fr; gap: 28px; }

@@ -60,9 +60,10 @@
 .tk-gal__pane { padding-top: 16px; }
 
 /* ── Страница галереи ─────────────────────────────────────────────────── */
+/* Поле и заголовок — по шкале страниц кабинета (catalog.css, .tk-cat). */
 .tk-gal {
   max-width: 1440px;
-  padding: 40px;
+  padding: 32px 40px 40px;
 }
 
 /* «‹ Профиль» над рубрикой: .tk-gal — не колонка с gap, как у других
@@ -79,7 +80,7 @@
 
 .tk-gal__h1 {
   margin: 0;
-  font-size: 40px;
+  font-size: 32px;
   line-height: 1.05;
   letter-spacing: -.02em;
   font-weight: 900;
@@ -124,7 +125,7 @@ a.tk-pager__num:focus-visible { border-color: var(--tk-accent); color: var(--tk-
 
 @media (max-width: 767px) {
   .tk-pics { gap: 2px; }
-  .tk-gal { padding: 28px 20px 40px; }
-  .tk-gal__h1 { font-size: 28px; }
+  .tk-gal { padding: 24px 20px 40px; }
+  .tk-gal__h1 { font-size: 24px; }
   .tk-gal__add { margin-left: 0; }
 }

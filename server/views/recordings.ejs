@@ -11,7 +11,9 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { titleKey: 'page.recordings.title', titleVars: { name: owner.displayName }, seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow',
+<%- include('partials/tkHead', { titleKey: 'page.recordings.title', titleVars: { name: owner.displayName },
+         description: ta('seo.recordingsDesc', { name: owner.displayName }) + (page > 1 ? ' ' + ta('seo.page', { n: page }) : ''),
+         seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow',
          jsonld: ld.crumbs([['Takebana', '/'], [owner.displayName, owner.url], [ta('rec.title'), pageHref(1)]]) } }) %>
 <% if (page > 1) { %><link rel="prev" href="<%= pageHref(page - 1) %>"><% } %>
 <% if (page < pages) { %><link rel="next" href="<%= pageHref(page + 1) %>"><% } %>

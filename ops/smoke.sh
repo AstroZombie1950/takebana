@@ -123,7 +123,7 @@ moved  "старый адрес соглашения"            /user_agreement
 moved  "старый адрес персональных данных"   /personal_data_processing /privacy
 expect "о нас"                    "200"     GET /about
 expect "раздел каталога"         "200"     GET /streaming/business   # гость смотрит без входа
-expect "старый адрес популярного" "302"    GET /streaming           # ведёт на главную
+expect "старый адрес популярного" "301"    GET /streaming           # ведёт на главную насовсем
 # Раздел «Заведения» /venues (29.09, docs/VENUES.md) вместо «Карты заведений»
 # /map: старые адреса — 301 вместе с запросом. Поиск по разделу — не в индекс
 # (docs/seo/DECISIONS.md, п. 10), карточки фрагментом — тоже.

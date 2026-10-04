@@ -10,8 +10,10 @@
 // сразу говорит, чей это звонок. Итог реле — строка «peer usage»: байты
 // к собеседнику и от него. coturn пишет её при закрытии реле и каждые
 // 4096 пакетов, каждый раз за отрезок с прошлой строки, поэтому
-// складываем. Формат проверен на coturn 4.18 (STATUS, 4 октября); в 4.5–4.6
-// перед текстом стоит ещё номер сессии — разбор ищет имя где угодно в строке.
+// складываем. Две формы строк: coturn 4.18 (проверено локально) пишет
+// «allocation new, realm=…» и «allocation delete: realm=…», 4.5 (бой,
+// Ubuntu 22.04) — «session N: new, realm=…» и «session N: delete: realm=…».
+// Разбор ищет общую часть и имя в любом месте строки.
 //
 // Итог по людям ложится в запись звонка (models/Call.js, turn), карточка
 // звонка в панели показывает его рядом с попытками сторон. Журнал читаем
@@ -66,7 +68,7 @@ function line(s) {
   if (!m) return;
   const [, userId, callId] = m;
 
-  if (s.includes('allocation new')) {
+  if (s.includes('new, realm=')) {
     const u = slot(callId, userId);
     u.allocs++;
     u.open++;
@@ -74,14 +76,19 @@ function line(s) {
     const u = slot(callId, userId);
     u.inB += Number((s.match(/rb=(\d+)/) || [])[1]) || 0;
     u.outB += Number((s.match(/sb=(\d+)/) || [])[1]) || 0;
-  } else if (s.includes('allocation delete')) {
+  } else if (s.includes('delete: realm=')) {
     const u = slot(callId, userId);
     u.open = Math.max(0, u.open - 1);
   } else if (/ALLOCATE processed, error (\d+)/.test(s)) {
-    // 401 без имени — обычный первый круг проверки ключа; с именем — нет.
+    // 401 без имени — обычный первый круг проверки ключа и сюда не доходит
+    // (имени нет); с именем — неверный ключ, у 4.5 это единственный его след
+    // (4.18 пишет ещё «credentials … are wrong»). 438 — устаревший nonce:
+    // браузер повторяет запрос сам, это не отказ.
     const code = s.match(/ALLOCATE processed, error (\d+)/)[1];
+    if (code === '438') return;
+    const key = code === '401' ? 'auth' : code;
     const u = slot(callId, userId);
-    u.errors[code] = (u.errors[code] || 0) + 1;
+    u.errors[key] = (u.errors[key] || 0) + 1;
   } else if (/credentials of user .* are wrong/.test(s)) {
     const u = slot(callId, userId);
     u.errors.auth = (u.errors.auth || 0) + 1;

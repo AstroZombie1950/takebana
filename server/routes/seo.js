@@ -122,7 +122,7 @@ async function collect() {
     GalleryPhoto.find({}).sort({ createdAt: -1 }).select('userId url createdAt').lean(),
     Stream.distinct('userId', { isActive: true }),
     authors.groups(),
-    Establishments.find({ status: true, about: /\S/ }).select('_id features').lean(),
+    Establishments.find({ status: true }).select('_id features about').lean(),
     MenuItem.distinct('venue'),
   ]);
 
@@ -142,16 +142,21 @@ async function collect() {
 
   const pages = [{ loc: '/' }, ...Object.keys(CATEGORIES).map((c) => ({ loc: '/streaming/' + c })), { loc: '/about' }];
   if (Object.values(groups).some((g) => g.length)) pages.push({ loc: '/authors' });
-  // Раздел заведений и их страницы — одобренные и с описанием: у остальных
-  // noindex (views/venue.ejs, docs/VENUES.md п. 5). Раздел — если есть хоть одна.
-  if (venues.length) pages.push({ loc: '/venues' }, ...venues.map((v) => ({ loc: `/venue/${v._id}` })));
+  // Раздел — если одобрено хоть одно заведение: тогда он в индексе
+  // (views/venues.ejs). Страница заведения — одобренного и с описанием:
+  // у остальных noindex (views/venue.ejs, docs/VENUES.md п. 5). До 04.10
+  // раздел шёл в карту только при заведении с описанием и выпадал из неё,
+  // оставаясь в индексе.
+  const described = venues.filter((v) => /\S/.test(v.about || ''));
+  if (venues.length) pages.push({ loc: '/venues' });
+  pages.push(...described.map((v) => ({ loc: `/venue/${v._id}` })));
   // Вкладки «Эфиры», «Видео» и включённое «Меню» заведения (29.09) — у тех
   // же, если есть что показать.
   const venueHas = (list) => new Set(list.filter((x) => x.venue).map((x) => String(x.venue)));
   const withRecs = venueHas(recordings.filter((r) => !r.isAdult));
   const withVideos = venueHas(videos);
   const withMenu = new Set(menus.map(String));
-  for (const v of venues) {
+  for (const v of described) {
     if (v.features && v.features.videoMenu && withMenu.has(String(v._id))) pages.push({ loc: `/venue/${v._id}/menu` });
     if (withRecs.has(String(v._id))) pages.push({ loc: `/venue/${v._id}/streams` });
     if (withVideos.has(String(v._id))) pages.push({ loc: `/venue/${v._id}/videos` });

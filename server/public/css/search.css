@@ -4,14 +4,15 @@
  * здесь только то, чего нет больше нигде: вкладки, люди и заведения списком.
  */
 
+/* Поле и заголовок — по шкале страниц кабинета (catalog.css, .tk-cat). */
 .tk-search {
   max-width: 1440px;
-  padding: 40px;
+  padding: 32px 40px 40px;
 }
 
 .tk-search__h1 {
   margin: 10px 0 0;
-  font-size: 40px;
+  font-size: 32px;
   line-height: 1.05;
   letter-spacing: -.02em;
   font-weight: 900;
@@ -241,8 +242,8 @@
 }
 
 @media (max-width: 767px) {
-  .tk-search { padding: 28px 20px 40px; }
-  .tk-search__h1 { font-size: 28px; }
+  .tk-search { padding: 24px 20px 40px; }
+  .tk-search__h1 { font-size: 24px; }
   .tk-search__form { flex-wrap: wrap; }
   .tk-search__sec { margin-top: 32px; }
   .tk-places { grid-template-columns: 1fr; }

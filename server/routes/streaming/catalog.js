@@ -167,9 +167,10 @@ router.get('/feed', async (req, res) => {
 });
 
 // Прежние адреса «Популярного» — на главную, с фильтрами: ими делились ссылками.
+// 301: переезд насовсем, поисковик переносит адрес на главную (до 04.10 — 302).
 router.get(['/streaming', '/streaming/popular'], (req, res) => {
   const qs = req.originalUrl.indexOf('?');
-  res.redirect(qs === -1 ? '/' : '/' + req.originalUrl.slice(qs));
+  res.redirect(301, qs === -1 ? '/' : '/' + req.originalUrl.slice(qs));
 });
 
 router.get('/streaming/:category', commonDataMiddleware, (req, res) => {

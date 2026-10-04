@@ -18,7 +18,6 @@
 const CATEGORIES = {
   entertainment: {
     name: 'Развлечения', i18n: 'cat.entertainment',
-    note: 'Игры, музыка, спорт', noteI18n: 'cat.entertainmentNote',
     subs: [
       { code: 'games', name: 'Игры', i18n: 'sub.games' },
       { code: 'music', name: 'Музыка', i18n: 'sub.music' },
@@ -30,7 +29,6 @@ const CATEGORIES = {
   },
   business: {
     name: 'Бизнес', i18n: 'cat.business',
-    note: 'Недвижимость, услуги, обучение', noteI18n: 'cat.businessNote',
     subs: [
       { code: 'real_estate', name: 'Недвижимость', i18n: 'sub.real_estate' },
       { code: 'services', name: 'Услуги', i18n: 'sub.services' },
@@ -42,7 +40,6 @@ const CATEGORIES = {
   },
   fashion: {
     name: 'Мода', i18n: 'cat.fashion',
-    note: 'Дизайн, стиль, красота', noteI18n: 'cat.fashionNote',
     subs: [
       { code: 'designers', name: 'Дизайнеры', i18n: 'sub.designers' },
       { code: 'style', name: 'Стиль и образы', i18n: 'sub.style' },

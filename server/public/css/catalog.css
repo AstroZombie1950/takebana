@@ -9,10 +9,16 @@
  * в дизайн-системе: тёмный фон, киноварь, линейки, острые углы.
  */
 
+/* Шкала страниц кабинета (04.10): поле 40px от 768, 20px на телефоне;
+ * сверху 32 и 24; h1 32 и 24, h2 22 и 20. Её держат каталог, поиск
+ * и «Авторы», галерея и записи, страницы-формы (app.css, .tk-page). */
 .tk-cat {
   max-width: 1440px;
-  padding: 40px;
+  padding: 32px 40px 40px;
 }
+
+/* Вкладки категорий (partials/catTabs.ejs) — первой строкой витрины. */
+.tk-cat__tabs { margin: 0 0 24px; }
 
 /* ── Плашка гостю «Что такое Takebana?» ─────────────────────────────────
  * Над всей страницей, киноварная планка слева — как у активного раздела
@@ -86,7 +92,7 @@
 .tk-home__h1,
 .tk-home__h2 {
   margin: 0;
-  font-size: 28px;
+  font-size: 32px;
   line-height: 1;
   letter-spacing: -.02em;
   font-weight: 900;
@@ -168,7 +174,7 @@
 }
 
 /* ── Секции ── */
-.tk-cat__sec { padding-top: 48px; }
+.tk-cat__sec { padding-top: 40px; }
 
 /* Записи под эфирами: заголовок без подписи — сетке нужен свой отступ. */
 .tk-cat__h2 + .tk-recs { margin-top: 20px; }
@@ -267,7 +273,7 @@
 
 .tk-cat__h2 {
   margin: 0 0 6px;
-  font-size: 30px;
+  font-size: 22px;
   line-height: 1;
   letter-spacing: -.02em;
   font-weight: 900;
@@ -479,13 +485,14 @@
 
 /* ── Узкие экраны ─────────────────────────────────────────────────────── */
 @media (max-width: 767px) {
-  .tk-cat { padding: 28px 20px 40px; }
+  .tk-cat { padding: 24px 20px 40px; }
+  .tk-cat__tabs { margin: 0 -20px 20px; padding: 0 20px; scroll-padding-inline: 20px; }
   .tk-intro { flex-wrap: wrap; gap: 14px; padding: 16px 8px 16px 18px; margin-bottom: 28px; }
   .tk-intro__body { flex-basis: calc(100% - 60px); }
   .tk-intro__close { align-self: flex-start; }
   .tk-intro__more { order: 1; }
   .tk-cat__lede { margin-top: -4px; font-size: 14px; }
-  .tk-cat__h2 { font-size: 24px; }
-  .tk-cat__sec { padding-top: 36px; }
+  .tk-cat__h2 { font-size: 20px; }
+  .tk-cat__sec { padding-top: 32px; }
   .tk-grid { grid-template-columns: 1fr; }
 }

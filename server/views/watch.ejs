@@ -31,7 +31,7 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: (rec.description || '').slice(0, 160), seo: { path: base, type: 'video.other', image: rec.thumb && rec.thumb.url, imageAlt: headTitle, robots: rec.userId.banned ? 'noindex, follow' : '', jsonld: jsonld } }) %>
+<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: snippet(rec.description) || ta(kind === 'recording' ? 'seo.recordingDesc' : 'seo.videoDesc', { name: author.displayName, date: date(at, { day: 'numeric', month: 'long', year: 'numeric' }) }), seo: { path: base, type: 'video.other', image: rec.thumb && rec.thumb.url, imageAlt: headTitle, robots: rec.userId.banned ? 'noindex, follow' : '', jsonld: jsonld } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/player.css') %>">
