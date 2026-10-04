@@ -95,6 +95,8 @@
     var file = imageInput.files[0];
     imageInput.value = '';
     if (!file || !picking) return;
+    var bad = TKNet.image(file, 5); // логотип и обложка — до 5 МБ (routes/venueLive.js)
+    if (bad) return toast(bad, 'error');
     var kind = picking;
     var data = new FormData();
     data.append(kind, file);
@@ -147,7 +149,15 @@
 
   function addFiles(files) {
     var room = MAX - photos.length;
-    var images = Array.prototype.filter.call(files, function (x) { return /^image\//.test(x.type); });
+    // Фото заведения — до 10 МБ (establishmentsRouter.js); негодные — сразу,
+    // а не отказом всей формы при сохранении.
+    var bad = '';
+    var images = Array.prototype.filter.call(files, function (x) {
+      var why = TKNet.image(x, 10);
+      if (why && !bad) bad = why;
+      return !why;
+    });
+    if (bad) toast(bad, 'error');
     if (images.length > room) toast(t('venues.photoLimit', { n: room }));
     images.slice(0, room).forEach(function (file) { photos.push({ file: file, preview: URL.createObjectURL(file) }); });
     renderThumbs();

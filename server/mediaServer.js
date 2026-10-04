@@ -4,6 +4,7 @@ const { isPublishAuthEnabled, getSecret } = require('./utils/rtmpAuth');
 const hls = require('./utils/hls');
 const webLive = require('./utils/webLive');
 const streamLog = require('./utils/streamLog');
+const rtmpWatch = require('./utils/rtmpWatch');
 const { audit } = require('./utils/audit');
 const errorLog = require('./utils/errorLog');
 const liveSignal = require('./utils/liveSignal');
@@ -241,6 +242,7 @@ function dropPublisher(streamKey, why = 'прервано модерацией')
     if (!live) return false;
 
     dropSession(live.id, `вещание ${streamKey}: ${why}`);
+    live.watch();
     activeStreams.delete(streamKey);
     // donePublish на отклонённой сессии приходит не всегда, поэтому конвейер
     // гасим сами: stop() у себя проверяет, есть ли что останавливать.
@@ -265,7 +267,9 @@ nms.on('postPublish', async (id, streamPath, args) => {
         id,
         startTime: new Date(),
         isLive: true,
-        fromDaily
+        fromDaily,
+        // Битрейт и кадры на входе — хронология и подсказка ведущему OBS.
+        watch: rtmpWatch.watch(session, streamKey, { obs: !fromDaily }),
     });
     if (fromDaily) webLive.published(streamKey);
     else markObsStreamStarted(streamKey);
@@ -274,7 +278,7 @@ nms.on('postPublish', async (id, streamPath, args) => {
     // HLS: единственный формат, который играет на iPhone. HTTP-FLV там не
     // работает в принципе — flv.js собирает поток через MSE, а Media Source
     // Extensions в Safari на iOS недоступны.
-    hls.start(streamKey);
+    hls.start(streamKey, { daily: fromDaily });
 });
 
 nms.on('donePublish', (id, streamPath, args) => {
@@ -285,7 +289,7 @@ nms.on('donePublish', (id, streamPath, args) => {
     // она не начинала, и заканчивать нечего.
     if (!live || live.id !== id) return;
     activeStreams.delete(streamKey);
-    streamLog.event(streamKey, 'rtmp.out', { sec: Math.round((Date.now() - live.startTime) / 1000) });
+    streamLog.event(streamKey, 'rtmp.out', { sec: Math.round((Date.now() - live.startTime) / 1000), ...live.watch() });
     // Обрыв выхода Daily, который будем поднимать, — конвейер вернётся в том
     // же режиме (utils/hls.js, held). OBS отключился — эфир кончился.
     const retrying = live.fromDaily && webLive.ended(streamKey);

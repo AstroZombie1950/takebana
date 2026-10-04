@@ -180,7 +180,18 @@
   }
 
   // Ролик — отдельным запросом, с полосой: файл бывает в сотню мегабайт.
+  // Попытка загрузки — как у остальных файлов (docs/TELEMETRY.md, kind upload).
   function sendClip(id) {
+    var tr = window.TKTrace ? TKTrace.start('upload', BASE + '/' + id + '/clip') : null;
+    var sentAt = Date.now();
+    if (tr) { tr.set('what', 'menu'); tr.set('kb', Math.round(file.size / 1024)); tr.set('type', file.type || ''); }
+    function done(outcome, reason) {
+      if (!tr) return;
+      var ms = Date.now() - sentAt;
+      tr.set('ms', ms);
+      tr.set('kbps', Math.round((file.size * 8) / Math.max(1, ms)));
+      tr.end(outcome, reason);
+    }
     return new Promise(function (resolve, reject) {
       var data = new FormData();
       data.append('start', form.elements.start.value || '0');
@@ -191,10 +202,10 @@
       xhr.onload = function () {
         var body = {};
         try { body = JSON.parse(xhr.responseText); } catch (err) { /* не JSON — ниже код */ }
-        if (xhr.status >= 200 && xhr.status < 300) resolve(body);
-        else reject(new Error(body.message || t('common.failedCode', { code: xhr.status })));
+        if (xhr.status >= 200 && xhr.status < 300) { done('ok'); resolve(body); }
+        else { done('fail', xhr.status === 413 ? 'too_big' : 'http_' + xhr.status); reject(new Error(body.message || t('common.failedCode', { code: xhr.status }))); }
       };
-      xhr.onerror = function () { reject(new Error(t('common.noNetwork'))); };
+      xhr.onerror = function () { done('fail', navigator.onLine === false ? 'offline' : 'no_server'); reject(new Error(t('common.noNetwork'))); };
       progress.hidden = false;
       progress.value = 0;
       toast(t('venue.menu.uploading'));

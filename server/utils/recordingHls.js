@@ -31,6 +31,8 @@ const errorLog = require('./errorLog');
 const streamLog = require('./streamLog');
 const { resolveWithin } = require('./safePath');
 const Recording = require('../models/Recording');
+const videoEncode = require('./videoEncode');
+const { WATERMARK, WATERMARK_MARGIN, WATERMARK_SHARE } = require('./watermark');
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 const FFPROBE = process.env.FFMPEG_PATH ? path.join(path.dirname(process.env.FFMPEG_PATH), 'ffprobe') : 'ffprobe';
@@ -127,6 +129,72 @@ function ffmpegArgs(src, out, info) {
 
 const TYPES = { '.m3u8': 'application/vnd.apple.mpegurl', '.ts': 'video/mp2t' };
 
+// Запись эфира со знаком поверх плеера (utils/recording.js, finalize) —
+// одним проходом из кусков: знак и все качества за одно декодирование,
+// superfast. Решение Ивана 02.10 по замеру на боевом сервере: прежние два
+// прохода (знак veryfast в MP4, затем лестница из него) стоили ≈1,0
+// ядро-секунды на секунду записи, один проход — 0,6; 50 часовых эфиров —
+// ~8 ч очереди вместо 13–14. Заодно ушли выгрузка MP4 и его скачивание
+// обратно ради лестницы. Звук — копией: в кусках он уже AAC.
+//
+// Знак зациклен и обрезан по видео (shortest): у склейки кусок другого
+// размера пересобирает фильтры, а картинка знака к тому времени прочитана
+// (utils/videoEncode.js, ffmpegArgs, проверено 01.10).
+const TOP_BITRATE = 2500;
+
+function markedArgs(list, out, info) {
+  const size = videoEncode.fit(info.width, info.height);
+  const short = Math.min(size.w, size.h);
+  const portrait = size.h > size.w;
+  const wm = Math.max(16, Math.round(short * WATERMARK_SHARE));
+  const levels = [{ bitrate: TOP_BITRATE }, ...LADDER.filter((l) => l.height < short - 40)];
+  const labels = levels.map((_, i) => (i ? `[o${i}]` : '[s0]'));
+  let graph = `[0:v]scale=${size.w}:${size.h},setsar=1[v];[1:v]scale=-1:${wm}[wm];` +
+    `[v][wm]overlay=W-w-${WATERMARK_MARGIN}:${WATERMARK_MARGIN}:shortest=1`;
+  graph += levels.length > 1
+    ? `,split=${levels.length}` + levels.map((_, i) => `[s${i}]`).join('') + ';' +
+      levels.slice(1).map((l, i) => `[s${i + 1}]scale=${portrait ? `${l.height}:-2` : `-2:${l.height}`}[o${i + 1}]`).join(';')
+    : '[s0]';
+  const args = ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', ...videoEncode.input(list, 'concat'),
+    '-loop', '1', '-i', WATERMARK, '-filter_complex', graph];
+  labels.forEach((l) => args.push('-map', l));
+  if (info.audio) levels.forEach(() => args.push('-map', '0:a:0'));
+  args.push('-fpsmax', '30', '-c:v', 'libx264', '-preset', 'superfast', '-pix_fmt', 'yuv420p');
+  levels.forEach((l, i) => args.push(`-b:v:${i}`, `${l.bitrate}k`,
+    `-maxrate:v:${i}`, `${Math.round(l.bitrate * 1.1)}k`, `-bufsize:v:${i}`, `${l.bitrate * 2}k`));
+  args.push('-force_key_frames', 'expr:gte(t,n_forced*2)', '-sc_threshold', '0', '-threads', THREADS);
+  if (info.audio) args.push('-c:a', 'copy');
+  const map = levels.map((_, i) => `v:${i}` + (info.audio ? `,a:${i}` : '')).join(' ');
+  args.push('-f', 'hls', '-hls_time', String(SEGMENT_SECONDS), '-hls_playlist_type', 'vod',
+    '-hls_flags', 'single_file+independent_segments', '-master_pl_name', 'master.m3u8',
+    '-var_stream_map', map, '-hls_segment_filename', path.join(out, 'v%v.ts'), path.join(out, 'v%v.m3u8'));
+  return args;
+}
+
+// Готовые качества из папки — в хранилище. Плейлист — последним: пока он
+// не выгружен, недокачанные видео никто не откроет. Сбой — выгруженное
+// убирается, ошибка уходит наверх.
+async function upload(rec, out) {
+  const prefix = `recordings/${rec.userId}/${rec._id}/hls`;
+  const names = (await fs.promises.readdir(out)).sort((a, b) => (a === 'master.m3u8') - (b === 'master.m3u8'));
+  const files = [];
+  let size = 0;
+  let url = '';
+  try {
+    for (const name of names) {
+      const file = path.join(out, name);
+      size += (await fs.promises.stat(file)).size;
+      const put = await storage.put(file, `${prefix}/${name}`, TYPES[path.extname(name)] || 'application/octet-stream');
+      files.push(`${prefix}/${name}`);
+      if (name === 'master.m3u8') url = put;
+    }
+  } catch (e) {
+    await Promise.all(files.map((k) => storage.remove(k).catch(() => {})));
+    throw e;
+  }
+  return { url, files, size };
+}
+
 async function convert(rec) {
   const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `tk-hls-${rec._id}-`));
   const uploaded = [];
@@ -139,18 +207,8 @@ async function convert(rec) {
     const started = Date.now();
     await run(FFMPEG, ffmpegArgs(src, out, info));
 
-    const prefix = `recordings/${rec.userId}/${rec._id}/hls`;
-    // Плейлист — последним: пока он не выгружен, недокачанные видео никто не откроет.
-    const names = (await fs.promises.readdir(out)).sort((a, b) => (a === 'master.m3u8') - (b === 'master.m3u8'));
-    let size = 0;
-    let masterUrl = '';
-    for (const name of names) {
-      const file = path.join(out, name);
-      size += (await fs.promises.stat(file)).size;
-      const url = await storage.put(file, `${prefix}/${name}`, TYPES[path.extname(name)] || 'application/octet-stream');
-      uploaded.push(`${prefix}/${name}`);
-      if (name === 'master.m3u8') masterUrl = url;
-    }
+    const { url: masterUrl, files, size } = await upload(rec, out);
+    uploaded.push(...files);
 
     // Запись могли удалить, пока шло кодирование, — тогда убираем и выгруженное.
     const saved = await Recording.findOneAndUpdate({ _id: rec._id, status: 'ready' }, {
@@ -165,7 +223,7 @@ async function convert(rec) {
     if (saved.video && saved.video.key) {
       await storage.remove(saved.video.key).catch((e) => errorLog.external(e, 'recording.hls.mp4', { recording: String(rec._id) }));
     }
-    console.log(`[rec ${rec._id}] HLS готов: ${names.length} файлов, ${(size / 1048576).toFixed(1)} МБ, ${Math.round((Date.now() - started) / 1000)} с`);
+    console.log(`[rec ${rec._id}] HLS готов: ${files.length} файлов, ${(size / 1048576).toFixed(1)} МБ, ${Math.round((Date.now() - started) / 1000)} с`);
   } catch (e) {
     await Promise.all(uploaded.map((k) => storage.remove(k).catch(() => {})));
     // Запись остаётся смотрибельной одним MP4; повтор — при следующем запуске.
@@ -207,4 +265,7 @@ async function resume() {
   rows.forEach((r) => enqueue(r._id));
 }
 
-module.exports = { enqueue, resume, ffmpegArgs };
+// Записей в очереди на лестницу вместе с идущей — «Нагрузка» (utils/loadStats.js).
+const pending = () => queue.length + (busy ? 1 : 0);
+
+module.exports = { ENABLED, enqueue, resume, pending, ffmpegArgs, markedArgs, upload };

@@ -63,160 +63,108 @@
 
 .tk-intro__close:hover { color: var(--tk-paper); }
 
-/* ── Шапка страницы ──────────────────────────────────────────────────────
- * Слева заголовок и метрики, справа рекомендации. Раскладка та же, что была
- * до переверстки: рекомендации — содержимое страницы, а не каркаса.
- */
-.tk-cat__hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 48px;
-  align-items: start;
-  padding-bottom: 48px;
-  border-bottom: 1px solid var(--tk-rule);
+/* ── Шапка эфиров: заголовок, «N в эфире», фильтры ─────────────────────
+ * Общая у главной и разделов (с 02.10 раздел устроен как главная: одной
+ * строкой над сеткой, без витрины на первый экран). Имена — с главной,
+ * откуда она пришла. */
+.tk-home__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 20px;
 }
 
-/* 44, а не 68: на десктопе заголовок в три строки давил на всю страницу. */
-.tk-cat__h1 {
+.tk-home__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+}
+
+.tk-home__h1,
+.tk-home__h2 {
   margin: 0;
-  font-size: 44px;
+  font-size: 28px;
   line-height: 1;
   letter-spacing: -.02em;
   font-weight: 900;
   text-transform: uppercase;
   color: var(--tk-paper);
-  text-wrap: balance;
 }
 
-.tk-cat__lede {
-  margin: 22px 0 0;
-  max-width: 620px;
-  font-size: 17px;
-  line-height: 1.55;
-  color: var(--tk-beige);
-  text-wrap: pretty;
-}
+.tk-home__h2 { font-size: 22px; }
 
-/* ── Метрики ── */
-.tk-cat__stats {
-  margin-top: 28px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.tk-stat {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
-  border: 1px solid var(--tk-rule);
-  font-family: Oswald, sans-serif;
-  font-size: 12px;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-  color: var(--tk-muted);
-}
-
-.tk-stat__num {
-  font-size: 15px;
-  letter-spacing: .04em;
-  color: var(--tk-paper);
-}
-
-.tk-stat svg { color: var(--tk-green-live); }
-
-/* ── Рекомендации ── */
-.tk-rec__list {
-  display: flex;
-  flex-direction: column;
-}
-
-/* display только через :not(.hidden): иначе он перебивает .hidden из app.css,
-   скрытые рекомендации видны сразу, и «Показать ещё» раскрывать нечего. */
-.tk-rec__item:not(.hidden) { display: flex; }
-
-.tk-rec__item {
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(144, 113, 99, .25);
-  transition: color .18s ease;
-}
-
-.tk-rec__item:first-child { border-top: 1px solid rgba(144, 113, 99, .25); }
-.tk-rec__item:hover .tk-rec__name { color: var(--tk-accent); }
-
-.tk-rec__ava {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: rgba(144, 113, 99, .35);
-  font-size: 14px;
-  font-weight: 900;
-  color: var(--tk-paper);
-}
-
-.tk-rec__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-/* Точка присутствия сидит на аватаре, как в левой панели. */
-.tk-rec__ava .presence-dot {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 9px;
-  height: 9px;
-  border: 2px solid var(--tk-ink);
-}
-
-.tk-rec__body { flex: 1; min-width: 0; }
-
-.tk-rec__name {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--tk-paper);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: color .18s ease;
-}
-
-.tk-rec__state {
-  margin: 2px 0 0;
-  font-family: Oswald, sans-serif;
-  font-size: 12px;
-  color: var(--tk-muted);
-}
-
-.tk-rec__more {
-  width: 100%;
-  margin-top: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: none;
-  border: 1px solid var(--tk-rule);
-  padding: 11px 0;
-  cursor: pointer;
+/* «2 в эфире» рядом с заголовком — счётчик, а не часть заголовка. */
+.tk-home__count {
   font-family: Oswald, sans-serif;
   font-size: 13px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--tk-beige);
-  transition: border-color .18s ease, color .18s ease;
+  font-weight: 400;
+  letter-spacing: .14em;
+  color: var(--tk-accent);
 }
 
-.tk-rec__more:hover,
-.tk-rec__more:focus-visible {
-  border-color: var(--tk-accent);
-  color: var(--tk-paper);
+/* Фильтры эфиров — в строку с заголовком, без подписей над полями. */
+.tk-home__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.tk-home__bar .tk-select { width: 190px; padding-block: 9px; }
+.tk-home__bar .tk-cat__reset { padding-block: 8px; }
+
+/* Никто не в эфире — строка, а не рамка на пол-экрана: ниже лента
+ * (главная) или записи (раздел). */
+.tk-home__quiet {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 16px 20px;
+  border: 1px solid var(--tk-rule);
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  color: var(--tk-beige);
+}
+
+.tk-home__first { gap: 10px; margin-left: auto; }
+
+/* Точка «в эфир» — пульсирует, как у живых эфиров на плитках. */
+.tk-home__first-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: tk-home-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tk-home-pulse { 50% { opacity: .25; } }
+
+@media (prefers-reduced-motion: reduce) { .tk-home__first-dot { animation: none; } }
+
+/* На телефоне строка переносится — кнопка во всю ширину под текстом. */
+@media (max-width: 600px) { .tk-home__first { flex: 1 1 100%; margin-left: 0; } }
+
+@media (max-width: 767px) {
+  .tk-home__h1 { font-size: 24px; }
+  .tk-home__h2 { font-size: 20px; }
+  .tk-home__bar { width: 100%; }
+  .tk-home__bar .tk-select { flex: 1 1 140px; width: auto; }
+}
+
+/* Вводка раздела — под строкой фильтров, мелко: для пришедшего из
+ * поиска, а не на весь первый экран. */
+.tk-cat__lede {
+  margin: -8px 0 20px;
+  max-width: 760px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tk-muted);
+  text-wrap: pretty;
 }
 
 /* ── Секции ── */
@@ -327,74 +275,6 @@
   color: var(--tk-paper);
 }
 
-.tk-cat__note {
-  margin: 0 0 26px;
-  font-family: Oswald, sans-serif;
-  font-size: 14px;
-  color: var(--tk-muted);
-}
-
-/* ── Категории контента ── */
-.tk-groups {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 20px;
-}
-
-.tk-group {
-  display: flex;
-  flex-direction: column;
-  padding: 22px;
-  border: 1px solid var(--tk-rule);
-}
-
-.tk-group__head {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 18px;
-}
-
-.tk-group__head svg { flex: none; color: var(--tk-accent); }
-
-.tk-group__name {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 900;
-  letter-spacing: -.01em;
-  text-transform: uppercase;
-  color: var(--tk-paper);
-}
-
-.tk-group__note {
-  margin: 2px 0 0;
-  font-family: Oswald, sans-serif;
-  font-size: 13px;
-  color: var(--tk-muted);
-}
-
-/* Теги (.tk-tag, .tk-tags) — в app.css: ими же фильтрует карта заведений. */
-
-/* ── Фильтры над сеткой ── */
-.tk-cat__bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px 16px;
-  margin-bottom: 26px;
-}
-
-.tk-cat__ctl {
-  flex: 0 1 240px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* Поле формы из tk.css рассчитано на окна настроек, в строке фильтров оно
- * ниже. Кегль не трогаем: меньше 16px Safari на айфоне приближает страницу. */
-.tk-cat__ctl .tk-field { padding-block: 11px; }
-
 .tk-cat__reset {
   padding: 12px 2px;
   font-family: Oswald, sans-serif;
@@ -437,6 +317,9 @@
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: none; }
 }
+
+/* Сетку, обновившуюся саму (catalog.js), карточки не «влетают» заново. */
+.is-still .tk-card { animation: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .tk-card { animation: none; }
@@ -595,31 +478,14 @@
 }
 
 /* ── Узкие экраны ─────────────────────────────────────────────────────── */
-@media (max-width: 1279px) {
-  .tk-cat__hero {
-    grid-template-columns: 1fr;
-    gap: 40px;
-  }
-
-  .tk-cat__h1 { font-size: 38px; }
-}
-
 @media (max-width: 767px) {
   .tk-cat { padding: 28px 20px 40px; }
   .tk-intro { flex-wrap: wrap; gap: 14px; padding: 16px 8px 16px 18px; margin-bottom: 28px; }
   .tk-intro__body { flex-basis: calc(100% - 60px); }
   .tk-intro__close { align-self: flex-start; }
   .tk-intro__more { order: 1; }
-  .tk-cat__h1 { font-size: 30px; }
-  .tk-cat__lede { font-size: 15px; }
+  .tk-cat__lede { margin-top: -4px; font-size: 14px; }
   .tk-cat__h2 { font-size: 24px; }
   .tk-cat__sec { padding-top: 36px; }
-  .tk-cat__hero { padding-bottom: 36px; }
-  .tk-groups { grid-template-columns: 1fr; }
   .tk-grid { grid-template-columns: 1fr; }
-  .tk-cat__ctl { flex: 1 1 160px; }
-}
-
-@media (max-width: 374px) {
-  .tk-cat__h1 { font-size: 26px; }
 }

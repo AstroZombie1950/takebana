@@ -25,6 +25,7 @@ const userView = require('../../utils/userView');
 const callLog = require('../../utils/callLog');
 const errorLog = require('../../utils/errorLog');
 const attachments = require('../../utils/attachments');
+const uploadTrace = require('../../utils/uploadTrace');
 const { uploadAttachment } = require('./uploads');
 const { attachLimiter } = require('../../middleware/rateLimit');
 const limits = require('../../utils/messageLimit');
@@ -653,9 +654,16 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
   }
 
   res.status(202).json({ pending: true, ref });
+  const repliedAt = Date.now();
+  // Сколько шло после ответа 202 — в попытку отправителя (public/chats.js).
+  const timing = () => ({ queueMs: info.queueMs, encodeMs: info.encodeMs, ms: Date.now() - repliedAt });
   send().then(
-    () => mark('ok', { kind: info.kind, ext: info.ext }),
+    () => {
+      mark('ok', { kind: info.kind, ext: info.ext });
+      uploadTrace.done('chat.media', ref, { ...timing(), outcome: 'ok' });
+    },
     (e) => {
+      uploadTrace.done('chat.media', ref, { ...timing(), outcome: 'fail', reason: e.reason || (info.encodeMs == null ? 'encode' : 'store') });
       if (special) note(e);
       else if (!e.expose) errorLog.media(e, 'attachments.video', { conversation: String(conversation._id) });
       // Пережатие идёт уже после ответа 202: отказ здесь человек видит

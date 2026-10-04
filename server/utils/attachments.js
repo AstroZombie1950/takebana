@@ -234,10 +234,16 @@ async function storeVideo(info, base, dir) {
   const round = info.kind === 'round';
   let out;
   try {
-    out = await schedule(() => encode(info.path, dir, { maxSeconds: round ? ROUND_SECONDS : VIDEO_SECONDS, round, log: { key: base } }));
+    // Ожидание очереди и пережатие — в телеметрию отправителя (utils/uploadTrace.js).
+    const queuedAt = Date.now();
+    out = await schedule(() => {
+      info.queueMs = Date.now() - queuedAt;
+      return encode(info.path, dir, { maxSeconds: round ? ROUND_SECONDS : VIDEO_SECONDS, round, log: { key: base } })
+        .finally(() => { info.encodeMs = Date.now() - queuedAt - info.queueMs; });
+    });
   } catch (e) {
-    if (e.reason === 'long') throw bad(round ? 'Кружок длиннее минуты' : 'Видео длиннее 10 минут');
-    if (e.reason === 'novideo') throw Object.assign(bad('В файле нет видео'), { cause: e });
+    if (e.reason === 'long') throw Object.assign(bad(round ? 'Кружок длиннее минуты' : 'Видео длиннее 10 минут'), { reason: 'long' });
+    if (e.reason === 'novideo') throw Object.assign(bad('В файле нет видео'), { cause: e, reason: 'novideo' });
     throw e;
   }
   const items = [[out.video, `${base}.mp4`, 'video/mp4']];

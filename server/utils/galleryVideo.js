@@ -18,6 +18,7 @@ const os = require('os');
 const path = require('path');
 const storage = require('./storage');
 const errorLog = require('./errorLog');
+const uploadTrace = require('./uploadTrace');
 const engagement = require('./engagement');
 const { encode, schedule } = require('./videoEncode');
 const { stamp } = require('./watermark');
@@ -41,12 +42,17 @@ const UPLOAD_DIR = path.join(__dirname, '..', 'media', 'upload');
 const partPath = (id) => path.join(UPLOAD_DIR, `${id}.part`);
 const coverPath = (id) => path.join(UPLOAD_DIR, `${id}.cover`);
 
-async function convert(doc, src) {
+// queuedAt — когда встал в очередь: ожидание — тоже часть пути ролика.
+async function convert(doc, src, queuedAt = Date.now()) {
   const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `tk-gv-${doc._id}-`));
   const base = `gallery/${doc.userId}/${doc._id}`;
   const uploaded = [];
+  const t = { queueMs: Date.now() - queuedAt };
+  let at = Date.now();
   try {
     const out = await encode(src, dir, { maxSeconds: MAX_SECONDS, log: { video: String(doc._id) }, edit: doc.edit || {} });
+    t.encodeMs = Date.now() - at;
+    at = Date.now();
     const videoUrl = await storage.put(out.video, `${base}.mp4`, 'video/mp4');
     uploaded.push(`${base}.mp4`);
     // Обложка: своя картинка человека — со знаком, как всё на сайте
@@ -72,8 +78,10 @@ async function convert(doc, src) {
       },
     });
     if (!saved) await Promise.all(uploaded.map((k) => storage.remove(k).catch(() => {})));
+    uploadTrace.done('upload', doc._id, { ...t, storeMs: Date.now() - at, kb: Math.round((out.bytes || 0) / 1024), outcome: 'ok' });
   } catch (e) {
     await Promise.all(uploaded.map((k) => storage.remove(k).catch(() => {})));
+    uploadTrace.done('upload', doc._id, { ...t, outcome: 'fail', reason: e.reason || (t.encodeMs == null ? 'encode' : 'store') });
     if (!e.reason) errorLog.media(e, 'gallery.video', { video: String(doc._id) });
     await GalleryVideo.updateOne({ _id: doc._id }, { $set: { status: 'failed', error: e.reason || 'convert' } }).catch(() => {});
   } finally {
@@ -98,7 +106,8 @@ async function ownCover(id, dir) {
 // Принятый файл (временный, на диске) — в очередь галереи, отдельную от
 // переписки (videoEncode.js). Файл удаляется после.
 function enqueue(doc, src) {
-  schedule(() => convert(doc, src), { lane: 'gallery', owner: doc.userId });
+  const queuedAt = Date.now();
+  schedule(() => convert(doc, src, queuedAt), { lane: 'gallery', owner: doc.userId });
 }
 
 // Файл доехал и «Опубликовать» нажато — в очередь пережатия. Условие

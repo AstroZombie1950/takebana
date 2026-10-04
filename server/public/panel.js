@@ -251,25 +251,33 @@ function filtersHtml(spec, params) {
 // контраста на тёмном фоне (dataviz validate_palette, dark).
 const dayLabel = (iso) => iso.slice(8, 10) + '.' + iso.slice(5, 7);
 
-function chart(title, days, values, format) {
-  const fmt = format || num;
-  const max = Math.max(...values, 0);
-  const total = values.reduce((a, b) => a + b, 0);
+// labels — подпись каждой колонки (день, час, минута); foot — строка справа
+// от названия; cap — верх шкалы, если он известен заранее (проценты — 100).
+function series(title, labels, values, fmt, foot, cap) {
+  const max = cap || Math.max(...values, 0);
   const cols = values.map((v, i) =>
-    '<div class="tk-chart__col" data-tip="' + esc(dayLabel(days[i]) + ' — ' + fmt(v)) + '">' +
-      (v ? '<i style="height:' + Math.max(2, (v / max) * 100).toFixed(1) + '%"></i>' : '') +
+    '<div class="tk-chart__col" data-tip="' + esc(labels[i] + ' — ' + fmt(v)) + '">' +
+      (v ? '<i style="height:' + Math.min(100, Math.max(2, (v / max) * 100)).toFixed(1) + '%"></i>' : '') +
     '</div>').join('');
 
-  const mid = Math.floor(days.length / 2);
+  const mid = Math.floor(labels.length / 2);
   return '<figure class="tk-chart">' +
     '<figcaption class="tk-chart__head"><span class="tk-chart__title">' + esc(title) + '</span>' +
-      '<span class="tk-chart__total">' + esc('за период ' + fmt(Math.round(total * 10) / 10) + ' · сегодня ' + fmt(values[values.length - 1] || 0)) + '</span></figcaption>' +
-    '<div class="tk-chart__plot" role="img" aria-label="' + esc(title + ': за период ' + fmt(total) + ', максимум за день ' + fmt(max)) + '">' +
+      '<span class="tk-chart__total">' + esc(foot) + '</span></figcaption>' +
+    '<div class="tk-chart__plot" role="img" aria-label="' + esc(title + ': ' + foot) + '">' +
       '<span class="tk-chart__max">' + esc(max ? fmt(max) : '') + '</span>' +
       '<div class="tk-chart__bars">' + cols + '</div>' +
     '</div>' +
-    '<div class="tk-chart__axis"><span>' + dayLabel(days[0]) + '</span><span>' + dayLabel(days[mid]) + '</span><span>' + dayLabel(days[days.length - 1]) + '</span></div>' +
+    '<div class="tk-chart__axis"><span>' + esc(labels[0] || '') + '</span><span>' + esc(labels[mid] || '') + '</span><span>' + esc(labels[labels.length - 1] || '') + '</span></div>' +
   '</figure>';
+}
+
+// По дням — сводка.
+function chart(title, days, values, format) {
+  const fmt = format || num;
+  const total = values.reduce((a, b) => a + b, 0);
+  return series(title, days.map(dayLabel), values, fmt,
+    'за период ' + fmt(Math.round(total * 10) / 10) + ' · сегодня ' + fmt(values[values.length - 1] || 0));
 }
 
 // Подсказка одна на страницу: следует за колонкой под курсором. Колонка
@@ -1067,15 +1075,32 @@ const OUTCOME_TITLE = { open: 'идёт', ok: 'вышло', fail: 'ошибка'
 const REASON_TITLE = {
   no_manifest: 'плейлист не пришёл', no_frame: 'плейлист есть, картинки нет', fallback_busy: 'запасной путь переполнен',
   error: 'ошибка', no_camera: 'нет камеры',
+  camera_denied: 'камера запрещена', no_publish: 'видео не дошло до сервера ни разу',
+  lost: 'связь пропала и не вернулась', not_connected: 'не соединились',
+  canceled: 'отменили', too_big: 'слишком большой', novideo: 'не видео', long: 'слишком длинное', encode: 'пережатие', store: 'хранилище',
+  processing: 'не обработалось на сервере', processing_timeout: 'обработка дольше 5 минут', stalled: 'отправка встала',
+  network: 'не открылось (сеть)', decode: 'не открылось (файл)', unsupported: 'запись не поддерживается', recorder: 'сбой записи',
+  empty: 'пустая запись', mic_denied: 'микрофон запрещён', cam_denied: 'камера запрещена', no_mic: 'нет микрофона', no_cam: 'нет камеры',
+  timeout: 'время вышло', offline: 'нет интернета', no_server: 'нет связи с сервером', server: 'ошибка сервера', busy: 'сервер занят',
 };
 const STEP_TITLE = {
   manifest: 'плейлист', frame: 'кадр', camera: 'камера', joined: 'вошёл в Daily', live: 'в эфире', slow: 'Daily грузится',
   fallback: 'запасной путь', busy: 'запасной путь занят', reset: 'перезапуск плеера', reconnect: 'переподключение',
   net_good: 'сеть хорошая', net_low: 'сеть слабая', net_bad: 'сеть плохая', out_drop: 'выход оборвался', out_lost: 'выход потерян',
+  watch: 'адрес получен', publish: 'публикация', pub_fail: 'публикация не дошла', notice_slow: 'сказали «ждём»',
+  notice_no_route: 'сказали «видео не доходит»',
+  peer: 'собеседник в разговоре', stuck: 'Daily застрял', switch_own: 'перешли на свой путь', media_denied: 'камера/микрофон запрещены',
+  notice_silent: 'сказали «не слышно собеседника»',
+  draft: 'черновик заведён', first_chunk: 'первый кусок дошёл', uploaded: 'файл доехал', retry: 'повтор',
+  offline: 'ждали сеть', resumed: 'продолжено на другой странице', sent: 'файл ушёл', processing: 'обрабатывается на сервере',
 };
 const STAT_TITLE = {
   stalls: 'подвисаний', stallMs: 'стоял, мс', resets: 'перезапусков', player: 'плеер', height: 'качество', lastErr: 'ошибка',
   reconnects: 'переподключений', media: 'камера/микрофон',
+  pubs: 'публикаций', fails: 'не дошло', ice: 'путь ICE',
+  what: 'что', kb: 'КБ', type: 'тип', files: 'файлов', pages: 'страниц', bytes: 'байт дошло', sendMs: 'отправка, мс',
+  kbps: 'кбит/с', retries: 'повторов', ms: 'всего, мс', dir: 'куда', group: 'в группе', retry: 'повтор №', tries: 'попыток открыть',
+  video: 'с видео', role: 'сторона', size: 'участников', stuck: 'почему ушли с Daily', heard: 'звук через 10 с', heardEnd: 'звук в конце',
 };
 const sec = (ms) => (ms / 1000).toFixed(1).replace('.', ',') + ' с';
 
@@ -1094,6 +1119,19 @@ function statsText(stats) {
     .map(([k, v]) => esc(STAT_TITLE[k] || k) + ': ' + esc(k === 'height' ? v + 'p' : String(v))).join(' · ');
 }
 
+// Что было с файлом после приёма (utils/uploadTrace.js): очередь,
+// пережатие, выгрузка в хранилище, исход.
+function serverText(s) {
+  return [
+    s.outcome === 'ok' ? 'обработано' : 'не обработано' + (s.reason ? ' (' + (REASON_TITLE[s.reason] || s.reason) + ')' : ''),
+    s.queueMs != null ? 'очередь ' + sec(s.queueMs) : '',
+    s.encodeMs != null ? 'пережатие ' + sec(s.encodeMs) : '',
+    s.storeMs != null ? 'в хранилище ' + sec(s.storeMs) : '',
+    s.ms != null ? 'всего ' + sec(s.ms) : '',
+    s.kb ? s.kb + ' КБ после пережатия' : '',
+  ].filter(Boolean).map(esc).join(' · ');
+}
+
 // Сеть: страна · провайдер, часовой пояс, «VPN?» — догадка (utils/netInfo.js).
 function netText(t) {
   const n = t.net || {};
@@ -1110,7 +1148,8 @@ function traceRow(t, withKind) {
     '<td>' + outcomeTag(t) + '</td>' +
     '<td>' + esc(t.route || '—') + '</td>' +
     '<td><span class="tk-panel__why">' + stepsText(t.steps) + '</span>' +
-      (Object.keys(t.stats || {}).length ? '<span class="tk-panel__why">' + statsText(t.stats) + '</span>' : '') + '</td>' +
+      (Object.keys(t.stats || {}).length ? '<span class="tk-panel__why">' + statsText(t.stats) + '</span>' : '') +
+      (t.server ? '<span class="tk-panel__why">на сервере: ' + serverText(t.server) + '</span>' : '') + '</td>' +
     '<td>' + netText(t) + '</td>' +
     '<td>' + esc(t.device || '—') + (t.standalone ? '<span class="tk-tag">с иконки</span>' : '') + '</td>' +
     '<td class="tk-nowrap">' + (t.ip ? '<a href="' + href('traces', { ip: t.ip }) + '">' + esc(t.ip) + '</a>' : '—') + '</td>' +
@@ -1149,13 +1188,15 @@ const EVENT_TITLE = {
   'daily.out.back': 'выход вернулся', 'daily.out.lost': 'выход не вернулся', 'rtmp.in': 'поток пришёл', 'rtmp.out': 'поток ушёл',
   'hls.start': 'конвейер запущен', 'hls.ready': 'первый плейлист', 'hls.late': 'плейлиста нет минуту', 'hls.exit': 'ffmpeg вышел',
   'hls.stop': 'конвейер остановлен', 'host.away': 'ведущий свернул', 'host.back': 'ведущий вернулся',
+  'rtmp.info': 'параметры потока', 'rtmp.low': 'вещатель шлёт мало данных', 'rtmp.ok': 'поток выровнялся',
 };
 const PROFILE_TITLE = { full: '720/480/360', lite: '480p', copy: 'копия', venue: 'камера' };
 
 // Подробности события — по-русски, без пустого и «нет»: «режим 720/480/360 ·
 // знак поверх · режим до обрыва», «без видео 42,0 с · попыток 4».
 const EVENT_KEYS = { ms: 'за', downMs: 'без видео', sec: 'шёл', tries: 'попыток', n: 'попытка', attempt: 'с попытки',
-  status: 'ответ Daily', msg: '', code: 'код', signal: 'сигнал', restart: 'перезапуск' };
+  status: 'ответ Daily', msg: '', code: 'код', signal: 'сигнал', restart: 'перезапуск',
+  size: 'кадр', codec: '', fps: 'кадров/с', of: 'из', kbps: 'кбит/с', want: 'заявлено', lowSec: 'плохо было' };
 function eventMeta(e) {
   const d = e.d || {};
   const out = [];
@@ -1167,7 +1208,7 @@ function eventMeta(e) {
   if (d.host != null) out.push(d.host ? 'ведущий в комнате' : d.host === false ? 'ведущего нет в комнате' : 'есть ли ведущий — неизвестно');
   Object.entries(d).forEach(([k, v]) => {
     if (!(k in EVENT_KEYS) || v == null || v === '') return;
-    const val = k === 'ms' || k === 'downMs' ? sec(v) : k === 'sec' ? dur(v) : String(v);
+    const val = k === 'ms' || k === 'downMs' ? sec(v) : k === 'sec' || k === 'lowSec' ? dur(v) : String(v);
     out.push((EVENT_KEYS[k] ? EVENT_KEYS[k] + ' ' : '') + val);
   });
   return esc(out.join(' · '));
@@ -1527,49 +1568,106 @@ VIEWS.retention = {
   },
 };
 
-// ── Водяной знак ─────────────────────────────────────────────────────────────
+// ── Нагрузка ─────────────────────────────────────────────────────────────────
 //
-// Где у эфиров знак — поверх плеера или в кадре (routes/admin/watermark.js,
-// utils/streamWatermark.js). Рядом — что идёт сейчас и сколько ядер это
-// стоит: ради процессора выбор и сделан.
-VIEWS.watermark = {
-  title: 'Водяной знак',
-  admin: true,
-  async render() {
-    const d = await api('/watermark');
-    const c = d.usage.count;
-    const streams = (c.full || 0) + (c.lite || 0) + (c.copy || 0);
-    const inFrame = d.mode === 'frame';
+// Верх «Системы» (02.10.2026, план п. 7): замеры раз в минуту
+// (utils/loadStats.js) — сейчас и графиком за отрезок. Здесь же выбор знака
+// эфиров: он делается ради процессора (routes/admin/load.js). Отдельной
+// вкладки «Водяной знак» больше нет.
+const LOAD_RANGES = [
+  { value: 'hour', title: 'За час' },
+  { value: '', title: 'За сутки' },
+  { value: 'week', title: 'За неделю' },
+  { value: 'month', title: 'За месяц' },
+];
+const PROC_NAMES = { ffmpeg: 'ffmpeg', node: 'Node', mongo: 'база', mediamtx: 'MediaMTX', turn: 'TURN', other: 'прочее' };
+const comma = (n, d = 1) => (Number(n) || 0).toFixed(d).replace('.', ',');
+const pct = (n) => comma(n) + '%';
 
-    let html = '<div class="tk-tiles">';
-    html += tile('Знак эфиров', inFrame ? 'в кадре' : 'поверх плеера', inFrame
-      ? 'кладёт сервер, каждый эфир пережимается'
-      : 'кладёт браузер зрителя, по прямой ссылке на поток знака нет');
-    html += tile('Эфиров сейчас', num(streams), [
-      c.full ? c.full + ' в трёх качествах' : '',
-      c.lite ? c.lite + ' облегчённо, 480p' : '',
-      c.copy ? c.copy + ' копией' : '',
-      c.venue ? count(c.venue, 'камера', 'камеры', 'камер') + ' заведений' : '',
-    ].filter(Boolean).join(', ') || 'ни одного');
-    html += tile('Процессор на видео', '≈ ' + d.usage.cores.toFixed(1).replace('.', ',') + ' из 4 ядер', 'оценка по замерам; выше 3 — запись в журнал ошибок');
-    html += '</div>';
+function loadLabel(iso, range) {
+  const d = new Date(iso);
+  const p = (n) => String(n).padStart(2, '0');
+  const dm = p(d.getDate()) + '.' + p(d.getMonth() + 1);
+  const hm = p(d.getHours()) + ':' + p(d.getMinutes());
+  return range === 'month' ? dm : range === 'week' ? dm + ' ' + hm : hm;
+}
 
-    html += '<div class="tk-card"><label class="tk-switch tk-switch--wrap"><input type="checkbox" data-act="wm-frame"' + (inFrame ? ' checked' : '') + '> Знак в кадре — пережимать каждый эфир на сервере</label></div>';
-    html += '<p class="tk-panel__why"><b>Поверх плеера</b> — первые два эфира идут в трёх качествах (720p, 480p, 360p), остальные — копией того, что прислал вещатель: одно качество, процессора почти не тратят. Одновременно — десятки эфиров. Знак рисует страница: на экране и на записи экрана он есть, но по прямой ссылке на поток его нет.</p>';
-    html += '<p class="tk-panel__why"><b>В кадре</b> — знак вшит в видео, убрать его нельзя. Первые два эфира — в трёх качествах, остальные — одним 480p. Каждый эфир стоит процессора: при четырёх-пяти одновременно сервер у предела, тормозит и сайт.</p>';
-    html += '<p class="tk-panel__why">Смена действует на эфиры, начатые после неё; идущие доходят как начались. Записи — всегда со знаком в кадре: при знаке поверх плеера запись пережимается со знаком после эфира, в фоне. Камеры заведений — всегда со знаком в кадре: их пережимаем в любом случае.</p>';
-    return { html, sub: d.updatedAt ? 'Изменено ' + when(d.updatedAt) : 'По умолчанию — поверх плеера' };
-  },
-};
+function loadHtml(d) {
+  const s = d.last;
+  const c = d.usage.count;
+  const streams = (c.full || 0) + (c.lite || 0) + (c.copy || 0);
+  const inFrame = d.mode === 'frame';
+
+  let html = '<h2 class="tk-panel__h2">Нагрузка</h2><div class="tk-tiles">';
+  html += tile('Процессор', s ? pct(s.cpu) : '—', s
+    ? 'средняя загрузка ' + comma(s.load, 2) + ' на 4 ядра; выше ' + d.warn + '% пять минут — запись в журнал ошибок'
+    : 'замеров ещё нет — первый через минуту после запуска');
+  if (s && s.procs) {
+    const parts = Object.entries(s.procs).sort((a, b) => b[1] - a[1]).map(([k, v]) => (PROC_NAMES[k] || k) + ' ' + comma(v));
+    html += tile('Ядер по процессам', parts[0] || '—', parts.slice(1).join(' · ') || 'остальные — ноль');
+  }
+  if (s) html += tile('Память', pct(s.mem), 'занято, без кэша диска');
+  html += tile('Эфиров сейчас', num(streams), [
+    c.full ? c.full + ' в трёх качествах' : '',
+    c.lite ? c.lite + ' облегчённо, 480p' : '',
+    c.copy ? c.copy + ' копией' : '',
+    c.venue ? count(c.venue, 'камера', 'камеры', 'камер') + ' заведений' : '',
+  ].filter(Boolean).join(', ') || 'ни одного');
+  if (s) html += tile('Зрителей · звонков', num(s.viewers) + ' · ' + num(s.calls), 'зрители — в комнатах эфиров, звонки — идущие');
+  if (s && s.net) html += tile('Сеть, Мбит/с', comma(s.net.tx) + ' ↑ · ' + comma(s.net.rx) + ' ↓', 'исходящий и входящий за последнюю минуту; трафик за месяц — ниже');
+  if (s) html += tile('Запасной путь', num(s.lf || 0), 'зрителей смотрят эфир с нашего канала (/lf/), а не через Bunny');
+  if (s) html += tile('Порты TURN', num(s.turn || 0) + ' из ' + num(d.turnPorts), 'оценка по звонкам своим путём; у порога — запись в журнал ошибок');
+  if (s && s.encode) {
+    const e = s.encode;
+    html += tile('Очередь пережатия', num(e.recording + e.chat + e.gallery),
+      'записи эфиров ' + num(e.recording) + ', переписка ' + num(e.chat) + ', галерея ' + num(e.gallery) + ' — вместе с идущими');
+  }
+  html += '</div>';
+
+  const pts = d.points;
+  if (pts.length) {
+    const labels = pts.map((p) => loadLabel(p.at, d.range));
+    const avg = (key) => pts.reduce((a, p) => a + (p[key] || 0), 0) / pts.length;
+    const peak = (key) => Math.max(...pts.map((p) => p[key] || 0));
+    const ff = pts.map((p) => (p.procs && p.procs.ffmpeg) || 0);
+    html += '<div class="tk-charts">' +
+      series('Процессор, в среднем', labels, pts.map((p) => p.cpu || 0), pct, 'за отрезок ' + pct(avg('cpu')), 100) +
+      series('Процессор, пик', labels, pts.map((p) => p.cpuMax || 0), pct, 'максимум ' + pct(peak('cpuMax')), 100) +
+      series('ffmpeg, ядер', labels, ff, comma, 'в среднем ' + comma(ff.reduce((a, b) => a + b, 0) / ff.length)) +
+      series('Эфиров', labels, pts.map((p) => p.streams), num, 'максимум ' + num(peak('streams'))) +
+      series('Зрителей', labels, pts.map((p) => p.viewers), num, 'максимум ' + num(peak('viewers'))) +
+      series('Звонков', labels, pts.map((p) => p.calls), num, 'максимум ' + num(peak('calls'))) +
+      series('Сеть исходящая, Мбит/с', labels, pts.map((p) => p.tx || 0), comma, 'в среднем ' + comma(avg('tx')) + ', пик ' + comma(peak('txMax'))) +
+      series('Сеть входящая, Мбит/с', labels, pts.map((p) => p.rx || 0), comma, 'в среднем ' + comma(avg('rx'))) +
+      series('Зрителей на запасном пути', labels, pts.map((p) => p.lf), num, 'максимум ' + num(peak('lf'))) +
+      series('Порты TURN', labels, pts.map((p) => p.turn), num, 'максимум ' + num(peak('turn')) + ' из ' + num(d.turnPorts), d.turnPorts) +
+      series('Очередь пережатия', labels, pts.map((p) => p.encode), num, 'максимум ' + num(peak('encode'))) +
+      series('Диск эфиров занят', labels, pts.map((p) => p.disk || 0), pct, 'максимум ' + pct(peak('disk')) + '; от ' + d.diskWarn + '% — в журнал', 100) +
+    '</div>';
+  } else {
+    html += note('За этот отрезок замеров нет');
+  }
+
+  html += '<h2 class="tk-panel__h2">Знак эфиров</h2>';
+  html += '<div class="tk-card"><label class="tk-switch tk-switch--wrap"><input type="checkbox" data-act="wm-frame"' + (inFrame ? ' checked' : '') + '> Знак в кадре — пережимать каждый эфир на сервере</label>' +
+    '<p class="tk-panel__why">Сейчас: ' + (inFrame ? 'в кадре' : 'поверх плеера') + (d.modeAt ? ', изменено ' + when(d.modeAt) : ', по умолчанию') +
+    '. По оценке видео сейчас занимает ≈ ' + comma(d.usage.cores) + ' из 4 ядер.</p></div>';
+  html += '<p class="tk-panel__why"><b>Поверх плеера</b> — первые два эфира идут в трёх качествах (720p, 480p, 360p), остальные — копией того, что прислал вещатель: одно качество, процессора почти не тратят. Одновременно — десятки эфиров. Знак рисует страница: на экране и на записи экрана он есть, но по прямой ссылке на поток его нет.</p>';
+  html += '<p class="tk-panel__why"><b>В кадре</b> — знак вшит в видео, убрать его нельзя. Первые два эфира — в трёх качествах, остальные — одним 480p. Каждый эфир стоит процессора: при четырёх-пяти одновременно сервер у предела, тормозит и сайт.</p>';
+  html += '<p class="tk-panel__why">Смена действует на эфиры, начатые после неё; идущие доходят как начались. Записи — всегда со знаком в кадре: при знаке поверх плеера запись пережимается со знаком после эфира, в фоне. Камеры заведений — всегда со знаком в кадре: их пережимаем в любом случае.</p>';
+  return html;
+}
 
 // ── Система ──────────────────────────────────────────────────────────────────
 VIEWS.system = {
   title: 'Система',
   admin: true,
-  async render() {
-    const d = await api('/system');
+  filters: [{ name: 'range', options: LOAD_RANGES }],
+  async render(params) {
+    const [d, load] = await Promise.all([api('/system'), api('/load?range=' + encodeURIComponent(params.range || ''))]);
 
-    let html = '<div class="tk-tiles">';
+    let html = loadHtml(load);
+    html += '<h2 class="tk-panel__h2">Процесс, база, диск</h2><div class="tk-tiles">';
     html += tile('Процесс живёт', dur(d.process.uptime), 'Node ' + esc(d.process.node) + ', режим ' + esc(d.process.mode));
     html += tile('Память', bytes(d.process.rss), 'куча ' + bytes(d.process.heap));
     html += tile('База', d.db.state === 'connected' ? 'на связи' : 'недоступна', esc(d.db.name));
@@ -1869,7 +1967,7 @@ function serverParams(params) {
   return out;
 }
 
-const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'support', 'broadcast', 'venues', 'recordings', 'audit', 'errors', 'traces', 'costs', 'storage', 'retention', 'watermark', 'system'];
+const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'support', 'broadcast', 'venues', 'recordings', 'audit', 'errors', 'traces', 'costs', 'storage', 'retention', 'system'];
 
 function drawNav(active) {
   nav.innerHTML = ORDER.filter((name) => !VIEWS[name].admin || IS_ADMIN).map((name) => {

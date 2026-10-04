@@ -42,6 +42,11 @@
     login: ['stream.hintLive', 'vlive.login'],
     restricted: ['', 'restricted.text'],
     connecting: ['studio.connecting', ''],
+    // Камера вещает, только пока её смотрят (utils/venueCam.js): первые
+    // секунды зритель ждёт, пока она проснётся, — говорим это, а не «подключаемся».
+    waking: ['vlive.wakingTitle', 'vlive.waking'],
+    slow: ['vlive.slowTitle', 'vlive.slow'],
+    blocked: ['', 'vlive.blocked'],
     lost: ['vlive.lostTitle', 'vlive.lost'],
     elsewhere: ['stream.hintLive', 'vlive.elsewhere'],
   };
@@ -154,11 +159,17 @@
   }
   if (soundBtn) soundBtn.addEventListener('click', function () { play(); });
 
+  // Телеметрия просмотра (docs/TELEMETRY.md, venue.view) — как у эфира:
+  // путь, плейлист, первый кадр, подвисания, почему ушёл. Камера выключена,
+  // нужен вход, закрыто владельцем — попытки не было, не пишем.
   function watch() {
     if (!canWatch || session) return;
     say('connecting');
+    var tr = window.TKTrace ? TKTrace.start('venue.view', ID) : null;
     json('/api/venues/' + ID + '/watch', 'POST', {}).then(function (first) {
-      if (first.engine === 'hls') return watchHls(first.url);
+      if (tr) tr.step('watch');
+      if (first.engine === 'hls') return watchHls(first.url, tr);
+      if (tr) { tr.route = 'daily'; tr.onLeave = function () { tr.outcome = session ? 'ok' : 'gave_up'; }; }
       var media = new MediaStream();
       var firstAccess = first;
       session = TKDaily.connect({
@@ -177,6 +188,7 @@
       });
     }).catch(function (e) {
       session = null;
+      if (tr) { if ([401, 403, 409].indexOf(e.status) >= 0) tr.drop(); else tr.end('fail', 'watch_' + (e.status || e.reason || 'net')); }
       if (e.status === 409) { markOnline(false); say('off'); }
       else if (e.status === 401) say('login');
       else if (e.status === 403) say('restricted');
@@ -187,20 +199,72 @@
   // HLS через CDN. Плейлиста ещё нет — камеру только что попросили, первые
   // секунды видео будут через ~5–10 с: tk-hls.js ждёт его сам. Знак уже
   // в кадре (utils/hls.js, профиль venue) — наложение здесь не нужно.
-  function watchHls(url) {
-    var started = false;
-    var hls = TKHls.play(video, url, {});
+  //
+  // CDN из сети зрителя не отвечает — плеер сам уходит на запасной путь /lf/
+  // (utils/mediaFallback.js), как у эфира. Адрес уже /lf — сервер подменил его
+  // сам (cookie запасного пути).
+  function watchHls(url, tr) {
+    var started = false, playing = false, gotManifest = false, busy = false;
+    var stalls = 0, stallMs = 0, stallAt = 0;
+    var cdn = /^https?:/.test(url) && url.indexOf('/live/') > 0;
+    if (tr) {
+      tr.route = /^\/lf\//.test(url) ? 'fallback' : cdn ? 'cdn' : '';
+      tr.onLeave = function () {
+        tr.outcome = !started ? 'gave_up' : playing ? 'ok' : 'partial';
+        tr.reason = started ? '' : busy ? 'fallback_busy' : gotManifest ? 'no_frame' : 'no_manifest';
+      };
+    }
+    say('waking');
+    var hls = TKHls.play(video, url, {
+      fallback: cdn ? '/lf' + url.slice(url.indexOf('/live/')) : '',
+      // ~20 с без плейлиста: камера не проснулась — у заведения, скорее
+      // всего, плохая связь. Ждём дальше, но говорим это словами.
+      slowAfter: 10,
+      onSlow: function () {
+        if (started) return;
+        say('slow');
+        if (tr) tr.mark('notice_slow');
+      },
+      onEvent: function (name, d) {
+        if (!tr && name !== 'busy' && name !== 'reset') return;
+        if (name === 'manifest') { gotManifest = true; tr.step('manifest'); }
+        else if (name === 'player') tr.set('player', d.kind);
+        else if (name === 'fallback') { tr.route = 'fallback'; tr.mark('fallback'); }
+        else if (name === 'busy') { busy = true; if (!started) say('blocked'); if (tr) tr.step('busy'); }
+        else if (name === 'reset') {
+          // Поток пропал посреди просмотра (камера ушла, конвейер встал) —
+          // плеер ждёт его заново. Без слов зритель смотрел бы на застывший кадр.
+          playing = false;
+          say('slow');
+          if (tr) { tr.mark('reset'); tr.mark('notice_slow'); }
+        }
+        else if (name === 'error') tr.set('lastErr', String(d.details || '') + (d.code ? ' ' + d.code : ''));
+      },
+    });
     var onPlaying = function () {
+      playing = true;
+      if (stallAt) { stallMs += Date.now() - stallAt; stallAt = 0; if (tr) tr.set('stallMs', stallMs); }
+      if (tr) tr.step('frame');
+      say('');
       if (started) return;
       started = true;
       video.hidden = false;
-      say('');
       play();
     };
+    var onWaiting = function () {
+      if (!started || stallAt) return;
+      playing = false;
+      stallAt = Date.now();
+      if (tr) tr.set('stalls', ++stalls);
+    };
     video.addEventListener('playing', onPlaying);
+    video.addEventListener('waiting', onWaiting);
     session = {
       leave: function () {
+        // Камеру выключили или связь с ней пропала — итог сразу.
+        if (tr) { tr.onLeave(); tr.onLeave = null; tr.end(tr.outcome, tr.reason); }
         video.removeEventListener('playing', onPlaying);
+        video.removeEventListener('waiting', onWaiting);
         hls.stop();
         video.removeAttribute('src');
         video.load();
@@ -259,27 +323,80 @@
 
   function badgeText(key) { tkText(badge.lastElementChild, key); }
 
+  // Телеметрия владельца (docs/TELEMETRY.md, venue.host): от «включить» до
+  // «выключить» — камера, публикации по WHIP, путь ICE, сбои. Публикация
+  // NO_ROUTE раз подряд не дошла до сервера — владельцу словами: раньше
+  // страница переспрашивала молча, а он видел «Ждём зрителей», пока зрители
+  // ждали картинку (NOTICES.md, «Камеры заведений»).
+  var NO_ROUTE = 3;
+  var htr = null, pubs = 0, fails = 0, streak = 0, everLive = false, noRoute = false;
+  function hostTrace(route) {
+    if (htr || !window.TKTrace) return;
+    var tr = htr = TKTrace.start('venue.host', ID);
+    tr.route = route;
+    pubs = fails = streak = 0;
+    everLive = noRoute = false;
+    tr.onLeave = function () {
+      tr.outcome = fails && !everLive ? 'fail' : 'ok';
+      tr.reason = fails && !everLive ? 'no_publish' : '';
+    };
+  }
+  function hostEnd(outcome, reason) {
+    if (!htr) return;
+    var tr = htr;
+    htr = null;
+    if (!outcome) { tr.onLeave(); outcome = tr.outcome; reason = tr.reason; }
+    tr.onLeave = null;
+    tr.end(outcome, reason);
+  }
+  function pubFailed(e) {
+    if (!htr) return;
+    htr.set('fails', ++fails);
+    // Этапов у попытки не больше 40, а страница переспрашивает часами:
+    // отмечаем первые сбои подряд, остальное — в счёте.
+    if (streak < NO_ROUTE) htr.mark('pub_fail');
+    if (e) htr.set('lastErr', ((e.status ? e.status + ' ' : '') + (e.message || '')).slice(0, 80));
+    if (++streak < NO_ROUTE || noRoute) return;
+    noRoute = true;
+    htr.mark('notice_no_route');
+    htr.send(); // страница владельца открыта часами — важное не ждёт минуты
+    badgeText('vlive.noRouteBadge');
+    toast(t('vlive.noRoute'), 'error');
+  }
+
   function publishNow() {
     if (!local || pub) return;
     clearTimeout(retry);
     json('/api/venues/' + ID + '/watch', 'POST', {}).then(function (r) {
       if (!local || pub || !wanted || r.engine !== 'whip') return;
+      var reached = false, failure = null;
+      if (htr) { htr.set('pubs', ++pubs); if (streak < NO_ROUTE) htr.mark('publish'); }
       var mine = pub = TKWhip.publish(r.url, local, {
         onState: function (s) {
-          if (s === 'live' && pub === mine) badgeText('stream.hintLive');
+          if (s === 'live' && pub === mine) {
+            reached = everLive = true;
+            streak = 0;
+            if (noRoute) { noRoute = false; toast(t('vlive.resumed'), 'ok'); }
+            badgeText('stream.hintLive');
+            if (htr) htr.mark('live');
+          }
           if (s === 'ended' && pub === mine) {
             pub = null;
             badgeText('vlive.waitingBadge');
+            if (!reached) pubFailed(failure);
             // Оборвалось, а камеру всё ещё смотрят, — просим снова.
             if (wanted) retry = setTimeout(publishNow, 3000);
           }
         },
-        onError: function () {},
+        // Путь известен чуть позже «в эфире» — с ним и отправляем: страница
+        // владельца открыта часами, первая публикация не должна ждать минуты.
+        onRoute: function (route) { if (htr) { htr.set('ice', route); htr.send(); } },
+        onError: function (e) { failure = e; },
       });
     }).catch(function (e) {
       // 409 — камера на сервере уже выключена: просить снова бесполезно,
       // об этом скажет venue:state или сверка после обрыва сокета.
-      if (wanted && e.status !== 409) retry = setTimeout(publishNow, 5000);
+      if (wanted && e.status !== 409) { pubFailed(e); retry = setTimeout(publishNow, 5000); }
     });
   }
 
@@ -306,17 +423,20 @@
     paintOwner('connecting');
     say('connecting');
     json('/api/venues/' + ID + '/live', 'POST', {}).then(function (first) {
+      hostTrace(first.engine === 'whip' ? 'whip' : 'daily');
       if (first.engine !== 'whip') { starting = false; return startDaily(first); }
       // Свой приём: камеру открываем сами. Движок узнаём до этого —
       // в Daily камеру открывает он, а телефон две разом не даёт.
       return navigator.mediaDevices.getUserMedia({ video: CAMERA, audio: true }).then(function (stream) {
         starting = false;
+        if (htr) htr.step('camera');
         local = stream;
         show(stream);
         video.play().catch(function () {});
         startOwn(first);
       }, function () {
         starting = false;
+        hostEnd('fail', 'camera_denied');
         toast(t('venues.mediaDenied'), 'error');
         stop();
       });
@@ -406,7 +526,7 @@
       },
       onMediaError: function () { toast(t('venues.mediaDenied'), 'error'); },
       onState: function (s) {
-        if (s === 'live') { markOnline(true); paintOwner('live'); }
+        if (s === 'live') { markOnline(true); paintOwner('live'); everLive = true; if (htr) htr.step('live'); }
         if (s === 'ended' && session) lost();
       },
     });
@@ -420,6 +540,7 @@
 
   // Погасить камеру у себя — пульт снова «Запустить трансляцию».
   function halt() {
+    hostEnd();
     var s = session;
     session = null;
     if (s) s.leave();

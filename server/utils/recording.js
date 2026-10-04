@@ -100,26 +100,46 @@ async function finalize(rec, dir, cover) {
     await fs.promises.writeFile(list, nonEmpty.map((n) => `file '${n}'\n`).join(''));
 
     const video = path.join(work, 'video.mp4');
+    const hlsDir = path.join(work, 'hls');
     const thumb = path.join(work, 'thumb.jpg');
-    if (fs.existsSync(path.join(dir, UNMARKED))) {
-      await burnMark(rec, dir, nonEmpty, list, video);
+    // Знак поверх плеера — запись пережимается со знаком. Есть HLS записей —
+    // сразу в качества одним проходом (utils/recordingHls.js, markedArgs);
+    // нет — в MP4, как раньше.
+    const unmarked = fs.existsSync(path.join(dir, UNMARKED));
+    const oneShot = unmarked && recordingHls.ENABLED;
+    let duration;
+    if (oneShot) {
+      duration = await burnHls(rec, dir, nonEmpty, list, hlsDir);
     } else {
-      // Знак уже в кадре (utils/hls.js) — склейка копией, секунды.
-      // faststart — индекс в начале файла: плеер начинает играть, не скачав всё.
-      await run(FFMPEG, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
-        '-f', 'concat', '-i', list, '-c', 'copy', '-movflags', '+faststart', video]);
+      if (unmarked) {
+        await burnMark(rec, dir, nonEmpty, list, video);
+      } else {
+        // Знак уже в кадре (utils/hls.js) — склейка копией, секунды.
+        // faststart — индекс в начале файла: плеер начинает играть, не скачав всё.
+        await run(FFMPEG, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
+          '-f', 'concat', '-i', list, '-c', 'copy', '-movflags', '+faststart', video]);
+      }
+      duration = Math.round(Number(await run(FFPROBE, ['-v', 'error', '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1', video])) || 0);
     }
-
-    const duration = Math.round(Number(await run(FFPROBE, ['-v', 'error', '-show_entries', 'format=duration',
-      '-of', 'default=noprint_wrappers=1:nokey=1', video])) || 0);
     // Кадр не с нуля — первая секунда часто чёрная, пока камера просыпается.
     await run(FFMPEG, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
-      '-ss', String(Math.min(3, Math.max(0, duration / 2))), '-i', video, '-frames:v', '1', '-vf', 'scale=640:-2', thumb])
+      '-ss', String(Math.min(3, Math.max(0, duration / 2))), '-i', oneShot ? path.join(hlsDir, 'v0.ts') : video,
+      '-frames:v', '1', '-vf', 'scale=640:-2', thumb])
       .catch((e) => errorLog.media(e, 'recording.thumb', { recording: String(rec._id) }));
 
     const base = `recordings/${rec.userId}/${rec._id}`;
-    const { size } = await fs.promises.stat(video);
-    const videoUrl = await storage.put(video, `${base}.mp4`, 'video/mp4');
+    let size, media, keys;
+    if (oneShot) {
+      const up = await recordingHls.upload(rec, hlsDir);
+      size = up.size;
+      media = { hls: { url: up.url, files: up.files }, video: { url: '', key: '' } };
+      keys = up.files;
+    } else {
+      size = (await fs.promises.stat(video)).size;
+      media = { video: { url: await storage.put(video, `${base}.mp4`, 'video/mp4'), key: `${base}.mp4` } };
+      keys = [`${base}.mp4`];
+    }
     const own = cover && ownCover(cover);
     const thumbKey = own ? `${base}.webp` : fs.existsSync(thumb) ? `${base}.jpg` : '';
     const thumbUrl = own ? await storage.put(own, thumbKey, 'image/webp')
@@ -127,13 +147,9 @@ async function finalize(rec, dir, cover) {
 
     // Запись могли удалить, пока шла выгрузка, — тогда убираем и файлы.
     const saved = await Recording.findOneAndUpdate({ _id: rec._id }, {
-      $set: {
-        status: 'ready', duration, size,
-        video: { url: videoUrl, key: `${base}.mp4` },
-        thumb: { url: thumbUrl, key: thumbKey },
-      },
+      $set: { status: 'ready', duration, size, ...media, thumb: { url: thumbUrl, key: thumbKey } },
     });
-    if (!saved) await Promise.all([storage.remove(`${base}.mp4`), storage.remove(thumbKey)]);
+    if (!saved) await Promise.all([...keys, thumbKey].filter(Boolean).map((k) => storage.remove(k).catch(() => {})));
     console.log(`[rec ${rec._id}] готова: ${duration} с, ${(size / 1048576).toFixed(1)} МБ`);
 
     // Автору — сейчас. Склейка идёт минуты, и до 20.09.2026 он не узнавал
@@ -152,7 +168,7 @@ async function finalize(rec, dir, cover) {
     audit(null, 'recording.ready', { actor: rec.userId, targetType: 'recording', target: rec, meta: { duration, size } });
     streamLog.recordingSize(rec._id, size);
     // Несколько качеств — в фоне; пока их нет, запись играет из MP4.
-    if (saved) recordingHls.enqueue(rec._id);
+    if (saved && !oneShot) recordingHls.enqueue(rec._id);
   } catch (e) {
     errorLog.media(e, 'recording.finalize', { recording: String(rec._id) });
     audit(null, 'recording.fail', { actor: rec.userId, result: 'fail', targetType: 'recording', target: rec, meta: { error: e.message } });
@@ -196,6 +212,24 @@ async function burnMark(rec, dir, parts, list, video) {
   console.log(`[rec ${rec._id}] знак в кадре: ${Math.round(seconds)} с записи за ${Math.round((Date.now() - started) / 1000)} с`);
 }
 
+// То же, что burnMark, но сразу в качества HLS (utils/recordingHls.js,
+// markedArgs). Возвращает длительность записи, с.
+async function burnHls(rec, dir, parts, list, out) {
+  let seconds = 0;
+  for (const n of parts) {
+    const p = await videoEncode.probe(path.join(dir, n), { format: 'mpegts' });
+    seconds += (p && p.duration) || 0;
+  }
+  const info = await videoEncode.probe(list, { format: 'concat' });
+  if (!info || !info.video) throw new Error('в кусках записи нет видео');
+  await fs.promises.mkdir(out, { recursive: true });
+  const started = Date.now();
+  await videoEncode.schedule(() => videoEncode.run(FFMPEG, recordingHls.markedArgs(list, out, info),
+    { timeout: Math.max(600, 4 * seconds) }), { lane: 'recording', owner: rec.userId });
+  console.log(`[rec ${rec._id}] знак и качества одним проходом: ${Math.round(seconds)} с записи за ${Math.round((Date.now() - started) / 1000)} с`);
+  return Math.round(seconds);
+}
+
 // Эфир завершён с сохранением. Конвейер к этому моменту остановлен
 // (routes/streaming/streams.js ждёт hls.stopped): куски закрыты. Каталог
 // сразу переименовывается — следующий эфир того же ключа начнёт писать
@@ -234,15 +268,33 @@ function ownCover(url) {
   return fs.existsSync(file) ? file : '';
 }
 
-// Запись после склейки — удалить из хранилища и базы. Вместе с ней —
+// Запись после склейки — удалить из базы и хранилища. Вместе с ней —
 // оценки, комментарии, просмотры и жалобы (utils/engagement.js).
+//
+// Сначала база: для человека запись исчезает сразу. Файлы (видео, обложка,
+// все файлы HLS) — следом, в фоне, с повтором: 01.10 удаление ждало их
+// по одному, и один зависший запрос к Bunny давал «удалить» 500, а запись
+// оставалась на месте. Не удалилось и за три попытки — в журнал с ключами:
+// такие файлы — сироты, их видно в «Хранилище» панели.
+const REMOVE_RETRY_MS = [0, 30000, 300000];
+
 async function remove(rec) {
-  const keys = [rec.video && rec.video.key, rec.thumb && rec.thumb.key, ...((rec.hls && rec.hls.files) || [])];
-  await Promise.all(keys.filter(Boolean).map((k) => storage.remove(k)));
+  const keys = [rec.video && rec.video.key, rec.thumb && rec.thumb.key, ...((rec.hls && rec.hls.files) || [])].filter(Boolean);
   await Promise.all([
     Recording.deleteOne({ _id: rec._id }),
     engagement.forgetTarget(rec._id, 'recording'),
   ]);
+  removeFiles(String(rec._id), keys, 0);
+}
+
+function removeFiles(id, keys, attempt) {
+  setTimeout(async () => {
+    const left = [];
+    await Promise.all(keys.map((k) => storage.remove(k).catch(() => left.push(k))));
+    if (!left.length) return;
+    if (attempt + 1 < REMOVE_RETRY_MS.length) return removeFiles(id, left, attempt + 1);
+    errorLog.external(new Error(`файлы записи не удалились из хранилища: ${left.length}`), 'recording.remove', { recording: id, keys: left.slice(0, 20) });
+  }, REMOVE_RETRY_MS[attempt]).unref();
 }
 
 // Каталоги, оставшиеся от падения процесса посреди склейки: их никто уже

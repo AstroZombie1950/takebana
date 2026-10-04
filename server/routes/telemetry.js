@@ -27,7 +27,7 @@ const limiter = rateLimit({
 
 const TID = /^[\w-]{8,40}$/;
 const CODE = /^[a-z][\w.]{0,39}$/;
-const ROUTES = ['', 'cdn', 'fallback', 'daily', 'own'];
+const ROUTES = ['', 'cdn', 'fallback', 'daily', 'own', 'whip']; // whip — камера заведения на наш приёмник (03.10)
 const OUTCOMES = ['open', 'ok', 'fail', 'gave_up', 'partial'];
 const DAY_MS = 86400000;
 

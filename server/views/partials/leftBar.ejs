@@ -1,10 +1,16 @@
 <%
   // Левая панель — единственное меню сайта: на десктопе стоит слева всегда,
   // ниже 1024 (и на широких страницах — tk-app--wide) выезжает по бургеру.
-  // Сверху карточка профиля (имя и почта — она же ссылка на профиль) и карта,
-  // затем подписки, разделы каталога и запуск эфира, внизу документы и выход.
-  // Сообщения — иконкой в шапке, настройки профиля и язык — на странице
-  // /settings, звонки — вкладкой в сообщениях. Поведение — tk-app.js.
+  // Сверху карточка профиля (имя и почта — она же ссылка на профиль),
+  // под ней сообщения, звонки и контакты, заведения, затем подписки, разделы
+  // каталога и запуск эфира, внизу документы и выход. Настройки профиля
+  // и язык — на странице /settings. Поведение — tk-app.js.
+  //
+  // Сообщения, звонки и контакты — с 02.10 (правки заказчика): звонки
+  // и контакты жили только вкладками переписки, и их не находили. Это те же
+  // вкладки (/chatsPage?tab=…). Иконка переписки в шапке осталась: на
+  // телефоне панель спрятана за бургером, и счётчик непрочитанного должен
+  // быть виден без него.
   //
   // Гостю вместо профиля — вход и регистрация, из личного — карта и «Что такое
   // Takebana», подписок и выхода нет, язык — внизу панели (в шапке на телефоне
@@ -34,6 +40,17 @@
   // «Что такое Takebana» в шапке — только у гостя; вошедшему — здесь, всегда.
   var links = mine ? [venues, mine, about] : [venues, about];
   var online = (subscriptions || []).filter(function (x) { return x.status === 'online'; }).length;
+  // Вкладка переписки, открытая сейчас: подсвечивает свой пункт. Дальше
+  // вкладки переключает chats.js, он же переносит подсветку.
+  var chatTab = here === '/chatsPage' ? (typeof tab !== 'undefined' ? tab : 'messages') : '';
+  var talk = guest ? [] : [
+    { key: 'messages', href: '/chatsPage', i18n: 'app.messages', badge: 'data-chat-messages', count: unreadMessages || 0,
+      icon: '<path d="M21 11a8 8 0 01-11.5 7.2L4 20l1.8-5.5A8 8 0 1121 11Z"></path>' },
+    { key: 'calls', href: '/chatsPage?tab=calls', i18n: 'calls.title', badge: 'data-missed-calls', count: missedCalls || 0,
+      icon: '<path d="M6.5 3.5h3l1.5 4-2 1.5a12 12 0 006 6l1.5-2 4 1.5v3c0 1.1-.9 2-2 2A15.5 15.5 0 014.5 5.5c0-1.1.9-2 2-2z"></path>' },
+    { key: 'contacts', href: '/chatsPage?tab=contacts', i18n: 'contacts.title',
+      icon: '<rect x="4" y="3" width="16" height="18"></rect><circle cx="12" cy="10" r="3"></circle><path d="M7.5 18c.8-2 2.4-3 4.5-3s3.7 1 4.5 3"></path>' }
+  ];
 %>
 <div class="tk-aside__overlay" id="sidebarOverlay" hidden></div>
 
@@ -57,6 +74,15 @@
     </span>
   </a>
   <% } %>
+
+  <% talk.forEach(function (item) { %>
+  <a href="<%= item.href %>" class="tk-aside__item<%= chatTab === item.key ? ' tk-aside__item--on' : '' %>" data-chat-tab="<%= item.key %>">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><%- item.icon %></svg>
+    <span data-i18n="<%= item.i18n %>"><%- t(item.i18n) %></span>
+    <% if (item.badge) { %><span class="tk-aside__badge<%= item.count ? '' : ' hidden' %>" <%= item.badge %>><%= item.count > 99 ? '99+' : item.count %></span><% } %>
+  </a>
+  <% }); %>
+  <% if (talk.length) { %><div class="tk-aside__rule"></div><% } %>
 
   <%# Заявка заведения подсвечивает «Заведения», список своих — «Мои заведения». %>
   <% var parentOf = { '/company-register': '/venues' }; if (mine) parentOf['/venues/mine'] = mine.href; %>

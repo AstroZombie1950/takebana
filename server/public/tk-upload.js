@@ -54,13 +54,46 @@
   }
 
   var save = function (rec) { return tx('readwrite', function (s) { return s.put(rec); }); };
-  var drop = function (id) { return tx('readwrite', function (s) { return s.delete(id); }).catch(function () {}); };
+  var drop = function (id) {
+    try { localStorage.removeItem('tk.uptr.' + id); } catch (e) {} // попытка загрузки (ниже)
+    return tx('readwrite', function (s) { return s.delete(id); }).catch(function () {});
+  };
   var every = function () { return tx('readonly', function (s) { return s.getAll(); }); };
 
   // Метка для tk-app.js: есть что докачивать — подгрузить этот скрипт.
   function mark() {
     var busy = Object.keys(jobs).some(function (id) { return jobs[id].status === 'uploading'; });
     try { if (busy) localStorage.setItem(FLAG, '1'); else localStorage.removeItem(FLAG); } catch (e) {}
+  }
+
+  // ── Телеметрия (docs/TELEMETRY.md, kind upload) ──
+  // Загрузка переживает переходы по сайту — попытка тоже: её состояние
+  // лежит рядом с меткой докачки, следующая страница продолжает ту же
+  // запись (TKTrace.resume). Числа: размер, тип, скорость по дошедшим
+  // кускам, повторы, сколько страниц пережила.
+  var TR_KEY = 'tk.uptr.'; // убирается и в drop() выше
+  function describe(tr, size, file) {
+    tr.set('what', 'video');
+    tr.set('kb', Math.round(size / 1024));
+    tr.set('type', (file && file.type) || '');
+  }
+  // Докачка на этой странице: та же попытка, если её состояние сохранилось.
+  function traceOf(job, file) {
+    if (!window.TKTrace) return null;
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(TR_KEY + job.id) || 'null'); } catch (e) {}
+    var tr = saved ? TKTrace.resume(saved) : TKTrace.start('upload', job.id);
+    if (!saved) describe(tr, job.size, file);
+    tr.set('pages', (tr.stats.pages || 0) + 1);
+    return tr;
+  }
+  function keep(job) {
+    if (!job.tr) return;
+    try { localStorage.setItem(TR_KEY + job.id, JSON.stringify(job.tr.state())); } catch (e) {}
+  }
+  function traceEnd(job, outcome, reason) {
+    try { localStorage.removeItem(TR_KEY + job.id); } catch (e) {}
+    if (job.tr) job.tr.end(outcome, reason);
   }
 
   function emit(job) {
@@ -127,7 +160,10 @@
   // Доехал, но не опубликован (draft) — файл остаётся в браузере: страница
   // загрузки показывает по нему превью и кадры обложки. Опубликован или
   // пропал — больше не нужен.
-  function finish(job, status, error) {
+  function finish(job, status, error, code) {
+    if (status === 'gone') traceEnd(job, 'gave_up', 'canceled');
+    else if (status === 'failed') traceEnd(job, 'fail', code || 'error');
+    else { if (job.tr) job.tr.step('uploaded'); traceEnd(job, 'ok'); }
     job.status = status;
     job.error = error || '';
     job.file = null;
@@ -141,12 +177,31 @@
   // паузой; вернулась (событие online) — сразу.
   function pump(job) {
     var pause = 1000;
+    var tr = job.tr;
+    function retry(what) {
+      if (!tr) return;
+      tr.set('retries', (tr.stats.retries || 0) + 1);
+      tr.step(what);
+      keep(job);
+    }
     function step() {
       if (!jobs[job.id]) return Promise.resolve();
       if (job.received >= job.size) return Promise.resolve();
+      var sentAt = Date.now();
+      var from = job.received;
       return sendChunk(job).then(function (r) {
         if (r.status === 200 && r.body.video) {
           pause = 1000;
+          if (tr) {
+            // Скорость — по кускам, что дошли: ожидание сети сюда не входит.
+            var bytes = (tr.stats.bytes || 0) + Math.max(0, r.body.video.received - from);
+            var ms = (tr.stats.sendMs || 0) + (Date.now() - sentAt);
+            tr.set('bytes', bytes);
+            tr.set('sendMs', ms);
+            tr.set('kbps', Math.round((bytes * 8) / Math.max(1, ms)));
+            tr.step('first_chunk');
+            keep(job);
+          }
           job.received = r.body.video.received;
           job.status = r.body.video.status;
           emit(job);
@@ -159,14 +214,17 @@
         }
         // Кусок дошёл не целиком — сервер говорит, откуда повторить.
         if (r.status === 400 && typeof r.body.received === 'number') {
+          retry('retry');
           job.received = r.body.received;
           return wait(pause).then(function () { pause = Math.min(pause * 2, 30000); return step(); });
         }
         // Черновик удалили (на профиле или в другой вкладке) — всё.
         if (r.status === 404) return finish(job, 'gone');
         if (r.status >= 400 && r.status < 500 && r.status !== 408 && r.status !== 429) {
-          return finish(job, 'failed', r.body.message || TKNet.explain(r));
+          return finish(job, 'failed', r.body.message || TKNet.explain(r), 'http_' + r.status);
         }
+        // Сеть пропала (0), сервер занят или упал — ждём и повторяем.
+        retry(r.status ? 'retry' : 'offline');
         emit(job);
         return Promise.race([wait(pause), new Promise(function (res) { window.addEventListener('online', res, { once: true }); })])
           .then(function () { pause = Math.min(pause * 2, 30000); return step(); });
@@ -197,6 +255,8 @@
   // Не удалось сохранить файл в браузере (приватный режим, нет места) —
   // качаем с этой страницы, и уход с неё предупреждает (upload.js).
   function add(file) {
+    var tr0 = window.TKTrace ? TKTrace.start('upload', '') : null;
+    if (tr0) describe(tr0, file.size, file);
     return json('/upload/video', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -204,11 +264,23 @@
       body: JSON.stringify({ name: file.name.slice(0, 200), size: file.size, venue: (window.TK_UPLOAD || {}).venue || undefined }),
     }).then(function (d) {
       var job = { id: d.video.id, name: file.name, size: file.size, received: 0, status: 'uploading', chunk: d.chunk, file: file };
+      if (tr0) {
+        // Черновик заведён — дальше это попытка его загрузки.
+        tr0.target = job.id;
+        tr0.set('pages', 1);
+        tr0.step('draft');
+        job.tr = tr0;
+        keep(job);
+      }
       jobs[job.id] = job;
       mark();
       return save({ id: job.id, name: job.name, size: job.size, chunk: job.chunk, file: file })
         .then(function () { job.saved = true; }, function () { job.saved = false; })
         .then(function () { run(job); emit(job); return d.video; });
+    }, function (e) {
+      // Черновик не завёлся (лимит, сеть, сервер) — загрузки не было вовсе.
+      if (tr0) tr0.end('fail', 'draft_' + (e.reason || e.status || 'error'));
+      throw e;
     });
   }
 
@@ -228,6 +300,8 @@
           if (d.video.status === 'draft') return null;
           if (d.video.status !== 'uploading') return drop(rec.id);
           var job = { id: rec.id, name: rec.name, size: rec.size, received: d.video.received, status: 'uploading', chunk: rec.chunk, file: rec.file, saved: true };
+          job.tr = traceOf(job, rec.file);
+          if (job.tr) { job.tr.mark('resumed'); keep(job); }
           jobs[job.id] = job;
           run(job);
           emit(job);

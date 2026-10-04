@@ -1,0 +1,4 @@
+<%# «N в эфире» рядом с заголовком эфиров — главная и разделы. Число —
+    сколько эфиров в сетке под ним, с учётом фильтров; сетку подменяет
+    catalog.js, и число приходит с ней заголовком X-Live-Count. %>
+<span class="tk-home__count" id="liveCount"<%= count ? '' : ' hidden' %>><span data-live-num><%= count %></span> <span data-i18n="catalog.liveNow"><%- t('catalog.liveNow') %></span></span>

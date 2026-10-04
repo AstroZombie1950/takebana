@@ -97,7 +97,9 @@ async function purge(key) {
     console.warn(`[storage] BUNNY_API_KEY не задан: ${key} удалён из хранилища, но остаётся в кэше CDN`);
     return;
   }
-  const q = new URLSearchParams({ url: `${bunny.cdn}/${key}`, async: 'false' });
+  // async — Bunny сбрасывает кэш у себя и отвечает сразу: ждать его по
+  // каждому файлу записи незачем (удаление записи упиралось в это 01.10).
+  const q = new URLSearchParams({ url: `${bunny.cdn}/${key}`, async: 'true' });
   const res = await fetch(`https://api.bunny.net/purge?${q}`, {
     method: 'POST',
     headers: { AccessKey: process.env.BUNNY_API_KEY },

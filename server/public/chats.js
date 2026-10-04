@@ -1360,13 +1360,38 @@
   // стоит заглушка с полосой загрузки. Текст из поля — подпись к первому.
   // Видео сервер пережимает со знаком: ответ 202 приходит сразу, а готовое
   // сообщение — сокетом, с тем же ref (tk:message:new или tk:message:failed).
-  var uploads = [];         // { ref, peerId, name, kind, pct, state, xhr, error }
+  var uploads = [];         // { ref, peerId, name, kind, pct, state, xhr, error, tr }
   var sending = false;
+  // Прогресс стоит столько — отправку обрываем с «Повторить», а не держим
+  // «Загрузка 37%» вечно: у XHR без тайм-аута зависший запрос живёт часами.
+  var STALL_MS = 60000;
+
+  // Телеметрия отправки (docs/TELEMETRY.md, kind chat.media): попытка на файл,
+  // цель — ref заглушки; по нему же сервер дописывает пережатие (utils/uploadTrace.js).
+  function traceUpload(u) {
+    if (!window.TKTrace) return null;
+    var tr = TKTrace.start('chat.media', u.ref);
+    tr.set('dir', 'out');
+    tr.set('what', u.kind);
+    tr.set('kb', Math.round(u.file.size / 1024));
+    tr.set('type', u.file.type || '');
+    if (u.groupId) tr.set('group', true);
+    if (u.tries) tr.set('retry', u.tries);
+    return tr;
+  }
+  function endUpload(u, outcome, reason) {
+    if (!u.tr) return;
+    u.tr.end(outcome, reason);
+    u.tr = null;
+  }
 
   function uploadHtml(u) {
     var state = u.state === 'failed' ? escapeHtml(u.error || t('chats.uploadFailed'))
       : u.state === 'processing' ? escapeHtml(t('chats.processing'))
       : escapeHtml(t('chats.uploading')) + ' ' + u.pct + '%';
+    // Файл ещё в памяти — его можно отправить снова. После 202 его нет:
+    // не пережалось на сервере — заново только выбором файла.
+    if (u.state === 'failed' && u.file) state += ' <button type="button" class="tk-upload__again" data-retry-upload="' + escapeHtml(u.ref) + '">' + escapeHtml(t('chats.uploadRetry')) + '</button>';
     return '<div class="tk-msg tk-msg--out tk-msg--pending' + (u.state === 'failed' ? ' is-failed' : '') + '" data-ref="' + escapeHtml(u.ref) + '">' +
       '<div class="tk-msg__bubble has-att"><div class="tk-upload">' +
         '<span class="tk-upload__name">' + escapeHtml(u.name) + '</span>' +
@@ -1415,7 +1440,7 @@
       if (u.state !== 'processing') return clearInterval(u.watch);
       if (++tries > WATCH_TRIES) {
         clearInterval(u.watch);
-        failUpload(u);
+        failUpload(u, '', 'processing_timeout');
         return;
       }
       (u.groupId
@@ -1426,6 +1451,7 @@
             m.attachments && m.attachments[0] && m.attachments[0].kind === u.kind;
         });
         if (!found) return;
+        endUpload(u, 'ok');
         dropUpload(u.ref);
         if (chatKey() === u.chat) openHistory();
       }).catch(function () {});
@@ -1476,6 +1502,15 @@
     if (u.limit) form.append('limit', u.limit);
     if (u.replyTo) form.append('replyTo', u.replyTo);
     form.append('file', u.file, u.file.name);
+    if (!u.tr) u.tr = traceUpload(u);
+    var sentAt = u.sentAt = Date.now();
+    u.moved = sentAt;
+    u.stalled = false;
+    var stall = setInterval(function () {
+      if (Date.now() - u.moved < STALL_MS || u.pct >= 99) return;
+      u.stalled = true;
+      xhr.abort();
+    }, 5000);
 
     var xhr = u.xhr = new XMLHttpRequest();
     xhr.open('POST', '/messages/attach');
@@ -1486,6 +1521,7 @@
       if (!e.lengthComputable) return;
       var pct = Math.min(99, Math.floor(e.loaded / e.total * 100));
       if (pct === u.pct) return;
+      u.moved = Date.now();
       u.pct = pct;
       var bar = uploadEl(u.ref);
       if (!bar) return;
@@ -1494,31 +1530,44 @@
     };
     xhr.onload = function () {
       var data = xhr.response || {};
+      if (u.tr) {
+        var ms = Date.now() - sentAt;
+        u.tr.set('ms', ms);
+        u.tr.set('kbps', Math.round((u.file.size * 8) / Math.max(1, ms)));
+      }
       if (xhr.status === 202) {
         u.state = 'processing';
         u.file = null;
+        if (u.tr) { u.tr.step('sent'); u.tr.step('processing'); u.tr.send(); } // запись — до того, как сервер допишет пережатие
         redrawUpload(u);
         watchProcessing(u);
       } else if (xhr.status >= 200 && xhr.status < 300) {
+        if (u.tr) u.tr.step('sent');
+        endUpload(u, 'ok');
         dropUpload(u.ref);
         delivered(data, u);
       } else {
-        failUpload(u, data.message);
+        failUpload(u, data.message, xhr.status === 413 ? 'too_big' : 'http_' + xhr.status);
       }
       next();
     };
-    xhr.onerror = function () { failUpload(u); next(); };
-    xhr.onabort = next;
+    xhr.onerror = function () { failUpload(u, '', navigator.onLine === false ? 'offline' : 'no_server'); next(); };
+    // Оборвали мы сами: встало — сбой с «Повторить»; крестик — отмена.
+    xhr.onabort = function () {
+      if (u.stalled) failUpload(u, t('chats.uploadStalled'), 'stalled');
+      else endUpload(u, 'gave_up', 'canceled');
+      next();
+    };
     xhr.send(form);
 
-    function next() { u.xhr = null; sending = false; pump(); }
+    function next() { clearInterval(stall); u.xhr = null; sending = false; pump(); }
   }
 
-  function failUpload(u, message) {
+  function failUpload(u, message, reason) {
     if (u.watch) { clearInterval(u.watch); u.watch = null; }
     u.state = 'failed';
     u.error = message || t('chats.uploadFailed');
-    u.file = null;
+    endUpload(u, 'fail', reason || 'error');
     redrawUpload(u);
     toast(u.error, 'error');
   }
@@ -1535,11 +1584,24 @@
   }
 
   feed.addEventListener('click', function (e) {
+    var again = e.target.closest('[data-retry-upload]');
+    if (again) {
+      var ru = uploads.find(function (y) { return y.ref === again.getAttribute('data-retry-upload'); });
+      if (!ru || !ru.file) return;
+      ru.state = 'queued';
+      ru.error = '';
+      ru.pct = 0;
+      ru.tries = (ru.tries || 0) + 1;
+      redrawUpload(ru);
+      pump();
+      return;
+    }
     var x = e.target.closest('[data-drop-upload]');
     if (!x) return;
     var ref = x.getAttribute('data-drop-upload');
     var u = uploads.find(function (y) { return y.ref === ref; });
     if (u && u.xhr) u.xhr.abort();
+    else if (u) endUpload(u, 'gave_up', 'canceled');
     dropUpload(ref);
   });
 
@@ -1623,6 +1685,23 @@
   // файла, сервер их не распознавал. Ему — mp4 первым.
   var WEBKIT = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Android|Edg\//.test(navigator.userAgent);
 
+  // Запись не состоялась — в телеметрию (kind chat.media, dir rec): запрет
+  // микрофона или камеры, нет записи в браузере, сбой записи, пустой файл.
+  // Успешная запись отдельной попытки не заводит — её видно по отправке.
+  function recFailed(what, reason) {
+    if (!window.TKTrace) return;
+    var tr = TKTrace.start('chat.media', chatKey());
+    tr.set('dir', 'rec');
+    tr.set('what', what);
+    tr.end('fail', reason);
+  }
+  function denied(e, what) {
+    var name = (e && e.name) || '';
+    return name === 'NotAllowedError' || name === 'SecurityError' ? what + '_denied'
+      : name === 'NotFoundError' || name === 'OverconstrainedError' ? 'no_' + what
+      : what + '_' + (name ? name.replace(/Error$/, '').toLowerCase() : 'error');
+  }
+
   function voiceType() {
     if (!window.MediaRecorder) return null;
     var types = WEBKIT ? ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'] : ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
@@ -1694,7 +1773,7 @@
     var keyboard = !!e && e.detail === 0;
     if (rec || voiceAsking || !chatKey()) return;
     var type = voiceType();
-    if (type === null || !navigator.mediaDevices) return toast(t('chats.recUnsupported'), 'error');
+    if (type === null || !navigator.mediaDevices) { recFailed('voice', 'unsupported'); return toast(t('chats.recUnsupported'), 'error'); }
     voiceAsking = true;
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
       voiceAsking = false;
@@ -1704,6 +1783,7 @@
       rec = r;
       recorder.ondataavailable = function (ev) { if (ev.data && ev.data.size) r.chunks.push(ev.data); };
       recorder.onstop = function () { finishVoice(r); };
+      recorder.onerror = function () { r.failed = true; recFailed('voice', 'recorder'); };
       recorder.start();
       waveReset();
       pauseLabel(recPause, false);
@@ -1718,7 +1798,7 @@
         if (sec >= VOICE_MAX) stopVoice(true);
       }, 80);
       recording(true, keyboard);
-    }).catch(function () { voiceAsking = false; toast(t('chats.micDenied'), 'error'); });
+    }).catch(function (e) { voiceAsking = false; recFailed('voice', denied(e, 'mic')); toast(t('chats.micDenied'), 'error'); });
   }
 
   function stopVoice(send) {
@@ -1743,7 +1823,13 @@
     if (rec === r) { rec = null; recording(false); }
     r.stream.getTracks().forEach(function (tr) { tr.stop(); });
     if (r.meter) try { r.meter.ctx.close(); } catch (e) {}
-    // Меньше полусекунды — промах, а не голосовое.
+    // Меньше полусекунды — промах, а не голосовое. Нажали «отправить»,
+    // а записи нет (сбой записи, айфон отдал пустой файл) — сказать, а не
+    // молча ничего не отправить.
+    if (r.send && r.sec >= 0.5 && (!r.chunks.length || r.failed)) {
+      if (!r.failed) recFailed('voice', 'empty');
+      return toast(t('chats.recFailed'), 'error');
+    }
     if (!r.send || !r.chunks.length || r.sec < 0.5) return;
     if (chatKey() !== r.chat) return;
     var type = r.recorder.mimeType || r.chunks[0].type || 'audio/webm';
@@ -1848,6 +1934,8 @@
         el.removeEventListener('loadeddata', okFn);
         el.removeEventListener('error', errFn);
         if (worked && TKMedia.remember()) toast(t('chats.mediaOwnPath'));
+        // Открылось только своей дорогой — это и есть блокировка CDN у получателя.
+        if (worked) viewTrace(el, url, 'ok', '', 'fallback');
       };
       okFn = function () { done(true); };
       errFn = function () { done(false); };
@@ -1863,8 +1951,21 @@
     return true;
   }
 
+  // Получатель: медиа не открылось или открылось только запасным путём
+  // (kind chat.media, dir in). Удачные просмотры не пишем — их тысячи.
+  function viewTrace(el, url, outcome, reason, route) {
+    if (!window.TKTrace) return;
+    var tr = TKTrace.start('chat.media', hostOf(url));
+    tr.route = route || (window.TKMedia && TKMedia.on() ? 'fallback' : 'cdn');
+    tr.set('dir', 'in');
+    tr.set('what', el.tagName === 'AUDIO' ? 'audio' : el.tagName === 'VIDEO' ? 'video' : 'image');
+    tr.set('tries', mediaRetried[url] || 0);
+    tr.end(outcome, reason);
+  }
+
   function mediaFailed(kind, url, el) {
     var e = el.error;
+    viewTrace(el, url, 'fail', netFail(el) ? 'network' : 'decode');
     toast(t('chats.mediaFailed'), 'error');
     try {
       var body = JSON.stringify({
@@ -2316,7 +2417,7 @@
   function startRound() {
     var type = roundType();
     if (!chatKey()) return;
-    if (type === null || !navigator.mediaDevices) return toast(t('chats.recUnsupported'), 'error');
+    if (type === null || !navigator.mediaDevices) { recFailed('round', 'unsupported'); return toast(t('chats.recUnsupported'), 'error'); }
     if (rrec) return;
     if (rec) cancelVoice();
     navigator.mediaDevices.getUserMedia({
@@ -2329,6 +2430,7 @@
       rrec = r;
       recorder.ondataavailable = function (e) { if (e.data && e.data.size) r.chunks.push(e.data); };
       recorder.onstop = function () { finishRound(r); };
+      recorder.onerror = function () { r.failed = true; recFailed('round', 'recorder'); };
       roundPreview.srcObject = stream;
       recorder.start();
       roundRec.classList.remove('hidden');
@@ -2343,7 +2445,7 @@
         if (sec >= ROUND_MAX) stopRoundRec(true);
       }, 200);
       $('roundSend').focus();
-    }).catch(function () { toast(t('chats.camDenied'), 'error'); });
+    }).catch(function (e) { recFailed('round', denied(e, 'cam')); toast(t('chats.camDenied'), 'error'); });
   }
 
   function stopRoundRec(send) {
@@ -2367,6 +2469,10 @@
       roundPreview.srcObject = null;
     }
     r.stream.getTracks().forEach(function (tr) { tr.stop(); });
+    if (r.send && r.sec >= 1 && (!r.chunks.length || r.failed)) {
+      if (!r.failed) recFailed('round', 'empty');
+      return toast(t('chats.recFailed'), 'error');
+    }
     if (!r.send || !r.chunks.length || r.sec < 1) return;
     if (chatKey() !== r.chat) return;
     var type = (r.recorder.mimeType || r.chunks[0].type || 'video/webm').split(';')[0];
@@ -2400,7 +2506,17 @@
     setLast(el, m);
     bumpRecent(p);
     // Готово вложение, которое отправляла эта вкладка: заглушку — прочь.
-    if (e.detail.ref) dropUpload(e.detail.ref);
+    if (e.detail.ref) {
+      var done = uploads.find(function (x) { return x.ref === e.detail.ref; });
+      // Сокет бывает быстрее ответа на сам запрос — тогда «ушло» и время
+      // отмечаем здесь, иначе попытка закрылась бы без них.
+      if (done && done.tr) {
+        done.tr.step('sent');
+        if (done.tr.stats.ms == null && done.sentAt) done.tr.set('ms', Date.now() - done.sentAt);
+      }
+      if (done) endUpload(done, 'ok');
+      dropUpload(e.detail.ref);
+    }
 
     if (peer && peer.id === p.id) {
       var stick = atBottom() || m.sender === ME;
@@ -2497,7 +2613,7 @@
   // Видео не пережалось — заглушка этой вкладки показывает почему.
   document.addEventListener('tk:message:failed', function (e) {
     var u = uploads.find(function (x) { return x.ref === e.detail.ref; });
-    if (u) failUpload(u, e.detail.message);
+    if (u) failUpload(u, e.detail.message, 'processing');
   });
 
   document.addEventListener('tk:message:delivered', function (e) {
@@ -2608,6 +2724,10 @@
     else q.delete('tab');
     var qs = q.toString();
     history.replaceState(null, '', '/chatsPage' + (qs ? '?' + qs : ''));
+    // Подсветка того же пункта в левой панели (leftBar.ejs).
+    document.querySelectorAll('.tk-aside__item[data-chat-tab]').forEach(function (item) {
+      item.classList.toggle('tk-aside__item--on', item.getAttribute('data-chat-tab') === name);
+    });
     if (onCalls && journalStale) loadJournal();
     // Подсказки «кого записать первым» считаются по всей переписке —
     // просим их только на открытой вкладке.
@@ -2823,10 +2943,7 @@
       .then(function (data) {
         journal = data.calls;
         renderJournal();
-        document.querySelectorAll('[data-missed-calls]').forEach(function (b) {
-          b.textContent = '0';
-          b.classList.add('hidden');
-        });
+        // Счётчики в шапке, в панели и у вкладки ведёт tk-app.js.
         if (window.tkChatBadge) window.tkChatBadge({ calls: 0 });
         if (window.setNotificationDot) window.setNotificationDot(data.unread > 0);
       })
@@ -3299,10 +3416,6 @@
 
   function afterCallsDeleted(ids, r) {
     dropCalls(ids);
-    document.querySelectorAll('[data-missed-calls]').forEach(function (b) {
-      b.textContent = String(r.missed || 0);
-      b.classList.toggle('hidden', !r.missed);
-    });
     if (window.tkChatBadge) window.tkChatBadge({ calls: r.missed || 0 });
   }
 

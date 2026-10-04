@@ -250,4 +250,7 @@ function schedule(job, { lane = 'chat', owner = '' } = {}) {
   });
 }
 
-module.exports = { FFMPEG, run, probe, containerOf, input, fit, ffmpegArgs, encode, schedule };
+// Заданий в каждой очереди вместе с идущим — «Нагрузка» в панели (utils/loadStats.js).
+const queued = () => Object.fromEntries(Object.entries(lanes).map(([k, l]) => [k, l.jobs.length + (l.busy ? 1 : 0)]));
+
+module.exports = { FFMPEG, run, probe, containerOf, input, fit, ffmpegArgs, encode, schedule, queued };

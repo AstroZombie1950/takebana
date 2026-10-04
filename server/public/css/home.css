@@ -1,4 +1,4 @@
-/* Главная (/) с 28.09.2026: разделы строкой, эфиры, авторы полосой,
+/* Главная (/) с 28.09.2026: эфиры, авторы полосой,
  * лента видео (views/home.ejs). Плашка гостю, сетка эфиров и её карточки —
  * из catalog.css: они общие с разделами. */
 
@@ -6,82 +6,8 @@
  * на 1920 справа оставалось 220px пустоты — туда встаёт пятая колонка. */
 .tk-home { max-width: 1760px; padding-top: 28px; }
 
-/* ── Разделы строкой ──
- * Как тематические фильтры над лентой YouTube: на узком экране строка
- * прокручивается вбок, полосы прокрутки не видно. */
-.tk-home__chips {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 -40px;
-  padding: 0 40px 4px;
-}
-
-.tk-home__chips::-webkit-scrollbar { display: none; }
-
-.tk-home__chip {
-  flex: none;
-  padding: 9px 16px;
-  border: 1px solid var(--tk-rule);
-  font-family: Oswald, sans-serif;
-  font-size: 13px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--tk-beige);
-  white-space: nowrap;
-  transition: border-color .18s ease, color .18s ease;
-}
-
-.tk-home__chip:hover,
-.tk-home__chip:focus-visible { border-color: var(--tk-accent); color: var(--tk-paper); }
-
-.tk-home__chip.is-on {
-  border-color: var(--tk-paper);
-  background: var(--tk-paper);
-  color: var(--tk-ink);
-}
-
 /* ── Секции ── */
 .tk-home__sec { padding-top: 40px; }
-
-.tk-home__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 24px;
-  margin-bottom: 20px;
-}
-
-.tk-home__title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 16px;
-}
-
-.tk-home__h1,
-.tk-home__h2 {
-  margin: 0;
-  font-size: 28px;
-  line-height: 1;
-  letter-spacing: -.02em;
-  font-weight: 900;
-  text-transform: uppercase;
-  color: var(--tk-paper);
-}
-
-.tk-home__h2 { font-size: 22px; }
-
-/* «2 в эфире» рядом с заголовком — счётчик, а не часть заголовка. */
-.tk-home__count {
-  font-family: Oswald, sans-serif;
-  font-size: 13px;
-  font-weight: 400;
-  letter-spacing: .14em;
-  color: var(--tk-accent);
-}
 
 .tk-home__more {
   /* Зона нажатия 44px в высоту, а строка не раздвигается: отступ съеден
@@ -98,49 +24,6 @@
 
 .tk-home__more:hover,
 .tk-home__more:focus-visible { color: var(--tk-accent); }
-
-/* Фильтры эфиров — в строку с заголовком, без подписей над полями. */
-.tk-home__bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 12px;
-}
-
-.tk-home__bar .tk-select { width: 190px; padding-block: 9px; }
-.tk-home__bar .tk-cat__reset { padding-block: 8px; }
-
-/* Никто не в эфире — строка, а не рамка на пол-экрана: ниже лента. */
-.tk-home__quiet {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 20px;
-  padding: 16px 20px;
-  border: 1px solid var(--tk-rule);
-  font-family: Oswald, sans-serif;
-  font-size: 15px;
-  color: var(--tk-beige);
-}
-
-.tk-home__first { gap: 10px; margin-left: auto; }
-
-/* Точка «в эфир» — пульсирует, как у живых эфиров на плитках. */
-.tk-home__first-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
-  animation: tk-home-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes tk-home-pulse { 50% { opacity: .25; } }
-
-@media (prefers-reduced-motion: reduce) { .tk-home__first-dot { animation: none; } }
-
-/* На телефоне строка переносится — кнопка во всю ширину под текстом. */
-@media (max-width: 600px) { .tk-home__first { flex: 1 1 100%; margin-left: 0; } }
 
 /* ── Авторы полосой ── */
 .tk-home__authors {
@@ -340,13 +223,8 @@
 /* ── Узкие экраны ── */
 @media (max-width: 767px) {
   .tk-home { padding-top: 20px; }
-  .tk-home__chips,
   .tk-home__authors { margin: 0 -20px; padding: 0 20px 4px; }
   .tk-home__sec { padding-top: 32px; }
-  .tk-home__h1 { font-size: 24px; }
-  .tk-home__h2 { font-size: 20px; }
-  .tk-home__bar { width: 100%; }
-  .tk-home__bar .tk-select { flex: 1 1 140px; width: auto; }
   .tk-feed { grid-template-columns: 1fr; gap: 28px; }
   /* Эфиры на телефоне — лентой вбок: столбиком они уводили ленту видео
    * на второй-третий экран. Следующая карточка выглядывает справа. */

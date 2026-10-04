@@ -95,6 +95,13 @@ window.tkChatBadge = function (part) {
   d.calls = c;
   badge.textContent = m + c > 99 ? '99+' : String(m + c);
   badge.classList.toggle('hidden', !(m + c));
+  // Те же числа порознь — у пунктов левой панели и у вкладки «Звонки».
+  const put = (sel, n) => document.querySelectorAll(sel).forEach((el) => {
+    el.textContent = n > 99 ? '99+' : String(n);
+    el.classList.toggle('hidden', !n);
+  });
+  put('[data-chat-messages]', m);
+  put('[data-missed-calls]', c);
   // Точное «ничего непрочитанного» — уведомлениям в шторке делать нечего.
   if (part.messages === 0) window.tkClearPush((tag) => /^(msg|group)-/.test(tag) && !/^group-call-/.test(tag));
   if (part.calls === 0) window.tkClearPush((tag) => /^(call|group-call)-/.test(tag));
@@ -497,9 +504,12 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     // Обрыв дольше пяти секунд — полоса «нет связи с сервером» (tk-net.js):
     // переписка, счётчики и звонки без сокета молча стоят, и человек должен
     // это знать.
-    socket.on('connect', () => { console.log('[client] socket connected id=', socket.id); window.TKNet.socket(true); });
-    socket.on('connect_error', (err) => { console.warn('[client] socket connect_error', err.message); window.TKNet.socket(false); }); // сеть пропала — переподключится сам
-    socket.on('disconnect', (reason) => { console.log('[client] socket disconnected', reason); window.TKNet.socket(false); });
+    socket.on('connect', () => {
+      console.log('[client] socket connected id=', socket.id);
+      window.TKNet.socket(true, '', socket.io.engine && socket.io.engine.transport && socket.io.engine.transport.name);
+    });
+    socket.on('connect_error', (err) => { console.warn('[client] socket connect_error', err.message); window.TKNet.socket(false, 'error: ' + err.message); }); // сеть пропала — переподключится сам
+    socket.on('disconnect', (reason) => { console.log('[client] socket disconnected', reason); window.TKNet.socket(false, reason); });
 
     // Переписка: события сокета уходят в document как tk:<событие>, их слушает
     // страница переписки (chats.js). Колокольчик зажигается на любой странице.
@@ -531,15 +541,9 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       // Звук и системное уведомление — если включены в настройках (tk-notify.js).
       if (window.TKNotify) window.TKNotify.message(d);
     });
-    // Пропущенный звонок — счётчик у иконки переписки в шапке и у вкладки
-    // «Звонки». Открытая вкладка гасит его сама (chats.js).
-    socket.on('call:missed', () => {
-      window.tkChatBadge({ addCalls: 1 });
-      document.querySelectorAll('[data-missed-calls]').forEach((badge) => {
-        badge.textContent = String((parseInt(badge.textContent, 10) || 0) + 1);
-        badge.classList.remove('hidden');
-      });
-    });
+    // Пропущенный звонок — счётчик у иконки переписки в шапке, у пункта
+    // «Звонки» в панели и у вкладки. Открытая вкладка гасит его сама (chats.js).
+    socket.on('call:missed', () => window.tkChatBadge({ addCalls: 1 }));
     // ── Сверка с сервером ────────────────────────────────────────────────
     //
     // Всё живое на странице держится на событиях сокета, а значки в шапке —
@@ -1129,6 +1133,33 @@ document.addEventListener('DOMContentLoaded', function(){
     let group = false;
     const cards = new Map();    // userId → { displayName, avatarUrl }
     const tracks = new Map();   // userId → { video, audio } — что уже пришло
+    // Daily застрял — разговор уходит на свой путь: пока не соединились,
+    // говорим это, а не «подключаемся» (NOTICES.md, «Звонки»).
+    let switching = false;
+    // Собеседника не слышно SILENT_MS подряд при живом соединении —
+    // подсказка: скорее всего, у него выключен микрофон. Тишина в комнате
+    // даёт хоть какой-то уровень, ноль — нет.
+    const SILENT_MS = 10000;
+    let quietSince = 0;
+    let silent = false;
+
+    // Телеметрия разговора (docs/TELEMETRY.md, kind call), у каждой стороны
+    // своя: путь, собеседник появился, соединились, переподключения, уход
+    // на свой путь и почему, сеть, звук, итог. Звонок, который не взяли,
+    // сюда не попадает — его видно в журнале звонков сервера.
+    const tr = window.TKTrace ? TKTrace.start('call', callId) : null;
+    let reconnects = 0;
+    let size = 2;
+    if (tr) {
+      tr.route = first.engine === 'own' ? 'own' : 'daily';
+      tr.set('video', isVideo);
+      tr.set('role', s === OUT ? 'caller' : 'callee');
+    }
+    // Итог: обрыв — его причиной; иначе соединились — ok, нет — не дождались.
+    window.tkCallEnd = (outcome, reason) => {
+      window.tkCallEnd = null;
+      if (tr) tr.end(outcome || (started ? 'ok' : 'gave_up'), reason || (started ? '' : 'not_connected'));
+    };
 
     function remember(userId, track, on) {
       const bag = tracks.get(userId) || {};
@@ -1191,9 +1222,10 @@ document.addEventListener('DOMContentLoaded', function(){
 
     function paint() {
       setBeacon(s, state !== 'reconnecting');
-      if (state === 'reconnecting') tkText(s.status, 'call.reconnecting');
+      if (switching && state !== 'live') tkText(s.status, 'call.otherPath');
+      else if (state === 'reconnecting') tkText(s.status, 'call.reconnecting');
       else if (state === 'connecting') tkText(s.status, 'call.connectingShort');
-      else if (peers) tkText(s.status, 'call.connected');
+      else if (peers) tkText(s.status, silent ? 'call.peerSilent' : 'call.connected');
       else tkText(s.status, hadPeer ? 'call.peerReconnecting' : 'call.waitingPeer');
     }
 
@@ -1217,6 +1249,9 @@ document.addEventListener('DOMContentLoaded', function(){
       // чисел это был ложный сигнал: на пути Daily их не было вовсе, и
       // журнал панели копил «звука нет» на разговорах, где звук был.
       const verdict = !sound ? 'нечем измерить' : sound.energy > 0 ? 'звук доходит' : 'звука нет';
+      // Вердикт — и в попытку: по ней видно звонки без звука строкой, а не
+      // разбором журнала (CallAudio там остаётся — ждём отчёт с айфона).
+      if (tr) tr.set(reported === 1 ? 'heard' : 'heardEnd', !sound ? 'unknown' : sound.energy > 0 ? 'yes' : 'no');
       window.TKAudio.outputs().then((list) => window.TKAudio.send(
         'Звук в звонке (' + when + '): ' + verdict,
         [
@@ -1256,15 +1291,19 @@ document.addEventListener('DOMContentLoaded', function(){
       onPeers: (n) => {
         peers = n;
         if (n) hadPeer = true;
+        if (n && tr) { tr.step('peer'); if (n + 1 > size) tr.set('size', size = n + 1); }
         paint();
       },
       onState: (st) => {
         if (st === 'ended') {
+          if (window.tkCallEnd) window.tkCallEnd(started ? 'partial' : 'fail', 'lost');
           endCallLocal();
           toast(t('call.lost'), 'error');
           return;
         }
         state = st;
+        if (st === 'live') { switching = false; if (tr) tr.step('live'); }
+        if (st === 'reconnecting' && tr && started) { tr.mark('reconnect'); tr.set('reconnects', ++reconnects); }
         // Свой объект звонка пересоздаётся, и о пропаже дорожек старый уже не
         // сообщает: без этого сцена оставалась чёрной, а в углу — пустая рамка.
         if (st === 'reconnecting') s.stage.classList.add('tk-call__stage--empty', 'tk-call__stage--nolocal');
@@ -1277,7 +1316,10 @@ document.addEventListener('DOMContentLoaded', function(){
         }
         paint();
       },
-      onMediaError: () => toast(t('call.mediaDenied'), 'error'),
+      onMediaError: () => {
+        if (tr) { tr.step('media_denied'); tr.set('media', 'denied'); }
+        toast(t('call.mediaDenied'), 'error');
+      },
       // Полоска уровня: сколько звука пришло за последний срез. Сам звук
       // мы измерить не можем (WebAudio в звонке запрещён), а вот сколько
       // его декодировалось — видно из статистики соединения.
@@ -1288,8 +1330,19 @@ document.addEventListener('DOMContentLoaded', function(){
         // корень, иначе полоска дёргалась бы между нулём и краем.
         s.level.firstElementChild.style.width = Math.min(100, Math.round(Math.sqrt(grew / 0.02) * 100)) + '%';
         s.level.dataset.sound = grew > 0.0001 ? 'yes' : 'no';
+        // Тишина от собеседника: только вдвоём — в группе молчат по очереди.
+        const now = Date.now();
+        if (grew > 0 || group || state !== 'live' || !peers) quietSince = 0;
+        else if (!quietSince) quietSince = now;
+        const quiet = !!quietSince && now - quietSince >= SILENT_MS;
+        if (quiet !== silent) {
+          silent = quiet;
+          if (silent && tr) tr.step('notice_silent');
+          paint();
+        }
       },
       onNetwork: (n) => {
+        if (tr && n !== 'good') tr.step('net_' + n);
         s.net.dataset.net = n;
         const level = t('call.net.' + n) || n;
         s.net.setAttribute('aria-label', t('call.networkIs', { level }));
@@ -1315,7 +1368,12 @@ document.addEventListener('DOMContentLoaded', function(){
       // (reachMs в tk-daily.js), и тогда уходим по нему.
       joinMs: 10000,
       mediaMs: 5000,
-      onStuck: (reason) => window.callSocket.emit('call:fallback', { callId, reason }),
+      onStuck: (reason) => {
+        switching = true;
+        paint();
+        if (tr) { tr.step('stuck'); tr.set('stuck', String(reason).slice(0, 60)); }
+        window.callSocket.emit('call:fallback', { callId, reason });
+      },
     }, view));
 
     // Свой путь — всегда комната (public/tk-peer.js): на двоих в ней одно
@@ -1345,6 +1403,8 @@ document.addEventListener('DOMContentLoaded', function(){
     // у собеседника он, возможно, работает.
     window.switchCallToOwn = (access) => {
       const stuck = window._call.stuck;
+      if (!started) { switching = true; paint(); }
+      if (tr) { tr.route = 'own'; tr.step('switch_own'); }
       window._call.leave();
       [s.remoteVideo, s.localVideo, s.remoteAudio].forEach((el) => TKDaily.attach(el, null));
       s.stage.classList.add('tk-call__stage--empty', 'tk-call__stage--nolocal');
@@ -1450,6 +1510,7 @@ document.addEventListener('DOMContentLoaded', function(){
   function stopMedia() {
     // Отчёт снимается до закрытия соединения: после него статистики не будет.
     if (window.tkCallReport) { window.tkCallReport('в конце разговора'); window.tkCallReport = null; }
+    if (window.tkCallEnd) window.tkCallEnd();
     closeInvite();
     window.tkCallSize = null;
     if (window._call) { window._call.leave(); window._call = null; }

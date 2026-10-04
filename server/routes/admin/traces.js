@@ -52,6 +52,7 @@ function traceView(t, names) {
     outcome: t.outcome,
     reason: t.reason || '',
     stats: t.stats || {},
+    server: t.server || null,
   };
 }
 
@@ -94,6 +95,7 @@ csvRoute(router, '/traces', requireAdmin, 'traces', loadTraces, [
   ['Путь', (t) => t.route],
   ['Этапы, с', stepsText],
   ['Числа', (t) => t.stats],
+  ['На сервере', (t) => t.server || ''],
   ['Страна', (t) => t.net.country || ''],
   ['Провайдер', (t) => t.net.org || ''],
   ['VPN?', (t) => (t.net.vpn ? 'похоже' : '')],

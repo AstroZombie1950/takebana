@@ -14,7 +14,7 @@
 //   TKNet.reason(ошибка | ответ) — offline | no_server | timeout | server | busy | too_big | denied | ''
 //   TKNet.explain(ответ)        — текст по коду ответа, когда сервер своего не прислал
 //   TKNet.say(ошибка | ответ [, запасной текст]) — показать это человеку
-//   TKNet.socket(true | false)  — tk-app.js: сокет подключился / отвалился
+//   TKNet.socket(true | false, причина, транспорт) — tk-app.js: сокет подключился / отвалился
 //
 // Кнопка, нажатая перед запросом, через секунду без ответа показывает
 // «Отправляем…» и не нажимается второй раз; через пять секунд — «медленное
@@ -30,14 +30,20 @@
   var FILE_TIMEOUT = 120000;
   var BUSY_MS = 1000;
   var SLOW_MS = 5000;
-  var SOCKET_GRACE = 5000;  // переподключение быстрее — не повод пугать
-  var PROBE_MS = 10000;     // без сокета (гость) связь проверяем сами
+  // Сокет молчит дольше SOCKET_GRACE — спрашиваем сервер обычным запросом.
+  // Не ответил — «нет связи с сервером». Ответил — рвётся только живое
+  // соединение (так было у заказчика через VPN 02.10: сотни сокетов по
+  // несколько секунд, а эфиры и страницы шли), и пугать «нет связи» — неправда:
+  // первые SOFT_MS молчим, дальше — мягкое «переподключаемся».
+  var SOCKET_GRACE = 10000;
+  var SOFT_MS = 30000;
+  var PROBE_MS = 10000;     // пока связи нет — проверяем снова; гость без сокета — так же
   var PRESS_MS = 1000;      // запрос через столько после нажатия — от этой кнопки
 
   var KEYS = {
     offline: 'notice.offline', no_server: 'notice.noServer', slow: 'notice.slow',
     timeout: 'notice.timeout', server: 'notice.server', busy: 'notice.busy',
-    too_big: 'notice.tooBig', denied: 'notice.denied',
+    too_big: 'notice.tooBig', denied: 'notice.denied', reconnecting: 'notice.reconnecting',
   };
   function text(reason) { return window.t(KEYS[reason] || KEYS.server); }
 
@@ -48,6 +54,7 @@
   function note(reason, url) {
     if (!window.TKTrace) return;
     if (!trace) trace = window.TKTrace.start('notice', location.pathname);
+    if (!reason) return trace; // только числа: длительность обрыва, причина
     trace.mark(reason);
     trace.set(reason, (trace.stats[reason] || 0) + 1);
     if (url) trace.set('url', String(url).split('?')[0]);
@@ -58,15 +65,18 @@
   var bar = null;
   var shown = '';
   var hasSocket = false;
-  var socketDown = false;
+  var socketOk = true;      // последнее, что сообщил tk-app.js
+  var downSince = 0;
+  var socketDown = '';      // '' | 'no_server' | 'reconnecting' — что показываем про сокет
   var socketTimer = 0;
   var requestDown = false;  // запрос не дошёл, а сокета нет — до первого ответа
   var probeTimer = 0;
   var leaving = false;
+  var lastWhy = '';
 
   function paint() {
     var reason = navigator.onLine === false ? 'offline'
-      : (socketDown || (requestDown && !hasSocket)) ? 'no_server' : '';
+      : socketDown || (requestDown && !hasSocket ? 'no_server' : '');
     if (reason === shown) return;
     shown = reason;
     if (!bar) {
@@ -78,8 +88,18 @@
     }
     bar.hidden = !reason;
     if (!reason) return;
+    bar.classList.toggle('tk-netbar--soft', reason === 'reconnecting');
     window.tkText(bar, KEYS[reason]);
     note(reason);
+    if (lastWhy && trace) trace.set('why', lastWhy);
+  }
+
+  // Отвечает ли сервер обычным запросом — за 5 с.
+  function healthy() {
+    var ctrl = new AbortController();
+    var t = setTimeout(function () { ctrl.abort(); }, 5000);
+    return fetch('/healthz', { cache: 'no-store', signal: ctrl.signal })
+      .then(function (r) { clearTimeout(t); return r.ok; }, function () { clearTimeout(t); return false; });
   }
 
   // Гость без сокета: связь вернулась — узнаём сами, иначе полоса висела бы
@@ -88,30 +108,58 @@
     clearTimeout(probeTimer);
     if (!requestDown || hasSocket) return;
     probeTimer = setTimeout(function () {
-      fetch('/healthz', { cache: 'no-store' }).then(function () {
+      healthy().then(function (ok) {
+        if (!ok) return probe();
         requestDown = false;
         paint();
-      }, probe);
+      });
     }, PROBE_MS);
   }
 
-  function socketState(ok) {
+  // Сокет молчит: проверка раз в PROBE_MS, пока страница на экране.
+  // В фоне — ничего: человек не смотрит, а вернувшись, получит отсчёт заново
+  // (tk-app.js в этот момент сам переподключается).
+  function arm(ms) {
+    clearTimeout(socketTimer);
+    socketTimer = setTimeout(check, ms);
+  }
+  function check() {
+    socketTimer = 0;
+    if (socketOk || leaving || document.visibilityState === 'hidden') return;
+    healthy().then(function (ok) {
+      if (socketOk || leaving) return;
+      if (!ok) socketDown = 'no_server';
+      else if (Date.now() - downSince >= SOFT_MS) socketDown = 'reconnecting';
+      else socketDown = '';
+      if (ok && trace) trace.set('httpOk', true);
+      paint();
+      arm(PROBE_MS);
+    });
+  }
+
+  function socketState(ok, why, transport) {
     hasSocket = true;
     if (ok) {
+      // Обрыв был виден человеку — сколько длился: по этому числу видно,
+      // мешает ли сеть или полоса мелькнула на секунду.
+      if (!socketOk && shown) {
+        var t = note('');
+        if (t) { t.set('downMs', Date.now() - downSince); if (transport) t.set('transport', transport); }
+      }
+      socketOk = true;
+      downSince = 0;
       clearTimeout(socketTimer);
       socketTimer = 0;
-      socketDown = false;
+      socketDown = '';
       requestDown = false;
       return paint();
     }
+    if (why) lastWhy = String(why).slice(0, 40);
     // connect_error приходит на каждой попытке — отсчёт от первой.
-    if (socketTimer || socketDown || leaving) return;
-    socketTimer = setTimeout(function () {
-      socketTimer = 0;
-      if (leaving) return;
-      socketDown = true;
-      paint();
-    }, SOCKET_GRACE);
+    if (!socketOk || leaving) return;
+    socketOk = false;
+    downSince = Date.now();
+    arm(SOCKET_GRACE);
   }
 
   window.addEventListener('online', function () { paint(); if (requestDown) probe(); });
@@ -119,13 +167,14 @@
   // Переход по ссылке рвёт сокет — это не обрыв.
   window.addEventListener('pagehide', function () { leaving = true; });
   window.addEventListener('pageshow', function (e) { if (e.persisted) leaving = false; });
-  // Вкладка проснулась: таймер, заведённый перед заморозкой, сработал бы
-  // сразу, пока tk-app.js ещё переподключается. Отсчёт — заново.
+  // Вернулась из фона: что было до заморозки — уже неправда. Полосу
+  // убираем, отсчёт — заново, пока tk-app.js переподключается.
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState !== 'visible' || !socketTimer) return;
-    clearTimeout(socketTimer);
-    socketTimer = 0;
-    socketState(false);
+    if (document.visibilityState !== 'visible' || socketOk) return;
+    downSince = Date.now();
+    socketDown = '';
+    paint();
+    arm(SOCKET_GRACE);
   });
 
   // ── Кнопка, от которой запрос ──
@@ -178,8 +227,37 @@
     return (typeof FormData !== 'undefined' && body instanceof FormData) || (typeof Blob !== 'undefined' && body instanceof Blob);
   }
 
+  // Файл в запросе — попытка загрузки (docs/TELEMETRY.md, kind upload):
+  // аватар, обложки, фото заведения и группы идут здесь все, поэтому и
+  // телеметрия одна на всех. Видео галереи — кусками (tk-upload.js), там своя.
+  function fileTrace(url, body) {
+    if (!window.TKTrace || !isFile(body)) return null;
+    var files = [];
+    if (body instanceof FormData) body.forEach(function (v) { if (v instanceof Blob) files.push(v); });
+    else files.push(body);
+    if (!files.length) return null;
+    var bytes = files.reduce(function (a, f) { return a + f.size; }, 0);
+    var type = files[0].type || '';
+    var tr = TKTrace.start('upload', String(url).split('?')[0]);
+    tr.set('what', /^video\//.test(type) ? 'video' : /^image\//.test(type) ? 'photo' : 'file');
+    tr.set('files', files.length);
+    tr.set('kb', Math.round(bytes / 1024));
+    tr.set('type', type);
+    tr.bytes = bytes;
+    return tr;
+  }
+  function fileDone(tr, outcome, reason) {
+    if (!tr) return;
+    var ms = tr.at();
+    tr.set('ms', ms);
+    // Вместе с обработкой на сервере — медленнее чистой скорости сети.
+    tr.set('kbps', Math.round((tr.bytes * 8) / Math.max(1, ms)));
+    tr.end(outcome, reason);
+  }
+
   function tkFetch(url, opts) {
     opts = Object.assign({}, opts);
+    var tr = fileTrace(url, opts.body);
     var limit = opts.timeout != null ? opts.timeout : isFile(opts.body) ? FILE_TIMEOUT : TIMEOUT;
     var method = String(opts.method || 'GET').toUpperCase();
     var btn = opts.button !== undefined ? opts.button
@@ -212,11 +290,13 @@
       settle();
       if (requestDown) { requestDown = false; paint(); }
       if (r.status >= 500 || r.status === 429) note(reasonOf(r), url);
+      if (tr) fileDone(tr, r.ok ? 'ok' : 'fail', r.ok ? '' : reasonOf(r) || 'http_' + r.status);
       return r;
     }, function (e) {
       settle();
-      if (outer && outer.aborted) throw e; // отменила сама страница — не сбой
+      if (outer && outer.aborted) { if (tr) tr.drop(); throw e; } // отменила сама страница — не сбой
       var reason = timedOut ? 'timeout' : navigator.onLine === false ? 'offline' : 'no_server';
+      fileDone(tr, 'fail', reason);
       note(reason, url);
       if (reason === 'no_server' && !hasSocket) { requestDown = true; paint(); probe(); }
       var err = new Error(text(reason));
@@ -273,5 +353,15 @@
   }
 
   window.tkFetch = tkFetch;
-  window.TKNet = { json: json, reason: reasonOf, explain: explain, say: say, socket: socketState };
+  // Фото до отправки — те же правила, что у сервера (routes/streaming/
+  // uploads.js, establishmentsRouter.js): JPEG, PNG или WebP и предел в МБ.
+  // Пусто — годится, иначе текст для человека. Без этого отказ приходил
+  // только после отправки — у заведения вместе со всей формой.
+  function image(file, mb) {
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return window.t('upload.photoType', { name: file.name });
+    if (file.size > mb * 1048576) return window.t('user.photoHeavy', { name: file.name, mb: mb });
+    return '';
+  }
+
+  window.TKNet = { json: json, reason: reasonOf, explain: explain, say: say, socket: socketState, image: image };
 })();

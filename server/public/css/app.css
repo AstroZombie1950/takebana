@@ -467,6 +467,22 @@ body.tk-app {
 
 .tk-aside__item--on svg { color: var(--tk-accent); }
 
+/* Непрочитанное и пропущенные звонки у пунктов переписки — как у иконки
+ * в шапке (.tk-ahead__count), только в строке. */
+.tk-aside__badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--tk-accent);
+  color: var(--tk-ink);
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+}
+
 .tk-aside__rule {
   height: 1px;
   background: var(--tk-rule);

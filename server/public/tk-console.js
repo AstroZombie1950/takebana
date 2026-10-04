@@ -48,6 +48,17 @@
     if (key) tkText(hint.querySelector('p'), key);
   }
 
+  // Камера запрещена — где её разрешить на этом устройстве. Общее «в
+  // настройках браузера» не помогло: 02.10 ведущая с Android (сайт с иконки)
+  // девять раз за 23 минуты упёрлась в запрет, а у приложения с иконки
+  // настроек браузера на виду нет вовсе.
+  function cameraHelp() {
+    var ua = navigator.userAgent;
+    if (/Android/i.test(ua)) return 'stream.cameraHelpAndroid';
+    if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'stream.cameraHelpIos';
+    return 'stream.cameraHelpDesktop';
+  }
+
   function live(on, since) {
     TKStream.state(on ? 'live' : OBS ? 'wait' : 'paused');
     if (on) {
@@ -127,7 +138,14 @@
     // Идёт ли OBS-эфир, решает приём RTMP (mediaServer.js) — он и присылает
     // stream:update. Реагируем только на смену состояния.
     var obsLive = !!data.startedAt;
+    var obsLow = false;
     TKStream.onUpdate(function (u) {
+      // OBS шлёт заметно меньше заявленного битрейта или кадров
+      // (utils/rtmpWatch.js): зрители видят рывки, а здесь — «в эфире».
+      if (u.obsInput && obsLive && (u.obsInput === 'low') !== obsLow) {
+        obsLow = u.obsInput === 'low';
+        showHint(obsLow ? 'stream.obsLowInput' : null);
+      }
       if (typeof u.isActive !== 'boolean' || u.isActive === obsLive) return;
       obsLive = u.isActive;
       live(obsLive, u.startedAt);
@@ -136,6 +154,7 @@
         obsToggle.setAttribute('aria-expanded', 'false');
       } else {
         preview.hidden = true;
+        obsLow = false;
         showHint('stream.obsWaitHint');
       }
     });
@@ -397,6 +416,7 @@
             },
             onState: function (state) {
               if (tr && state === 'reconnecting') { tr.mark('reconnect'); tr.set('reconnects', (tr.stats.reconnects || 0) + 1); }
+              if (state === 'reconnecting') unstableNet(tr);
               if (state === 'live') {
                 clearTimeout(slow);
                 if (tr) tr.step('joined');
@@ -457,7 +477,7 @@
         clearTimeout(slow);
         if (tr) tr.end('fail', error.code || 'error');
         if (self.session) { self.session.leave(); self.session = null; }
-        showHint('stream.pausedHint');
+        showHint(error.code === 'no_camera' ? cameraHelp() : 'stream.pausedHint');
         tkText(startBtn, everLive ? 'stream.resume' : 'studio.go');
         toast(t('app.errorShort', { message: error.message }), 'error');
       })
@@ -506,13 +526,37 @@
     toast(t('stream.weakNet'), 'error');
   }
 
+  // Связь с Daily рвётся снова и снова — так было 02.10 у ведущих из России
+  // без VPN: 40 переподключений за эфир, Daily видел ведущую 5 секунд из
+  // пятнадцати минут, зрители смотрели чёрное. Тост «слабая связь» раз в
+  // минуту не объяснял, что делать. Три обрыва за две минуты — постоянная
+  // подсказка с советом сменить сеть; уходит через пять минут без обрывов.
+  var drops = [];
+  function unstable() {
+    var now = Date.now();
+    drops = drops.filter(function (at) { return now - at < 300000; });
+    for (var i = 2; i < drops.length; i++) if (drops[i] - drops[i - 2] < 120000) return true;
+    return false;
+  }
+  function unstableNet(tr) {
+    drops.push(Date.now());
+    if (!unstable()) return;
+    if (tr && !tr.stats.unstable) { tr.mark('unstable'); tr.set('unstable', true); }
+    showHint('stream.unstableNet');
+  }
+
   // Выход зрителям оборвался и восстанавливается (utils/webLive.js). Раньше
   // ведущий узнавал об этом только от зрителей.
   TKStream.onUpdate(function (u) {
     if (!streamer.connected) return;
     if (u.reconnecting === true) showHint('stream.outReconnecting');
-    else if (u.reconnecting === false) showHint(null);
-    if (u.lost) {
+    else if (u.reconnecting === false) showHint(unstable() ? 'stream.unstableNet' : null);
+    // Daily не видит ведущего в комнате (utils/webLive.js, hostGone) — дело
+    // в его сети, а не в выходе: совет сменить сеть, а не «пауза и заново».
+    if (u.hostGone) {
+      showHint('stream.unstableNet');
+      if (streamer.trace && !streamer.trace.stats.unstable) { streamer.trace.mark('unstable'); streamer.trace.set('unstable', true); }
+    } else if (u.lost) {
       showHint(null);
       toast(t('stream.outLost'), 'error');
     }

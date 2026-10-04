@@ -64,7 +64,9 @@ router.post('/stream/away/:streamId', requireAuth, requireOwner(Stream, { param:
     streamLog.event(stream.streamKey, away ? 'host.away' : 'host.back');
     const io = req.app.get('io');
     if (io) {
-      io.to(`stream:${stream.streamKey}`).emit('stream:update', { streamKey: stream.streamKey, away });
+      // at — время сервера: зритель сверяет его со временем сегмента
+      // (EXT-X-PROGRAM-DATE-TIME) и меняет заставку синхронно с видео.
+      io.to(`stream:${stream.streamKey}`).emit('stream:update', { streamKey: stream.streamKey, away, at: Date.now() });
       // Пауза — это уход из эфира для всех, кто смотрит списки.
       liveSignal.changed(io, stream.userId, !away);
     }

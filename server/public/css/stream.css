@@ -347,8 +347,12 @@
 
 .tk-live__author-body { flex: 1; min-width: 0; }
 
+/* Ссылка — только по тексту имени (правки 02.10): блоком она тянулась
+ * пустым полем до кнопок справа, и щелчок в пустоту уводил в профиль. */
 .tk-live__author-name {
-  display: block;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
   font-family: Oswald, sans-serif;
   font-size: 16px;
   font-weight: 500;

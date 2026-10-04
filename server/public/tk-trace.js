@@ -7,6 +7,11 @@
 //   tr.route = 'fallback';
 //   tr.end('fail', 'cdn_timeout');  — исход; ok/fail/gave_up/partial
 //   tr.onLeave = function () { … }; — последний шанс выставить исход
+//   tr.drop();                      — попытки не было (камера выключена,
+//                                     нужен вход): ничего не отправлять
+//   tr.state() / TKTrace.resume(s)  — попытка дольше страницы (загрузка
+//                                     видео докачивается с любой): та же
+//                                     запись, время — от настоящего начала
 //
 // Итог уходит sendBeacon: при исходе, когда страницу прячут (на айфоне это
 // последнее надёжное событие) и раз в минуту, если что-то поменялось, —
@@ -28,14 +33,15 @@
 
   var standalone = !!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches));
 
-  function Trace(kind, target) {
-    this.tid = id();
+  function Trace(kind, target, saved) {
+    saved = saved || {};
+    this.tid = saved.tid || id();
     this.kind = kind;
     this.target = String(target || '');
-    this.t0 = Date.now();
-    this.steps = [];
-    this.stats = {};
-    this.route = '';
+    this.t0 = saved.t0 || Date.now();
+    this.steps = saved.steps || [];
+    this.stats = saved.stats || {};
+    this.route = saved.route || '';
     this.outcome = 'open';
     this.reason = '';
     this.onLeave = null;
@@ -77,6 +83,15 @@
     this.send();
   };
 
+  Trace.prototype.state = function () {
+    return { tid: this.tid, kind: this.kind, target: this.target, t0: this.t0, steps: this.steps, stats: this.stats, route: this.route };
+  };
+
+  Trace.prototype.drop = function () {
+    clearInterval(this.timer);
+    this.send = function () {};
+  };
+
   Trace.prototype.send = function () {
     var c = navigator.connection || {};
     var body = JSON.stringify({
@@ -94,5 +109,6 @@
 
   window.TKTrace = {
     start: function (kind, target) { return new Trace(kind, target); },
+    resume: function (s) { return new Trace(s.kind, s.target, s); },
   };
 })();

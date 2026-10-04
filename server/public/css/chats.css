@@ -1057,6 +1057,19 @@
   cursor: pointer;
 }
 
+/* «Повторить» у упавшего вложения — текстом, в строке причины. */
+.tk-upload__again {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--tk-paper);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .tk-msg--pending .tk-msg__bubble { opacity: .85; }
 .tk-msg--pending.is-failed .tk-msg__bubble { background: none; border: 1px solid var(--tk-accent); color: var(--tk-paper); }
 .tk-msg--pending.is-failed .tk-upload__state { color: var(--tk-accent); }

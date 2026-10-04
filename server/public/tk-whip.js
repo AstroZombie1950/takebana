@@ -51,7 +51,11 @@
         });
       })
       .then(function (res) {
-        if (!res.ok) throw new Error(TKNet.explain(res));
+        if (!res.ok) {
+          var err = new Error(TKNet.explain(res));
+          err.status = res.status;
+          throw err;
+        }
         var place = res.headers.get('Location') || '';
         return res.text().then(function (sdp) {
           return pc.setRemoteDescription({ type: 'answer', sdp: sdp }).then(function () {
@@ -67,9 +71,24 @@
   // а лишнее — входящий трафик нашего канала.
   var VIDEO = { maxBitrate: 800000, maxFramerate: 15 };
 
+  // Каким путём пошло видео: host / srflx / relay и протокол — для
+  // телеметрии владельца (docs/TELEMETRY.md, venue.host).
+  function route(pc) {
+    return pc.getStats().then(function (stats) {
+      var out = '';
+      stats.forEach(function (s) {
+        if (out || s.type !== 'candidate-pair' || !s.nominated || s.state !== 'succeeded') return;
+        var c = stats.get(s.localCandidateId);
+        if (c) out = c.candidateType + '/' + (c.relayProtocol || c.protocol);
+      });
+      return out;
+    });
+  }
+
   // Вещание: дорожки stream уходят на сервер. Дорожки — страницы, публикация
   // их не останавливает. opts: onState('connecting' | 'live' | 'ended'),
-  // onError(e). Возвращает { pc, leave(), replaceTrack(track) }.
+  // onError(e) — e.status у отказа сервера, onRoute('host/udp').
+  // Возвращает { pc, leave(), replaceTrack(track) }.
   function publish(url, stream, opts) {
     opts = opts || {};
     var closed = false;
@@ -80,7 +99,10 @@
 
     pc.onconnectionstatechange = function () {
       if (closed) return;
-      if (pc.connectionState === 'connected') emit('onState', 'live');
+      if (pc.connectionState === 'connected') {
+        emit('onState', 'live');
+        route(pc).then(function (r) { if (r) emit('onRoute', r); }, noop);
+      }
       // Разорвалось и не вернулось само — публикация кончилась. Пересобирать
       // соединение здесь незачем: страница попросит новую, если камеру ещё смотрят.
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') leave('ended');

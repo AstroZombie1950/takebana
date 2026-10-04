@@ -122,8 +122,4 @@ const commonDataMiddleware = async (req, res, next) => {
   }
 };
 
-async function getActiveStreamsCount() {
-  return await Stream.countDocuments({ isActive: true });
-}
-
-module.exports = { commonDataMiddleware, getActiveStreamsCount };
+module.exports = { commonDataMiddleware };

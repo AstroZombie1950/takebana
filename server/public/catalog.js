@@ -20,9 +20,15 @@ document.addEventListener('DOMContentLoaded', function () {
     if (submit) submit.remove();
 
     var topReset = form.querySelector('.tk-cat__reset');
+    var liveCount = document.getElementById('liveCount');
     var pending = null;
+    var loadedAt = Date.now();
 
-    var load = function () {
+    // quiet — обновление само по себе, без действия человека: сетка не
+    // мигает «занято», одинаковая разметка не перерисовывается (карточки
+    // не проигрывают появление заново), а сбой — не повод уводить страницу,
+    // следующая попытка будет и так.
+    var load = function (quiet) {
       var params = new URLSearchParams();
       new FormData(form).forEach(function (value, key) {
         if (value) params.append(key, value);
@@ -31,20 +37,38 @@ document.addEventListener('DOMContentLoaded', function () {
       var pageUrl = form.getAttribute('action') + qs;
 
       // Щёлкнули три тега подряд — нужен ответ на последний, а не на тот,
-      // что пришёл позже остальных.
-      if (pending) pending.abort();
+      // что пришёл позже остальных. Тихое обновление выбор человека
+      // не перебивает.
+      if (pending) {
+        if (quiet) return;
+        pending.abort();
+      }
       var ctrl = pending = new AbortController();
-      results.setAttribute('aria-busy', 'true');
+      if (!quiet) results.setAttribute('aria-busy', 'true');
 
       tkFetch(form.dataset.grid + qs, { signal: ctrl.signal })
         .then(function (res) {
           if (!res.ok) throw new Error(TKNet.explain(res));
-          return res.text();
+          var n = Number(res.headers.get('X-Live-Count')) || 0;
+          return res.text().then(function (html) { return { html: html, n: n }; });
         })
-        .then(function (html) {
-          results.innerHTML = html;
+        .then(function (grid) {
+          pending = null;
+          loadedAt = Date.now();
           results.removeAttribute('aria-busy');
-          history.replaceState(null, '', pageUrl);
+          if (liveCount) {
+            liveCount.querySelector('[data-live-num]').textContent = grid.n;
+            liveCount.hidden = !grid.n;
+          }
+          var box = document.createElement('template');
+          box.innerHTML = grid.html;
+          // Ничего не изменилось — сетку не трогаем: картинки не грузятся
+          // заново, и место прокрутки ленты эфиров на телефоне не сбивается.
+          if (quiet && print(box.content) === print(results)) return;
+          // Новая сетка, пришедшая сама, — без появления карточек по одной.
+          results.classList.toggle('is-still', !!quiet);
+          results.replaceChildren(box.content);
+          if (!quiet) history.replaceState(null, '', pageUrl);
           if (topReset) topReset.hidden = !(params.has('sub') || params.has('city'));
 
           // Градиент аватара ставится на загрузке страницы, подгруженной
@@ -55,38 +79,83 @@ document.addEventListener('DOMContentLoaded', function () {
           });
         })
         .catch(function (err) {
-          // Сессия истекла или сервер ответил ошибкой — обычный переход,
-          // дальше сервер сам решит, что показать.
-          if (err.name !== 'AbortError') location.href = pageUrl;
+          if (ctrl !== pending) return; // перебит новым выбором (AbortError)
+          pending = null;
+          results.removeAttribute('aria-busy');
+          // Сессия истекла или сервер ответил ошибкой на выбор человека —
+          // обычный переход, дальше сервер сам решит, что показать. Тихому
+          // обновлению — следующая попытка (TKNet уже показал полосу связи).
+          if (!quiet) location.href = pageUrl;
         });
     };
 
+    // Отпечаток сетки: какие эфиры, у кого сколько зрителей, пусто ли.
+    var print = function (root) {
+      var cards = root.querySelectorAll('.tk-card');
+      if (!cards.length) return root.querySelector('.tk-empty') ? 'filtered' : 'quiet';
+      return Array.prototype.map.call(cards, function (card) {
+        var eyes = card.querySelector('.tk-card__eyes');
+        return card.getAttribute('href') + ':' + (eyes ? eyes.textContent.trim() : '');
+      }).join();
+    };
+
+    // ── Живая сетка ──────────────────────────────────────────────────────
+    //
     // Состав идущих эфиров изменился — перечитываем сетку (utils/liveSignal.js).
     // До 20.09.2026 витрина не менялась вовсе: событие о начале эфира уходило
-    // только в комнату самого эфира, и человек, стоящий на главной, узнавал
-    // о новом эфире лишь перезагрузкой.
+    // только в комнату самого эфира.
     //
-    // С задержкой и не чаще раза в пять секунд: когда эфир начинается,
-    // сигналов приходит несколько подряд (RTMP, затем /set-active), а сетку
-    // незачем перечитывать на каждый.
-    var liveTimer = null;
-    document.addEventListener('tk:live:changed', function () {
-      if (liveTimer) return;
-      liveTimer = setTimeout(function () {
-        liveTimer = null;
-        if (document.visibilityState === 'visible') load();
-      }, 5000);
-    });
+    // Одного сигнала мало (02.10: у заказчика с VPN на главной были эфиры,
+    // а у нас на только что открытой — пусто).
+    // Сигнал теряется, когда его некому принять: у гостя сокета нет вовсе;
+    // через VPN сокет рвётся каждые несколько секунд, и всё, что ушло
+    // в обрыв, не дойдёт; сигнал, пришедший в свёрнутую вкладку, прежде
+    // выбрасывался; страница с иконки «Домой» и из «назад» показывается
+    // такой, какой была. Поэтому сетка перечитывается ещё и после
+    // переподключения, при возвращении к странице, если она простояла
+    // дольше минуты, и раз в минуту — пока сокета нет.
+    //
+    // Не чаще раза в пять секунд: когда эфир начинается, сигналов приходит
+    // несколько подряд (RTMP, затем /set-active), а сокет через VPN
+    // переподключается раз за разом.
+    var STALE = 60000;
+    var timer = null;
+    var due = false; // пришло, пока страница была не на экране
+    var refresh = function () {
+      if (timer) return;
+      timer = setTimeout(function () {
+        timer = null;
+        if (document.visibilityState === 'visible') load(true); else due = true;
+      }, Math.max(0, 5000 - (Date.now() - loadedAt)));
+    };
+    var socketUp = function () { return !!(window.callSocket && window.callSocket.connected); };
+
+    document.addEventListener('tk:live:changed', refresh);
+    document.addEventListener('tk:reconnect', refresh);
+    var back = function () {
+      if (document.visibilityState !== 'visible') return;
+      if (due || Date.now() - loadedAt > STALE) { due = false; refresh(); }
+    };
+    document.addEventListener('visibilitychange', back);
+    window.addEventListener('pageshow', function (e) { if (e.persisted) back(); });
+    setInterval(function () {
+      if (!socketUp() && document.visibilityState === 'visible' && Date.now() - loadedAt > STALE) refresh();
+    }, 15000);
+    // «Назад» может отдать страницу из дискового кэша — со скриптами заново,
+    // но с сеткой на момент первого показа. Вошедшему это сверит
+    // tk:reconnect, гостю — некому.
+    var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+    if (nav && nav.type === 'back_forward' && !(window.TK && TK.userId)) refresh();
+
     // Сокет мог подключиться позже этого места — просимся в комнату и здесь,
-    // и на каждом переподключении.
+    // и на каждом подключении.
     var watch = function () {
-      if (window.callSocket && window.callSocket.connected) window.callSocket.emit('live:watch');
+      if (socketUp()) window.callSocket.emit('live:watch');
     };
     watch();
-    document.addEventListener('tk:reconnect', watch);
     if (window.callSocket) window.callSocket.on('connect', watch);
 
-    form.addEventListener('change', load);
+    form.addEventListener('change', function () { load(); });
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       load();

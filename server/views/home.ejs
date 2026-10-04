@@ -1,7 +1,8 @@
 <%#
-  Главная (/) с 28.09.2026 — лента, как у YouTube: сверху разделы
-  строкой, под ними идущие эфиры, авторы полосой и лента видео — записи
-  эфиров и ролики галерей вперемешку, новые сверху (utils/feed.js).
+  Главная (/) с 28.09.2026 — лента, как у YouTube: сверху идущие эфиры,
+  под ними авторы полосой и лента видео — записи эфиров и ролики галерей
+  вперемешку, новые сверху (utils/feed.js). Строки разделов над эфирами
+  с 02.10 нет: те же ссылки есть в левой панели.
   Раньше здесь была витрина раздела: большой заголовок, три рамки
   подкатегорий и восемь записей внизу — без эфиров страница выглядела
   пустой. Разделы (/streaming/:category) остались прежними
@@ -41,29 +42,18 @@
       </aside>
       <% } %>
 
-      <%# Разделы строкой, как тематические фильтры над лентой YouTube.
-          На телефоне строка прокручивается вбок. %>
-      <nav class="tk-home__chips" aria-label="<%= ta('feed.sections') %>" data-i18n-aria="feed.sections">
-        <a href="/" class="tk-home__chip is-on" aria-current="page" data-i18n="search.all"><%- t('search.all') %></a>
-        <% Object.keys(catalog.CATEGORIES).forEach(function (code) { var cat = catalog.CATEGORIES[code]; %>
-        <a href="/streaming/<%= code %>" class="tk-home__chip" data-i18n="<%= cat.i18n %>"><%= ta(cat.i18n, cat.name) %></a>
-        <% }); %>
-        <a href="/authors" class="tk-home__chip" data-i18n="authors.kicker"><%- t('authors.kicker') %></a>
-        <a href="/venues" class="tk-home__chip" data-i18n="feed.venues"><%- t('feed.venues') %></a>
-      </nav>
-
       <%# Идущие эфиры. Фильтры — та же GET-форма, что в разделах: без
           скрипта уходит перезагрузкой, со скриптом catalog.js подменяет
           сетку. Подкатегории выбирают в разделе; пришедшие в адресе
           (старые ссылки /?sub=…) держатся скрытыми полями до сброса. %>
       <form id="catFilters" action="/" method="get" data-grid="/streaming/popular/grid">
-      <section class="tk-home__sec">
+      <section>
         <div class="tk-home__head">
           <%# Счётчик — рядом с h1, а не внутри: заголовок для поисковика —
               «Прямые эфиры», без «2 в эфире». %>
           <div class="tk-home__title">
             <h1 class="tk-home__h1" data-i18n="cat.popularTitle"><%- t('cat.popularTitle') %></h1>
-            <% if (totalStreamsCount) { %><span class="tk-home__count"><%= totalStreamsCount %> <span data-i18n="catalog.liveNow"><%- t('catalog.liveNow') %></span></span><% } %>
+            <%- include('partials/liveCount', { count: streams.length }) %>
           </div>
           <div class="tk-home__bar">
             <% filters.subs.forEach(function (sub) { %><input type="hidden" name="sub" value="<%= sub %>"><% }); %>

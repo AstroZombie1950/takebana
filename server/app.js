@@ -392,6 +392,8 @@ async function startServer() {
   app.set('activeCalls', activeCalls);
   // Сообщения с ограничением: уборка исчерпанных и просроченных.
   require('./utils/messageLimit').start(io);
+  // Нагрузка сервера раз в минуту — «Система» в панели (utils/loadStats.js).
+  require('./utils/loadStats').start({ calls: activeCalls });
 
   // Хуки node-media-server шлют зрителям смену типа эфира при старте OBS.
   try {

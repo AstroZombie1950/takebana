@@ -22,8 +22,10 @@ function errorHandler(err, req, res, next) {
     // multer сообщает о слишком большом или неподходящем файле обычной
     // ошибкой. Без этой строки такая загрузка отвечала 500 и ложилась
     // в журнал ошибок, хотя сервер отработал ровно так, как должен.
+    // Файл больше предела — 413, как у nginx: браузер (public/tk-net.js)
+    // называет причину «слишком большой», а не безликим «код 400» (03.10).
     const fromMulter = err && err.name === 'MulterError';
-    const status = Number(err.status || err.statusCode) || (fromMulter ? 400 : 500);
+    const status = Number(err.status || err.statusCode) || (fromMulter ? (err.code === 'LIMIT_FILE_SIZE' ? 413 : 400) : 500);
 
     // 4xx — это ответ приложения, а не поломка: негодное тело, нет прав,
     // не тот формат файла. В журнал ошибок они не идут, иначе он превратится

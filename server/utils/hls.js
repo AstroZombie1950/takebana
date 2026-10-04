@@ -105,10 +105,18 @@ const PROFILES = {
 // Сколько ядер ест конвейер каждого вида — по замерам выше. Сумма больше
 // CPU_WARN — пишем в журнал: Node, Mongo и nginx остаются без процессора,
 // тормозят и эфиры, и сайт. Повтор — только после спада ниже CPU_CALM.
-// У копии — только звук и упаковка в сегменты: 0,04 от полного (замер
-// 30.09 на 1080p30). Там же: знак в кадре добавляет к полному меньше
-// процента — процессор ест пережатие, а не знак.
-const CORES = { full: 1.12, lite: 0.42, venue: 0.11, copy: 0.05 };
+// У копии — только звук и упаковка в сегменты. Знак в кадре добавляет
+// к полному меньше процента — процессор ест пережатие, а не знак (30.09).
+// full и copy — замер 02.10 на боевом сервере (AMD EPYC 9354P, ffmpeg 4.4),
+// 60 с вертикального 720×1280 с шумом как у камеры, в реальном времени:
+// полный — 0,87 ядра, копия — 0,08, из них 0,06 — кодирование звука AAC
+// (копия со звуком без пережатия — 0,013).
+const CORES = { full: 0.87, lite: 0.42, venue: 0.11, copy: 0.08 };
+// Звук копией (веб-эфир, ниже) — без пережатия AAC.
+const AUDIO_CORES = 0.06;
+// Сколько ядер из четырёх отдаём живым эфирам — остальное Node, базе,
+// nginx и очереди записей (nice 19).
+const LIVE_CORES = 3;
 const CPU_WARN = 3;
 const CPU_CALM = 2.5;
 let cpuWarned = false;
@@ -204,8 +212,9 @@ function clean(dir) {
 // доля потребовала бы scale2ref, а его в новых сборках ffmpeg уже нет,
 // и конвейер сломался бы при следующем обновлении сервера.
 //
-// Звук пережимаем в AAC всегда — HLS на iOS другой не принимает, а
-// перекодирование одной аудиодорожки стоит доли процента ядра.
+// Звук пережимаем в AAC всегда — HLS на iOS другой не принимает. Стоит это
+// 0,06 ядра на эфир (замер 02.10; быстрый кодер -aac_coder fast — 0,055):
+// при 50 копиях — три ядра из четырёх, это главная цена копии.
 //
 // ── Расхождение звука и картинки ────────────────────────────────────────────
 //
@@ -314,13 +323,22 @@ function inputArgs(streamKey, input) {
     return ['-i', `rtmp://127.0.0.1:1935/live/${streamKey}`];
 }
 
-function ffmpegArgs(streamKey, dir, profile, part, audio, input, inFrame) {
+// audioCopy — звук как пришёл, без пережатия и без синхронизации: у веб-эфира
+// (решение Ивана 02.10). Его звук собирает выход Daily на своём сервере —
+// часы ровные, AAC, разъезжаться нечему; а пережатие AAC стоит 0,06 ядра
+// на эфир, при 50 эфирах — почти три ядра из четырёх. У OBS (чужой
+// компьютер, свои часы, переподключения) — пережатие с aresample, как было.
+function ffmpegArgs(streamKey, dir, profile, part, audio, input, inFrame, audioCopy) {
     const { renditions, copy } = PROFILES[profile];
     const variants = renditions.map((r, i) => `v:${i}${audio ? `,a:${i}` : ''},name:${r.height}`).join(' ');
     const hlsOut = '[f=hls' +
         `:hls_time=${SEGMENT_SECONDS}` +
         `:hls_list_size=${PLAYLIST_SEGMENTS}` +
-        ':hls_flags=delete_segments+omit_endlist+independent_segments' +
+        // program_date_time — время сервера у каждого сегмента: по нему
+        // зритель ставит заставку «ведущий переключился» в тот момент
+        // воспроизведения, когда ведущий ушёл, а не на 10–20 с раньше
+        // (public/tk-viewer.js, тест 02.10). Проверено на 4.4 и 9.
+        ':hls_flags=delete_segments+omit_endlist+independent_segments+program_date_time' +
         ':hls_start_number_source=epoch' +
         ':hls_segment_type=mpegts' +
         ':master_pl_name=index.m3u8' +
@@ -340,7 +358,7 @@ function ffmpegArgs(streamKey, dir, profile, part, audio, input, inFrame) {
         ...inputArgs(streamKey, input),
 
         ...(copy ? ['-c:v', 'copy'] : videoArgs(profile, inFrame)),
-        '-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-af', AUDIO_SYNC,
+        ...(audioCopy ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-af', AUDIO_SYNC]),
 
         // Очередь мультиплексора. Когда одна дорожка обгоняет другую (а после
         // обрыва RTMP это норма), ffmpeg копит пакеты опережающей, пока не
@@ -386,7 +404,7 @@ function spawnFfmpeg(streamKey, job) {
     const dir = dirFor(streamKey);
     // Каждый запуск — новый кусок записи: после паузы и перезапуска тоже.
     const part = job.input ? null : recording.newPart(streamKey, { unmarked: job.mark === 'overlay' });
-    const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.profile, part, job.audio, job.input, job.mark === 'frame'), { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.profile, part, job.audio, job.input, job.mark === 'frame', job.daily), { stdio: ['ignore', 'ignore', 'pipe'] });
     job.proc = proc;
     if (!job.input) watchReady(streamKey, job);
     // О каких видах разъезда уже сказали в этом запуске — чтобы не повторяться.
@@ -440,6 +458,10 @@ function spawnFfmpeg(streamKey, job) {
         if (job.restarts >= MAX_RESTARTS) {
             errorLog.media(new Error(`ffmpeg падает подряд ${MAX_RESTARTS} раз, транскод остановлен`), 'hls.restarts', { streamKey, code });
             finish(streamKey, job);
+            // Старый плейлист — долой: иначе новый зритель получал ~12 с
+            // прошлого видео и вставал, а не «видео ещё не пришло» (зонд
+            // probe-venue-trace-1003: MediaMTX упал, о конце публикации не сказал).
+            clean(dir);
             return;
         }
 
@@ -462,13 +484,13 @@ function spawnFfmpeg(streamKey, job) {
 }
 
 // Сколько конвейеров каждого вида идёт и сколько ядер они едят по замерам —
-// для журнала ниже и вкладки «Водяной знак» в панели.
+// для журнала ниже и «Системы» в панели (routes/admin/load.js).
 function usage() {
     let cores = 0;
     const count = {};
     for (const j of jobs.values()) {
         if (j.stopping) continue;
-        cores += CORES[j.profile];
+        cores += CORES[j.profile] - (j.daily ? AUDIO_CORES : 0);
         count[j.profile] = (count[j.profile] || 0) + 1;
     }
     return { cores, count };
@@ -524,10 +546,14 @@ function start(streamKey, opts = {}) {
         const j = jobs.get(key);
         if (key !== streamKey && h.profile === 'full' && h.until > Date.now() && !(j && !j.stopping)) full++;
     }
-    const profile = opts.profile || (kept && kept.profile) || (full < MAX_FULL_TRANSCODES ? 'full' : mark === 'frame' ? 'lite' : 'copy');
+    // Полный — первым двум, и только пока живые конвейеры вместе с ним
+    // укладываются в LIVE_CORES (план 02.10, п. 8): при десятках копий
+    // третье и четвёртое ядро нужны Node, базе и очереди записей.
+    const room = usage().cores + CORES.full <= LIVE_CORES;
+    const profile = opts.profile || (kept && kept.profile) || (full < MAX_FULL_TRANSCODES && room ? 'full' : mark === 'frame' ? 'lite' : 'copy');
     if (!opts.profile) held.set(streamKey, { profile, mark, until: Infinity });
 
-    const job = { proc: null, restarts: 0, stopping: false, timer: null, profile, mark, input: opts.input || null, audio: true, silent: false };
+    const job = { proc: null, restarts: 0, stopping: false, timer: null, profile, mark, input: opts.input || null, daily: !!opts.daily, audio: true, silent: false };
     job.done = new Promise((resolve) => { job.resolve = resolve; });
     jobs.set(streamKey, job);
     spawnFfmpeg(streamKey, job);

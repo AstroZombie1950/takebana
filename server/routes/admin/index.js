@@ -20,7 +20,7 @@ router.use('/api/admin', require('./reports'));
 router.use('/api/admin', require('./journal'));
 router.use('/api/admin', require('./storage'));
 router.use('/api/admin', require('./retention'));
-router.use('/api/admin', require('./watermark'));
+router.use('/api/admin', require('./load'));
 router.use('/api/admin', require('./support'));
 
 module.exports = router;

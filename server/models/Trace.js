@@ -50,6 +50,10 @@ const TraceSchema = new mongoose.Schema({
   reason: { type: String, default: '' },
   // Числа своего направления: подвисания, отдача ведущего, скорость загрузки.
   stats: { type: mongoose.Schema.Types.Mixed, default: null },
+  // Что было дальше на сервере (03.10): у загрузки видео — ожидание
+  // в очереди, пережатие, выгрузка в хранилище и исход. Отдельно от stats:
+  // их браузер переписывает каждой досылкой (utils/uploadTrace.js).
+  server: { type: mongoose.Schema.Types.Mixed, default: null },
   startedAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 }, { versionKey: false });

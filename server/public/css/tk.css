@@ -867,6 +867,9 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   font: 500 13px/1.4 'Golos Text', Helvetica, sans-serif;
 }
 .tk-netbar[hidden] { display: none; }
+/* Сервер отвечает, рвётся только живое соединение — без тревоги. */
+.tk-netbar--soft { color: var(--tk-beige); }
+.tk-netbar--soft::before { background: var(--tk-muted); }
 .tk-netbar::before {
   content: "";
   flex: none;

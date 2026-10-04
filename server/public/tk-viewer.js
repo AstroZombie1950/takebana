@@ -31,8 +31,55 @@
     awayBox.hidden = !on;
     if (on && awayTitle) window.tkText(awayTitle, on[1]);
   }
+  // Ведущий ушёл или вернулся, а зритель смотрит с отставанием 10–20 с
+  // (HLS): заставка, поставленная сразу, лежала поверх ещё идущего видео
+  // (тест 02.10). Ставим и снимаем её, когда воспроизведение дойдёт до
+  // момента события. Время кадра — EXT-X-PROGRAM-DATE-TIME (utils/hls.js),
+  // время события — сервера (at), часы одни. Метки в потоке нет — ждём
+  // столько, сколько зритель отстаёт от живого края. Дольше 40 с не ждём;
+  // не играет вовсе — сразу. События идут очередью: ушёл и вернулся быстрее
+  // отставания — зритель увидит и то, и другое в своё время.
+  var INGEST_MS = 2000;     // от камеры ведущего до нашего ffmpeg (Daily → RTMP)
+  var SYNC_MAX_MS = 40000;
+  var awayQueue = [];
+  var awayTimer = null;
+  var hlsNow = null;        // текущий hls.js — плеер пересоздаёт его на сбоях
+  function playClock() {
+    try {
+      if (hlsNow && hlsNow.playingDate) return hlsNow.playingDate.getTime();
+      var start = video.getStartDate && video.getStartDate();
+      if (start && !isNaN(start.getTime())) return start.getTime() + video.currentTime * 1000;
+    } catch (_) {}
+    return null;
+  }
+  function lagMs() {
+    var edge = 0;
+    try {
+      if (hlsNow && hlsNow.latency) edge = hlsNow.latency;
+      else if (video.seekable.length) edge = video.seekable.end(video.seekable.length - 1) - video.currentTime;
+    } catch (_) {}
+    return Math.max(0, edge * 1000) + INGEST_MS;
+  }
+  function awayDue(e) {
+    if (!e.at || !video || !played || video.paused || Date.now() >= e.until) return true;
+    var clock = playClock();
+    return clock != null ? clock >= e.at + INGEST_MS : Date.now() >= e.lagUntil;
+  }
+  function drainAway() {
+    clearTimeout(awayTimer);
+    while (awayQueue.length) {
+      if (!awayDue(awayQueue[0])) { awayTimer = setTimeout(drainAway, 250); return; }
+      showNotice({ away: awayQueue.shift().away });
+    }
+  }
+  function queueAway(u) {
+    var now = Date.now();
+    awayQueue.push({ away: u.away, at: u.at, until: now + SYNC_MAX_MS, lagUntil: video ? now + lagMs() : now });
+    drainAway();
+  }
+
   if (window.TKStream) TKStream.onUpdate(function (u) {
-    if (typeof u.away === 'boolean') showNotice({ away: u.away });
+    if (typeof u.away === 'boolean') queueAway(u);
     if (typeof u.reconnecting === 'boolean') showNotice({ reconnecting: u.reconnecting, lost: false });
     if (u.lost) showNotice({ lost: true });
     if (u.ended || (u.streamType && u.streamType !== data.streamType) ||
@@ -108,6 +155,9 @@
   // плеером. Исход считается в момент ухода: картинки так и не было —
   // gave_up с причиной, была и есть — ok, была и пропала — partial.
   var tr = window.TKTrace ? TKTrace.start('live.view', data.streamKey) : null;
+  // Запасной путь — сколько так смотрят, видно в панели («Нагрузка»).
+  var onFallback = function () { if (window.TKStream) TKStream.route('fallback'); };
+  if (base === '/lf') onFallback();
   var played = false, playing = false, gotManifest = false;
   var stalls = 0, stallMs = 0, stallAt = 0, resets = 0;
   var busy = false, lastErr = '';
@@ -141,12 +191,13 @@
     onEvent: function (name, d) {
       if (name === 'manifest') { gotManifest = true; if (tr) tr.step('manifest'); }
       else if (name === 'player' && tr) tr.set('player', d.kind);
-      else if (name === 'fallback' && tr) { tr.route = 'fallback'; tr.mark('fallback'); }
+      else if (name === 'fallback') { onFallback(); if (tr) { tr.route = 'fallback'; tr.mark('fallback'); } }
       else if (name === 'busy') { busy = true; showNotice({ blocked: true }); if (tr) tr.step('busy'); }
       else if (name === 'reset') { playing = false; if (tr) { tr.mark('reset'); tr.set('resets', ++resets); } }
       else if (name === 'error') { lastErr = String(d.details || ''); if (tr) tr.set('lastErr', lastErr + (d.code ? ' ' + d.code : '')); }
     },
     onHls: function (h) {
+      hlsNow = h;
       player.attachHls(h);
       // Какое качество играет — по нему видно, тянет ли сеть зрителя.
       if (tr) h.on('hlsLevelSwitched', function (_e, d) { var l = h.levels[d.level]; if (l) tr.set('height', l.height); });

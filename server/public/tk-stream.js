@@ -149,9 +149,12 @@
   var socket = io(window.location.origin, { transports: ['websocket', 'polling'], tryAllTransports: true });
 
   // В socket.io 4 'connect' приходит и после каждого переподключения: вход
-  // в комнату и добор чата повторяются сами.
+  // в комнату и добор чата повторяются сами. Путь плеера (TKStream.route) —
+  // тоже: новый сокет на сервере его не знает.
+  var route = '';
   socket.on('connect', function () {
     socket.emit('join-stream-room', streamKey, fetchMissed);
+    if (route) socket.emit('stream:route', route);
   });
   socket.on('chat:message', render);
   socket.on('viewers-count-updated', function (d) {
@@ -273,5 +276,7 @@
     onUpdate: function (fn) { updateHandlers.push(fn); },
     timer: { start: startTimer, stop: stopTimer },
     state: setState,
+    // Плеер ушёл на запасной путь /lf/ — сервер считает таких (tk-viewer.js).
+    route: function (r) { route = r; if (socket.connected) socket.emit('stream:route', r); },
   };
 })();

@@ -13,7 +13,7 @@ const Subscription = require('../../models/Subscription');
 const Contact = require('../../models/Contact');
 const Conversation = require('../../models/Conversation');
 const { SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
-const { commonDataMiddleware, getActiveStreamsCount } = require('./shared');
+const { commonDataMiddleware } = require('./shared');
 const { notFound } = require('../../middleware/errors');
 const authors = require('../../utils/authors');
 const userView = require('../../utils/userView');
@@ -117,11 +117,9 @@ async function renderCatalog(req, res, category) {
   const page = PAGES[category];
   const filters = readFilters(category, req.query);
 
-  // Запросы параллельно (ускоряет F5)
-  const [users, totalStreamsCount, streams, recordings] = await Promise.all([
-    // Трое в колонку «Авторы»; кто это — utils/authors.js, остальные на /authors.
-    authors.featured(3, req.session.userId),
-    getActiveStreamsCount(),
+  // Запросы параллельно (ускоряет F5). Колонки «Авторы» в разделе с 02.10
+  // нет — они в левой панели (/authors); «N в эфире» — число в сетке.
+  const [streams, recordings] = await Promise.all([
     findStreams(category, filters),
     findRecordings(category),
   ]);
@@ -132,10 +130,8 @@ async function renderCatalog(req, res, category) {
     filters,
     filtered: filters.subs.length > 0 || !!filters.city,
     base: baseUrl(category),
-    users,
     streams,
     recordings,
-    totalStreamsCount,
     showIntro: !req.session.userId && !introClosed(req),
   });
 }
@@ -146,9 +142,8 @@ const HOME_AUTHORS = 12;
 router.get('/', commonDataMiddleware, async (req, res) => {
   const filters = readFilters('popular', req.query);
   const viewer = req.session.userId;
-  const [users, totalStreamsCount, streams, items] = await Promise.all([
+  const [users, streams, items] = await Promise.all([
     authors.featured(HOME_AUTHORS, viewer),
-    getActiveStreamsCount(),
     findStreams('popular', filters),
     feed.page({ before: feed.cursor(req.query.before), viewer }),
   ]);
@@ -158,7 +153,6 @@ router.get('/', commonDataMiddleware, async (req, res) => {
     base: '/',
     users,
     streams,
-    totalStreamsCount,
     feed: items,
     showIntro: !viewer && !introClosed(req),
   });
@@ -195,8 +189,11 @@ router.get('/streaming/:category/grid', async (req, res) => {
   }
 
   const filters = readFilters(category, req.query);
+  const streams = await findStreams(category, filters);
+  // «N в эфире» над сеткой (partials/liveCount.ejs) catalog.js берёт отсюда.
+  res.set('X-Live-Count', String(streams.length));
   res.render('partials/catalogGrid', {
-    streams: await findStreams(category, filters),
+    streams,
     filtered: filters.subs.length > 0 || !!filters.city,
     base: baseUrl(category),
     compact: category === 'popular', // сетка главной (views/home.ejs)
