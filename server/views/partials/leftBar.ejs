@@ -3,7 +3,7 @@
   // ниже 1024 (и на широких страницах — tk-app--wide) выезжает по бургеру.
   // Сверху карточка профиля (имя и почта — она же ссылка на профиль), под ней
   // три группы с заголовками: «Мессенджер» (сообщения, звонки, контакты),
-  // «Подписки», «Разделы» (Популярное, Заведения, Мои заведения, «Что такое
+  // «Подписки», «Разделы» (Популярное, Лента, Заведения, Мои заведения, «Что такое
   // Takebana»); ниже запуск эфира, внизу документы и выход. Настройки профиля
   // и язык — на странице /settings. Поведение — tk-app.js.
   //
@@ -28,7 +28,7 @@
   var cat = typeof category !== 'undefined' ? category : '';
   var here = typeof path !== 'undefined' ? path : '';
   var guest = !currentUser;
-  var myPage = guest ? '' : '/userPage/' + currentUser._id;
+  var myPage = guest ? '' : currentUser.url;
   // «Мои заведения» (29.09) — только у того, у кого они есть: одно — ссылка
   // на его страницу, несколько — на список (routes/streaming/shared.js).
   var mine = !guest && currentUser.venuesHref
@@ -36,6 +36,7 @@
     : null;
   var sections = [
     { href: '/', i18n: 'cat.popular', noteI18n: 'cat.popularNote', icon: '<path d="M12 3l2.6 5.6 6.4.8-4.7 4.4 1.2 6.2L12 17l-5.5 3 1.2-6.2L3 9.4l6.4-.8L12 3Z"></path>' },
+    { href: '/feed', i18n: 'feed.h1', noteI18n: 'side.feedNote', icon: '<rect x="3" y="3" width="8" height="8"></rect><rect x="13" y="3" width="8" height="8"></rect><rect x="3" y="13" width="8" height="8"></rect><path d="M15 14.5v5l4-2.5-4-2.5Z"></path>' },
     { href: '/venues', i18n: 'app.venues', noteI18n: 'side.venuesNote', icon: '<path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle>' },
     mine,
     { href: '/about', i18n: 'nav.whatIs', noteI18n: 'side.aboutNote', icon: '<circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5v.01"></path>' }
@@ -103,7 +104,7 @@
       (window.tkSubscriptions): строка ниже — образец для новой. %>
   <div id="subsList">
     <% (subscriptions || []).forEach(function (sub) { %>
-    <a href="/userPage/<%= sub.id %>" class="tk-aside__sub" data-sub-id="<%= sub.id %>" data-presence-user="<%= sub.id %>" data-live="<%= sub.status === 'online' ? 1 : 0 %>">
+    <a href="<%= sub.url %>" class="tk-aside__sub" data-sub-id="<%= sub.id %>" data-presence-user="<%= sub.id %>" data-live="<%= sub.status === 'online' ? 1 : 0 %>">
       <div class="tk-aside__ava"<% if (!sub.avatarStyle.url) { %> data-bg="<%= sub.avatarStyle.gradient %>"<% } %>>
         <% if (sub.avatarStyle.url) { %><img src="<%= sub.avatarStyle.url %>" alt="" loading="lazy" decoding="async"><% } else { %><%= sub.avatarStyle.initial %><% } %>
         <span class="presence-dot <%= sub.status === 'online' ? 'presence-online' : 'presence-offline' %>"></span>

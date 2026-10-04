@@ -7,7 +7,9 @@
   Шапка и панель — общие с сайтом, панель выезжает по бургеру (tk-app--wide):
   вёрстка лендинга рассчитана на всю ширину окна.
 %>
-<%- include('partials/tkHead', { titleKey: 'page.about.title', descriptionKey: 'page.about.description', seo: { path: '/about' } }) %>
+<%- include('partials/tkHead', { titleKey: 'page.about.title', descriptionKey: 'page.about.description', seo: { path: '/about',
+      jsonld: [ld.page({ type: 'AboutPage', path: '/about', name: ta('page.about.title'), description: ta('page.about.description') }),
+               ld.crumbs([['Takebana', '/'], [ta('nav.whatIs'), '/about']])] } }) %>
 
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/about.css') %>">
@@ -64,22 +66,26 @@
       </div>
     </section>
 
-    <%# Карта — настоящая, та же, что у вошедших на /main (public/tk-map.js).
+    <%# Карта — настоящая, та же, что в разделе «Заведения» (public/tk-map.js).
+        Счётчики — из базы; пока заведений нет, блок выключен (routes/pages.js,
+        SHOW_VENUE_MAP), и без #tkHomeMap библиотека карты не грузится вовсе.
         Библиотеку карты (~300 КБ) tk-landing.js грузит, только когда секция
         подходит к экрану. Метка ведёт ко входу: карточка заведения — для
         вошедших. %>
+    <% if (venueStats) { var vLive = plural(venueStats.live, 'map.statLive'), vVer = plural(venueStats.verified, 'map.statVerified'); %>
     <section class="tk-about__sec">
       <h2 class="tk-about__h2" data-i18n="map.h2"><%- t('map.h2') %></h2>
       <div class="tk-about__head tk-about__head--map">
         <p class="tk-about__note" data-i18n="map.body"><%- t('map.body') %></p>
         <div class="tk-about__grow"></div>
         <div class="tk-about__legend">
-          <div class="tk-about__legend-row"><span class="tk-about__mark"></span><span class="tk-about__legend-label" data-i18n="map.statLive"><%- t('map.statLive') %></span></div>
-          <div class="tk-about__legend-row"><span class="tk-about__mark tk-about__mark--green"></span><span class="tk-about__legend-label tk-about__legend-label--muted" data-i18n="map.statVerified"><%- t('map.statVerified') %></span></div>
+          <div class="tk-about__legend-row"><span class="tk-about__mark"></span><span class="tk-about__legend-label" data-i18n="<%= vLive.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(venueStats.live) }) %>'><%= vLive.text %></span></div>
+          <div class="tk-about__legend-row"><span class="tk-about__mark tk-about__mark--green"></span><span class="tk-about__legend-label tk-about__legend-label--muted" data-i18n="<%= vVer.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(venueStats.verified) }) %>'><%= vVer.text %></span></div>
         </div>
       </div>
       <div class="tk-homemap tk-about__map" id="tkHomeMap"></div>
     </section>
+    <% } %>
 
     <section class="tk-about__split">
       <% [['l', 'left', ''], ['r', 'right', ' tk-about__h2s--accent']].forEach(function (side) { %>
@@ -137,6 +143,8 @@
     </section>
 
     <section class="tk-about__sec tk-about__sec--paper tk-about__sec--stats" data-bg="paper">
+      <%# Цифры скрыты до подсчёта по базе (routes/pages.js, SHOW_STATS). %>
+      <% if (showStats) { %>
       <div class="tk-about__stats" id="tkStats">
         <div class="tk-about__stat">
           <span class="tk-about__stat-num" id="tkStatStreams">0+</span>
@@ -148,6 +156,7 @@
           <span class="tk-about__stat-label" data-i18n="stats.venuesLabel"><%- t('stats.venuesLabel') %></span>
         </div>
       </div>
+      <% } %>
       <div class="tk-about__quotes">
         <% [['l', 1], ['r', 2]].forEach(function (q) { %>
         <div class="tk-about__quote-box tk-about__quote-box--<%= q[0] %>">

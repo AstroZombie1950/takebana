@@ -15,6 +15,7 @@ const { stamp, USER_PIXELS } = require('./watermark');
 const fsp = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
+const avatarSmall = require('./avatarSmall');
 
 // Под что подгоняем. fit: 'cover' — кадрируем под точный размер (аватар
 // круглый, обложка 16:9), 'inside' — вписываем в коробку, пропорции целы.
@@ -73,6 +74,8 @@ async function saveImage(buffer, preset, dir) {
   await fsp.mkdir(dir, { recursive: true });
   const name = newName();
   await fsp.writeFile(path.join(dir, name), data);
+  // Аватару — ещё копия для кружков (utils/avatarSmall.js).
+  if (preset === 'avatar') await avatarSmall.add(dir, name, data);
   return name;
 }
 

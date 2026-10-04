@@ -4,6 +4,12 @@
   и страниц с токеном в адресе (сброс пароля, подтверждение почты).
   Без METRIKA_ID в .env не выводит ничего — локально и в зондах тишина.
 
+  Сам счётчик (tag.js) подключается после загрузки страницы, когда браузер
+  свободен (решение Ивана 04.10, docs/seo, задача 41): на телефоне Метрика
+  занимала больше половины работы главного потока и делила его с первой
+  отрисовкой. Вызовы ym() до того копятся в очереди, время начала — ym.l,
+  как и было. Цена — визит, закрытый до конца загрузки, не посчитается.
+
   Счётчик работает сразу (решение 24.09): внизу уведомление «пользуясь
   сайтом, вы соглашаетесь с политикой cookie» с одной кнопкой; нажал —
   cookie tk_consent на год, уведомление больше не показывается. Вебвизор
@@ -17,10 +23,18 @@
 
   window.ym = window.ym || function () { (ym.a = ym.a || []).push(arguments); };
   ym.l = +new Date();
-  var s = document.createElement('script');
-  s.async = true;
-  s.src = 'https://mc.yandex.ru/metrika/tag.js?id=' + ID;
-  document.head.appendChild(s);
+  function attach() {
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://mc.yandex.ru/metrika/tag.js?id=' + ID;
+    document.head.appendChild(s);
+  }
+  function later() {
+    if (window.requestIdleCallback) requestIdleCallback(attach, { timeout: 3000 });
+    else setTimeout(attach, 0);
+  }
+  if (document.readyState === 'complete') later();
+  else addEventListener('load', later, { once: true });
   // Параметры — из кода счётчика в кабинете Метрики; webvisor: false — явно.
   ym(ID, 'init', { ssr: true, webvisor: false, clickmap: true, ecommerce: 'dataLayer', referrer: document.referrer,
                    url: location.href, accurateTrackBounce: true, trackLinks: true });

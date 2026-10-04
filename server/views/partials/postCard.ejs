@@ -1,0 +1,42 @@
+<%#
+  Пост «Ленты» (/feed, 04.10.2026): фото или видео человека — как в Инстаграме.
+  Шапка — автор и дата, ниже снимок или обложка ролика (ведут на его
+  страницу: там «нравится», комментарии, листание), под ним название
+  у видео, подпись и счётчики. Подписи и alt — по правилу «текст что-то
+  говорит» (utils/snippet.js, docs/seo DECISIONS 04.10). Стили — css/feed.css.
+  Параметр: item — из utils/feed.js (card). Первые снимки экрана грузятся
+  сразу и первыми — imgLoad (utils/i18n.js).
+%>
+<% var isPhoto = item.kind === 'photo';
+   var when = date(item.at, { day: 'numeric', month: 'long', year: 'numeric' });
+   var name = isPhoto ? '' : mediaTitle(item.title, 'video', item.author.displayName, item.at);
+   var alt = isPhoto ? (meaningful(item.text) ? snippet(item.text, 125) : ta('alt.photoBy', { name: item.author.displayName, date: when }))
+                     : ta('alt.cover', { title: name });
+   var likes = plural(item.likes, 'feed.likes'), talk = plural(item.comments, 'rec.comments'); %>
+<article class="tk-post">
+  <a href="<%= item.author.url %>" class="tk-post__head">
+    <span class="tk-post__ava"<% if (!item.author.avatarStyle.url) { %> data-bg="<%= item.author.avatarStyle.gradient %>"<% } %>>
+      <% if (item.author.avatarStyle.url) { %><img src="<%= item.author.avatarStyle.url %>" alt="" width="36" height="36" loading="lazy" decoding="async"><% } else { %><%= item.author.avatarStyle.initial %><% } %>
+    </span>
+    <span class="tk-post__who"><%= item.author.displayName %></span>
+    <time class="tk-post__when" datetime="<%= new Date(item.at).toISOString() %>"><%= when %></time>
+  </a>
+
+  <a href="<%= item.href %>" class="tk-post__media tk-post__media--<%= isPhoto ? 'photo' : 'video' %>">
+    <% if (item.thumb) { %><img src="<%= item.thumb %>" alt="<%= alt %>" decoding="async" <%- imgLoad() %>><% } %>
+    <% if (!isPhoto) { %>
+    <span class="tk-post__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg></span>
+    <% if (item.duration) { %><span class="tk-post__len"><%= clock(item.duration) %></span><% } %>
+    <% } %>
+  </a>
+
+  <div class="tk-post__body">
+    <% if (!isPhoto) { %><h2 class="tk-post__title"><a href="<%= item.href %>"><%= name %></a></h2><% } %>
+    <% if (meaningful(item.text)) { %><p class="tk-post__text"><%= snippet(item.text, 220) %></p><% } %>
+    <p class="tk-post__meta">
+      <span data-i18n="<%= likes.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(item.likes) }) %>'><%= likes.text %></span>
+      · <span data-i18n="<%= talk.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(item.comments) }) %>'><%= talk.text %></span>
+      <% if (!isPhoto) { var vv = plural(item.views, 'rec.views'); %>· <span data-i18n="<%= vv.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(item.views) }) %>'><%= vv.text %></span><% } %>
+    </p>
+  </div>
+</article>

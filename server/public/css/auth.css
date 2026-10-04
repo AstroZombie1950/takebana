@@ -31,7 +31,7 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -53,7 +53,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: .24em;
@@ -97,7 +97,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -133,14 +133,14 @@
 /* ── Подписи под формой ── */
 .tk-auth__row {
   margin: 18px 0 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   color: var(--tk-beige);
 }
 
 .tk-auth__note {
   margin: 14px 0 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 14px;
   line-height: 1.55;
   color: var(--tk-label);
@@ -152,7 +152,7 @@
 
 .tk-auth__lede {
   margin-top: 18px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   line-height: 1.55;
   color: var(--tk-label);
@@ -170,7 +170,7 @@
 
 .tk-auth__forgot {
   align-self: flex-end;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 14px;
   color: var(--tk-muted);
   transition: color .18s ease;

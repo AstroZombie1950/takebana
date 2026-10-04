@@ -45,7 +45,7 @@
 
 .tk-intro__p {
   margin: 4px 0 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   line-height: 1.5;
   color: var(--tk-beige);
@@ -104,7 +104,7 @@
 
 /* «2 в эфире» рядом с заголовком — счётчик, а не часть заголовка. */
 .tk-home__count {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   font-weight: 400;
   letter-spacing: .14em;
@@ -132,7 +132,7 @@
   gap: 8px 20px;
   padding: 16px 20px;
   border: 1px solid var(--tk-rule);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   color: var(--tk-beige);
 }
@@ -227,7 +227,7 @@
 
 .tk-about-block__row h3 {
   margin: 2px 0 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   font-weight: 500;
   letter-spacing: .18em;
@@ -248,7 +248,7 @@
 .tk-about-block__chip {
   padding: 6px 10px;
   border: 1px solid var(--tk-rule);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -283,7 +283,7 @@
 
 .tk-cat__reset {
   padding: 12px 2px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -361,7 +361,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 9px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: .14em;
@@ -382,7 +382,7 @@
   padding: 4px 9px;
   background: rgba(10, 10, 10, .78);
   border: 1px solid var(--tk-accent);
-  font: 500 10px/1.2 Oswald, sans-serif;
+  font: 500 10px/1.2 Oswald, 'Oswald Fallback', sans-serif;
   letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--tk-paper);
@@ -457,7 +457,7 @@
 
 .tk-card__who {
   margin: 4px 0 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   color: var(--tk-muted);
   overflow: hidden;
@@ -476,7 +476,7 @@
 .tk-card__cat {
   padding: 4px 9px;
   border: 1px solid var(--tk-rule);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   letter-spacing: .12em;
   text-transform: uppercase;

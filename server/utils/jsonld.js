@@ -4,6 +4,7 @@
 // Только у страниц в индексе (docs/seo/DECISIONS.md).
 
 const { siteUrl } = require('./site');
+const contacts = require('../config/contacts');
 
 const iso = (d) => new Date(d).toISOString();
 
@@ -15,11 +16,15 @@ function duration(sec) {
 }
 
 // Главная: как называется сайт и кто за ним стоит.
+// sameAs — заведённые соцсети и телеграм (config/contacts.js): по ним
+// поисковик связывает сайт с аккаунтами бренда.
 function site() {
   const url = siteUrl('/');
+  const sameAs = [...Object.values(contacts.social), contacts.telegram].filter(Boolean);
   return [
     { '@context': 'https://schema.org', '@type': 'WebSite', name: 'Takebana', url },
-    { '@context': 'https://schema.org', '@type': 'Organization', name: 'Takebana', url, logo: siteUrl('/img/app/icon-512.png') },
+    { '@context': 'https://schema.org', '@type': 'Organization', name: 'Takebana', url, logo: siteUrl('/img/app/icon-512.png'),
+      email: contacts.email, ...(sameAs.length ? { sameAs } : {}) },
   ];
 }
 
@@ -46,13 +51,18 @@ function video({ path, title, description, thumb, src, seconds, date, views, aut
 
 // description — описание профиля, sameAs — его ссылки: сайт и сети
 // (utils/profileLinks.js), по ним поисковик связывает человека с ними.
-function profile({ url, name, image, followers, description, sameAs }) {
+// created — когда заведён аккаунт, modified — последнее фото, видео
+// или запись; alternateName — «@ник» (04.10, docs/seo, задача 37).
+function profile({ url, name, alternateName, image, followers, description, sameAs, created, modified }) {
   return {
     '@context': 'https://schema.org',
     '@type': 'ProfilePage',
+    ...(created ? { dateCreated: iso(created) } : {}),
+    ...(modified ? { dateModified: iso(modified) } : {}),
     mainEntity: {
       '@type': 'Person',
       name,
+      ...(alternateName && alternateName !== name ? { alternateName } : {}),
       url: siteUrl(url),
       ...(image ? { image: siteUrl(image) } : {}),
       ...(description ? { description } : {}),
@@ -80,6 +90,56 @@ function menu({ path, name, sections }) {
   };
 }
 
+// Заведение (04.10, docs/seo, задача 31): тип schema.org — по типу из
+// справочника (config/catalog.js, VENUE_TYPES), своё владельца — просто
+// LocalBusiness. Только то, что видно на странице: телефона и почты там нет —
+// и здесь нет. Часы — будни и выходные (utils/venueHours.js: выходные —
+// суббота и воскресенье); оценка — когда кто-то оценил.
+const VENUE_SCHEMA = { bar: 'BarOrPub', pub: 'BarOrPub', hookah: 'BarOrPub', restaurant: 'Restaurant', cafe: 'CafeOrCoffeeShop', club: 'NightClub' };
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const WEEKEND = ['Saturday', 'Sunday'];
+
+function venue({ v, description, city, country }) {
+  const hours = [[v.weekdayHours, WEEKDAYS], [v.weekendHours, WEEKEND]]
+    .filter(([h]) => h && HHMM.test(h.open) && HHMM.test(h.close))
+    .map(([h, days]) => ({ '@type': 'OpeningHoursSpecification', dayOfWeek: days, opens: h.open, closes: h.close }));
+  const images = [v.cover, ...(v.photos || [])].filter(Boolean).map(siteUrl);
+  const loc = v.location && Number.isFinite(v.location.lat) && Number.isFinite(v.location.lng) ? v.location : null;
+  return {
+    '@context': 'https://schema.org',
+    '@type': VENUE_SCHEMA[v.type] || 'LocalBusiness',
+    name: v.name,
+    url: siteUrl('/venue/' + v._id),
+    ...(description ? { description } : {}),
+    ...(images.length ? { image: images } : {}),
+    ...(v.avatar ? { logo: siteUrl(v.avatar) } : {}),
+    address: {
+      '@type': 'PostalAddress',
+      ...(v.address ? { streetAddress: v.address } : {}),
+      ...(city ? { addressLocality: city } : {}),
+      // Страна из справочника — кодом ISO, своя — как вписал владелец.
+      ...(v.country ? { addressCountry: v.country.toUpperCase() } : country ? { addressCountry: country } : {}),
+    },
+    ...(loc ? { geo: { '@type': 'GeoCoordinates', latitude: loc.lat, longitude: loc.lng } } : {}),
+    ...(hours.length ? { openingHoursSpecification: hours } : {}),
+    ...(v.ratingCount > 0 ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: Number(v.ratingAvg.toFixed(1)), ratingCount: v.ratingCount, bestRating: 5, worstRating: 1 } } : {}),
+  };
+}
+
+// Страница-раздел (04.10, задача 13): что это за страница и чья она.
+// type — CollectionPage (разделы, лента, авторы, заведения) или AboutPage.
+function page({ type, path, name, description }) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': type,
+    name,
+    ...(description ? { description } : {}),
+    url: siteUrl(path),
+    isPartOf: { '@type': 'WebSite', name: 'Takebana', url: siteUrl('/') },
+  };
+}
+
 // [[название, путь], …] — от главной до текущей страницы.
 function crumbs(items) {
   return {
@@ -89,4 +149,4 @@ function crumbs(items) {
   };
 }
 
-module.exports = { site, video, profile, menu, crumbs };
+module.exports = { site, video, profile, menu, venue, page, crumbs };

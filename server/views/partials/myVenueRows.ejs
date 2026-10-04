@@ -9,7 +9,7 @@
   <% venues.forEach(function (v) { %>
   <li>
     <a href="/venue/<%= v._id %>" class="tk-myv__row">
-      <span class="tk-myv__ava" data-user-content><% if (v.avatar) { %><img src="<%= v.avatar %>" alt=""><% } else { %><%= (String(v.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase() %><% } %></span>
+      <span class="tk-myv__ava" data-user-content><% if (v.avatar) { %><img src="<%= avaSmall(v.avatar) %>" alt=""><% } else { %><%= (String(v.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase() %><% } %></span>
       <span class="tk-myv__body">
         <span class="tk-myv__name" data-user-content><%= v.name %></span>
         <% var vmeta = [placeHtml('type', v.type, v.typeOther), placeHtml('city', v.city, v.cityOther)].filter(Boolean).join(' · '); %>

@@ -115,7 +115,7 @@
   background: var(--tk-paper);
   border: 0;
   color: var(--tk-ink);
-  font: 500 13px/1 Oswald, sans-serif;
+  font: 500 13px/1 Oswald, 'Oswald Fallback', sans-serif;
   letter-spacing: .06em;
   text-transform: uppercase;
   cursor: pointer;
@@ -133,7 +133,7 @@
   transform: translateY(-50%);
   background: rgba(10, 10, 10, .6);
   border-radius: 999px;
-  font: 500 15px/1 Oswald, sans-serif;
+  font: 500 15px/1 Oswald, 'Oswald Fallback', sans-serif;
   opacity: 0;
   pointer-events: none;
 }
@@ -259,7 +259,7 @@
   padding: 0 8px;
   /* Как метки эфира над картинкой (stream.css, .tk-live__badge): плеер
    * и сцена читаются одним набором. */
-  font: 500 13px/1 Oswald, sans-serif;
+  font: 500 13px/1 Oswald, 'Oswald Fallback', sans-serif;
   letter-spacing: .08em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -277,7 +277,7 @@
   padding: 0 10px;
   background: none;
   border: 0;
-  font: 500 12px/1 Oswald, sans-serif;
+  font: 500 12px/1 Oswald, 'Oswald Fallback', sans-serif;
   letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--tk-paper);
@@ -358,7 +358,7 @@
   padding: 4px 7px;
   transform: translateX(-50%);
   background: rgba(10, 10, 10, .88);
-  font: 400 12px/1 Oswald, sans-serif;
+  font: 400 12px/1 Oswald, 'Oswald Fallback', sans-serif;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   pointer-events: none;
@@ -389,7 +389,7 @@
   padding: 10px 16px;
   background: none;
   border: 0;
-  font: 400 14px/1.2 'Golos Text', sans-serif;
+  font: 400 14px/1.2 'Golos Text', 'Golos Text Fallback', sans-serif;
   text-align: left;
   color: var(--tk-paper);
   cursor: pointer;

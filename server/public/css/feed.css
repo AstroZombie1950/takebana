@@ -1,0 +1,156 @@
+/* «Лента» (/feed, 04.10.2026): посты — фото и видео людей — одной колонкой,
+ * как в Инстаграме (views/feed.ejs, partials/postCard.ejs). Заголовок,
+ * вводка и вкладки — общие с каталогом (catalog.css).
+ *
+ * Рамка снимка — 4:5, обложки видео — 16:9: размер известен до загрузки
+ * картинки, и лента не прыгает, пока они догружаются. Фото внутри рамки
+ * целиком, на тёмном поле, — не обрезается. */
+
+.tk-posts { max-width: 680px; }
+
+.tk-posts__list {
+  display: grid;
+  gap: 32px;
+}
+
+.tk-post {
+  border: 1px solid var(--tk-rule);
+  background: var(--tk-ink);
+  animation: tk-card-in .4s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-post { animation: none; }
+}
+
+/* Шапка: аватар, имя, дата — одна ссылка на автора. */
+.tk-post__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+.tk-post__ava {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .35);
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-post__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-post__who {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-post__head:hover .tk-post__who { color: var(--tk-accent); }
+
+.tk-post__when {
+  margin-left: auto;
+  flex: none;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 12px;
+  color: var(--tk-muted);
+}
+
+/* Снимок или обложка. */
+.tk-post__media {
+  position: relative;
+  display: block;
+  background: #000;
+  border-block: 1px solid var(--tk-rule);
+}
+
+.tk-post__media--photo { aspect-ratio: 4 / 5; }
+.tk-post__media--video { aspect-ratio: 16 / 9; }
+
+.tk-post__media img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.tk-post__media--photo img { object-fit: contain; }
+.tk-post__media--video img { object-fit: cover; }
+
+.tk-post__play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  background: rgba(10, 10, 10, .65);
+  border: 1px solid rgba(245, 241, 234, .4);
+  color: var(--tk-paper);
+  transition: background-color .18s ease, border-color .18s ease;
+}
+
+.tk-post__media:hover .tk-post__play { background: var(--tk-accent); border-color: var(--tk-accent); }
+
+.tk-post__len {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 2px 7px;
+  background: rgba(10, 10, 10, .8);
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 12px;
+  color: var(--tk-paper);
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-post__body { padding: 14px 16px 16px; display: grid; gap: 8px; }
+
+.tk-post__title {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.tk-post__title a { color: var(--tk-paper); }
+.tk-post__title a:hover { color: var(--tk-accent); }
+
+.tk-post__text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tk-beige);
+  overflow-wrap: anywhere;
+}
+
+.tk-post__meta {
+  margin: 0;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+}
+
+.tk-posts__more { display: flex; width: max-content; margin: 32px auto 0; }
+.tk-posts__more[aria-busy="true"] { opacity: .5; pointer-events: none; }
+
+/* Телефон: пост во всю ширину, без рамки по бокам — как в приложениях. */
+@media (max-width: 767px) {
+  .tk-posts__list { gap: 20px; margin: 0 -20px; }
+  .tk-post { border-inline: 0; }
+  .tk-post__head { padding: 10px 20px; }
+  .tk-post__body { padding: 12px 20px 14px; }
+}

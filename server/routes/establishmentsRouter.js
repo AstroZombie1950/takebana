@@ -61,6 +61,7 @@ const { hoursState, zoneAt } = require('../utils/venueHours');
 const venueRating = require('../utils/venueRating');
 const { applyState, stateOf } = require('../utils/venueOwner');
 const { pageVenue, tabsFor, indexableVenue } = require('../utils/venuePage');
+const { fragmentOnly } = require('../middleware/fragment');
 
 // Что нужно карточке выдачи /venues. Почты, телефона и владельца в ней нет.
 const CARD_FIELDS = 'name type typeOther city cityOther address about weekdayHours weekendHours tz location photos avatar cover online ratingAvg ratingCount';
@@ -125,9 +126,8 @@ router.get('/venues', commonDataMiddleware, wrap(async (req, res) => {
 }));
 
 // Карточки под новые фильтры — тот же шаблон, что в странице.
-router.get('/venues/cards', wrap(async (req, res) => {
+router.get('/venues/cards', fragmentOnly(() => '/venues'), wrap(async (req, res) => {
     const venues = await listVenues(readVenueFilters(req.query));
-    res.set('X-Robots-Tag', 'noindex');
     res.render('partials/venueCards', { venues });
 }));
 

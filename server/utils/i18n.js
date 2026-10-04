@@ -502,6 +502,13 @@ function pageLocals(req, res, next) {
     res.locals.mediaTitle = (title, kind, name, at) => meaningful(title) ? String(title).trim()
         : res.locals.ta(kind === 'recording' ? 'rec.untitledBy' : 'video.untitledBy',
             { name, date: res.locals.date(at, { day: 'numeric', month: 'long', year: 'numeric' }) });
+    // Как грузить картинку содержимого (обложку, снимок, аватар профиля):
+    // первые две на странице — то, что человек видит сразу (LCP), браузер
+    // берёт их сразу и первыми; остальные — по мере прокрутки. Шаблоны
+    // вызывают по порядку разметки: <img … <%- imgLoad() %>>. Во фрагментах
+    // (подгрузка ленты, смена фильтра) всё ниже экрана (docs/seo, задача 32).
+    let lead = req.headers['x-tk-fragment'] === '1' ? 0 : 2;
+    res.locals.imgLoad = () => lead-- > 0 ? 'fetchpriority="high"' : 'loading="lazy"';
     // Одна и та же ссылка отдаёт разные страницы: кэш между сервером
     // и браузером (CDN) обязан различать их по cookie.
     const render = res.render;

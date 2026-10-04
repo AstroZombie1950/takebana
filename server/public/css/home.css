@@ -14,7 +14,7 @@
    * отрицательным полем. На телефоне в 20px пальцем не попасть. */
   padding: 12px 0;
   margin: -12px 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -84,7 +84,7 @@
 
 .tk-home__author-live {
   margin-top: -4px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   letter-spacing: .14em;
   text-transform: uppercase;
@@ -140,7 +140,7 @@
   position: absolute;
   padding: 3px 7px;
   background: rgba(10, 10, 10, .82);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .06em;
   color: var(--tk-paper);
@@ -202,7 +202,7 @@
 
 .tk-feed__who,
 .tk-feed__meta {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   color: var(--tk-muted);
   overflow: hidden;

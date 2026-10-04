@@ -33,7 +33,7 @@
     <div class="tk-vp" data-venue="<%= venue._id %>" data-name="<%= venue.name %>">
 
       <header class="tk-vp__head tk-vp__head--small">
-        <a href="/venue/<%= venue._id %>" class="tk-vp__ava"><% if (venue.avatar) { %><img src="<%= venue.avatar %>" alt=""><% } else { %><%= letter %><% } %></a>
+        <a href="/venue/<%= venue._id %>" class="tk-vp__ava"><% if (venue.avatar) { %><img src="<%= avaSmall(venue.avatar) %>" alt=""><% } else { %><%= letter %><% } %></a>
         <div class="tk-vp__id">
           <h1 class="tk-vp__name" data-user-content><%= venue.name %></h1>
         </div>

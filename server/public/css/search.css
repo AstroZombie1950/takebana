@@ -36,7 +36,7 @@
 
 .tk-search__note {
   margin: 20px 0 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   color: var(--tk-beige);
 }
@@ -64,7 +64,7 @@
 
 .tk-search__more {
   margin-left: auto;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -145,7 +145,7 @@
 }
 
 .tk-person__meta {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   color: var(--tk-muted);
   overflow: hidden;
@@ -213,7 +213,7 @@
   padding: 3px 7px;
   background: var(--tk-accent);
   color: var(--tk-ink);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 10px;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -234,7 +234,7 @@
 }
 
 .tk-place__meta {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   color: var(--tk-muted);
   overflow: hidden;
@@ -256,3 +256,23 @@
   gap: 12px;
   margin-top: 32px;
 }
+
+/* ── Авторы и все авторы (04.10) ── */
+.tk-search > .tk-page__back { display: inline-flex; margin-bottom: 24px; }
+.tk-authors__all { margin-top: 20px; }
+/* «Все» у группы — справа в строке заголовка, как «Все авторы» на главной
+ * (.tk-home__more живёт в home.css, здесь его нет). */
+.tk-authors__more {
+  margin-left: auto;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 13px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-beige);
+  transition: color .18s ease;
+}
+
+.tk-authors__more:hover,
+.tk-authors__more:focus-visible { color: var(--tk-accent); }
+.tk-authors__head { margin-bottom: 24px; }
+

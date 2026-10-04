@@ -114,7 +114,7 @@ body.tk-app {
   border: 1px solid rgba(144, 113, 99, .7);
   outline: none;
   padding: 9px 14px 9px 38px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   /* 16px, иначе Safari на айфоне приближает страницу при фокусе. */
   font-size: 16px;
   color: var(--tk-paper);
@@ -197,7 +197,7 @@ body.tk-app {
 .tk-found__group {
   margin: 0;
   padding: 10px 14px 6px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -210,7 +210,7 @@ body.tk-app {
   display: block;
   padding: 12px 14px;
   text-align: center;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -295,7 +295,7 @@ body.tk-app {
   padding: 0 4px;
   background: var(--tk-accent);
   color: var(--tk-ink);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   font-weight: 500;
   line-height: 16px;
@@ -430,7 +430,7 @@ body.tk-app {
 
 .tk-aside__title {
   padding: 8px 18px 6px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   letter-spacing: .22em;
   text-transform: uppercase;
@@ -443,7 +443,7 @@ body.tk-app {
 .tk-aside__title > span:first-child { flex: 1; }
 
 .tk-aside__count {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   letter-spacing: 0;
   text-transform: none;
@@ -499,7 +499,7 @@ body.tk-app {
   padding: 0 5px;
   background: var(--tk-accent);
   color: var(--tk-ink);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   font-weight: 500;
   line-height: 18px;
@@ -568,13 +568,13 @@ body.tk-app {
 
 .tk-aside__sub-state {
   margin: 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   color: var(--tk-muted);
 }
 
 .tk-aside__empty {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   line-height: 1.5;
   color: var(--tk-muted);
@@ -610,7 +610,7 @@ body.tk-app {
   flex-wrap: wrap;
   gap: 4px 14px;
   padding: 4px 18px 8px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
 }
 
@@ -887,7 +887,7 @@ body.tk-app {
   display: flex;
   align-items: center;
   gap: 14px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .16em;
   text-transform: uppercase;
@@ -920,7 +920,7 @@ body.tk-app {
 }
 
 .tk-form__label {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: .16em;
@@ -965,7 +965,7 @@ body.tk-app {
 }
 
 .tk-banned b {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-weight: 500;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -980,7 +980,7 @@ body.tk-app {
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: .16em;
@@ -1017,7 +1017,7 @@ body.tk-app {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: .16em;
@@ -1061,7 +1061,7 @@ body.tk-app {
 
 .tk-panel__title {
   margin: 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: .16em;
@@ -1078,7 +1078,7 @@ body.tk-app {
 
 .tk-note {
   margin: 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   line-height: 1.5;
   color: var(--tk-muted);
@@ -1101,7 +1101,7 @@ body.tk-app {
   border: 1px solid var(--tk-rule);
   padding: 7px 12px;
   cursor: pointer;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .08em;
   color: var(--tk-beige);
@@ -1149,7 +1149,7 @@ body.tk-app {
   color: var(--tk-beige);
 }
 
-.tk-dropzone p { margin: 0; font-family: Oswald, sans-serif; font-size: 13px; }
+.tk-dropzone p { margin: 0; font-family: Oswald, 'Oswald Fallback', sans-serif; font-size: 13px; }
 .tk-dropzone[hidden] { display: none; }
 
 .tk-thumbs {
@@ -1232,7 +1232,7 @@ body.tk-app {
 
 .tk-notice__when {
   flex: none;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   color: var(--tk-muted);
 }
@@ -1295,7 +1295,7 @@ body.tk-app {
  * тёмном фоне и поверх картинки было не разглядеть (правки 29.09). */
 .tk-call__type {
   margin: 2px 0 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .04em;
   color: var(--tk-accent);
@@ -1315,7 +1315,7 @@ body.tk-app {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   color: var(--tk-beige);
 }
@@ -1384,7 +1384,7 @@ body.tk-app {
 .tk-call__timer {
   margin: 2px 0 0;
   text-align: center;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 16px;
   font-weight: 500;
   letter-spacing: .06em;
@@ -1436,7 +1436,7 @@ body.tk-app {
   padding: 0 4px;
   background: var(--tk-accent);
   color: var(--tk-ink);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   font-weight: 500;
   line-height: 18px;
@@ -1649,7 +1649,7 @@ body.tk-app {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 14px;
   color: var(--tk-muted);
 }
@@ -1717,7 +1717,7 @@ body.tk-app {
   display: none;
   align-items: center;
   justify-content: center;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 34px;
   font-weight: 900;
   color: var(--tk-muted);
@@ -1732,7 +1732,7 @@ body.tk-app {
   bottom: 0;
   padding: 4px 8px;
   background: linear-gradient(to top, rgba(0, 0, 0, .75), transparent);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .04em;
   color: var(--tk-paper);
@@ -1836,7 +1836,7 @@ body.tk-app {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   color: var(--tk-muted);
 }
@@ -2098,7 +2098,7 @@ body.tk-app {
   padding: 12px 16px;
   white-space: nowrap;
   border-bottom: 2px solid transparent;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 14px;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -2160,7 +2160,7 @@ button.tk-tabs__item.tk-tabs__item--on { border-bottom-color: var(--tk-accent); 
   overflow: hidden;
   border-radius: 50%;
   background: rgba(144, 113, 99, .25);
-  font: 600 15px/1 Oswald, sans-serif;
+  font: 600 15px/1 Oswald, 'Oswald Fallback', sans-serif;
   color: var(--tk-paper);
 }
 
@@ -2181,7 +2181,7 @@ button.tk-tabs__item.tk-tabs__item--on { border-bottom-color: var(--tk-accent); 
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .06em;
   color: var(--tk-muted);
@@ -2189,7 +2189,7 @@ button.tk-tabs__item.tk-tabs__item--on { border-bottom-color: var(--tk-accent); 
 
 .tk-myv__state {
   flex: none;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   letter-spacing: .12em;
   text-transform: uppercase;

@@ -20,6 +20,7 @@ const storage = require('./storage');
 const streamLog = require('./streamLog');
 const { audit } = require('./audit');
 const errorLog = require('./errorLog');
+const indexNow = require('./indexNow');
 const Recording = require('../models/Recording');
 const engagement = require('./engagement');
 const recordingHls = require('./recordingHls');
@@ -150,6 +151,8 @@ async function finalize(rec, dir, cover) {
       $set: { status: 'ready', duration, size, ...media, thumb: { url: thumbUrl, key: thumbKey } },
     });
     if (!saved) await Promise.all([...keys, thumbKey].filter(Boolean).map((k) => storage.remove(k).catch(() => {})));
+    // 18+ в индекс не идёт — как и в карту сайта (routes/seo.js).
+    else if (!saved.isAdult) indexNow.ping('/recording/' + rec._id);
     console.log(`[rec ${rec._id}] готова: ${duration} с, ${(size / 1048576).toFixed(1)} МБ`);
 
     // Автору — сейчас. Склейка идёт минуты, и до 20.09.2026 он не узнавал

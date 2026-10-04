@@ -152,7 +152,7 @@ function commentView(c, me, ownerId, moderator) {
     _id: String(c._id),
     text: c.text,
     createdAt: c.createdAt,
-    author: { _id: u._id ? String(u._id) : '', name, avatar: userView.avatarStyle(u, name), official: privacy.isOfficial(u) },
+    author: { _id: u._id ? String(u._id) : '', url: profileUrl(u), name, avatar: userView.avatarStyle(u, name), official: privacy.isOfficial(u) },
     mine,
     canDelete: mine || String(ownerId) === String(me) || moderator,
   };

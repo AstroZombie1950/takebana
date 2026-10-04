@@ -29,6 +29,9 @@
 
 .tk-photo__img {
   display: block;
+  /* width/height в разметке — пропорция снимка до загрузки; height: auto
+     не даёт атрибуту растянуть его по высоте, object-fit — по ширине. */
+  height: auto;
   max-width: 100%;
   max-height: calc(100vh - var(--tk-head-h) - 60px);
   max-height: calc(100dvh - var(--tk-head-h) - 60px);
@@ -63,7 +66,7 @@
   top: 12px;
   padding: 3px 8px;
   background: rgba(10, 10, 10, .72);
-  font: 400 12px/1.4 Oswald, sans-serif;
+  font: 400 12px/1.4 Oswald, 'Oswald Fallback', sans-serif;
   letter-spacing: .06em;
   color: var(--tk-paper);
   font-variant-numeric: tabular-nums;
@@ -72,16 +75,6 @@
 .tk-photo__head { margin-top: 0; }
 
 /* «Фото» под именем — ссылка на всю вкладку автора. */
-.tk-photo__all {
-  font: 400 12px/1.4 Oswald, sans-serif;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--tk-muted);
-  text-decoration: none;
-}
-
-.tk-photo__all:hover { color: var(--tk-paper); }
-
 .tk-photo__acts { margin-top: 14px; }
 
 /* Сердечко нажато — залито киноварью, а не полупрозрачно, как оценки видео. */

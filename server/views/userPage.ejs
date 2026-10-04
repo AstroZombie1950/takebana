@@ -1,10 +1,15 @@
 <% var isSelf = !!currentUser && user._id.toString() === currentUser._id.toString(); %>
+<%# Последнее, что появилось на странице, — для dateModified разметки: списки
+    идут новыми сверху, берём первое из каждого. %>
+<% var lastAt = [recordings[0], photos[0], videos[0]].filter(Boolean).map(function (x) { return new Date(x.createdAt); })
+     .sort(function (a, b) { return b - a; })[0]; %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName }, description: describe(user.bio, ta('seo.profileDesc', { name: user.displayName })),
          seo: { path: user.url, type: 'profile', robots: indexable ? '' : 'noindex, follow', image: ogImage, imageStd: !!ogImage, imageAlt: user.displayName,
-         jsonld: ld.profile({ url: user.url, name: user.displayName, image: user.avatarStyle.url, followers: user.followersCount,
+         jsonld: ld.profile({ url: user.url, name: user.displayName, alternateName: user.nickname ? '@' + user.nickname : '',
+           image: user.avatarStyle.full, followers: user.followersCount, created: user.createdAt, modified: lastAt,
            description: user.bio, sameAs: user.links.map(function (l) { return l.url; }) }) } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/profile.css') %>">
@@ -67,7 +72,7 @@
         <div class="tk-prof__top">
           <div class="tk-prof__ava"<% if (!user.avatarStyle.url) { %> data-bg="<%= user.avatarStyle.gradient %>"<% } %>>
             <% if (user.avatarStyle.url) { %>
-              <img src="<%= user.avatarStyle.url %>" alt="<%= user.displayName %>" data-avatar-url="<%= user.avatarStyle.url %>">
+              <img src="<%= user.avatarStyle.full %>" alt="<%= user.displayName %>" <%- imgLoad() %> data-avatar-url="<%= user.avatarStyle.full %>">
             <% } else { %>
               <%= user.avatarStyle.initial %>
             <% } %>
@@ -127,11 +132,11 @@
               При ограниченном доступе записей и галереи на странице нет —
               нет и их счётчиков. %>
           <div class="tk-prof__stats">
-            <a href="/userPage/<%= user._id %>/followers" class="tk-prof__stat">
+            <a href="<%= user.url %>/followers" class="tk-prof__stat">
               <span class="tk-prof__num" id="followersCount" data-count-followers="<%= user._id %>"><%= user.followersCount %></span>
               <span class="tk-prof__lbl" data-i18n="user.subscribersTab"><%- t('user.subscribersTab') %></span>
             </a>
-            <a href="/userPage/<%= user._id %>/following" class="tk-prof__stat">
+            <a href="<%= user.url %>/following" class="tk-prof__stat">
               <span class="tk-prof__num" data-count-following="<%= user._id %>"><%= user.followingCount %></span>
               <span class="tk-prof__lbl" data-i18n="user.followingTab"><%- t('user.followingTab') %></span>
             </a>
@@ -140,9 +145,13 @@
               <span class="tk-prof__num"><%= recordingsTotal %></span>
               <span class="tk-prof__lbl" data-i18n="user.recordingsStat"><%- t('user.recordingsStat') %></span>
             </a>
-            <a href="#gallery" class="tk-prof__stat">
-              <span class="tk-prof__num"><%= counts.photos + counts.videos %></span>
-              <span class="tk-prof__lbl" data-i18n="user.gallery"><%- t('user.gallery') %></span>
+            <a href="#photos" class="tk-prof__stat">
+              <span class="tk-prof__num"><%= counts.photos %></span>
+              <span class="tk-prof__lbl" data-i18n="gallery.photos"><%- t('gallery.photos') %></span>
+            </a>
+            <a href="#videos" class="tk-prof__stat">
+              <span class="tk-prof__num"><%= counts.videos %></span>
+              <span class="tk-prof__lbl" data-i18n="gallery.videos"><%- t('gallery.videos') %></span>
             </a>
             <% } %>
           </div>
@@ -221,10 +230,13 @@
       </section>
       <% } else { %>
       <!-- Идёт ли эфир -->
+      <%# Без эфира рубрика «Стрим» — не заголовок: раздел, в котором ничего
+          нет, роботу как h2 не нужен; на вид то же (docs/seo, задача 6). %>
+      <% var liveNow = user.isStreaming && user.activeStreamId, kickTag = liveNow ? 'h2' : 'div'; %>
       <section class="tk-panel--prof">
-        <h2 class="tk-kicker" data-i18n="user.stream"><%- t('user.stream') %></h2>
+        <<%= kickTag %> class="tk-kicker" data-i18n="user.stream"><%- t('user.stream') %></<%= kickTag %>>
 
-        <% if (user.isStreaming && user.activeStreamId) { %>
+        <% if (liveNow) { %>
         <div class="tk-prof__live">
           <span class="tk-prof__live-mark" data-i18n="user.live"><%- t('user.live') %></span>
           <a href="/stream/<%= user.activeStreamId %>" data-i18n="stream.goto"><%- t('stream.goto') %></a>
@@ -261,64 +273,47 @@
         <% } %>
       </section>
 
-      <!-- Галерея — вкладками «Фото» и «Видео» (решение заказчика 25.09.2026):
-           начало каждой, целиком — на /@ник/photos и /@ник/videos. Фото —
-           partials/galleryPhoto.ejs, видео — partials/galleryVideo.ejs,
-           переключение и ролики в работе — public/gallery.js. -->
-      <section class="tk-prof__gal" id="gallery"<% if (isSelf) { %> data-own<% } %>>
+      <%# Фото и видео — двумя секциями, как записи (04.10, решение Ивана: до
+          того одна «Галерея» с вкладками-кнопками). Начало каждой — здесь,
+          целиком — /@ник/photos и /@ник/videos; общая лента всех людей —
+          раздел «Лента» (/feed). Фото — partials/galleryPhoto.ejs, видео —
+          partials/galleryVideo.ejs; ролики владельца в работе — public/gallery.js
+          (по data-own). «Добавить» у владельца ведёт на /upload — там и то, и то. %>
+      <section class="tk-prof__gal" id="photos">
         <div class="tk-prof__gal-head">
-          <h2 class="tk-kicker tk-prof__gal-title" data-i18n="user.gallery"><%- t('user.gallery') %></h2>
+          <h2 class="tk-kicker tk-prof__gal-title" data-i18n="gallery.photos"><%- t('gallery.photos') %></h2>
+          <span class="tk-note"><%= counts.photos %></span>
+          <% if (isSelf) { %><a href="/upload" class="tk-btn tk-btn--outline tk-btn--xs tk-prof__gal-new" data-i18n="user.add"><%- t('user.add') %></a><% } %>
         </div>
-
-        <%# Вкладки — кнопками: обе уже на странице, переключение без перехода.
-            Какая открыта — помнит адрес (#photos, #videos). %>
-        <div class="tk-tabs tk-tabs--gal" role="tablist">
-          <% [['photos', 'gallery.photos', counts.photos], ['videos', 'gallery.videos', counts.videos]].forEach(function (tb, i) { %>
-          <button type="button" class="tk-tabs__item<%= i === 0 ? ' tk-tabs__item--on' : '' %>" role="tab" id="galTab-<%= tb[0] %>" aria-controls="galPane-<%= tb[0] %>" aria-selected="<%= i === 0 %>" data-gal-tab="<%= tb[0] %>">
-            <span data-i18n="<%= tb[1] %>"><%- t(tb[1]) %></span><span class="tk-tabs__num"><%= tb[2] %></span>
-          </button>
-          <% }); %>
+        <% if (photos.length) { %>
+        <div class="tk-pics">
+          <% photos.forEach(function (p, i) { %><%- include('partials/galleryPhoto', { p: p, n: i + 1, owner: user.displayName }) %><% }); %>
         </div>
-
-        <div class="tk-gal__pane" role="tabpanel" id="galPane-photos" aria-labelledby="galTab-photos">
-          <% if (photos.length) { %>
-          <div class="tk-pics">
-            <% photos.forEach(function (p, i) { %><%- include('partials/galleryPhoto', { p: p, n: i + 1, owner: user.displayName }) %><% }); %>
-          </div>
-          <% } else { %>
-          <p class="tk-note tk-note--center" data-i18n="gallery.photosEmpty"><%- t('gallery.photosEmpty') %></p>
-          <% } %>
-          <%# Вся вкладка — кнопкой, как только есть что смотреть, а не только
-              когда фото больше, чем влезает в профиль: без неё на страницу
-              галереи было не попасть (правки 29.09). %>
-          <% if (counts.photos > 0) { %>
-          <div class="tk-prof__gal-add">
-            <a href="<%= user.url %>/photos" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.allPhotos" data-i18n-vars='<%= JSON.stringify({ n: counts.photos }) %>'><%- t('gallery.allPhotos', { n: counts.photos }) %></a>
-          </div>
-          <% } %>
-        </div>
-
-        <div class="tk-gal__pane" role="tabpanel" id="galPane-videos" aria-labelledby="galTab-videos" hidden>
-          <% if (videos.length) { %>
-          <div class="tk-recs">
-            <% videos.forEach(function (v) { %><%- include('partials/galleryVideo', { v: v, who: user.displayName }) %><% }); %>
-          </div>
-          <% } else { %>
-          <p class="tk-note tk-note--center" data-i18n="gallery.videosEmpty"><%- t('gallery.videosEmpty') %></p>
-          <% } %>
-          <% if (counts.videosListed > 0) { %>
-          <div class="tk-prof__gal-add">
-            <a href="<%= user.url %>/videos" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.allVideos" data-i18n-vars='<%= JSON.stringify({ n: counts.videos }) %>'><%- t('gallery.allVideos', { n: counts.videos }) %></a>
-          </div>
-          <% } %>
-        </div>
-
-        <%# «Добавить» — под обеими вкладками, по центру: ведёт на страницу
-            загрузки (/upload), там и фото с подписью, и видео. %>
-        <% if (isSelf) { %>
         <div class="tk-prof__gal-add">
-          <a href="/upload" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="user.galleryAdd"><%- t('user.galleryAdd') %></a>
+          <a href="<%= user.url %>/photos" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.allPhotos" data-i18n-vars='<%= JSON.stringify({ n: counts.photos }) %>'><%- t('gallery.allPhotos', { n: counts.photos }) %></a>
         </div>
+        <% } else { %>
+        <p class="tk-note tk-note--center" data-i18n="gallery.photosEmpty"><%- t('gallery.photosEmpty') %></p>
+        <% } %>
+      </section>
+
+      <section class="tk-prof__gal" id="videos"<% if (isSelf) { %> data-own<% } %>>
+        <div class="tk-prof__gal-head">
+          <h2 class="tk-kicker tk-prof__gal-title" data-i18n="gallery.videos"><%- t('gallery.videos') %></h2>
+          <span class="tk-note"><%= counts.videos %></span>
+          <% if (isSelf) { %><a href="/upload" class="tk-btn tk-btn--outline tk-btn--xs tk-prof__gal-new" data-i18n="user.add"><%- t('user.add') %></a><% } %>
+        </div>
+        <% if (videos.length) { %>
+        <div class="tk-recs">
+          <% videos.forEach(function (v) { %><%- include('partials/galleryVideo', { v: v, who: user.displayName }) %><% }); %>
+        </div>
+        <% if (counts.videosListed > 0) { %>
+        <div class="tk-prof__gal-add">
+          <a href="<%= user.url %>/videos" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.allVideos" data-i18n-vars='<%= JSON.stringify({ n: counts.videos }) %>'><%- t('gallery.allVideos', { n: counts.videos }) %></a>
+        </div>
+        <% } %>
+        <% } else { %>
+        <p class="tk-note tk-note--center" data-i18n="gallery.videosEmpty"><%- t('gallery.videosEmpty') %></p>
         <% } %>
       </section>
       <% } %>

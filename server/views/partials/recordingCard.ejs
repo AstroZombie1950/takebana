@@ -8,7 +8,7 @@
     не узнавал о её конце без перезагрузки. %>
 <a href="/recording/<%= r._id %>" class="tk-recard<%= r.status !== 'ready' ? ' is-' + r.status : '' %>" data-rec-id="<%= r._id %>">
   <span class="tk-recard__thumb">
-    <% if (r.thumb && r.thumb.url) { %><img src="<%= r.thumb.url %>" alt="<%= ta('alt.cover', { title: mediaTitle(r.title, 'recording', who, r.recordedAt || r.createdAt) }) %>" loading="lazy"><% } %>
+    <% if (r.thumb && r.thumb.url) { %><img src="<%= r.thumb.url %>" alt="<%= ta('alt.cover', { title: mediaTitle(r.title, 'recording', who, r.recordedAt || r.createdAt) }) %>" <%- imgLoad() %>><% } %>
     <% if (r.status === 'ready') { %>
       <span class="tk-recard__len"><%= clock(r.duration) %></span>
     <% } else { %>

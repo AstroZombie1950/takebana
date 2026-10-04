@@ -229,8 +229,9 @@
     li.className = 'tk-watch__c';
     li.id = 'c-' + c._id;
     li.dataset.id = c._id;
+    // Разметка — как у partials/comment.ejs: первую порцию рисует сервер.
     var a = c.author, av = a.avatar || {};
-    var profile = '/userPage/' + encodeURIComponent(a._id);
+    var profile = a.url || '/userPage/' + encodeURIComponent(a._id);
     var acts = '';
     if (c.canDelete) {
       acts += '<button type="button" class="tk-watch__c-btn" data-del aria-label="' + escapeHtml(t('common.delete')) + '" title="' + escapeHtml(t('common.delete')) + '">' + TRASH + '</button>';
@@ -239,7 +240,7 @@
       acts += '<button type="button" class="tk-watch__c-btn" data-report="comment" data-report-id="' + escapeHtml(c._id) + '" data-report-name="' + escapeHtml(a.name) + '" aria-label="' + escapeHtml(t('common.report')) + '" title="' + escapeHtml(t('common.report')) + '">' + FLAG + '</button>';
     }
     li.innerHTML =
-      '<a class="tk-watch__c-ava" href="' + profile + '"' + (av.url ? '' : ' style="background:' + escapeHtml(av.gradient || '') + '"') + '>' +
+      '<a class="tk-watch__c-ava" href="' + profile + '" tabindex="-1" aria-hidden="true"' + (av.url ? '' : ' style="background:' + escapeHtml(av.gradient || '') + '"') + '>' +
         (av.url ? '<img src="' + escapeHtml(av.url) + '" alt="" loading="lazy">' : escapeHtml(av.initial || '')) + '</a>' +
       '<div><div class="tk-watch__c-head"><a class="tk-watch__c-name" href="' + profile + '">' + escapeHtml(a.name) + (a.official && window.tkOfficial ? window.tkOfficial() : '') + '</a>' +
         '<time class="tk-watch__c-when" datetime="' + escapeHtml(c.createdAt) + '">' + escapeHtml(tkDate(c.createdAt, WHEN)) + '</time></div>' +
@@ -253,7 +254,9 @@
     empty.hidden = list.children.length > 0 || !!empty.dataset.closed;
   }
 
-  append(JSON.parse($('commentsData').textContent || '[]'));
+  // Первая порция уже в разметке; «Ещё» продолжает от последнего в ней.
+  var lastTime = list.lastElementChild && list.lastElementChild.querySelector('time');
+  if (lastTime) oldest = lastTime.getAttribute('datetime');
 
   // Переход из уведомления: комментарий подсвечен (:target) и в поле зрения.
   if (location.hash.indexOf('#c-') === 0) {

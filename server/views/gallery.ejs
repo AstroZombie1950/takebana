@@ -16,7 +16,7 @@
 <head>
 <%# Каждая страница листалки — canonical на себя. Пока всё помещается
     в профиль, вкладка его повторяет — вне индекса (indexable). %>
-<%- include('partials/tkHead', { titleKey: 'page.' + tab + '.title', titleVars: { name: owner.displayName },
+<%- include('partials/tkHead', { titleKey: 'page.' + tab + (page > 1 ? '.titlePage' : '.title'), titleVars: { name: owner.displayName, n: page },
          description: ta('seo.' + tab + 'Desc', { name: owner.displayName }) + (page > 1 ? ' ' + ta('seo.page', { n: page }) : ''),
          seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow',
          jsonld: ld.crumbs([['Takebana', '/'], [owner.displayName, owner.url], [ta(tabKey), pageHref(1)]]) } }) %>
@@ -41,7 +41,7 @@
         <span data-i18n="user.backToProfile"><%- t('user.backToProfile') %></span>
       </a>
 
-      <p class="tk-kicker" data-i18n="user.gallery"><%- t('user.gallery') %></p>
+      <p class="tk-kicker" data-i18n="<%= tabKey %>"><%- t(tabKey) %></p>
       <div class="tk-gal__head">
         <%# Имя — отдельным узлом с экранированием, как на странице подписчиков. %>
         <h1 class="tk-gal__h1"><%= owner.displayName %></h1>

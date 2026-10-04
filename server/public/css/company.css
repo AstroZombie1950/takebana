@@ -56,7 +56,7 @@
 }
 
 .tk-company__label {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   line-height: 1.4;
   color: var(--tk-beige);
@@ -66,7 +66,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   color: var(--tk-muted);
 }
@@ -83,7 +83,7 @@
   margin: 0;
   padding: 22px 24px;
   border: 1px solid var(--tk-green);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 16px;
   line-height: 1.6;
   color: var(--tk-paper);
@@ -92,7 +92,7 @@
 /* «Мои заведения» (/venues/mine): новая заявка и счётчик «N из 10». */
 .tk-company__add { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
 .tk-company__add .tk-form__note { margin: 0; }
-.tk-company__count { margin-left: auto; font-family: Oswald, sans-serif; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--tk-muted); }
+.tk-company__count { margin-left: auto; font-family: Oswald, 'Oswald Fallback', sans-serif; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--tk-muted); }
 
 .tk-company__stop { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; border-color: var(--tk-rule); }
 .tk-company__stop p { margin: 0; }

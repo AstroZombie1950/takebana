@@ -73,7 +73,7 @@
   border: 0;
   outline: 0;
   background: none;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 16px;
   letter-spacing: .01em;
   color: var(--tk-paper);
@@ -119,7 +119,7 @@
   background: none;
   cursor: pointer;
   white-space: nowrap;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -169,7 +169,7 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   pointer-events: none;
-  font: 500 10px/1 Oswald, sans-serif;
+  font: 500 10px/1 Oswald, 'Oswald Fallback', sans-serif;
   letter-spacing: .16em;
   text-transform: uppercase;
   color: var(--tk-label);
@@ -184,7 +184,7 @@
   outline: 0;
   background-color: transparent;
   background-position: right 12px center;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 16px;
   line-height: 1.2;
   color: var(--tk-paper);
@@ -215,7 +215,7 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font: 16px/1.2 Oswald, sans-serif;
+  font: 16px/1.2 Oswald, 'Oswald Fallback', sans-serif;
   color: var(--tk-paper);
 }
 
@@ -242,7 +242,7 @@
   gap: 12px;
   padding: 10px 18px;
   cursor: pointer;
-  font: 16px/1.3 Oswald, sans-serif;
+  font: 16px/1.3 Oswald, 'Oswald Fallback', sans-serif;
   color: #C9C2B7;
 }
 
@@ -266,7 +266,7 @@
 
 .tk-venues__reset {
   padding: 4px 2px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -330,7 +330,7 @@
 }
 
 .tk-venues__count b {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: .04em;
@@ -358,7 +358,7 @@
 }
 
 .tk-venues__empty b {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 18px;
   font-weight: 600;
   text-transform: uppercase;
@@ -409,7 +409,7 @@
   white-space: nowrap;
   background: rgba(10, 10, 10, .92);
   border: 1px solid var(--tk-rule);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .04em;
   color: var(--tk-paper);
@@ -497,7 +497,7 @@
   align-items: center;
   justify-content: center;
   background: repeating-linear-gradient(135deg, #1B1917 0 12px, #141312 12px 24px);
-  font: 600 44px/1 Oswald, sans-serif;
+  font: 600 44px/1 Oswald, 'Oswald Fallback', sans-serif;
   color: var(--tk-ink-soft);
 }
 
@@ -511,7 +511,7 @@
   padding: 5px 8px;
   background: var(--tk-accent);
   color: var(--tk-ink);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: .12em;
@@ -554,7 +554,7 @@
   border-radius: 50%;
   border: 2px solid var(--tk-beige);
   background: #1B1917;
-  font: 600 16px/1 Oswald, sans-serif;
+  font: 600 16px/1 Oswald, 'Oswald Fallback', sans-serif;
   color: var(--tk-paper);
 }
 
@@ -568,7 +568,7 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -638,7 +638,7 @@
 .tk-vc__open {
   margin-left: auto;
   padding: 6px 2px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -742,7 +742,7 @@
     background: var(--tk-paper);
     color: var(--tk-ink);
     cursor: pointer;
-    font-family: Oswald, sans-serif;
+    font-family: Oswald, 'Oswald Fallback', sans-serif;
     font-size: 13px;
     font-weight: 600;
     letter-spacing: .1em;

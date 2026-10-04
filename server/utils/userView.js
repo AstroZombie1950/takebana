@@ -1,6 +1,8 @@
 // Как пользователь выглядит в интерфейсе: имя и аватар без фото.
 // Прежде это считалось копией в десяти маршрутах.
 
+const avatarSmall = require('./avatarSmall');
+
 const GRADIENTS = [
   'linear-gradient(to right, #ff7e5f, #feb47b)',
   'linear-gradient(to right, #6a11cb, #2575fc)',
@@ -25,8 +27,10 @@ function displayName(user) {
 // Цвет — от id, а не случайный: прежде у одного человека он менялся
 // от страницы к странице и при каждой перезагрузке. Хвост ObjectId —
 // счётчик, поэтому соседние по регистрации получают разные цвета.
+// url — для кружков: маленькая копия, когда она есть (utils/avatarSmall.js);
+// full — оригинал 512×512: шапка профиля, настройки, просмотр во весь экран.
 function avatarStyle(user, name = displayName(user)) {
-  if (user.avatar) return { url: user.avatar };
+  if (user.avatar) return { url: avatarSmall.small(user.avatar), full: user.avatar };
   const n = parseInt(String(user._id).slice(-6), 16) || 0;
   return { gradient: GRADIENTS[n % GRADIENTS.length], initial: name.charAt(0).toUpperCase() };
 }

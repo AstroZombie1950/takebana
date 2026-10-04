@@ -15,6 +15,9 @@ const userView = require('../../utils/userView');
 const callLog = require('../../utils/callLog');
 const errorLog = require('../../utils/errorLog');
 const { langOf } = require('../../utils/i18n');
+const nickname = require('../../utils/nickname');
+const { profileUrl } = require('../../utils/profileUrl');
+const { notFound } = require('../../middleware/errors');
 
 const commonDataMiddleware = async (req, res, next) => {
   try {
@@ -79,6 +82,7 @@ const commonDataMiddleware = async (req, res, next) => {
           const displayName = userView.displayName(user);
           return {
               id: user._id,
+              url: profileUrl(user),
               displayName,
               avatarStyle: userView.avatarStyle(user, displayName),
               status: user.live ? 'online' : 'offline'
@@ -90,6 +94,7 @@ const commonDataMiddleware = async (req, res, next) => {
       // Раньше на каждый запрос кабинета уходил поиск эфира ради окна настроек.
       res.locals.currentUser = {
           _id: currentUser._id,
+          url: profileUrl(currentUser),
           displayName: currentUserDisplayName,
           email: currentUser.email || '',
           avatarStyle: currentUserAvatarStyle,
@@ -122,4 +127,20 @@ const commonDataMiddleware = async (req, res, next) => {
   }
 };
 
-module.exports = { commonDataMiddleware };
+// Профиль живёт по адресу /@ник (utils/profileUrl.js); страницы человека —
+// профиль, галерея, записи, подписчики — находят его здесь.
+// Человек по нику: нынешний — он; прежний — 301 на тот же вид страницы
+// (профиль или галерея, с ?page=) по нынешнему нику; иначе «не найдено».
+// canonicalPath уже привёл ник к нижнему регистру.
+async function byNick(req, res, select) {
+  const nick = req.params.nick;
+  if (!nickname.RULE.test(nick)) { notFound(req, res); return null; }
+  const user = await User.findOne({ nickname: nick }).select(select);
+  if (user) return user;
+  const now = await User.findOne({ formerNicknames: nick }).sort({ nicknameChangedAt: -1 }).select('nickname').lean();
+  if (now && now.nickname) res.redirect(301, req.originalUrl.replace('/@' + nick, '/@' + now.nickname));
+  else notFound(req, res);
+  return null;
+}
+
+module.exports = { commonDataMiddleware, byNick };

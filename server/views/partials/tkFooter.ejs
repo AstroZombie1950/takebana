@@ -1,6 +1,14 @@
-<%# Подвал и нижняя полоса. Адреса соцсетей и телеграма заказчик ещё не дал —
-    оставлены заглушками. %>
-<footer class="tk-footer">
+<%# Подвал и нижняя полоса. Почта, телеграм и соцсети — из config/contacts.js:
+    пустой адрес — пункта нет, нет ни одной соцсети — нет и колонки. %>
+<%
+  var socialIcons = {
+    instagram: ['Instagram', '<rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="4"></circle><path d="M17.5 6.5h.01"></path>'],
+    youtube: ['YouTube', '<rect x="2" y="5" width="20" height="14"></rect><path d="M11 9l4 3-4 3V9Z"></path>'],
+    tiktok: ['TikTok', '<path d="M14 3v12a4 4 0 1 1-4-4"></path><path d="M14 3c.4 2.8 2.3 4.7 5 5"></path>']
+  };
+  var socials = Object.keys(socialIcons).filter(function (k) { return contacts.social[k]; });
+%>
+<footer class="tk-footer<%= socials.length ? '' : ' tk-footer--nosocial' %>">
   <div class="tk-footer__brand">
     <a href="/" class="tk-footer__home" aria-label="Takebana">
       <img src="/img/logo.svg" alt="Takebana" class="tk-footer__logo"
@@ -19,18 +27,20 @@
 
   <div class="tk-footer__col">
     <span class="tk-footer__title" data-i18n="foot.col2.title"><%- t('foot.col2.title') %></span>
-    <a href="mailto:contact@takebana.com" class="tk-flink">contact@takebana.com</a>
-    <a href="#" class="tk-flink">@takebana</a>
+    <a href="mailto:<%= contacts.email %>" class="tk-flink"><%= contacts.email %></a>
+    <% if (contacts.telegram) { %><a href="<%= contacts.telegram %>" class="tk-flink" rel="noopener">@<%= contacts.telegram.replace(/^https?:\/\/t\.me\//, '') %></a><% } %>
   </div>
 
+  <% if (socials.length) { %>
   <div class="tk-footer__col">
     <span class="tk-footer__title" data-i18n="foot.col3.title"><%- t('foot.col3.title') %></span>
     <div class="tk-footer__socials">
-      <a href="#" class="tk-social" aria-label="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#C9C2B7" stroke-width="1.6" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="4"></circle><path d="M17.5 6.5h.01"></path></svg></a>
-      <a href="#" class="tk-social" aria-label="YouTube"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#C9C2B7" stroke-width="1.6" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="2" y="5" width="20" height="14"></rect><path d="M11 9l4 3-4 3V9Z"></path></svg></a>
-      <a href="#" class="tk-social" aria-label="TikTok"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#C9C2B7" stroke-width="1.6" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M14 3v12a4 4 0 1 1-4-4"></path><path d="M14 3c.4 2.8 2.3 4.7 5 5"></path></svg></a>
+      <% socials.forEach(function (k) { %>
+      <a href="<%= contacts.social[k] %>" class="tk-social" rel="noopener" aria-label="<%= socialIcons[k][0] %>"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#C9C2B7" stroke-width="1.6" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><%- socialIcons[k][1] %></svg></a>
+      <% }); %>
     </div>
   </div>
+  <% } %>
 </footer>
 
 <div class="tk-copy">

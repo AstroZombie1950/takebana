@@ -9,6 +9,7 @@
 // переезда в Bunny, остаются на сервере: удаление понимает оба адреса.
 
 const fs = require('fs');
+const sharp = require('sharp');
 const os = require('os');
 const path = require('path');
 const mongoose = require('mongoose');
@@ -31,23 +32,30 @@ const localDir = (userId) => path.join(UPLOADS, 'gallery', String(userId));
 const localPrefix = (userId) => `/uploads/gallery/${userId}/`;
 const keyOf = (userId, name) => `gallery/${userId}/${name}`;
 
-// files — из multer (memoryStorage). Возвращает адреса в порядке файлов.
-// Сбой посреди пачки — уже выгруженные убираются, адреса не возвращаются.
+// Ширина и высота готового файла (или буфера).
+const sizeOf = (src) => sharp(src).metadata().then(({ width, height }) => ({ width, height }));
+
+// files — из multer (memoryStorage). Возвращает [{ url, width, height }]
+// в порядке файлов. Сбой посреди пачки — уже выгруженные убираются,
+// адреса не возвращаются.
 async function save(userId, files) {
   if (storage.driver !== 'bunny') {
     const names = await saveImages(files, 'gallery', localDir(userId));
-    return names.map((n) => localPrefix(userId) + n);
+    const out = [];
+    for (const n of names) out.push({ url: localPrefix(userId) + n, ...await sizeOf(path.join(localDir(userId), n)) });
+    return out;
   }
   const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'tk-gallery-'));
   const done = [];
   try {
     const names = await saveImages(files, 'gallery', tmp);
-    const urls = [];
+    const out = [];
     for (const name of names) {
-      urls.push(await storage.put(path.join(tmp, name), keyOf(userId, name), 'image/webp'));
+      const size = await sizeOf(path.join(tmp, name));
+      out.push({ url: await storage.put(path.join(tmp, name), keyOf(userId, name), 'image/webp'), ...size });
       done.push(keyOf(userId, name));
     }
-    return urls;
+    return out;
   } catch (e) {
     await Promise.all(done.map((k) => storage.remove(k).catch(() => {})));
     throw e;
@@ -117,12 +125,40 @@ async function migrate() {
   if (left.length) console.log(`[gallery] фото перенесены в документы: людей ${left.length}`);
 }
 
+// Размеры фото, загруженных до 04.10: файл — с диска или из Bunny, по одному.
+// Файла нет вовсе — размер 0: больше не ищем, атрибутов у снимка не будет.
+// Сбой сети — пропускаем, попробуем при следующем запуске.
+const NONE = { width: 0, height: 0 };
+async function sourceOf(url) {
+  if (url.startsWith('/uploads/')) {
+    const file = resolveWithin(UPLOADS, url.slice('/uploads/'.length));
+    return file && fs.existsSync(file) ? file : null;
+  }
+  const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('хранилище ответило ' + r.status);
+  return Buffer.from(await r.arrayBuffer());
+}
+
+async function fillSizes() {
+  const left = await GalleryPhoto.find({ width: { $exists: false } }).select('url').lean();
+  for (const p of left) {
+    try {
+      const src = await sourceOf(p.url);
+      await GalleryPhoto.updateOne({ _id: p._id }, { $set: src ? await sizeOf(src) : NONE });
+    } catch (e) {
+      errorLog.external(e, 'gallery.fillSizes', { photo: String(p._id) });
+    }
+  }
+}
+
 // При запуске процесса: перенос — когда база открыта, драйвер команды
 // до соединения не копит.
 function start() {
   const db = mongoose.connection;
   (db.readyState === 1 ? Promise.resolve() : new Promise((r) => db.once('open', r)))
     .then(migrate)
+    .then(fillSizes)
     .catch((e) => errorLog.server(e, 'gallery.migrate'));
 }
 

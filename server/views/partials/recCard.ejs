@@ -6,7 +6,7 @@
 <% var recKind = rec.href && rec.href.indexOf('/video/') === 0 ? 'video' : 'recording'; %>
 <a href="<%= rec.href || '/recording/' + rec._id %>" class="tk-recard">
   <span class="tk-recard__thumb">
-    <% if (rec.thumb) { %><img src="<%= rec.thumb %>" alt="<%= ta('alt.cover', { title: mediaTitle(rec.title, recKind, rec.author.displayName, rec.createdAt) }) %>" loading="lazy"><% } %>
+    <% if (rec.thumb) { %><img src="<%= rec.thumb %>" alt="<%= ta('alt.cover', { title: mediaTitle(rec.title, recKind, rec.author.displayName, rec.createdAt) }) %>" <%- imgLoad() %>><% } %>
     <% if (rec.duration) { %><span class="tk-recard__len"><%= clock(rec.duration) %></span><% } %>
     <% if (rec.isAdult) { %><span class="tk-recard__adult">18+</span><% } %>
   </span>

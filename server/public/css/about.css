@@ -64,7 +64,7 @@
   max-width: 560px;
   padding-left: 20px;
   border-left: 2px solid #679267;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 19px;
   line-height: 1.5;
   color: #C9C2B7;
@@ -102,7 +102,7 @@
 }
 
 .tk-about__shot-ph {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   line-height: 1.9;
   letter-spacing: .2em;
@@ -148,7 +148,7 @@
 }
 
 .tk-about__host-kicker {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .2em;
   text-transform: uppercase;
@@ -164,7 +164,7 @@
 }
 
 .tk-about__host-role {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 16px;
   color: #F5F1EA;
 }
@@ -206,7 +206,7 @@
   max-width: 560px;
   padding-left: 18px;
   border-left: 2px solid #679267;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 18px;
   line-height: 1.55;
   color: #C9C2B7;
@@ -254,7 +254,7 @@
 
 .tk-about__feat-body {
   margin: 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 17px;
   line-height: 1.55;
   color: #3A3733;
@@ -274,7 +274,7 @@
 .tk-about__mark--green { background: #679267; animation: none; }
 
 .tk-about__legend-label {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   color: #F5F1EA;
 }
@@ -297,7 +297,7 @@
   padding: 6px 10px;
   background: #0A0A0A;
   border: 1px solid rgba(144, 113, 99, .5);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   white-space: nowrap;
   color: #F5F1EA;
@@ -342,7 +342,7 @@
 .tk-about__item:last-child { border-bottom: 1px solid rgba(144, 113, 99, .4); }
 
 .tk-about__item-num {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .16em;
   color: #E34234;
@@ -351,7 +351,7 @@
 .tk-about__split-r .tk-about__item-num { color: #679267; }
 
 .tk-about__item-text {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 20px;
   color: #F5F1EA;
 }
@@ -384,7 +384,7 @@
 
 .tk-about__step-body {
   margin: 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 18px;
   line-height: 1.55;
   color: #3A3733;
@@ -414,7 +414,7 @@
 }
 
 .tk-about__comm-num {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .2em;
   text-transform: uppercase;
@@ -453,7 +453,7 @@
 }
 
 .tk-about__stat-label {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 14px;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -469,8 +469,9 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0;
-  margin-top: 44px;
 }
+
+.tk-about__stats + .tk-about__quotes { margin-top: 44px; }
 
 .tk-about__quote-box { display: flex; flex-direction: column; gap: 22px; }
 .tk-about__quote-box--l { padding-right: 48px; border-right: 1px solid rgba(10, 10, 10, .2); }
@@ -486,7 +487,7 @@
 }
 
 .tk-about__quote-author {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   letter-spacing: .14em;
   text-transform: uppercase;

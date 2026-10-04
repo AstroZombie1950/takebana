@@ -1,10 +1,11 @@
 <%#
-  Подписчики и подписки человека: /userPage/:id/followers и /following.
+  Подписчики и подписки человека: /@ник/followers и /following (до 04.10 —
+  /userPage/:id/…, теперь 301 сюда).
   Маршрут — routes/streaming/subscriptions.js. Вёрстка — та же, что у поиска
   и авторов (css/search.css): вкладки, сетка карточек, пустое состояние.
 %>
 <%
-  var base = '/userPage/' + owner._id;
+  var base = owner.url;
   var tabs = [
     { key: 'followers', n: followersCount, i18n: 'user.subscribersTab' },
     { key: 'following', n: followingCount, i18n: 'user.followingTab' }

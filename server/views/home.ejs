@@ -104,7 +104,7 @@
       <% } %>
 
       <%# Лента: записи эфиров и видео галерей, новые сверху. Следующую
-          страницу подгружает catalog.js по кнопке (/feed?before=…); без
+          страницу подгружает catalog.js по кнопке (/home/next?before=…); без
           скрипта кнопка — обычная ссылка на ту же выдачу. %>
       <section class="tk-home__sec" aria-labelledby="feedTitle">
         <div class="tk-home__head">
@@ -115,7 +115,7 @@
           <% feed.items.forEach(function (item) { %><%- include('partials/feedCard', { item: item }) %><% }); %>
         </div>
         <% if (feed.next) { %>
-        <a href="/?before=<%= encodeURIComponent(feed.next) %>#feedTitle" class="tk-btn tk-btn--outline tk-btn--sm tk-feed__more" id="feedMore" data-next="<%= feed.next %>" data-i18n="feed.more"><%- t('feed.more') %></a>
+        <a href="/?before=<%= encodeURIComponent(feed.next) %>#feedTitle" class="tk-btn tk-btn--outline tk-btn--sm tk-feed__more" id="feedMore" data-src="/home/next" data-next="<%= feed.next %>" data-i18n="feed.more"><%- t('feed.more') %></a>
         <% } %>
         <% } else { %>
         <div class="tk-empty">

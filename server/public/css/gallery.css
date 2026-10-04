@@ -38,7 +38,7 @@
   justify-content: center;
   gap: 18px;
   background: rgba(10, 10, 10, .45);
-  font: 400 15px/1 Oswald, sans-serif;
+  font: 400 15px/1 Oswald, 'Oswald Fallback', sans-serif;
   color: var(--tk-paper);
   font-variant-numeric: tabular-nums;
   opacity: 0;
@@ -109,7 +109,7 @@
   justify-content: center;
   padding: 0 8px;
   border: 1px solid var(--tk-rule);
-  font: 400 14px/1 Oswald, sans-serif;
+  font: 400 14px/1 Oswald, 'Oswald Fallback', sans-serif;
   color: var(--tk-beige);
   text-decoration: none;
   font-variant-numeric: tabular-nums;

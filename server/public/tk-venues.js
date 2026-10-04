@@ -126,7 +126,9 @@
     return wide.matches ? 'split' : 'list';
   }
 
-  function setView(v, remember) {
+  // later — первый показ страницы: карта рядом со списком ждёт, пока
+  // страница дорисуется (ensureMapLater).
+  function setView(v, remember, later) {
     if (v === 'split' && !wide.matches) v = 'list';
     root.dataset.view = v;
     root.querySelectorAll('[data-set-view]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.setView === v)));
@@ -134,7 +136,8 @@
     if (remember) {
       try { localStorage.setItem(viewKey(), v); } catch (e) {}
     }
-    if (v !== 'list') ensureMap();
+    if (v === 'split' && later) ensureMapLater();
+    else if (v !== 'list') ensureMap();
     refresh();
   }
 
@@ -155,9 +158,22 @@
   tip.hidden = true;
   mapEl.append(tip);
 
+  // Стили MapLibre — вместе с картой, не в <head>: в виде «Список» они
+  // не нужны, а в <head> задерживали отрисовку всей страницы.
+  function mapStyles() {
+    return new Promise((resolve, reject) => {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = '/vendor/maplibre-gl-6.9.0/maplibre-gl.css';
+      link.onload = resolve;
+      link.onerror = reject;
+      document.head.append(link);
+    });
+  }
+
   function ensureMap() {
     if (mounting) return mounting;
-    mounting = TKMap.mount(mapEl).then((m) => {
+    mounting = mapStyles().then(() => TKMap.mount(mapEl)).then((m) => {
       map = m;
       m.setPoints(points());
       m.on('move', (b) => { bounds = b; refresh(); });
@@ -187,6 +203,18 @@
       mounting = null;
     });
     return mounting;
+  }
+
+  // Рядом со списком карта не главное: поднимаем её, когда страница
+  // дорисовалась и браузер свободен. MapLibre разбирается и заводит WebGL
+  // около секунды, и всё это время список не отвечал (PageSpeed 04.10:
+  // TBT 1,27 с на компьютере — docs/seo, задача 43). Вид «Карта», кнопка
+  // и «На карте» поднимают её сразу.
+  function ensureMapLater() {
+    const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
+    const go = () => idle(() => ensureMap(), { timeout: 3000 });
+    if (document.readyState === 'complete') go();
+    else addEventListener('load', go, { once: true });
   }
 
   function fitAll() {
@@ -344,7 +372,7 @@
     if (loading) loading.abort();
     const ctrl = loading = new AbortController();
     root.classList.add('is-loading');
-    tkFetch('/venues/cards' + (qs ? '?' + qs : ''), { signal: ctrl.signal })
+    tkFetch('/venues/cards' + (qs ? '?' + qs : ''), { signal: ctrl.signal, headers: { 'X-TK-Fragment': '1' } })
       .then((r) => {
         if (!r.ok) throw new Error(t('common.failedCode', { code: r.status }));
         return r.text();
@@ -401,7 +429,7 @@
   // ── Начало ──
   // ?venue=<id> — ссылка «Показать на карте» со страницы заведения и камеры.
   readCards();
-  setView(view() || storedView(), false);
+  setView(view() || storedView(), false, true);
   const wanted = new URLSearchParams(location.search).get('venue');
   if (wanted && cardOf(wanted)) focus(wanted);
 

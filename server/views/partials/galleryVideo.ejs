@@ -9,7 +9,7 @@
 <% var st = v.status; var href = st === 'uploading' || st === 'draft' ? '/upload#v' + v._id : '/video/' + v._id; %>
 <a href="<%= href %>" class="tk-recard<%= st !== 'ready' ? ' is-' + st : '' %>" data-video-id="<%= v._id %>">
   <span class="tk-recard__thumb">
-    <% if (v.thumb && v.thumb.url) { %><img src="<%= v.thumb.url %>" alt="<%= ta('alt.cover', { title: mediaTitle(v.title, 'video', who, v.createdAt) }) %>" loading="lazy" decoding="async"><% } %>
+    <% if (v.thumb && v.thumb.url) { %><img src="<%= v.thumb.url %>" alt="<%= ta('alt.cover', { title: mediaTitle(v.title, 'video', who, v.createdAt) }) %>" <%- imgLoad() %> decoding="async"><% } %>
     <% if (st === 'ready') { %>
       <span class="tk-recard__len"><%= clock(v.duration) %></span>
     <% } else if (st === 'uploading') { var pct = v.upload && v.upload.size ? Math.floor(v.upload.received / v.upload.size * 100) : 0; %>

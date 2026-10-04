@@ -1,7 +1,8 @@
-/* Галерея: вкладки «Фото» и «Видео» в профиле (userPage.ejs) и страницы
- * /@ник/photos и /@ник/videos (gallery.ejs). Разметка — partials/galleryPhoto
- * и partials/galleryVideo. Здесь — переключение вкладок профиля, ролики
- * владельца в работе и окно просмотра аватара.
+/* Фото и видео: секции «Фото» и «Видео» в профиле (userPage.ejs, с 04.10 —
+ * две секции вместо «Галереи» с вкладками) и страницы /@ник/photos
+ * и /@ник/videos (gallery.ejs). Разметка — partials/galleryPhoto
+ * и partials/galleryVideo. Здесь — ролики владельца в работе и окно
+ * просмотра аватара.
  *
  * С 25.09.2026 фото открывается своей страницей /photo/:id (подпись,
  * «нравится», комментарии, листание), а удаляют фото и видео на их
@@ -9,34 +10,10 @@
  */
 
 document.addEventListener('DOMContentLoaded', function () {
-  // ── Вкладки профиля ─────────────────────────────────────────────────────
-  // Обе вкладки уже на странице. Открытая — в адресе (#photos, #videos):
-  // «назад» со страницы видео возвращает на ту же вкладку.
-  var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-gal-tab]'));
-  var pick = function (name, remember) {
-    tabs.forEach(function (b) {
-      var on = b.getAttribute('data-gal-tab') === name;
-      b.classList.toggle('tk-tabs__item--on', on);
-      b.setAttribute('aria-selected', String(on));
-      document.getElementById(b.getAttribute('aria-controls')).hidden = !on;
-    });
-    if (remember) history.replaceState(null, '', '#' + name);
-  };
-  if (tabs.length) {
-    tabs.forEach(function (b) {
-      b.addEventListener('click', function () { pick(b.getAttribute('data-gal-tab'), true); });
-    });
-    if (location.hash === '#videos' || location.hash === '#photos') {
-      pick(location.hash.slice(1), false);
-      document.getElementById('gallery').scrollIntoView();
-    }
-  }
-
-  // ── Свои ролики в работе ────────────────────────────────────────────────
-  // Грузится (проценты приходят от фоновой загрузки, public/tk-upload.js),
-  // ждёт публикации, пережимается.
-  var gallery = document.getElementById('gallery');
-  if (gallery && gallery.hasAttribute('data-own')) {
+  // Свои ролики в работе: секция «Видео» профиля и вкладка /@ник/videos
+  // помечены data-own (у владельца).
+  var gallery = document.querySelector('[data-own]');
+  if (gallery) {
     var card = function (id) { return gallery.querySelector('.tk-recard[data-video-id="' + CSS.escape(id) + '"]'); };
     var state = function (el) { return el.querySelector('.tk-recard__state'); };
 

@@ -11,18 +11,18 @@
    var loc = v.location && Number.isFinite(v.location.lat) && Number.isFinite(v.location.lng) ? v.location : null;
    // Картинка: идёт камера — её обложка, иначе первое фото.
    var shot = (v.online && v.cover) || (v.photos && v.photos[0]) || v.cover || '';
-   var pin = v.avatar || (v.photos && v.photos[0]) || '';
+   var pin = (v.avatar && avaSmall(v.avatar)) || (v.photos && v.photos[0]) || '';
    var letter = (String(v.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase();
    var hk = v.hours ? (v.hours.open ? 'venues.openUntil' : 'venues.closedFrom') : '';
    var hv = v.hours ? (v.hours.open ? { to: v.hours.to } : { from: v.hours.from }) : null; %>
 <article class="tk-vc<%= v.online ? ' is-live' : '' %>" data-id="<%= id %>" data-name="<%= v.name %>"<% if (loc) { %> data-lat="<%= loc.lat %>" data-lng="<%= loc.lng %>"<% } %><% if (pin) { %> data-pin="<%= pin %>"<% } %>>
   <a class="tk-vc__media" href="/venue/<%= id %>" tabindex="-1" aria-hidden="true">
-    <% if (shot) { %><img src="<%= shot %>" alt="<%= ta('alt.venuePhoto', { name: v.name }) %>" loading="lazy"><% } else { %><span class="tk-vc__letter"><%= letter %></span><% } %>
+    <% if (shot) { %><img src="<%= shot %>" alt="<%= ta('alt.venuePhoto', { name: v.name }) %>" <%- imgLoad() %>><% } else { %><span class="tk-vc__letter"><%= letter %></span><% } %>
     <% if (v.online) { %><span class="tk-vc__live"><i></i><span data-i18n="venues.onAir"><%- t('venues.onAir') %></span></span><% } %>
   </a>
   <div class="tk-vc__body">
     <div class="tk-vc__top">
-      <span class="tk-vc__logo"><% if (v.avatar) { %><img src="<%= v.avatar %>" alt="" loading="lazy"><% } else { %><%= letter %><% } %></span>
+      <span class="tk-vc__logo"><% if (v.avatar) { %><img src="<%= avaSmall(v.avatar) %>" alt="" loading="lazy"><% } else { %><%= letter %><% } %></span>
       <div class="tk-vc__id">
         <p class="tk-vc__meta"><%- [placeHtml('type', v.type, v.typeOther), placeHtml('city', v.city, v.cityOther)].filter(Boolean).join(' · ') %></p>
         <h2 class="tk-vc__name"><a href="/venue/<%= id %>" data-user-content><%= v.name %></a></h2>

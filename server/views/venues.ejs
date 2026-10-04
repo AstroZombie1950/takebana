@@ -34,9 +34,12 @@
 <head>
 <%# В индексе — сам раздел. Выдача по запросу и пустая — нет: первой в поиске
     не место, у второй нечего показать (docs/seo/DECISIONS.md). %>
-<%- include('partials/tkHead', { titleKey: 'page.venues.title', descriptionKey: 'page.venues.description', seo: { path: '/venues', robots: filters.q || !venues.length ? 'noindex, follow' : '' } }) %>
+<%- include('partials/tkHead', { titleKey: 'page.venues.title', descriptionKey: 'page.venues.description', seo: { path: '/venues', robots: filters.q || !venues.length ? 'noindex, follow' : '',
+      jsonld: [ld.page({ type: 'CollectionPage', path: '/venues', name: ta('page.venues.title'), description: ta('page.venues.description') }),
+               ld.crumbs([['Takebana', '/'], [ta('venues.h1'), '/venues']])] } }) %>
+<%# Стили MapLibre (83 КБ) грузит tk-venues.js вместе с картой: телефону
+    в списке они не нужны, а здесь блокировали отрисовку (задача 43). %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
-<link rel="stylesheet" href="/vendor/maplibre-gl-6.9.0/maplibre-gl.css">
 <link rel="stylesheet" href="<%= asset('/css/tk-map.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/venues.css') %>">
 </head>

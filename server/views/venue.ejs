@@ -24,10 +24,21 @@
     страница выпадала бы из индекса при каждом удалении. %>
 <%# Описание для поиска (04.10): «Бар · Белград: {описание заведения}»;
     без описания страница вне индекса, там хватает типа, города и адреса. %>
-<% var described = meaningful(venue.about); // то же правило, что utils/venuePage.js, indexableVenue %>
-<%- include('partials/tkHead', { title: venue.name + ' — Takebana',
-      description: described ? snippet((meta ? meta + ': ' : '') + venue.about) : [meta, venue.address].filter(Boolean).join(' · '),
-      seo: { path: '/venue/' + venue._id, robots: !approved ? 'noindex, nofollow' : described ? '' : 'noindex, follow', image: venue.cover || photos[0] || venue.avatar, imageAlt: venue.name } }) %>
+<%# Title (04.10, задача 31): «{название} — Бар, Белград — Takebana» — тип
+    и город в выдаче отвечают на запрос «бар в Белграде». Разметка —
+    заведение по его типу и крошки (utils/jsonld.js, venue). %>
+<% var described = meaningful(venue.about); // то же правило, что utils/venuePage.js, indexableVenue
+   var city = placeLabel('city', venue.city, venue.cityOther);
+   var kind = placeLabel('type', venue.type, venue.typeOther);
+   // «Бар «Тэкэбана»» — тип уже в названии, второй раз его не пишем.
+   if (kind && String(venue.name).toLowerCase().indexOf(kind.toLowerCase()) !== -1) kind = '';
+   var typeCity = [kind, city].filter(Boolean).join(', ');
+   var pageDesc = described ? snippet((meta ? meta + ': ' : '') + venue.about) : [meta, venue.address].filter(Boolean).join(' · '); %>
+<%- include('partials/tkHead', { title: venue.name + (typeCity ? ' — ' + typeCity : '') + ' — Takebana',
+      description: pageDesc,
+      seo: { path: '/venue/' + venue._id, robots: !approved ? 'noindex, nofollow' : described ? '' : 'noindex, follow', image: venue.cover || photos[0] || venue.avatar, imageAlt: venue.name,
+             jsonld: [ld.venue({ v: venue, description: pageDesc, city: city, country: venue.countryOther }),
+                      ld.crumbs([['Takebana', '/'], [ta('app.venues'), '/venues'], [venue.name, '/venue/' + venue._id]])] } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/venue.css') %>">
 </head>

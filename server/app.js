@@ -183,12 +183,16 @@ app.locals.vapidPublic = require('./utils/push').publicKey;
 app.locals.clock = require('./utils/recording').clock;
 // Категории и города: форма эфира живёт в шапке каждой страницы кабинета.
 app.locals.catalog = require('./config/catalog');
+// Почта, телеграм поддержки, соцсети — подвал (config/contacts.js).
+app.locals.contacts = require('./config/contacts');
 // Полный адрес страницы и картинки — canonical и OG в partials/tkHead.ejs.
 app.locals.siteUrl = require('./utils/site').siteUrl;
 // Яндекс Метрика (partials/metrics.ejs). Пустой номер — счётчика нет.
 app.locals.metrika = { id: /^\d+$/.test(process.env.METRIKA_ID || '') ? process.env.METRIKA_ID : '' };
 // Микроразметка для поиска — seo.jsonld в шаблонах (utils/jsonld.js).
 app.locals.ld = require('./utils/jsonld');
+// Логотип заведения кружком — маленькой копией (utils/avatarSmall.js).
+app.locals.avaSmall = require('./utils/avatarSmall').small;
 // Стили с версией по содержимому: после выкладки браузер не держит старые (utils/assets.js).
 app.locals.asset = require('./utils/assets').asset;
 // Описание страницы и проверка «текст что-то говорит» — description, alt
@@ -293,6 +297,8 @@ require('./utils/venueRating').backfill();
 // до 30.09 — из строки в код (utils/places.js). Их часовой пояс — по точке.
 places.start();
 require('./utils/venueHours').backfill();
+// Маленькие копии аватаров: досоздать для старых, убрать осиротевшие.
+require('./utils/avatarSmall').start().catch((e) => require('./utils/errorLog').server(e, 'avatarSmall.start'));
 // Рассылки поддержки, оборванные перезапуском, — в «прервана».
 require('./utils/support').markInterrupted().catch((e) => require('./utils/errorLog').server(e, 'support.sweep'));
 // Отрезки эфиров, оставшиеся открытыми от прошлого процесса, — закрыть,

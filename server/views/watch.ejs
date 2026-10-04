@@ -77,11 +77,17 @@
 
         <div class="tk-watch__bar">
           <div class="tk-live__author tk-watch__author">
-            <a href="<%= author.url %>" class="tk-live__avatar"<% if (!author.avatarStyle.url) { %> data-bg="<%= author.avatarStyle.gradient %>"<% } %>>
+            <%# Аватар — та же ссылка, что имя рядом: для чтения с экрана и клавиш —
+                одна, с именем (docs/seo, задача 38). %>
+            <a href="<%= author.url %>" class="tk-live__avatar" tabindex="-1" aria-hidden="true"<% if (!author.avatarStyle.url) { %> data-bg="<%= author.avatarStyle.gradient %>"<% } %>>
               <% if (author.avatarStyle.url) { %><img src="<%= author.avatarStyle.url %>" alt=""><% } else { %><%= author.avatarStyle.initial %><% } %>
             </a>
             <div class="tk-live__author-body">
               <a href="<%= author.url %>" class="tk-live__author-name"><%= author.displayName %><% if (author.official) { %><%- include('partials/official') %><% } %></a>
+              <%# Назад ко всем роликам автора (04.10): у человека — /@ник/videos
+                  и /@ник/recordings, у заведения — его вкладки. %>
+              <% var allKey = kind === 'recording' ? 'watch.allRecordings' : 'watch.allVideos'; %>
+              <a href="<%= author.url + (kind === 'recording' ? (author.venue ? '/streams' : '/recordings') : '/videos') %>" class="tk-watch__all" data-i18n="<%= allKey %>"><%- t(allKey) %></a>
               <% if (host) { %><span class="tk-live__host"><span data-i18n="stream.hostedBy"><%- t('stream.hostedBy') %></span> <a href="<%= host.url %>"><%= host.displayName %></a></span><% } %>
             </div>
           </div>
@@ -169,10 +175,8 @@
           <% } %>
 
           <p class="tk-note" id="commentsEmpty"<% if (comments.length || commentsClosed) { %> hidden<% } %><% if (commentsClosed) { %> data-closed="1"<% } %> data-i18n="rec.commentsEmpty"><%- t('rec.commentsEmpty') %></p>
-          <ol class="tk-watch__list" id="commentList"></ol>
+          <ol class="tk-watch__list" id="commentList"><% comments.forEach(function (c) { %><%- include('partials/comment', { c: c }) %><% }); %></ol>
           <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-watch__load" id="commentsMore"<% if (!moreComments) { %> hidden<% } %> data-i18n="rec.commentsMore"><%- t('rec.commentsMore') %></button>
-          <%# Первая порция — данными: ленту рисует один шаблон в tk-watch.js. %>
-          <script type="application/json" id="commentsData"><%- JSON.stringify(comments).replace(/</g, '\\u003c') %></script>
         </section>
         <% } %>
       </div>

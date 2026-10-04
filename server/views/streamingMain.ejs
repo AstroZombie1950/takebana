@@ -6,7 +6,9 @@
     и без эфиров страница не пустая. Фильтры (?sub=, ?city=) в canonical
     не попадают — у всех комбинаций один адрес раздела. Главная с 28.09 —
     свой шаблон, home.ejs. %>
-<%- include('partials/tkHead', { titleKey: 'page.' + category + '.title', descriptionKey: 'page.' + category + '.description', seo: { path: '/streaming/' + category } }) %>
+<%- include('partials/tkHead', { titleKey: 'page.' + category + '.title', descriptionKey: 'page.' + category + '.description', seo: { path: '/streaming/' + category,
+      jsonld: [ld.page({ type: 'CollectionPage', path: '/streaming/' + category, name: ta('page.' + category + '.title'), description: ta('page.' + category + '.description') }),
+               ld.crumbs([['Takebana', '/'], [ta(page.i18n), '/streaming/' + category]])] } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/catalog.css') %>">
 <%# Карточки записей (.tk-recard) — как в поиске, стили там же. %>

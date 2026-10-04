@@ -1,5 +1,7 @@
-// Авторы — те, кого имеет смысл советовать: кто хоть раз выходил в эфир или
-// оставил запись. Пустые аккаунты и забаненные сюда не попадают.
+// Авторы — те, кого имеет смысл советовать: кто хоть раз выходил в эфир,
+// оставил запись или выложил фото или видео (с 04.10 — одно правило «есть
+// что смотреть» с индексом профиля, docs/seo, задача 3). Пустые аккаунты
+// и забаненные сюда не попадают.
 //
 // До 15 сентября 2026 «Рекомендации» на витрине показывали четырёх случайных
 // пользователей из всей базы ($sample) — включая забаненных и тех, кто ни разу
@@ -9,6 +11,8 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Stream = require('../models/Stream');
 const Recording = require('../models/Recording');
+const GalleryPhoto = require('../models/GalleryPhoto');
+const GalleryVideo = require('../models/GalleryVideo');
 const Subscription = require('../models/Subscription');
 const userView = require('../utils/userView');
 const privacy = require('./privacy');
@@ -47,20 +51,24 @@ async function liveStreams() {
   return streams.filter((s) => s.userId && !s.userId.banned);
 }
 
-// Кто вообще автор: выходил в эфир (firstLiveAt проставляется навсегда)
-// или у него есть готовая запись. Забаненных отсеиваем здесь же, и тех,
-// кто попросил не показывать его в подборках (utils/privacy.js).
+// Кто вообще автор: выходил в эфир (firstLiveAt проставляется навсегда),
+// есть готовая запись, фото или готовое видео галереи. До 04.10 фото и видео
+// не считались, и человек с одной галереей был в индексе, но ни в одной
+// подборке — сиротой, до которого по ссылкам не дойти. Забаненных отсеиваем
+// здесь же, и тех, кто попросил не показывать его в подборках (utils/privacy.js).
 // «Сейчас в эфире» он всё равно виден: эфир он открыл сам.
 async function authorIds() {
-  const [everLive, withRecordings] = await Promise.all([
+  const [everLive, withRecordings, withPhotos, withVideos] = await Promise.all([
     Stream.distinct('userId', { firstLiveAt: { $ne: null } }),
     Recording.distinct('userId', { status: 'ready' }),
+    GalleryPhoto.distinct('userId'),
+    GalleryVideo.distinct('userId', { status: 'ready' }),
   ]);
-  const all = [...new Set([...everLive, ...withRecordings].map(id))].map((x) => new mongoose.Types.ObjectId(x));
+  const all = [...new Set([...everLive, ...withRecordings, ...withPhotos, ...withVideos].map(id))].map((x) => new mongoose.Types.ObjectId(x));
   if (!all.length) return [];
-  const banned = await User.find({ _id: { $in: all }, $or: [{ banned: true }, { 'privacy.searchable': false }] }).select('_id').lean();
-  const stop = new Set(banned.map((u) => id(u._id)));
-  return all.filter((x) => !stop.has(id(x)));
+  // Только живые аккаунты: фото удалённого человека может пережить его
+  // запись в базе, и «Все авторы» насчитывали людей, которых не показать.
+  return User.distinct('_id', { _id: { $in: all }, banned: { $ne: true }, 'privacy.searchable': { $ne: false } });
 }
 
 // Подписчики скопом: по запросу на человека это был бы десяток запросов
@@ -175,4 +183,54 @@ async function featured(limit = 3, viewer = null) {
   return privacy.maskPresence(viewer, picked);
 }
 
-module.exports = { groups, featured };
+// Все авторы списком — /authors/all (04.10, docs/seo, задача 36): любой
+// автор в трёх кликах от главной. show — кого показать: SHOWS или все;
+// sort — порядок: SORTS или новые (по времени регистрации, оно в _id).
+// Список считается целиком и режется в памяти: авторов сотни, не миллионы;
+// станет тесно — переводить на агрегацию.
+const ALL_PAGE = 24;
+const SHOWS = ['live', 'recordings', 'media'];
+const SORTS = ['popular', 'name'];
+
+async function all({ show = '', sort = '', page = 1, viewer = null } = {}) {
+  const [streams, ids] = await Promise.all([liveStreams(), authorIds()]);
+  const liveBy = new Map(streams.map((s) => [id(s.userId._id), s]));
+  const [followers, recs, photos, videos] = await Promise.all([
+    followersOf(ids),
+    Recording.aggregate([{ $match: { userId: { $in: ids }, status: 'ready' } }, { $group: { _id: '$userId', count: { $sum: 1 } } }]),
+    show === 'media' ? GalleryPhoto.distinct('userId', { userId: { $in: ids } }) : [],
+    show === 'media' ? GalleryVideo.distinct('userId', { userId: { $in: ids }, status: 'ready' }) : [],
+  ]);
+  const recCount = new Map(recs.map((r) => [id(r._id), r.count]));
+  const media = new Set([...photos, ...videos].map(id));
+
+  let pool = ids;
+  if (show === 'live') pool = pool.filter((x) => liveBy.has(id(x)));
+  else if (show === 'recordings') pool = pool.filter((x) => recCount.has(id(x)));
+  else if (show === 'media') pool = pool.filter((x) => media.has(id(x)));
+
+  const users = await User.find({ _id: { $in: pool } }).select('nickname login email avatar isOnline role').lean();
+  let people = users.map((u) => view(u, {
+    followersCount: followers.get(id(u._id)) || 0,
+    recordings: recCount.get(id(u._id)) || 0,
+    ...(liveBy.has(id(u._id)) ? { stream: (({ _id, title, viewers }) => ({ _id, title, viewers }))(liveBy.get(id(u._id))) } : {}),
+  }));
+  const born = (p) => p._id.getTimestamp();
+  if (sort === 'popular') people.sort((a, b) => b.followersCount - a.followersCount || born(b) - born(a));
+  else if (sort === 'name') people.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  else people.sort((a, b) => born(b) - born(a));
+
+  const total = people.length;
+  const pages = Math.max(1, Math.ceil(total / ALL_PAGE));
+  const current = Math.min(Math.max(1, page), pages);
+  people = people.slice((current - 1) * ALL_PAGE, current * ALL_PAGE);
+  await privacy.maskPresence(viewer, people);
+  return { people, total, page: current, pages };
+}
+
+// Сколько всего авторов — карте сайта, чтобы перечислить страницы /authors/all.
+async function allCount() {
+  return (await authorIds()).length;
+}
+
+module.exports = { groups, featured, all, allCount, ALL_PAGE, SHOWS, SORTS };

@@ -101,7 +101,25 @@
     }
 
     // ── Воспроизведение ──
+    // Запись и видео — по нажатию (04.10, docs/seo, задача 42): до него
+    // только обложка, ни hls.js, ни сегментов. Прежде запись запускалась
+    // сама при открытии и тянула на телефоне ~11 МБ, даже если человек
+    // пришёл прочитать описание. Эфир по-прежнему стартует сам.
+    var pending = '';
+    function begin() {
+      var src = pending;
+      pending = '';
+      spinner.hidden = false;
+      // play() — прямо в обработчике нажатия: источник придёт позже
+      // (hls.js, плейлист), а Safari пускает звук, только если запуск
+      // начался с жеста. Обещание дождётся источника само.
+      var p = video.play();
+      if (p && p.catch) p.catch(function () {});
+      useSource(src, start);
+    }
+
     function playPause() {
+      if (pending) return begin();
       if (video.paused || video.ended) {
         var p = video.play();
         if (p && p.catch) p.catch(function () {});
@@ -479,6 +497,7 @@
     var lastTap = 0, tapTimer = null;
     video.addEventListener('click', function (e) {
       if (root.classList.contains('is-error')) return;
+      if (pending) return begin();
       if (!coarse) {
         clearTimeout(tapTimer);
         if (Date.now() - lastTap < 300) { lastTap = 0; toggleFullscreen(); return; }
@@ -559,8 +578,8 @@
     video.addEventListener('ratechange', function () { if (!live) speed = video.playbackRate; });
 
     // ── Старт ──
-    // Запись пробуем запустить сразу со звуком; браузер не дал — без звука
-    // и с кнопкой «Включить звук». Эфир стартует без звука всегда (TKHls).
+    // Запись — по нажатию (begin), со звуком; браузер не дал — без звука
+    // и с кнопкой «Включить звук». Эфир стартует сам и без звука всегда (TKHls).
     video.volume = load('volume', 1);
     video.muted = live || load('muted', false);
     syncPlay();
@@ -588,12 +607,14 @@
     }
 
     function loadSource(src, poster) {
+      pending = '';
       stop();
       if (poster) video.poster = poster; else video.removeAttribute('poster');
       useSource(src, start);
     }
 
-    if (root.dataset.src) useSource(root.dataset.src, start);
+    if (root.dataset.src && live) useSource(root.dataset.src, start);
+    else if (root.dataset.src) pending = root.dataset.src;
     if (live) {
       video.addEventListener('playing', function once() {
         video.removeEventListener('playing', once);

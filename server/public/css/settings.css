@@ -101,7 +101,7 @@
   left: 16px;
   top: 50%;
   transform: translateY(-50%);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 16px;
   color: var(--tk-muted);
   pointer-events: none;
@@ -169,7 +169,7 @@
 /* ── Почта ── */
 .tk-set__email {
   margin: 0 0 6px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 16px;
   color: var(--tk-paper);
   overflow-wrap: anywhere;
@@ -207,7 +207,7 @@
 
 .tk-set__how summary {
   display: inline-block;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .04em;
   color: var(--tk-beige);
@@ -229,7 +229,7 @@
   grid-template-columns: auto 1fr;
   gap: 8px 16px;
   margin: 0;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 14px;
 }
 
@@ -301,7 +301,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   color: var(--tk-paper);
 }
@@ -373,7 +373,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 14px;
   letter-spacing: .03em;
   color: var(--tk-beige);

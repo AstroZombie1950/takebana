@@ -35,7 +35,7 @@ body.tk-panel {
 }
 
 .tk-panel__brand {
-  font-family: Oswald, Impact, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', Impact, sans-serif;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: .02em;
@@ -249,7 +249,7 @@ body.tk-panel {
 
 .tk-tile__value {
   margin: 6px 0 0;
-  font-family: Oswald, Impact, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', Impact, sans-serif;
   font-size: 30px;
   line-height: 1;
   font-weight: 700;

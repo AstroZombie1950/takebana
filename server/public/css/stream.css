@@ -70,7 +70,7 @@
 .tk-live__hint svg { color: var(--tk-muted); }
 
 .tk-live__hint-title {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .16em;
   text-transform: uppercase;
@@ -126,7 +126,7 @@
   padding: 5px 9px;
   background: rgba(10, 10, 10, .72);
   border: 1px solid var(--tk-rule);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 11px;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -353,7 +353,7 @@
   display: inline-block;
   max-width: 100%;
   vertical-align: top;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 16px;
   font-weight: 500;
   color: var(--tk-paper);
@@ -419,7 +419,7 @@
   margin: 0;
   padding: 14px 16px;
   border-bottom: 1px solid var(--tk-rule);
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   font-weight: 500;
   letter-spacing: .16em;
@@ -495,7 +495,7 @@
   width: auto;
   min-width: 150px;
   padding: 7px 34px 7px 12px;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   color: var(--tk-paper);
   background-position: right 10px center;
@@ -568,7 +568,7 @@
   justify-content: center;
   overflow: hidden;
   border-radius: 50%;
-  font: 600 16px/1 Oswald, sans-serif;
+  font: 600 16px/1 Oswald, 'Oswald Fallback', sans-serif;
   color: var(--tk-paper);
   background: rgba(144, 113, 99, .25);
 }
@@ -580,7 +580,7 @@
 
 .tk-studio__venue-off {
   flex: none;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -643,7 +643,7 @@
   border: 1px solid var(--tk-rule);
   text-align: center;
   cursor: pointer;
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   font-weight: 500;
   letter-spacing: .14em;
@@ -751,7 +751,7 @@ html.tk-stage-open { overflow: hidden; }
 .tk-vl__facts > div { display: contents; }
 
 .tk-vl__facts dt {
-  font-family: Oswald, sans-serif;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   line-height: 20px;
   letter-spacing: .14em;

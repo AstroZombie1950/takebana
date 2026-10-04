@@ -17,6 +17,7 @@ const userView = require('./userView');
 const privacy = require('./privacy');
 const { view } = require('./messageView');
 const { isPlainFileName, resolveWithin } = require('./safePath');
+const avatarSmall = require('./avatarSmall');
 
 const MAX_MEMBERS = 100;
 const TITLE_MAX = 64;
@@ -31,6 +32,7 @@ function removePhoto(url) {
   const name = url.slice(prefix.length);
   const file = isPlainFileName(name) && resolveWithin(PHOTOS, name);
   if (file) fs.unlink(file, () => {});
+  avatarSmall.remove(url);
 }
 
 const oid = (id) => new mongoose.Types.ObjectId(String(id));

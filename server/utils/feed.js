@@ -10,9 +10,14 @@
 // Не показываем: 18+ (подтверждение возраста — на странице записи, в ленте
 // его спросить негде), авторов под ограничением модерации и тех, кто закрыл
 // свой канал от смотрящего (utils/restrict.js).
+//
+// С 04.10 та же лента — и раздел «Лента» (/feed): фото и видео, которые
+// выкладывают люди, без записей эфиров (они — в «Популярном»). Какие виды
+// брать — kinds.
 
 const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
+const GalleryPhoto = require('../models/GalleryPhoto');
 const User = require('../models/User');
 const userView = require('./userView');
 const { VENUE_AUTHOR, venueAuthor } = require('./venueAuthor');
@@ -21,14 +26,17 @@ const { profileUrl } = require('./profileUrl');
 const PAGE = 24;
 const AUTHOR = 'nickname login email avatar';
 
+// where — что из коллекции показывать вообще: у фото нет статуса обработки.
 const SOURCES = [
-  { kind: 'recording', Model: Recording, href: '/recording/', extra: { isAdult: { $ne: true } }, fields: 'title duration thumb views createdAt recordedAt userId venue' },
-  { kind: 'video', Model: GalleryVideo, href: '/video/', extra: {}, fields: 'title duration thumb views createdAt userId venue' },
+  { kind: 'recording', Model: Recording, href: '/recording/', where: { status: 'ready', isAdult: { $ne: true } }, fields: 'title description duration thumb views likes comments createdAt recordedAt userId venue' },
+  { kind: 'video', Model: GalleryVideo, href: '/video/', where: { status: 'ready' }, fields: 'title description duration thumb views likes comments createdAt userId venue' },
+  { kind: 'photo', Model: GalleryPhoto, href: '/photo/', where: {}, fields: 'url caption likes comments createdAt userId' },
 ];
+const HOME = ['recording', 'video'];
 
 // before — дата последней показанной карточки (курсор из прошлой страницы).
 // Ответ: карточки и курсор следующей страницы (null — дальше пусто).
-async function page({ before = null, viewer = null, limit = PAGE } = {}) {
+async function page({ before = null, viewer = null, limit = PAGE, kinds = HOME } = {}) {
   const [banned, hiders] = await Promise.all([
     User.distinct('_id', { banned: true }),
     viewer ? User.distinct('_id', { restricted: viewer }) : [],
@@ -36,13 +44,13 @@ async function page({ before = null, viewer = null, limit = PAGE } = {}) {
   const skip = banned.concat(hiders);
   const at = before ? { createdAt: { $lt: before } } : {};
 
-  const lists = await Promise.all(SOURCES.map(({ kind, Model, href, extra, fields }) =>
-    Model.find({ status: 'ready', ...extra, ...at, ...(skip.length ? { userId: { $nin: skip } } : {}) })
+  const lists = await Promise.all(SOURCES.filter((src) => kinds.includes(src.kind)).map(({ kind, Model, href, where, fields }) =>
+    Model.find({ ...where, ...at, ...(skip.length ? { userId: { $nin: skip } } : {}) })
       .sort({ createdAt: -1 })
       .limit(limit + 1)
       .select(fields)
       .populate('userId', AUTHOR)
-      .populate('venue', VENUE_AUTHOR)
+      .populate(kind === 'photo' ? [] : { path: 'venue', select: VENUE_AUTHOR })
       .lean()
       .then((rows) => rows.map((r) => ({ ...r, kind, href: href + r._id })))));
 
@@ -65,9 +73,13 @@ function card(r) {
     kind: r.kind,
     href: r.href,
     title: r.title || '',
-    thumb: (r.thumb && r.thumb.url) || null,
+    // Фото — сам снимок, у роликов — обложка.
+    thumb: r.kind === 'photo' ? r.url : (r.thumb && r.thumb.url) || null,
+    text: (r.kind === 'photo' ? r.caption : r.description) || '',
     duration: r.duration || 0,
     views: r.views || 0,
+    likes: r.likes || 0,
+    comments: r.comments || 0,
     // У записи — когда шёл эфир; курсор при этом — createdAt.
     at: r.recordedAt || r.createdAt,
     author: venueAuthor(r.venue) || { displayName, url: profileUrl(user), avatarStyle: userView.avatarStyle(user, displayName) },
@@ -81,4 +93,4 @@ function cursor(raw) {
   return isNaN(d) ? null : d;
 }
 
-module.exports = { page, cursor };
+module.exports = { page, cursor, PAGE };

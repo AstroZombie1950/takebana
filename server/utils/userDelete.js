@@ -45,6 +45,7 @@ const errorLog = require('./errorLog');
 const { forget } = require('./audit');
 const { resolveWithin, isPlainFileName } = require('./safePath');
 const { stopCamera } = require('../routes/venueLive');
+const avatarSmall = require('./avatarSmall');
 
 const UPLOADS = path.join(__dirname, '..', 'public', 'uploads');
 
@@ -56,9 +57,12 @@ function unlinkFile(folder, name) {
 
 // Адрес вида /uploads/<папка>/<имя>. Чужой не трогаем: у входа через Google
 // в аватаре лежит внешний адрес.
+// У аватара и логотипа — ещё маленькая копия (utils/avatarSmall.js).
 function unlinkUpload(url, folder) {
   const prefix = `/uploads/${folder}/`;
-  if (typeof url === 'string' && url.startsWith(prefix)) unlinkFile(folder, url.slice(prefix.length));
+  if (typeof url !== 'string' || !url.startsWith(prefix)) return;
+  unlinkFile(folder, url.slice(prefix.length));
+  if (folder === 'avatars') avatarSmall.remove(url);
 }
 
 const dropRoom = (name, why) => name && daily.deleteRoom(name).catch((err) => errorLog.external(err, 'daily.deleteRoom', { roomName: name, by: why }));

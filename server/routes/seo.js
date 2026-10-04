@@ -32,12 +32,19 @@ const { text, langOf } = require('../utils/i18n');
 const { CATEGORIES } = require('../config/catalog');
 const userView = require('../utils/userView');
 const { profileUrl } = require('../utils/profileUrl');
+const indexNow = require('../utils/indexNow');
 
 // Закрываем обход служебного: кабинета, входа, API, медиапотоков. Стили,
 // скрипты, шрифты и картинки (/min/, /css/, /fonts/, /img/, /uploads/,
 // /vendor/) открыты: без них Google не отрисует страницу, без картинок
 // не будет поиска по ним. Clean-param — в общей группе: отдельную группу
 // для Яндекса он прочитал бы вместо общей и остался бы без Disallow.
+//
+// Роботы нейросетей (решение Ивана 04.10, docs/seo DECISIONS): поисковые,
+// которые приводят людей ссылками из ответов, — пускаем как всех; те, что
+// берут тексты только для обучения моделей, — своей группой с Disallow: /.
+// Своя группа заменяет для робота общую целиком, поэтому служебное ему
+// перечислять не нужно. Google-Extended на поиск Google не влияет.
 //
 // /search и подписчики закрыты noindex, но не здесь: Disallow не выкидывает
 // из индекса то, что туда уже попало, — робот просто перестанет заходить
@@ -61,6 +68,8 @@ Disallow: /calls
 Disallow: /company-register
 Disallow: /venue/*/edit
 Disallow: /venues/cards
+Disallow: /home/next
+Disallow: /feed/next
 Disallow: /venues/mine
 Disallow: /venue/*/settings
 Disallow: /check
@@ -75,11 +84,32 @@ Disallow: /mtx/
 Disallow: /m/
 Clean-param: utm_source&utm_medium&utm_campaign&utm_content&utm_term&yclid&gclid&fbclid
 
+# Роботы, которые собирают тексты для обучения нейросетей, — нет.
+# Поисковые роботы нейросетей (OAI-SearchBot, ChatGPT-User, PerplexityBot,
+# Claude-SearchBot, YandexAdditional) — в общей группе выше.
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: anthropic-ai
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: CCBot
+User-agent: Meta-ExternalAgent
+User-agent: Bytespider
+User-agent: cohere-training-data-crawler
+User-agent: Diffbot
+User-agent: Omgilibot
+Disallow: /
+
 Sitemap: ${siteUrl('/sitemap.xml')}
 `;
 
 router.get('/robots.txt', (req, res) => {
   res.set('Cache-Control', 'public, max-age=3600').type('text/plain').send(ROBOTS);
+});
+
+// Ключ IndexNow (utils/indexNow.js): поисковик сверяет его с присланным.
+router.get('/' + indexNow.KEY + '.txt', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=86400').type('text/plain').send(indexNow.KEY);
 });
 
 const TTL = 60 * 60 * 1000;
@@ -118,14 +148,15 @@ function videoEntry(path, v, kind, name, date) {
 }
 
 async function collect() {
-  const [recordings, videos, photos, live, groups, venues, menus] = await Promise.all([
-    Recording.find({ status: 'ready' }).select('userId venue title description isAdult thumb video hls.url duration recordedAt createdAt').lean(),
+  const [recordings, videos, photos, live, groups, venues, menus, authorTotal] = await Promise.all([
+    Recording.find({ status: 'ready' }).select('userId venue category title description isAdult thumb video hls.url duration recordedAt createdAt').lean(),
     GalleryVideo.find({ status: 'ready' }).sort({ createdAt: -1 }).select('userId venue title description thumb video duration createdAt').lean(),
     GalleryPhoto.find({}).sort({ createdAt: -1 }).select('userId url createdAt').lean(),
     Stream.distinct('userId', { isActive: true }),
     authors.groups(),
-    Establishments.find({ status: true }).select('_id status features about').lean(),
+    Establishments.find({ status: true }).select('_id status features about cover photos reviewedAt').lean(),
     MenuItem.distinct('venue'),
+    authors.allCount(),
   ]);
 
   const withContent = new Set([...recordings, ...videos, ...photos].map((x) => String(x.userId)).concat(live.map(String)));
@@ -142,16 +173,30 @@ async function collect() {
   const videosOf = byUser(videos);
   const photosOf = byUser(photos);
 
-  const pages = [{ loc: '/' }, ...Object.keys(CATEGORIES).map((c) => ({ loc: '/streaming/' + c })), { loc: '/about' }];
-  if (Object.values(groups).some((g) => g.length)) pages.push({ loc: '/authors' });
+  // lastmod страниц-подборок (04.10, docs/seo, задача 38) — когда в них
+  // появилось новое: последняя запись, фото или видео (раздела — его запись).
+  // «О нас» — без даты: она меняется с выкладкой, а не с содержимым.
+  const shown = recordings.filter((r) => !r.isAdult);
+  const latest = newest([...shown, ...videos, ...photos].map((x) => x.createdAt));
+  const latestMedia = newest([...videos, ...photos].map((x) => x.createdAt));
+  const pages = [{ loc: '/', lastmod: latest },
+    ...Object.keys(CATEGORIES).map((c) => ({ loc: '/streaming/' + c, lastmod: newest(shown.filter((r) => r.category === c).map((r) => r.createdAt)) })),
+    { loc: '/about' }];
+  // «Лента» (04.10) — если есть хоть одно фото или видео: иначе она noindex.
+  if (photos.length || videos.length) pages.push({ loc: '/feed', lastmod: latestMedia });
+  if (Object.values(groups).some((g) => g.length)) pages.push({ loc: '/authors', lastmod: latest });
+  // Все авторы (04.10) — каждая страница листалки, без фильтров: они noindex.
+  const authorPages = Math.ceil(authorTotal / authors.ALL_PAGE);
+  for (let n = 1; n <= authorPages; n++) pages.push({ loc: '/authors/all' + (n > 1 ? `?page=${n}` : ''), lastmod: latest });
   // Раздел — если одобрено хоть одно заведение: тогда он в индексе
   // (views/venues.ejs). Страница заведения — одобренного и с описанием:
   // у остальных noindex (views/venue.ejs, docs/VENUES.md п. 5). До 04.10
   // раздел шёл в карту только при заведении с описанием и выпадал из неё,
   // оставаясь в индексе.
   const described = venues.filter(indexableVenue);
-  if (venues.length) pages.push({ loc: '/venues' });
-  pages.push(...described.map((v) => ({ loc: `/venue/${v._id}` })));
+  if (venues.length) pages.push({ loc: '/venues', lastmod: newest(venues.map((v) => v.reviewedAt)) });
+  // Со снимками заведения — обложкой камеры и фото (задача 31, 04.10).
+  pages.push(...described.map((v) => ({ loc: `/venue/${v._id}`, lastmod: v.reviewedAt || null, images: [v.cover, ...(v.photos || [])].filter(Boolean) })));
   // Вкладки «Эфиры», «Видео» и включённое «Меню» заведения (29.09) — у тех
   // же, если есть что показать.
   const venueHas = (list) => new Set(list.filter((x) => x.venue).map((x) => String(x.venue)));

@@ -52,7 +52,7 @@
           заменяют снимок и подпись под ним, как в Инстаграме. %>
       <h1 class="tk-vh"><%= headTitle %></h1>
       <div class="tk-watch__stage tk-photo__stage" id="photoStage">
-        <img class="tk-photo__img" src="<%= rec.url %>" alt="<%= alt %>" decoding="async">
+        <img class="tk-photo__img" src="<%= rec.url %>" alt="<%= alt %>"<% if (rec.width && rec.height) { %> width="<%= rec.width %>" height="<%= rec.height %>"<% } %> <%- imgLoad() %> decoding="async">
         <% if (around.prev) { %>
         <a class="tk-photo__nav tk-photo__nav--prev" href="<%= around.prev %>" aria-label="<%= ta('user.photoPrev') %>" data-i18n-aria="user.photoPrev">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
@@ -69,12 +69,14 @@
       <div class="tk-watch__main tk-photo__main">
         <div class="tk-watch__bar tk-photo__head">
           <div class="tk-live__author tk-watch__author">
-            <a href="<%= author.url %>" class="tk-live__avatar"<% if (!author.avatarStyle.url) { %> data-bg="<%= author.avatarStyle.gradient %>"<% } %>>
+            <%# Аватар — та же ссылка, что имя рядом: для чтения с экрана и клавиш —
+                одна, с именем (docs/seo, задача 38). %>
+            <a href="<%= author.url %>" class="tk-live__avatar" tabindex="-1" aria-hidden="true"<% if (!author.avatarStyle.url) { %> data-bg="<%= author.avatarStyle.gradient %>"<% } %>>
               <% if (author.avatarStyle.url) { %><img src="<%= author.avatarStyle.url %>" alt=""><% } else { %><%= author.avatarStyle.initial %><% } %>
             </a>
             <div class="tk-live__author-body">
               <a href="<%= author.url %>" class="tk-live__author-name"><%= author.displayName %><% if (author.official) { %><%- include('partials/official') %><% } %></a>
-              <a href="<%= author.url %>/photos" class="tk-photo__all" data-i18n="gallery.photos"><%- t('gallery.photos') %></a>
+              <a href="<%= author.url %>/photos" class="tk-watch__all" data-i18n="gallery.photos"><%- t('gallery.photos') %></a>
             </div>
           </div>
         </div>
@@ -148,10 +150,8 @@
           <% } %>
 
           <p class="tk-note" id="commentsEmpty"<% if (comments.length || commentsClosed) { %> hidden<% } %><% if (commentsClosed) { %> data-closed="1"<% } %> data-i18n="rec.commentsEmpty"><%- t('rec.commentsEmpty') %></p>
-          <ol class="tk-watch__list" id="commentList"></ol>
+          <ol class="tk-watch__list" id="commentList"><% comments.forEach(function (c) { %><%- include('partials/comment', { c: c }) %><% }); %></ol>
           <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-watch__load" id="commentsMore"<% if (!moreComments) { %> hidden<% } %> data-i18n="rec.commentsMore"><%- t('rec.commentsMore') %></button>
-          <%# Первая порция — данными: ленту рисует один шаблон в tk-watch.js. %>
-          <script type="application/json" id="commentsData"><%- JSON.stringify(comments).replace(/</g, '\\u003c') %></script>
         </section>
       </div>
     </div>

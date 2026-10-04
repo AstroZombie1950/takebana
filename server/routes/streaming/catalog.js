@@ -13,8 +13,9 @@ const Subscription = require('../../models/Subscription');
 const Contact = require('../../models/Contact');
 const Conversation = require('../../models/Conversation');
 const { SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
-const { commonDataMiddleware } = require('./shared');
+const { commonDataMiddleware, byNick } = require('./shared');
 const { notFound } = require('../../middleware/errors');
+const { fragmentOnly } = require('../../middleware/fragment');
 const authors = require('../../utils/authors');
 const userView = require('../../utils/userView');
 const { VENUE_AUTHOR, venueAuthor } = require('../../utils/venueAuthor');
@@ -22,7 +23,6 @@ const restriction = require('../../utils/restrict');
 const privacy = require('../../utils/privacy');
 const gallery = require('../../utils/gallery');
 const search = require('../../utils/search');
-const nickname = require('../../utils/nickname');
 const { profileUrl } = require('../../utils/profileUrl');
 const profileLinks = require('../../utils/profileLinks');
 const ogImage = require('../../utils/ogImage');
@@ -158,12 +158,36 @@ router.get('/', commonDataMiddleware, async (req, res) => {
   });
 });
 
-// Следующая страница ленты для catalog.js: карточки без обвязки, курсор
-// дальше — в заголовке (пустой — лента кончилась).
-router.get('/feed', async (req, res) => {
+// Следующая страница ленты главной для catalog.js: карточки без обвязки,
+// курсор дальше — в заголовке (пустой — лента кончилась). До 04.10 жила
+// на /feed — адрес отдан разделу «Лента».
+router.get('/home/next', fragmentOnly(() => '/'), async (req, res) => {
   const page = await feed.page({ before: feed.cursor(req.query.before), viewer: req.session.userId });
   res.set('X-Feed-Next', page.next || '');
   res.render('partials/feedPage', { items: page.items });
+});
+
+// Раздел «Лента» (04.10, решение Ивана): фото и видео, которые выкладывают
+// люди, одной колонкой, новые сверху — как в Инстаграме. Записи эфиров —
+// в «Популярном». ?kind=photo|video — только фото или только видео,
+// ?before= — дальше по ленте (так листает «Показать ещё» без скрипта).
+// В индексе — первая страница без фильтра; остальное — noindex, follow:
+// сами фото и видео в индексе своими страницами и в карте сайта.
+const POST_KINDS = { photo: ['photo'], video: ['video'] };
+const postKinds = (q) => (POST_KINDS[q] ? q : '');
+router.get('/feed', commonDataMiddleware, async (req, res) => {
+  const kind = postKinds(req.query.kind);
+  const before = feed.cursor(req.query.before);
+  const page = await feed.page({ before, viewer: req.session.userId, kinds: POST_KINDS[kind] || ['photo', 'video'] });
+  res.render('feed', { kind, before: !!before, items: page.items, next: page.next });
+});
+
+// Следующая страница «Ленты» для catalog.js — как /home/next.
+router.get('/feed/next', fragmentOnly(() => '/feed'), async (req, res) => {
+  const kind = postKinds(req.query.kind);
+  const page = await feed.page({ before: feed.cursor(req.query.before), viewer: req.session.userId, kinds: POST_KINDS[kind] || ['photo', 'video'] });
+  res.set('X-Feed-Next', page.next || '');
+  res.render('partials/postPage', { items: page.items });
 });
 
 // Прежние адреса «Популярного» — на главную, с фильтрами: ими делились ссылками.
@@ -183,7 +207,7 @@ router.get('/streaming/:category', commonDataMiddleware, (req, res) => {
 // Одна сетка, без страницы: её подгружает catalog.js при смене фильтра.
 // Без commonDataMiddleware — шапка, подписки и уведомления здесь не рисуются,
 // а это пять запросов к базе на каждое нажатие тега.
-router.get('/streaming/:category/grid', async (req, res) => {
+router.get('/streaming/:category/grid', fragmentOnly((req) => baseUrl(req.params.category)), async (req, res) => {
   const category = req.params.category;
   if (!PAGES[category]) {
     return res.sendStatus(404);
@@ -202,32 +226,19 @@ router.get('/streaming/:category/grid', async (req, res) => {
 });
 
 
-// Профиль живёт по адресу /@ник (utils/profileUrl.js). Прежний адрес
-// /userPage/<id> и прежний ник уводят сюда 301 — ссылки, разошедшиеся
-// до смены, продолжают работать.
+// Профиль живёт по адресу /@ник (utils/profileUrl.js, byNick — в shared.js).
+// Прежний адрес /userPage/<id> и прежний ник уводят сюда 301 — ссылки,
+// разошедшиеся до смены, продолжают работать.
 //
-// Человек по нику: нынешний — он; прежний — 301 на тот же вид страницы
-// (профиль или галерея, с ?page=) по нынешнему нику; иначе «не найдено».
-// canonicalPath уже привёл ник к нижнему регистру.
-async function byNick(req, res, select) {
-  const nick = req.params.nick;
-  if (!nickname.RULE.test(nick)) { notFound(req, res); return null; }
-  const user = await User.findOne({ nickname: nick }).select(select);
-  if (user) return user;
-  const now = await User.findOne({ formerNicknames: nick }).sort({ nicknameChangedAt: -1 }).select('nickname').lean();
-  if (now && now.nickname) res.redirect(301, req.originalUrl.replace('/@' + nick, '/@' + now.nickname));
-  else notFound(req, res);
-  return null;
-}
-
-// Старые адреса профиля и галереи. /gallery — общая лента до 25.09.2026,
-// теперь её место заняла вкладка «Фото».
-router.get(['/userPage/:id', '/userPage/:id/:tab(gallery|photos|videos)'], commonDataMiddleware, async (req, res) => {
+// Старые адреса профиля, галереи и подписчиков. /gallery — общая лента
+// до 25.09.2026, теперь её место заняла вкладка «Фото». Подписчики
+// и подписки — на /@ник с 04.10 (docs/seo, задача 26).
+router.get(['/userPage/:id', '/userPage/:id/:tab(gallery|photos|videos|followers|following)'], commonDataMiddleware, async (req, res) => {
   const user = /^[a-f\d]{24}$/i.test(req.params.id) ? await User.findById(req.params.id).select('nickname').lean() : null;
   // Без ника — «не найдено», а не 301 на самого себя.
   if (!user || !user.nickname) return notFound(req, res);
   const qs = req.originalUrl.indexOf('?');
-  const tab = req.params.tab === 'videos' ? '/videos' : req.params.tab ? '/photos' : '';
+  const tab = !req.params.tab ? '' : req.params.tab === 'gallery' ? '/photos' : '/' + req.params.tab;
   res.redirect(301, profileUrl(user) + tab + (qs === -1 ? '' : req.originalUrl.slice(qs)));
 });
 
@@ -327,6 +338,9 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
       avatarStyle,
       _id: user._id,
       url: profileUrl(user),
+      nickname: user.nickname || '',
+      // Когда заведён аккаунт — по id: отдельного поля даты у User нет.
+      createdAt: user._id.getTimestamp(),
       bio: user.bio || '',
       // Значки ссылок (utils/profileLinks.js). Сайт без nofollow — только
       // у тех, кому это включил администратор (User.linksFollow).

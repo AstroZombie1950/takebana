@@ -7,17 +7,19 @@
 %>
 <%
   var blocks = [
-    { key: 'live',     items: groups.live,     i18n: 'authors.live',     note: 'authors.liveNote' },
-    { key: 'popular',  items: groups.popular,  i18n: 'authors.popular',  note: 'authors.popularNote' },
-    { key: 'fresh',    items: groups.fresh,    i18n: 'authors.fresh',    note: 'authors.freshNote' },
-    { key: 'recorded', items: groups.recorded, i18n: 'authors.recorded', note: 'authors.recordedNote' }
+    { key: 'live',     items: groups.live,     i18n: 'authors.live',     note: 'authors.liveNote',     all: '/authors/all?show=live' },
+    { key: 'popular',  items: groups.popular,  i18n: 'authors.popular',  note: 'authors.popularNote',  all: '/authors/all?sort=popular' },
+    { key: 'fresh',    items: groups.fresh,    i18n: 'authors.fresh',    note: 'authors.freshNote',    all: '/authors/all' },
+    { key: 'recorded', items: groups.recorded, i18n: 'authors.recorded', note: 'authors.recordedNote', all: '/authors/all?show=recordings' }
   ].filter(function (b) { return b.items.length; });
 %>
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
 <%# В индексе, когда есть хоть одна группа; пустая — нет. %>
-<%- include('partials/tkHead', { titleKey: 'page.authors.title', descriptionKey: 'page.authors.description', seo: { path: '/authors', robots: blocks.length ? '' : 'noindex, follow' } }) %>
+<%- include('partials/tkHead', { titleKey: 'page.authors.title', descriptionKey: 'page.authors.description', seo: { path: '/authors', robots: blocks.length ? '' : 'noindex, follow',
+      jsonld: [ld.page({ type: 'CollectionPage', path: '/authors', name: ta('page.authors.title'), description: ta('page.authors.description') }),
+               ld.crumbs([['Takebana', '/'], [ta('authors.h1'), '/authors']])] } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/catalog.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/search.css') %>">
@@ -35,6 +37,9 @@
       <p class="tk-kicker" data-i18n="authors.kicker"><%- t('authors.kicker') %></p>
       <h1 class="tk-search__h1" data-i18n="authors.h1"><%- t('authors.h1') %></h1>
       <p class="tk-search__note" data-i18n="authors.lede"><%- t('authors.lede') %></p>
+      <%# Все списком, с фильтрами (04.10): группы ниже — по 12 человек,
+          остальных отсюда не найти. %>
+      <a href="/authors/all" class="tk-btn tk-btn--outline tk-btn--sm tk-authors__all" data-i18n="authors.all"><%- t('authors.all') %></a>
 
       <% if (!blocks.length) { %>
       <%# Никто ещё не выходил в эфир: советовать некого, зато можно позвать. %>
@@ -51,6 +56,7 @@
         <div class="tk-search__head">
           <h2 class="tk-search__h2" data-i18n="<%= block.i18n %>"><%- t(block.i18n) %></h2>
           <span class="tk-note" data-i18n="<%= block.note %>"><%- t(block.note) %></span>
+          <a href="<%= block.all %>" class="tk-authors__more" data-i18n="authors.allShort"><%- t('authors.allShort') %></a>
         </div>
 
         <div class="tk-people">

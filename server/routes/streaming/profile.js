@@ -18,6 +18,7 @@ const Establishments = require('../../models/Establishments');
 const { stateOf } = require('../../utils/venueOwner');
 const { saveImage, BadImageError } = require('../../utils/image');
 const galleryPhotos = require('../../utils/galleryPhotos');
+const indexNow = require('../../utils/indexNow');
 const { commonDataMiddleware } = require('./shared');
 const bcrypt = require('bcrypt');
 const { PASSWORD_PROVIDER, PASSWORD_MAX } = require('../../utils/password');
@@ -32,6 +33,7 @@ const nickname = require('../../utils/nickname');
 const { mailConfigured } = require('../../utils/mail');
 const profileLinks = require('../../utils/profileLinks');
 const privacy = require('../../utils/privacy');
+const avatarSmall = require('../../utils/avatarSmall');
 
 // Страница настроек: имя и ник, фото, пароль, почта, язык, удаление. Раньше — окно поверх
 // любой страницы кабинета, и его разметка со скриптом ехали с каждой из них.
@@ -89,6 +91,7 @@ function removeAvatarFile(url) {
   const name = url.slice(prefix.length);
   const file = isPlainFileName(name) && resolveWithin(path.join(UPLOADS, 'avatars'), name);
   if (file) fs.unlink(file, () => {});
+  avatarSmall.remove(url);
 }
 
 // Ответ после смены фото: как теперь выглядит аватар везде — фото или
@@ -169,9 +172,9 @@ router.post('/profile/gallery', requireAuth, async (req, res, next) => {
   const captions = captionsOf(req.body.captions, files.length);
 
   // Сжатие, знак и выгрузка в Bunny — utils/galleryPhotos.js.
-  let urls;
+  let saved;
   try {
-    urls = await galleryPhotos.save(userId, files);
+    saved = await galleryPhotos.save(userId, files);
   } catch (e) {
     if (!(e instanceof BadImageError)) throw e;
     return res.status(400).json({ success: false, message: e.message });
@@ -180,10 +183,11 @@ router.post('/profile/gallery', requireAuth, async (req, res, next) => {
   // Время — с шагом в миллисекунду: пачка выбрана в одном порядке и в нём же
   // должна лечь в ленту (новые сверху, первое выбранное — самое новое).
   const now = Date.now();
-  const photos = await GalleryPhoto.insertMany(urls.map((url, i) => ({
-    userId, url, caption: captions[i], createdAt: new Date(now + urls.length - i),
+  const photos = await GalleryPhoto.insertMany(saved.map((x, i) => ({
+    userId, url: x.url, width: x.width, height: x.height, caption: captions[i], createdAt: new Date(now + saved.length - i),
   })));
   const total = await GalleryPhoto.countDocuments({ userId });
+  indexNow.ping(...photos.map((p) => '/photo/' + p._id));
 
   audit(req, 'profile.gallery.add', { targetType: 'user', targetId: userId, meta: { added: photos.length, total } });
   return res.json({ success: true, photos: photos.map((p) => ({ id: String(p._id), url: p.url })), total });

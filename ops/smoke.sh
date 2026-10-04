@@ -135,7 +135,7 @@ moved  "старая карта с поиском"           "/map?q=ab" "/venue
 VENUES_Q=$("${CURL[@]}" "${BASE}/venues?q=ab" 2>/dev/null || echo "")
 [[ "$VENUES_Q" == *'name="robots" content="noindex'* ]] && pass "поиск по заведениям закрыт от индекса" \
   || fail "у /venues?q= нет noindex" "views/venues.ejs — robots при filters.q"
-CARDS_HEADERS=$("${CURL[@]}" -sI "${BASE}/venues/cards?q=ab" 2>/dev/null || echo "")
+CARDS_HEADERS=$("${CURL[@]}" -sI -H "X-TK-Fragment: 1" "${BASE}/venues/cards?q=ab" 2>/dev/null || echo "")
 grep -qi '^x-robots-tag:.*noindex' <<<"$CARDS_HEADERS" && pass "карточки /venues/cards закрыты от индекса" \
   || fail "/venues/cards без X-Robots-Tag noindex"
 expect "«Мои заведения» гостю"    "302"     GET /venues/mine
@@ -153,10 +153,10 @@ expect "«Меню», кривой адрес"     "404"     GET /venue/zzz/menu
 # SEO (docs/seo/): robots, карта сайта, подтверждение Вебмастера.
 expect "robots.txt"               "200"     GET /robots.txt
 ROBOTS=$("${CURL[@]}" "${BASE}/robots.txt" 2>/dev/null || echo "")
-if [[ "$ROBOTS" == *'Disallow: /venues/cards'* && "$ROBOTS" == *'Disallow: /venues/mine'* && "$ROBOTS" == *'Disallow: /venue/*/settings'* ]]; then
+if [[ "$ROBOTS" == *'Disallow: /venues/cards'* && "$ROBOTS" == *'Disallow: /home/next'* && "$ROBOTS" == *'Disallow: /venues/mine'* && "$ROBOTS" == *'Disallow: /venue/*/settings'* ]]; then
   pass "robots.txt закрывает служебное заведений"
 else
-  fail "robots.txt без Disallow для /venues/cards, /venues/mine, /venue/*/settings" "routes/seo.js"
+  fail "robots.txt без Disallow для /venues/cards, /home/next, /venues/mine, /venue/*/settings" "routes/seo.js"
 fi
 expect "карта сайта"              "200"     GET /sitemap.xml
 expect "файл Вебмастера"          "200"     GET /yandex_80b052bf060e4036.html
@@ -165,8 +165,12 @@ expect "страница поиска"         "200"     GET "/search?q=ab"
 expect "поиск: вкладка «Видео»"   "200"     GET "/search?q=ab&tab=videos"
 # Лента главной (28.09): следующая страница и она же без скрипта (?before=).
 # Кривой курсор — первая страница, а не 500.
-expect "лента: следующая страница" "200"    GET "/feed?before=2026-01-01T00:00:00.000Z"
-expect "лента: кривой курсор"     "200"     GET "/feed?before=xyz"
+expect "лента: следующая страница" "200"    GET "/home/next?before=2026-01-01T00:00:00.000Z" -H "X-TK-Fragment: 1"
+expect "лента: кривой курсор"     "200"     GET "/home/next?before=xyz" -H "X-TK-Fragment: 1"
+# Фрагменты только для наших скриптов: открытый напрямую — на полную страницу (04.10).
+expect "лента напрямую — на главную" "302" GET "/home/next?before=xyz"
+expect "раздел «Лента»"           "200"     GET /feed
+expect "карточки напрямую — на раздел" "302" GET "/venues/cards?q=ab"
 expect "главная с курсором ленты" "200"     GET "/?before=2026-01-01T00:00:00.000Z"
 HOME_HTML=$("${CURL[@]}" "${BASE}/" 2>/dev/null || echo "")
 if [[ "$HOME_HTML" == *'id="feedTitle"'* ]]; then
@@ -338,7 +342,7 @@ expect "POST /stream-key/rotate"          "401|302" POST /stream-key/rotate -H '
 expect "POST /chat/slow-mode"             "401|302" POST /chat/slow-mode -H 'X-Requested-With: XMLHttpRequest' "${JSON[@]}" -d "{\"streamId\":\"$OID\",\"seconds\":10}"
 # Витрина, поиск людей и карта открыты гостю с 15 сентября 2026: смотреть
 # и искать можно без входа. Поиск по почте при этом убран (profile.js).
-expect "GET /streaming/:category/grid"    "200"     GET  /streaming/popular/grid
+expect "GET /streaming/:category/grid"    "200"     GET  /streaming/popular/grid -H "X-TK-Fragment: 1"
 expect "GET /api/search"                  "200"     GET  "/api/search?q=ab"
 # С 28.09 поиск ищет и видео галерей: в ответе есть их группа.
 SEARCH_JSON=$("${CURL[@]}" "${BASE}/api/search?q=ab" 2>/dev/null || echo "")

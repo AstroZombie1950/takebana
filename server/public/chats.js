@@ -429,10 +429,12 @@
     if (m.system) return sysHtml(m);
     var out = m.sender === ME;
     var f = m.forwardedFrom;
-    g = g || { first: true, last: true, name: null, author: true };
+    g = g || { first: true, last: true, name: null, author: true, tail: true };
     var head = '';
-    // В группе над первым сообщением серии — кто пишет.
-    if (group && !out && g.author) head += '<span class="tk-msg__author">' + escapeHtml(personOf(m.sender).name) + '</span>';
+    // Над первым сообщением серии собеседника — кто пишет: в группе автор,
+    // в личке — собеседник, как в Telegram (04.10: аватара у сообщений
+    // в личке больше нет — он только в шапке диалога).
+    if (!out && g.author) head += '<span class="tk-msg__author">' + escapeHtml(group ? personOf(m.sender).name : peer ? peer.name : '') + '</span>';
     if (f) {
       if (g.first) head += '<span class="tk-msg__fwd-head">' + escapeHtml(t('chats.forwarded')) + '</span>';
       if (g.first || g.name !== f.name) {
@@ -456,7 +458,10 @@
       body = att + (m.content ? '<p class="tk-msg__text">' + text + '</p>' : '');
     }
     var special = m.expired || m.limit || (m.attachments && m.attachments.length);
-    var bubble = '<div class="tk-msg__bubble' + (special ? ' has-att' : '') + (bare ? ' is-bare' : '') + (m.limit || m.expired ? ' is-sealed' : '') + '" tabindex="0" role="button" aria-haspopup="menu" aria-label="' + escapeHtml(t('chats.actions')) + '">' +
+    // Хвостик — у последнего пузыря серии, в сторону автора (chats.css).
+    // У пачки пересланного своя рамка, у картинки без подписи пузыря нет.
+    var tail = g.tail && !f && !bare;
+    var bubble = '<div class="tk-msg__bubble' + (special ? ' has-att' : '') + (bare ? ' is-bare' : '') + (m.limit || m.expired ? ' is-sealed' : '') + (tail ? ' has-tail' : '') + '" tabindex="0" role="button" aria-haspopup="menu" aria-label="' + escapeHtml(t('chats.actions')) + '">' +
       head + body + '</div>';
     var when = '<time>' + escapeHtml(tkDate(m.sentAt)) + '</time>';
     if (out) {
@@ -473,13 +478,14 @@
     var key = 'm:' + m._id;
     var cls = 'tk-msg ' + (out ? 'tk-msg--out' : 'tk-msg--in') + (isPicked(key) ? ' is-picked' : '') +
       (f ? ' tk-msg--fwd' + (g.first ? ' is-first' : '') + (g.last ? ' is-last' : '') : '');
-    // Аватар собеседника — у первого в пачке; у остальных место под него
-    // остаётся, чтобы рамка пачки шла ровным столбцом.
-    var ava = group
+    // Аватар автора — только в группе, у первого в серии; у остальных место
+    // под него остаётся, чтобы пузыри шли ровным столбцом. В личке аватара
+    // у сообщений нет: собеседник один, он в шапке — место ленте.
+    var ava = group && !out
       ? avatar('tk-msg__ava' + (g.author ? '' : ' is-blank'), personOf(m.sender), g.author ? ' data-person="' + escapeHtml(m.sender) + '"' : ' aria-hidden="true"')
-      : avatar('tk-msg__ava' + (g.first ? '' : ' is-blank'), peer, g.first ? ' data-peer' : ' aria-hidden="true"');
+      : '';
     return '<div class="' + cls + '" data-mid="' + escapeHtml(m._id) + '" data-key="' + escapeHtml(key) + '">' +
-      (out ? bubble : '<div class="tk-msg__row">' + ava + bubble + '</div>') +
+      (ava ? '<div class="tk-msg__row">' + ava + bubble + '</div>' : bubble) +
       (g.last ? '<p class="tk-msg__when">' + when + '</p>' : '') + '</div>';
   }
 
@@ -494,8 +500,10 @@
       };
       var prev = items[i - 1], next = items[i + 1];
       x.g = { first: !same(prev), last: !same(next), name: same(prev) ? prev.m.forwardedFrom.name : null,
-        // Серия в группе: подряд от одного автора, без служебной строки между.
-        author: !(prev && prev.m && !prev.m.system && prev.m.sender === x.m.sender) };
+        // Серия: подряд от одного автора, без служебной строки и звонка между.
+        // Имя — над первым в серии, хвостик — у последнего.
+        author: !(prev && prev.m && !prev.m.system && prev.m.sender === x.m.sender),
+        tail: !(next && next.m && !next.m.system && next.m.sender === x.m.sender) };
     });
   }
 
@@ -1401,7 +1409,7 @@
 
   function uploadHtml(u) {
     if (u.text != null) {
-      return '<div class="tk-msg tk-msg--out tk-msg--pending" data-ref="' + escapeHtml(u.ref) + '"><div class="tk-msg__bubble">' +
+      return '<div class="tk-msg tk-msg--out tk-msg--pending" data-ref="' + escapeHtml(u.ref) + '"><div class="tk-msg__bubble has-tail">' +
         '<p class="tk-msg__text">' + escapeHtml(u.text) + '</p><span class="tk-upload__state">' + escapeHtml(t('chats.sendingText')) + '</span></div></div>';
     }
     var state = u.state === 'failed' ? escapeHtml(u.error || t('chats.uploadFailed'))
@@ -2128,7 +2136,16 @@
     videoBox.classList.remove('hidden');
     loadPlayer().then(function () {
       if (videoBox.classList.contains('hidden')) return;
-      if (!player) player = TKPlayer.mount(videoBox.querySelector('.tk-player'));
+      if (!player) {
+        player = TKPlayer.mount(videoBox.querySelector('.tk-player'));
+        // Исчезающее видео с таймером досмотрено — сервер оставляет ему
+        // последние секунды таймера (utils/messageLimit.js, close); окно
+        // само закроется, когда они выйдут (tickSealed).
+        player.video.addEventListener('ended', function () {
+          var m = viewing && findMessage(viewing);
+          if (m && m.limit && m.limit.mode === 'timer') post('/messages/' + encodeURIComponent(viewing) + '/close', {}).catch(function () {});
+        });
+      }
       player.load(url, poster);
     }).catch(function () { videoBox.classList.add('hidden'); toast(t('player.error'), 'error'); });
   }
@@ -2619,10 +2636,15 @@
   });
 
   // Собеседник открыл моё исчезающее — «Открыто» и сколько осталось.
+  // Получателю — тоже: дослушал или закрыл исчезающее с таймером, и срок
+  // сократился до последних секунд (utils/messageLimit.js, close).
   document.addEventListener('tk:message:limit', function (e) {
     var m = messages.find(function (x) { return x._id === e.detail.id; });
     if (!m) return;
     m.limit = e.detail.limit;
+    var until = e.detail.limit && e.detail.limit.until;
+    if (until && revealed[m._id]) revealed[m._id].until = until;
+    if (until && viewing === m._id) onceTimer.setAttribute('data-until', until);
     var top = feed.scrollTop;
     render();
     feed.scrollTop = top;
@@ -3191,7 +3213,6 @@
     if (quote && !picking && !longPressed) return revealMessage(quote.getAttribute('data-goto'));
     var who = e.target.closest('[data-person]');
     if (who && !picking) return (location.href = '/userPage/' + encodeURIComponent(who.getAttribute('data-person')));
-    if (e.target.closest('[data-peer]') && !picking) return goToPeer();
     var el = itemOf(e.target);
     if (!el || !picking) return;
     if (longPressed) return;   // клик, которым кончилось удержание

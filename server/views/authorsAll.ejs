@@ -1,0 +1,84 @@
+<%#
+  Все авторы (/authors/all, 04.10.2026, docs/seo задача 36) — routes/authors.js.
+  Любой автор в трёх кликах от главной: главная → «Авторы» → «Все авторы» →
+  профиль. Фильтры — обычная GET-форма (без скрипта уходит кнопкой, со
+  скриптом — сразу при смене, tk-app.js, data-autosubmit), листалка —
+  та же, что в галерее. Карточка — partials/personCard.ejs, как в поиске.
+
+  В индексе — список без фильтров, каждая страница с canonical на себя;
+  с фильтром — noindex, follow: это те же люди в другом порядке.
+%>
+<%
+  var filtered = !!(show || sort);
+  var headKey = page > 1 ? 'page.authorsAll.titlePage' : 'page.authorsAll.title';
+  var count = plural(total, 'authors.count');
+  var shows = [['', 'authors.showAll'], ['live', 'authors.showLive'], ['recordings', 'authors.showRecordings'], ['media', 'authors.showMedia']];
+  var sorts = [['', 'authors.sortNew'], ['popular', 'authors.sortPopular'], ['name', 'authors.sortName']];
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+<%- include('partials/tkHead', { titleKey: headKey, titleVars: { n: page },
+      description: ta('page.authorsAll.description') + (page > 1 ? ' ' + ta('seo.page', { n: page }) : ''),
+      seo: { path: pageHref(page), robots: filtered || !total ? 'noindex, follow' : '',
+             jsonld: [ld.page({ type: 'CollectionPage', path: pageHref(page), name: ta(headKey, { n: page }), description: ta('page.authorsAll.description') }),
+                      ld.crumbs([['Takebana', '/'], [ta('authors.h1'), '/authors'], [ta('authors.all'), pageHref(1)]])] } }) %>
+<% if (page > 1) { %><link rel="prev" href="<%= pageHref(page - 1) %>"><% } %>
+<% if (page < pages) { %><link rel="next" href="<%= pageHref(page + 1) %>"><% } %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/catalog.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/search.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/gallery.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-search">
+
+      <a href="/authors" class="tk-page__back">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        <span data-i18n="authors.h1"><%- t('authors.h1') %></span>
+      </a>
+
+      <form class="tk-home__head tk-authors__head" action="/authors/all" method="get" data-autosubmit>
+        <div class="tk-home__title">
+          <h1 class="tk-home__h1" data-i18n="authors.all"><%- t('authors.all') %></h1>
+          <span class="tk-home__count" data-i18n="<%= count.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(total) }) %>'><%= count.text %></span>
+        </div>
+        <div class="tk-home__bar">
+          <select name="show" class="tk-field tk-select" aria-label="<%= ta('authors.showAria') %>" data-i18n-aria="authors.showAria">
+            <% shows.forEach(function (o) { %><option value="<%= o[0] %>"<%= show === o[0] ? ' selected' : '' %> data-i18n="<%= o[1] %>"><%- t(o[1]) %></option><% }); %>
+          </select>
+          <select name="sort" class="tk-field tk-select" aria-label="<%= ta('catalog.sort') %>" data-i18n-aria="catalog.sort">
+            <% sorts.forEach(function (o) { %><option value="<%= o[0] %>"<%= sort === o[0] ? ' selected' : '' %> data-i18n="<%= o[1] %>"><%- t(o[1]) %></option><% }); %>
+          </select>
+          <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="common.show"><%- t('common.show') %></button>
+          <% if (filtered) { %><a href="/authors/all" class="tk-cat__reset" data-i18n="common.resetFilters"><%- t('common.resetFilters') %></a><% } %>
+        </div>
+      </form>
+
+      <% if (!people.length) { %>
+      <div class="tk-empty">
+        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
+        <p class="tk-empty__h" data-i18n="<%= filtered ? 'authors.filteredEmpty' : 'authors.emptyTitle' %>"><%- t(filtered ? 'authors.filteredEmpty' : 'authors.emptyTitle') %></p>
+      </div>
+      <% } else { %>
+      <div class="tk-people">
+        <% people.forEach(function (person) { %>
+        <%# В эфире — карточка ведёт прямо в эфир, как на «Авторах». %>
+        <%- include('partials/personCard', { person: person, href: person.stream ? '/stream/' + person.stream._id : '' }) %>
+        <% }); %>
+      </div>
+      <% if (pages > 1) { %><%- include('partials/pager') %><% } %>
+      <% } %>
+
+    </div>
+  </main>
+</div>
+</body>
+</html>

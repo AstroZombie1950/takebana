@@ -17,6 +17,10 @@ const galleryPhotoSchema = new Schema({
   url: { type: String, required: true },
   // Подпись: при загрузке и потом со страницы фото.
   caption: { type: String, default: '' },
+  // Размер снимка — для width/height на странице фото: место под него
+  // держится до загрузки, и подпись под ним не прыгает (04.10, docs/seo, 45).
+  width: Number,
+  height: Number,
   // Только «нравится»: дизлайка у фото нет, но счётчик общий обработчик
   // оценок ведёт у всех трёх видов одинаково.
   likes: { type: Number, default: 0 },

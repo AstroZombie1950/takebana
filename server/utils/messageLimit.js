@@ -7,6 +7,13 @@
 // таймером нельзя — у него это одно скачивание). Неоткрытое стирается через
 // семь дней.
 //
+// Таймер и длинное содержимое (04.10, жалоба Ивана): голосовое или кружок
+// на минуту с «10 секунд» обрывались на середине — срок шёл от открытия,
+// файл переставал отдаваться. Теперь у звука, кружка и видео к сроку
+// прибавляется их длительность (и запас на загрузку): дослушать можно
+// всегда. Дослушал, досмотрел или закрыл — остаётся не больше N секунд
+// (close). У текста и фото — как было: N секунд с открытия.
+//
 // Пока сообщение не открыто, браузер не получает ни текста, ни адреса файла
 // (routes/streaming/messages.js, view). Открывает только получатель: сервер
 // считает раз и на время выдаёт файл через себя (pipe) — постоянного адреса
@@ -22,6 +29,8 @@ const { release } = require('./attachments');
 const { view: viewOf } = require('./messageView');
 
 const LIFETIME_MS = 7 * 24 * 3600 * 1000;
+// Запас таймера на загрузку звука и видео до первого кадра.
+const PLAY_SLACK_SEC = 15;
 const TIMERS = { t10: 10, t60: 60, t600: 600, t3600: 3600 };
 const COUNTS = { n1: 1, n2: 2, n3: 3 };
 const OPTIONS = ['', ...Object.keys(COUNTS), ...Object.keys(TIMERS)];
@@ -46,6 +55,26 @@ function parse(option, kind, now = new Date()) {
 
 const io = { current: null };
 const emit = (userId, event, data) => { if (io.current) io.current.to(`user:${userId}`).emit(event, data); };
+
+// Сколько таймер ждёт сверх своих секунд: длительность звука, кружка или
+// видео и запас на загрузку; у текста и фото — ничего.
+function playSec(att) {
+  return att && att.duration && /^(audio|voice|round|video)$/.test(att.kind) ? Math.ceil(att.duration) + PLAY_SLACK_SEC : 0;
+}
+
+// Короткий срок стирания — точно в срок, не ждать уборки раз в 20 секунд:
+// «10 секунд» иначе выходили 10–30. Длинные досчитывает уборка. Повторный
+// вызов (срок сократился) — новый таймер; лишний срабатывает впустую:
+// expire проверяет и срок, и что сообщение ещё не стёрто.
+function schedule(id, at) {
+  const ms = new Date(at).getTime() - Date.now();
+  if (ms > 2 * 60 * 1000) return;
+  setTimeout(() => {
+    Message.exists({ _id: id, expiredAt: null, 'limit.expiresAt': { $lte: new Date() } })
+      .then((due) => due && expire(id))
+      .catch((e) => errorLog.server(e, 'limit.schedule'));
+  }, Math.max(0, ms) + 50).unref();
+}
 
 // Стереть содержимое и оставить заглушку. Условие expiredAt: null делает
 // это один раз, даже если истечение пришло с двух сторон сразу.
@@ -80,9 +109,10 @@ async function open(id, me) {
       if (lim.expiresAt <= now) return null;
       return m; // таймер уже идёт — открыть снова можно, пока не вышел
     }
-    const end = new Date(now.getTime() + lim.seconds * 1000);
+    const end = new Date(now.getTime() + (lim.seconds + playSec(att)) * 1000);
     set = { 'limit.openedAt': now, 'limit.grantUntil': end, 'limit.expiresAt': end, 'limit.used': 1 };
     const r = await Message.findOneAndUpdate({ _id: id, 'limit.openedAt': null }, { $set: set }, { returnDocument: 'after' }).lean();
+    if (r) schedule(id, end);
     return r || Message.findById(id).lean();
   }
 
@@ -101,11 +131,27 @@ async function open(id, me) {
 }
 
 // Окно просмотра закрыто: если раз был последним — стираем сейчас, не дожидаясь
-// срока выдачи.
+// срока выдачи. У таймера — дослушал, досмотрел или закрыл: остаётся не больше
+// его секунд; новый срок — обоим (message:limit), отправитель видит отсчёт.
 async function close(id, me) {
-  const m = await Message.findOne({ _id: id, recipient: me, expiredAt: null }).select('limit').lean();
+  const m = await Message.findOne({ _id: id, recipient: me, expiredAt: null }).select('limit sender recipient').lean();
   if (!m || !m.limit) return;
-  if (m.limit.mode !== 'timer' && m.limit.used >= m.limit.n) await expire(id);
+  if (m.limit.mode !== 'timer') {
+    if (m.limit.used >= m.limit.n) await expire(id);
+    return;
+  }
+  if (!m.limit.openedAt) return;
+  const soon = new Date(Date.now() + m.limit.seconds * 1000);
+  const r = await Message.findOneAndUpdate(
+    { _id: id, expiredAt: null, 'limit.expiresAt': { $gt: soon } },
+    { $set: { 'limit.expiresAt': soon, 'limit.grantUntil': soon } },
+    { returnDocument: 'after' },
+  ).lean();
+  if (!r) return;
+  schedule(id, soon);
+  const limit = viewOf(r).limit;
+  emit(r.sender, 'message:limit', { id: String(id), limit });
+  emit(r.recipient, 'message:limit', { id: String(id), limit });
 }
 
 // Отдать файл открытого сообщения, пока идёт окно выдачи. С Range — видео

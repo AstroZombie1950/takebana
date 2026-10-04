@@ -60,6 +60,19 @@ document.addEventListener('click', (e) => {
   if (e.target.closest && e.target.closest('a[href="#"]')) e.preventDefault();
 });
 
+// Фильтры-формы с data-autosubmit («Все авторы», 04.10): со скриптом
+// применяются сразу при смене выпадашки, и кнопка «Показать» не нужна.
+// Без скрипта форма уходит кнопкой — адрес тот же.
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('form[data-autosubmit]').forEach((form) => {
+    const submit = form.querySelector('[type="submit"]');
+    if (submit) submit.remove(); // у .tk-btn свой display — hidden его не спрячет
+    form.addEventListener('change', (e) => {
+      if (e.target.matches('select')) form.requestSubmit();
+    });
+  });
+});
+
 // Apply gradients from data-bg (used across multiple pages)
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-bg]').forEach((el) => {

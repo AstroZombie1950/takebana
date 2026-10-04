@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', function () {
       var ctrl = pending = new AbortController();
       if (!quiet) results.setAttribute('aria-busy', 'true');
 
-      tkFetch(form.dataset.grid + qs, { signal: ctrl.signal })
+      tkFetch(form.dataset.grid + qs, { signal: ctrl.signal, headers: { 'X-TK-Fragment': '1' } })
         .then(function (res) {
           if (!res.ok) throw new Error(TKNet.explain(res));
           var n = Number(res.headers.get('X-Live-Count')) || 0;
@@ -179,17 +179,29 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Лента главной: «Показать ещё» дописывает следующую страницу (/feed),
-  // курсор дальше сервер отдаёт заголовком X-Feed-Next. Без скрипта кнопка —
-  // ссылка на /?before=… с той же выдачей.
+  // Лента главной и раздел «Лента» (/feed): «Показать ещё» дописывает
+  // следующую страницу. Откуда брать — у кнопки: data-src — фрагмент
+  // (/home/next, /feed/next), href — та же выдача страницей, ею кнопка
+  // работает без скрипта. Курсор дальше сервер отдаёт заголовком X-Feed-Next.
+  // data-auto — подгружать самой, когда кнопка подходит к экрану (/feed).
   var feed = document.getElementById('feed');
   var more = document.getElementById('feedMore');
   if (feed && more) {
+    var withCursor = function (url, next) {
+      var u = new URL(url, location.href);
+      u.searchParams.set('before', next);
+      return u.pathname + u.search + u.hash;
+    };
+    if (more.hasAttribute('data-auto') && 'IntersectionObserver' in window) {
+      new IntersectionObserver(function (entries) {
+        if (entries[0].isIntersecting && more.isConnected && !more.dataset.failed) more.click();
+      }, { rootMargin: '600px 0px' }).observe(more);
+    }
     more.addEventListener('click', function (e) {
       e.preventDefault();
       if (more.getAttribute('aria-busy')) return;
       more.setAttribute('aria-busy', 'true');
-      tkFetch('/feed?before=' + encodeURIComponent(more.dataset.next))
+      tkFetch(withCursor(more.dataset.src, more.dataset.next), { headers: { 'X-TK-Fragment': '1' } })
         .then(function (res) {
           if (!res.ok) throw new Error(TKNet.explain(res));
           var next = res.headers.get('X-Feed-Next');
@@ -203,7 +215,8 @@ document.addEventListener('DOMContentLoaded', function () {
           if (page.next) {
             tkText(more, 'feed.more');
             more.dataset.next = page.next;
-            more.href = '/?before=' + encodeURIComponent(page.next) + '#feedTitle';
+            more.href = withCursor(more.href, page.next);
+            delete more.dataset.failed;
             more.removeAttribute('aria-busy');
           } else {
             more.remove();
@@ -214,6 +227,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // ленты открывалась ошибка браузера. Причина — тостом.
         .catch(function (err) {
           more.removeAttribute('aria-busy');
+          more.dataset.failed = '1'; // сама больше не тянет — по нажатию
           tkText(more, 'feed.moreFailed');
           TKNet.say(err);
         });

@@ -18,6 +18,7 @@ const os = require('os');
 const path = require('path');
 const storage = require('./storage');
 const errorLog = require('./errorLog');
+const indexNow = require('./indexNow');
 const uploadTrace = require('./uploadTrace');
 const engagement = require('./engagement');
 const { encode, schedule } = require('./videoEncode');
@@ -78,6 +79,7 @@ async function convert(doc, src, queuedAt = Date.now()) {
       },
     });
     if (!saved) await Promise.all(uploaded.map((k) => storage.remove(k).catch(() => {})));
+    else indexNow.ping('/video/' + doc._id);
     uploadTrace.done('upload', doc._id, { ...t, storeMs: Date.now() - at, kb: Math.round((out.bytes || 0) / 1024), outcome: 'ok' });
   } catch (e) {
     await Promise.all(uploaded.map((k) => storage.remove(k).catch(() => {})));

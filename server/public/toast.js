@@ -31,7 +31,7 @@
   background: #0A0A0A; color: #F5F1EA;
   border: 1px solid rgba(144, 113, 99, .5);
   box-shadow: 0 8px 28px rgba(0, 0, 0, .5);
-  font: 500 14px/1.45 'Golos Text', Helvetica, sans-serif;
+  font: 500 14px/1.45 'Golos Text', 'Golos Text Fallback', Helvetica, sans-serif;
   opacity: 0; transform: translateY(-8px);
   transition: opacity .18s ease, transform .18s ease;
   word-break: break-word;
@@ -56,7 +56,7 @@
   width: min(460px, 100%); background: #0A0A0A;
   border: 1px solid rgba(144, 113, 99, .5);
   padding: 24px 22px 22px; box-shadow: 0 20px 60px rgba(0, 0, 0, .6);
-  font: 14px/1.5 'Golos Text', Helvetica, sans-serif;
+  font: 14px/1.5 'Golos Text', 'Golos Text Fallback', Helvetica, sans-serif;
   color: #F5F1EA;
 }
 /* Вопрос — заголовком окна: сверху и по центру. */
@@ -67,7 +67,7 @@
 .tb-dialog-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
 .tb-dialog button {
   flex: 1 1 auto;
-  font: 700 12px/1 'Golos Text', Helvetica, sans-serif;
+  font: 700 12px/1 'Golos Text', 'Golos Text Fallback', Helvetica, sans-serif;
   letter-spacing: .1em; text-transform: uppercase;
   padding: 12px 12px; cursor: pointer; border: 1px solid transparent;
   transition: background-color .18s ease, border-color .18s ease, color .18s ease;

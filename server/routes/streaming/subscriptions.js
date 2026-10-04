@@ -14,6 +14,7 @@ const errorLog = require('../../utils/errorLog');
 const restriction = require('../../utils/restrict');
 const privacy = require('../../utils/privacy');
 const profileSignal = require('../../utils/profileSignal');
+const { profileUrl } = require('../../utils/profileUrl');
 
 // Подписка и отписка туда-обратно — не повод звать человека каждый раз:
 // от одного подписчика не чаще раза в сутки.
@@ -23,7 +24,7 @@ const FOLLOW_AGAIN_MS = 24 * 3600 * 1000;
 async function notifyFollow(io, subscriber, targetId) {
   const since = new Date(Date.now() - FOLLOW_AGAIN_MS);
   if (await Notification.exists({ recipient: targetId, sender: subscriber._id, type: 'follow', createdAt: { $gt: since } })) return;
-  const link = '/userPage/' + String(subscriber._id);
+  const link = profileUrl(subscriber);
   await Notification.create({ recipient: targetId, sender: subscriber._id, type: 'follow', link });
   if (io) io.to(`user:${targetId}`).emit('notification:new');
   if (push.onScreen(targetId)) return;
@@ -157,18 +158,17 @@ router.post('/restrict', requireAuthApi, validate({
 // (/following). Открыты гостю, как и сама страница человека. Новые подписки
 // сверху, по LIST_PAGE на страницу. Карточки — те же, что в поиске
 // (utils/search.js, partials/personCard.ejs).
-const { commonDataMiddleware } = require('./shared');
-const { notFound } = require('../../middleware/errors');
+const { commonDataMiddleware, byNick } = require('./shared');
 const { peopleCards } = require('../../utils/search');
 const LIST_PAGE = 48;
 
-router.get(['/userPage/:id/followers', '/userPage/:id/following'], commonDataMiddleware, async (req, res) => {
-  const { id } = req.params;
-  if (!/^[a-f\d]{24}$/i.test(id)) return notFound(req, res);
-  const owner = await User.findById(id).select('nickname login email avatar').lean();
-  if (!owner) return notFound(req, res);
-
-  const list = req.path.endsWith('/following') ? 'following' : 'followers';
+// Адрес — /@ник/followers и /@ник/following (04.10, docs/seo, задача 26);
+// прежние /userPage/<id>/… уводит сюда 301 routes/streaming/catalog.js.
+router.get('/@:nick/:list(followers|following)', commonDataMiddleware, async (req, res) => {
+  const owner = await byNick(req, res, 'nickname login email avatar');
+  if (!owner) return;
+  const id = owner._id;
+  const { list } = req.params;
   // В одной коллекции обе стороны: подписчики — те, кто подписан на него,
   // подписки — те, на кого подписан он.
   const [mine, other] = list === 'followers' ? ['subscribedToId', 'subscriberId'] : ['subscriberId', 'subscribedToId'];
@@ -192,7 +192,7 @@ router.get(['/userPage/:id/followers', '/userPage/:id/following'], commonDataMid
 
   const displayName = userView.displayName(owner);
   res.render('followers', {
-    owner: { _id: owner._id, displayName, avatarStyle: userView.avatarStyle(owner, displayName) },
+    owner: { _id: owner._id, url: profileUrl(owner), displayName, avatarStyle: userView.avatarStyle(owner, displayName) },
     list, people, page, more, followersCount, followingCount,
   });
 });

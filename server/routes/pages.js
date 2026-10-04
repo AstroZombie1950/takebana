@@ -9,6 +9,7 @@ const router = express.Router();
 const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const User = require('../models/User');
+const Establishments = require('../models/Establishments');
 const catalog = require('../config/catalog');
 const { commonDataMiddleware } = require('./streaming/shared');
 const { requireAuth } = require('../middleware/auth');
@@ -20,8 +21,24 @@ const turn = require('../utils/turn');
 
 // «О нас» — бывший лендинг главной. Вошедшему шапка и панель — свои,
 // поэтому commonDataMiddleware.
-router.get('/about', commonDataMiddleware, (req, res) => {
-  res.render('about');
+//
+// Блок карты (04.10): «сейчас в эфире» и «верифицировано» считаются по базе —
+// заведения с включённой камерой и одобренные. До того там стояли выдуманные
+// «14 производств» и «100+ площадок». Пока одобренных заведений нет, блок
+// выключен целиком: пустая карта и «0 площадок» хуже, чем ничего. Появятся
+// заведения — поставить true (решение Ивана: вернуть руками).
+const SHOW_VENUE_MAP = false;
+// Цифры «стримов проведено» и «производств на карте» (04.10) — до того
+// tk-landing.js накручивал зашитые «500+» и «100+». Скрыты до подсчёта
+// по базе (решение Ивана: вернуть вместе с картой).
+const SHOW_STATS = false;
+
+router.get('/about', commonDataMiddleware, async (req, res) => {
+  const venueStats = SHOW_VENUE_MAP ? {
+    live: await Establishments.countDocuments({ status: true, online: true }),
+    verified: await Establishments.countDocuments({ status: true }),
+  } : null;
+  res.render('about', { venueStats, showStats: SHOW_STATS });
 });
 
 // Проверка связи (utils/netCheck.js). Открыта и гостю: жалоба «не грузится»
