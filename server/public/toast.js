@@ -18,7 +18,8 @@
   // файл подключается и там, где tk.css может не быть.
   const CSS = `
 /* Отступы от вырезов — env() напрямую: токены --tk-safe-* живут в tk.css,
-   а этот файл подключается и без него (см. выше). */
+   а этот файл подключается и без него (см. выше). По той же причине у цветов
+   темы (tk.css) записан запасной — тёмный. */
 .tb-toasts {
   position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
   z-index: 10000; display: flex; flex-direction: column; gap: 8px;
@@ -28,9 +29,9 @@
   pointer-events: auto; cursor: pointer;
   display: flex; align-items: flex-start; gap: 12px;
   padding: 12px 14px;
-  background: #0A0A0A; color: #F5F1EA;
+  background: var(--tk-layer, #0A0A0A); color: var(--tk-fg, #F5F1EA);
   border: 1px solid rgba(144, 113, 99, .5);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, .5);
+  box-shadow: 0 8px 28px var(--tk-shadow-c, rgba(0, 0, 0, .5));
   font: 500 14px/1.45 'Golos Text', 'Golos Text Fallback', Helvetica, sans-serif;
   opacity: 0; transform: translateY(-8px);
   transition: opacity .18s ease, transform .18s ease;
@@ -39,25 +40,25 @@
 .tb-toast.tb-in { opacity: 1; transform: translateY(0); }
 .tb-toast::before {
   content: ""; flex: none; width: 3px; align-self: stretch;
-  background: #8A827C;
+  background: var(--tk-muted, #8A827C);
 }
 .tb-toast.tb-error::before { background: #E34234; }
-.tb-toast.tb-ok::before { background: #679267; }
+.tb-toast.tb-ok::before { background: var(--tk-green, #679267); }
 
 .tb-backdrop {
   position: fixed; inset: 0; z-index: 10001;
-  background: rgba(10, 10, 10, .78);
+  background: var(--tk-scrim, rgba(10, 10, 10, .78));
   display: flex; align-items: center; justify-content: center;
   padding: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
   opacity: 0; transition: opacity .15s ease;
 }
 .tb-backdrop.tb-in { opacity: 1; }
 .tb-dialog {
-  width: min(460px, 100%); background: #0A0A0A;
+  width: min(460px, 100%); background: var(--tk-layer, #0A0A0A);
   border: 1px solid rgba(144, 113, 99, .5);
-  padding: 24px 22px 22px; box-shadow: 0 20px 60px rgba(0, 0, 0, .6);
+  padding: 24px 22px 22px; box-shadow: 0 20px 60px var(--tk-shadow-c, rgba(0, 0, 0, .6));
   font: 14px/1.5 'Golos Text', 'Golos Text Fallback', Helvetica, sans-serif;
-  color: #F5F1EA;
+  color: var(--tk-fg, #F5F1EA);
 }
 /* Вопрос — заголовком окна: сверху и по центру. */
 .tb-dialog p { margin: 0 0 22px; font-size: 16px; font-weight: 700; text-align: center; }
@@ -72,10 +73,10 @@
   padding: 12px 12px; cursor: pointer; border: 1px solid transparent;
   transition: background-color .18s ease, border-color .18s ease, color .18s ease;
 }
-.tb-dialog .tb-cancel { background: transparent; color: #C9C2B7; border-color: rgba(144, 113, 99, .7); }
-.tb-dialog .tb-cancel:hover { border-color: #F5F1EA; color: #F5F1EA; }
+.tb-dialog .tb-cancel { background: transparent; color: var(--tk-fg-2, #C9C2B7); border-color: rgba(144, 113, 99, .7); }
+.tb-dialog .tb-cancel:hover { border-color: var(--tk-fg, #F5F1EA); color: var(--tk-fg, #F5F1EA); }
 .tb-dialog .tb-ok-btn { background: #E34234; border-color: #E34234; color: #0A0A0A; }
-.tb-dialog .tb-ok-btn:hover { background: #F5F1EA; border-color: #F5F1EA; }
+.tb-dialog .tb-ok-btn:hover { background: var(--tk-fg, #F5F1EA); border-color: var(--tk-fg, #F5F1EA); color: var(--tk-bg, #0A0A0A); }
 .tb-dialog button:focus-visible { outline: 2px solid #E34234; outline-offset: 3px; }
 
 @media (max-width: 480px) {

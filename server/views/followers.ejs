@@ -16,7 +16,7 @@
   var manage = list === 'followers' && !!currentUser && String(currentUser._id) === String(owner._id);
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: titleKey, titleVars: { name: owner.displayName } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">

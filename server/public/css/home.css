@@ -18,12 +18,12 @@
   font-size: 13px;
   letter-spacing: .12em;
   text-transform: uppercase;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   transition: color .18s ease;
 }
 
 .tk-home__more:hover,
-.tk-home__more:focus-visible { color: var(--tk-accent); }
+.tk-home__more:focus-visible { color: var(--tk-accent-text); }
 
 /* ── Авторы полосой ── */
 .tk-home__authors {
@@ -64,7 +64,7 @@
 
 .tk-home__author-ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tk-home__author-ava.is-live { border-color: var(--tk-accent); }
-.tk-home__author:hover .tk-home__author-ava { border-color: var(--tk-paper); }
+.tk-home__author:hover .tk-home__author-ava { border-color: var(--tk-fg); }
 
 .tk-home__author-ava .presence-dot {
   position: absolute;
@@ -76,7 +76,7 @@
   max-width: 100%;
   font-size: 13px;
   font-weight: 700;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -88,7 +88,7 @@
   font-size: 11px;
   letter-spacing: .14em;
   text-transform: uppercase;
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
 }
 
 /* ── Лента ──
@@ -118,7 +118,7 @@
   aspect-ratio: 16 / 9;
   overflow: hidden;
   border: 1px solid var(--tk-rule);
-  background: #141414;
+  background: var(--tk-shot);
   transition: border-color .18s ease;
 }
 
@@ -191,7 +191,7 @@
   font-size: 15px;
   font-weight: 700;
   line-height: 1.3;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   /* Две строки: иначе карточки в ряду разъезжаются по высоте. */
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -210,7 +210,7 @@
   white-space: nowrap;
 }
 
-.tk-feed__who { color: var(--tk-beige); }
+.tk-feed__who { color: var(--tk-fg-2); }
 
 .tk-feed__more {
   display: flex;

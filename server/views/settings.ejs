@@ -18,7 +18,7 @@
 %>
 <% var ava = currentUser.avatarStyle; %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.settings.title' }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
@@ -331,6 +331,16 @@
           <div class="tk-lang tk-set__lang">
             <button type="button" class="tk-lang__btn<%= lang === 'ru' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'ru' %>" data-lang="ru">RU</button>
             <button type="button" class="tk-lang__btn<%= lang === 'en' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'en' %>" data-lang="en">EN</button>
+          </div>
+        </section>
+
+        <%# Тема (public/tk-theme.js): меняется сразу, сохраняется в аккаунт. %>
+        <section class="tk-panel">
+          <p class="tk-panel__title" data-i18n="settings.theme"><%- t('settings.theme') %></p>
+          <div class="tk-lang tk-set__lang">
+            <% ['dark', 'light', 'auto'].forEach(function (k) { %>
+            <button type="button" class="tk-lang__btn<%= theme === k ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= theme === k %>" data-theme-set="<%= k %>" data-i18n="theme.<%= k %>"><%- t('theme.' + k) %></button>
+            <% }); %>
           </div>
         </section>
 

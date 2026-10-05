@@ -35,13 +35,13 @@
   font-size: 13px;
   letter-spacing: .18em;
   text-transform: uppercase;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   transition: color .18s ease;
 }
 
 .tk-auth__back:hover,
 .tk-auth__back:focus-visible {
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
 }
 
 .tk-auth__back svg {
@@ -135,7 +135,7 @@
   margin: 18px 0 0;
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 .tk-auth__note {
@@ -178,7 +178,7 @@
 
 .tk-auth__forgot:hover,
 .tk-auth__forgot:focus-visible {
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
 }
 
 /* ── Адаптив ── */

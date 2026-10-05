@@ -253,6 +253,8 @@
 
   function markFull(on) {
     stage.classList.toggle('is-full', on);
+    // Во весь экран чат лежит поверх видео — тёмный в любой теме (tk.css).
+    stage.classList.toggle('tk-dark', on);
     markChat(on && !narrow.matches);
     document.documentElement.classList.toggle('tk-stage-open', on);
     fsButtons.forEach(function (b) { label(b, on, 'stream.exitFullscreen', 'stream.fullscreen'); });

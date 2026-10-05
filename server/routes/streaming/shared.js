@@ -15,6 +15,7 @@ const userView = require('../../utils/userView');
 const callLog = require('../../utils/callLog');
 const errorLog = require('../../utils/errorLog');
 const { langOf } = require('../../utils/i18n');
+const theme = require('../../utils/theme');
 const nickname = require('../../utils/nickname');
 const { profileUrl } = require('../../utils/profileUrl');
 const { notFound } = require('../../middleware/errors');
@@ -36,7 +37,7 @@ const commonDataMiddleware = async (req, res, next) => {
       const me = new mongoose.Types.ObjectId(String(currentUserId));
       const [currentUser, subscribedUsers, unreadNotificationsCount, missedCalls, unreadMessages, myVenues] = await Promise.all([
         User.findById(currentUserId)
-          .select('nickname login email avatar streamKey banned banReason adultConfirmedAt lang role')
+          .select('nickname login email avatar streamKey banned banReason adultConfirmedAt lang theme role')
           .lean(),
         Subscription.aggregate([
           { $match: { subscriberId: me } },
@@ -71,6 +72,12 @@ const commonDataMiddleware = async (req, res, next) => {
       const lang = langOf(req);
       if (currentUser.lang !== lang) {
         User.updateOne({ _id: currentUser._id }, { $set: { lang } }).catch((e) => errorLog.server(e, 'user.lang'));
+      }
+
+      // Тема: из аккаунта поверх cookie; выбранная до входа — в аккаунт.
+      const guestTheme = theme.fromAccount(req, res, currentUser);
+      if (guestTheme) {
+        User.updateOne({ _id: currentUser._id }, { $set: { theme: guestTheme } }).catch((e) => errorLog.server(e, 'user.theme'));
       }
 
       // Определение отображаемой информации для текущего пользователя

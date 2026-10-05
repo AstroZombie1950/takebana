@@ -17,7 +17,7 @@
   var tabs = [['', 'feed.tabAll'], ['photo', 'gallery.photos'], ['video', 'gallery.videos']];
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.feed.title', descriptionKey: 'page.feed.description',
       seo: { path: '/feed', robots: kind || before || !items.length ? 'noindex, follow' : '',

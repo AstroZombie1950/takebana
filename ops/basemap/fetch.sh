@@ -37,7 +37,7 @@ for font in "Noto Sans Regular" "Noto Sans Medium" "Noto Sans Italic"; do
   done
 done > "$cfg"
 mkdir -p "$DEST/sprites"
-for f in dark.json dark.png dark@2x.json dark@2x.png; do
+for f in {dark,light}.json {dark,light}.png {dark,light}@2x.json {dark,light}@2x.png; do
   printf 'url = "%s/sprites/v4/%s"\noutput = "%s/sprites/%s"\n' "$ASSETS" "$f" "$DEST" "$f"
 done >> "$cfg"
 curl -fsS -Z --parallel-max 32 -K "$cfg"

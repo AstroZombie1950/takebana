@@ -20,7 +20,7 @@
   var state = s && s.isActive ? 'live' : source === 'obs' ? 'wait' : 'paused';
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <% if (phase === 'setup') { %>
 <%- include('partials/tkHead', { titleKey: 'page.studio.title' }) %>
@@ -75,7 +75,7 @@
   <% if (phase === 'setup') { %>
     <div class="tk-studio">
       <section class="tk-studio__screen">
-        <div class="tk-live__player" data-for="web"<% if (source !== 'web') { %> hidden<% } %>>
+        <div class="tk-live__player tk-dark" data-for="web"<% if (source !== 'web') { %> hidden<% } %>>
           <video id="previewVideo" class="video-fit-cover" autoplay muted playsinline hidden></video>
           <div class="tk-live__hint" id="previewHint">
             <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"></path><rect x="3" y="6" width="12" height="12"></rect></svg>
@@ -207,7 +207,7 @@
     <div class="tk-live">
       <div class="tk-live__grid" id="stage">
         <section class="tk-live__col">
-          <div class="tk-live__player" id="player">
+          <div class="tk-live__player tk-dark" id="player">
             <% if (source === 'obs') { %>
               <%# Предпросмотр — тот же HLS, что у зрителя; видео — с первым кадром. %>
               <video id="video" class="video-fit-contain" autoplay muted playsinline hidden></video>

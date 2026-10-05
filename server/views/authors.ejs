@@ -14,7 +14,7 @@
   ].filter(function (b) { return b.items.length; });
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%# В индексе, когда есть хоть одна группа; пустая — нет. %>
 <%- include('partials/tkHead', { titleKey: 'page.authors.title', descriptionKey: 'page.authors.description', seo: { path: '/authors', robots: blocks.length ? '' : 'noindex, follow',

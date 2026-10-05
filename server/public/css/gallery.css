@@ -85,7 +85,7 @@
   letter-spacing: -.02em;
   font-weight: 900;
   text-transform: uppercase;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow-wrap: anywhere;
 }
 
@@ -110,16 +110,16 @@
   padding: 0 8px;
   border: 1px solid var(--tk-rule);
   font: 400 14px/1 Oswald, 'Oswald Fallback', sans-serif;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   text-decoration: none;
   font-variant-numeric: tabular-nums;
   transition: border-color .18s ease, color .18s ease;
 }
 
 a.tk-pager__num:hover,
-a.tk-pager__num:focus-visible { border-color: var(--tk-accent); color: var(--tk-paper); }
+a.tk-pager__num:focus-visible { border-color: var(--tk-accent); color: var(--tk-fg); }
 
-.tk-pager__num[aria-current] { background: var(--tk-accent); border-color: var(--tk-accent); color: var(--tk-paper); }
+.tk-pager__num[aria-current] { background: var(--tk-accent); border-color: var(--tk-accent); color: var(--tk-fg); }
 
 .tk-pager__gap { border-color: transparent; }
 

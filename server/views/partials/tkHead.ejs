@@ -161,7 +161,12 @@
     замене значков поднять ?v= здесь и в манифесте: nginx держит /img/
     30 дней. Сам запуск и поведение без сети — public/sw.js. %>
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#0A0A0A">
+<%# Цвет полосы браузера — фон темы; tk-theme.js меняет его при переключении. %>
+<meta name="theme-color" content="<%= themeOn === 'light' ? '#F5F1EA' : '#0A0A0A' %>">
+<%# Тема «как в системе» (utils/theme.js): страница пришла тёмной, светлую
+    ставим здесь — до <body>, то есть до первой отрисовки, иначе мелькнёт
+    тёмный экран. Дальше за системой следит tk-theme.js. %>
+<% if (theme === 'auto') { %><script>if(matchMedia('(prefers-color-scheme: light)').matches){document.documentElement.setAttribute('data-theme','light');document.querySelector('meta[name="theme-color"]').content='#F5F1EA'}</script><% } %>
 <link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png?v=2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

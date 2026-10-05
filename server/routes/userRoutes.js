@@ -18,6 +18,7 @@ const profileLinks = require('../utils/profileLinks');
 const privacy = require('../utils/privacy');
 const support = require('../utils/support');
 const { langOf } = require('../utils/i18n');
+const theme = require('../utils/theme');
 const errorLog = require('../utils/errorLog');
 // Подтверждение почты после регистрации (router.sendVerify есть, когда настроена почта).
 const emailRoutes = require('./emailChange');
@@ -202,6 +203,17 @@ router.post('/settings/privacy', requireAuthApi, validate({
     privacy.recheckPresence(req.app.get('io'), req.session.userId).catch((e) => errorLog.server(e, 'privacy.recheck'));
   }
   res.json({ privacy: privacy.of(user) });
+});
+
+// Тема оформления (utils/theme.js): переключатель в шапке и в настройках уже
+// сменил её на странице и в cookie — здесь выбор уходит в аккаунт.
+router.post('/settings/theme', requireAuthApi, validate({
+  theme: { type: 'string', values: theme.THEMES, label: 'Тема' },
+}), async (req, res) => {
+  const ok = await User.updateOne({ _id: req.session.userId }, { $set: { theme: req.body.theme } });
+  if (!ok.matchedCount) return res.status(401).json({ message: 'Необходима авторизация' });
+  res.cookie('theme', req.body.theme, theme.COOKIE);
+  res.json({ theme: req.body.theme });
 });
 
 // Свободен ли ник — поле в настройках спрашивает на ходу, пока человек печатает.

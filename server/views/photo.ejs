@@ -22,7 +22,7 @@
   var liked = myReaction === 1;
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: describe(rec.caption, ta('seo.photoDesc', { name: author.displayName, date: when })), seo: { path: base, type: 'article', image: rec.url, imageAlt: alt, robots: rec.userId.banned ? 'noindex, follow' : '',
          jsonld: ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [ta('gallery.photos'), author.url + '/photos'], [headTitle, base]]) } }) %>
@@ -51,7 +51,7 @@
       <%# Заголовок страницы — для поиска и чтения с экрана; глазу его
           заменяют снимок и подпись под ним, как в Инстаграме. %>
       <h1 class="tk-vh"><%= headTitle %></h1>
-      <div class="tk-watch__stage tk-photo__stage" id="photoStage">
+      <div class="tk-watch__stage tk-photo__stage tk-dark" id="photoStage">
         <img class="tk-photo__img" src="<%= rec.url %>" alt="<%= alt %>"<% if (rec.width && rec.height) { %> width="<%= rec.width %>" height="<%= rec.height %>"<% } %> <%- imgLoad() %> decoding="async">
         <% if (around.prev) { %>
         <a class="tk-photo__nav tk-photo__nav--prev" href="<%= around.prev %>" aria-label="<%= ta('user.photoPrev') %>" data-i18n-aria="user.photoPrev">

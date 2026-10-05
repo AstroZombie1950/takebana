@@ -40,7 +40,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 .tk-intro__p {
@@ -48,7 +48,7 @@
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   line-height: 1.5;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 .tk-intro__more { flex: none; white-space: nowrap; }
@@ -67,7 +67,7 @@
   cursor: pointer;
 }
 
-.tk-intro__close:hover { color: var(--tk-paper); }
+.tk-intro__close:hover { color: var(--tk-fg); }
 
 /* ── Шапка эфиров: заголовок, «N в эфире», фильтры ─────────────────────
  * Общая у главной и разделов (с 02.10 раздел устроен как главная: одной
@@ -97,7 +97,7 @@
   letter-spacing: -.02em;
   font-weight: 900;
   text-transform: uppercase;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 .tk-home__h2 { font-size: 22px; }
@@ -108,7 +108,7 @@
   font-size: 13px;
   font-weight: 400;
   letter-spacing: .14em;
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
 }
 
 /* Фильтры эфиров — в строку с заголовком, без подписей над полями. */
@@ -134,7 +134,7 @@
   border: 1px solid var(--tk-rule);
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 .tk-home__first { gap: 10px; margin-left: auto; }
@@ -194,17 +194,17 @@
   font-weight: 900;
   letter-spacing: -.03em;
   text-transform: uppercase;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   text-wrap: balance;
 }
 
-.tk-about-block__h em { font-style: normal; color: var(--tk-accent); }
+.tk-about-block__h em { font-style: normal; color: var(--tk-accent-text); }
 
 .tk-about-block__lead {
   margin: 24px 0 0;
   font-size: 19px;
   line-height: 1.5;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   text-wrap: pretty;
 }
 
@@ -233,7 +233,7 @@
   margin: 0;
   font-size: 15px;
   line-height: 1.6;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   text-wrap: pretty;
 }
 
@@ -246,12 +246,12 @@
   font-size: 12px;
   letter-spacing: .12em;
   text-transform: uppercase;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   transition: color .18s ease, border-color .18s ease;
 }
 
 .tk-about-block__chip:hover,
-.tk-about-block__chip:focus-visible { color: var(--tk-accent); border-color: var(--tk-accent); }
+.tk-about-block__chip:focus-visible { color: var(--tk-accent-text); border-color: var(--tk-accent); }
 
 /* Уже: заголовок с вводкой над строками. */
 @media (max-width: 1099px) {
@@ -272,7 +272,7 @@
   letter-spacing: -.02em;
   font-weight: 900;
   text-transform: uppercase;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 .tk-cat__reset {
@@ -281,12 +281,12 @@
   font-size: 13px;
   letter-spacing: .12em;
   text-transform: uppercase;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   transition: color .18s ease;
 }
 
 .tk-cat__reset:hover,
-.tk-cat__reset:focus-visible { color: var(--tk-accent); }
+.tk-cat__reset:focus-visible { color: var(--tk-accent-text); }
 
 .tk-cat__results { transition: opacity .2s ease; }
 .tk-cat__results[aria-busy="true"] { opacity: .45; }
@@ -305,7 +305,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--tk-rule);
-  background: var(--tk-ink);
+  background: var(--tk-bg);
   transition: border-color .18s ease;
   animation: tk-card-in .4s ease-out both;
 }
@@ -329,7 +329,7 @@
   position: relative;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  background: #141414;
+  background: var(--tk-shot);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -440,7 +440,7 @@
   font-size: 16px;
   font-weight: 700;
   line-height: 1.25;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   /* Две строки максимум: иначе карточки в ряду разъезжаются по высоте. */
   display: -webkit-box;
   -webkit-line-clamp: 2;

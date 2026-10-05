@@ -7,7 +7,7 @@
   public/upload.js, вёрстка — public/css/upload.css.
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.upload.title' }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">

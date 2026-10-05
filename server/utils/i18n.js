@@ -46,6 +46,8 @@ const EN = {
     // Подпись к фото галереи (routes/watch.js)
     'Подпись': 'Caption',
     'Ссылки': 'Links',
+    // Тема оформления (routes/userRoutes.js)
+    'Тема': 'Theme',
     'Индексировать': 'Index',
     // Группы (routes/groups.js)
     'Группа не найдена': 'Group not found',

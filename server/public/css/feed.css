@@ -17,7 +17,7 @@
 
 .tk-post {
   border: 1px solid var(--tk-rule);
-  background: var(--tk-ink);
+  background: var(--tk-bg);
   animation: tk-card-in .4s ease-out both;
 }
 
@@ -53,13 +53,13 @@
   min-width: 0;
   font-size: 14px;
   font-weight: 700;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tk-post__head:hover .tk-post__who { color: var(--tk-accent); }
+.tk-post__head:hover .tk-post__who { color: var(--tk-accent-text); }
 
 .tk-post__when {
   margin-left: auto;
@@ -130,14 +130,14 @@
   font-weight: 700;
 }
 
-.tk-post__title a { color: var(--tk-paper); }
-.tk-post__title a:hover { color: var(--tk-accent); }
+.tk-post__title a { color: var(--tk-fg); }
+.tk-post__title a:hover { color: var(--tk-accent-text); }
 
 .tk-post__text {
   margin: 0;
   font-size: 15px;
   line-height: 1.5;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   overflow-wrap: anywhere;
 }
 
@@ -160,15 +160,15 @@
   justify-content: center;
   background: none;
   border: 0;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   font: 500 14px/1 Oswald, 'Oswald Fallback', sans-serif;
   cursor: pointer;
   transition: color .15s ease;
 }
 
-.tk-post__act:hover { color: var(--tk-paper); }
+.tk-post__act:hover { color: var(--tk-fg); }
 .tk-post__act:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: -2px; }
-.tk-post__act[aria-pressed="true"] { color: var(--tk-accent); }
+.tk-post__act[aria-pressed="true"] { color: var(--tk-accent-text); }
 .tk-post__act[aria-pressed="true"] svg { fill: currentColor; }
 .tk-post__act:disabled { cursor: default; }
 .tk-post__num { font-variant-numeric: tabular-nums; }
@@ -191,7 +191,7 @@
   color: var(--tk-muted);
 }
 
-.tk-post__all:hover { color: var(--tk-paper); }
+.tk-post__all:hover { color: var(--tk-fg); }
 
 .tk-post__said {
   margin: 0;
@@ -201,13 +201,13 @@
   gap: 4px;
   font-size: 14px;
   line-height: 1.45;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   overflow-wrap: anywhere;
 }
 
 .tk-post__said:empty { display: none; }
-.tk-post__said-who { font-weight: 700; color: var(--tk-paper); }
-.tk-post__said-who:hover { color: var(--tk-accent); }
+.tk-post__said-who { font-weight: 700; color: var(--tk-fg); }
+.tk-post__said-who:hover { color: var(--tk-accent-text); }
 
 .tk-post__say {
   display: flex;
@@ -228,7 +228,7 @@
   outline: none;
   font: inherit;
   font-size: 14px;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 .tk-post__input::placeholder { color: var(--tk-muted); }
@@ -243,7 +243,7 @@
   padding: 0;
   background: none;
   border: 0;
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
   cursor: pointer;
 }
 

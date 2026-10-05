@@ -17,12 +17,12 @@
   letter-spacing: -.02em;
   font-weight: 900;
   text-transform: uppercase;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow-wrap: anywhere;
 }
 
 /* Сам запрос в заголовке — киноварью: видно, что именно искали. */
-.tk-search__q { color: var(--tk-accent); }
+.tk-search__q { color: var(--tk-accent-text); }
 
 .tk-search__form {
   display: flex;
@@ -38,7 +38,7 @@
   margin: 20px 0 0;
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 /* Вкладки (.tk-tabs) — в app.css: ими пользуются профиль, галерея и подписчики. */
@@ -59,7 +59,7 @@
   letter-spacing: -.01em;
   font-weight: 900;
   text-transform: uppercase;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 .tk-search__more {
@@ -68,10 +68,10 @@
   font-size: 13px;
   letter-spacing: .06em;
   text-transform: uppercase;
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
 }
 
-.tk-search__more:hover { color: var(--tk-paper); }
+.tk-search__more:hover { color: var(--tk-fg); }
 
 /* ── Люди ── */
 .tk-people {
@@ -130,7 +130,7 @@
   position: absolute;
   right: 2px;
   bottom: 2px;
-  border: 2px solid var(--tk-ink);
+  border: 2px solid var(--tk-bg);
 }
 
 .tk-person__body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -138,7 +138,7 @@
 .tk-person__name {
   font-size: 14px;
   font-weight: 700;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -163,10 +163,10 @@
 }
 
 /* Метка «в эфире» у автора: та же киноварь, что у карточки эфира. */
-.tk-person__meta--live { color: var(--tk-beige); }
+.tk-person__meta--live { color: var(--tk-fg-2); }
 
 .tk-person__live {
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
   letter-spacing: .08em;
   text-transform: uppercase;
 }
@@ -200,7 +200,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #120E0C;
+  background: var(--tk-shot);
   color: var(--tk-muted);
 }
 
@@ -230,7 +230,7 @@
 .tk-place__name {
   font-size: 15px;
   font-weight: 700;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 .tk-place__meta {
@@ -268,11 +268,11 @@
   font-size: 13px;
   letter-spacing: .12em;
   text-transform: uppercase;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   transition: color .18s ease;
 }
 
 .tk-authors__more:hover,
-.tk-authors__more:focus-visible { color: var(--tk-accent); }
+.tk-authors__more:focus-visible { color: var(--tk-accent-text); }
 .tk-authors__head { margin-bottom: 24px; }
 

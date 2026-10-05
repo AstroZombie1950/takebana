@@ -9,7 +9,7 @@
   var pageHref = function (p) { return base + (p > 1 ? '?page=' + p : ''); };
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: page > 1 ? 'page.recordings.titlePage' : 'page.recordings.title', titleVars: { name: owner.displayName, n: page },
          description: ta('seo.recordingsDesc', { name: owner.displayName }) + (page > 1 ? ' ' + ta('seo.page', { n: page }) : ''),

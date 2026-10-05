@@ -90,6 +90,8 @@ const UserSchema = new mongoose.Schema({
   // commonDataMiddleware). Нужен тому, что собирается без его запроса:
   // рассылкам поддержки (utils/support.js).
   lang: { type: String, enum: ['ru', 'en'] },
+  // Тема оформления (utils/theme.js): пусто — ещё не выбирал.
+  theme: { type: String, enum: ['dark', 'light', 'auto'] },
   // Аккаунт поддержки (utils/support.js) — один из администраторов: от него
   // уходят рассылки и приветствие, его переписку ведут из панели.
   // supportWelcome — писать ли новичкам приветствие при регистрации.

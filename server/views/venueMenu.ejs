@@ -14,7 +14,7 @@
                              clip: c.video && c.video.url ? 1 : 0, status: c.status || 'none' });
    }; %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { title: venue.name + ' — ' + ta('venue.tab.menu') + ' — Takebana', description: ta('venue.menuDescription', { name: venue.name }),
       seo: { path: path, robots: indexable ? '' : 'noindex, follow', image: venue.cover || (venue.photos || [])[0] || venue.avatar, imageAlt: venue.name,

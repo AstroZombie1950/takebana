@@ -7,7 +7,7 @@
   routes/pages.js, отправка — public/tk-company.js, вёрстка — css/company.css.
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.company.title', descriptionKey: 'page.company.description' }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">

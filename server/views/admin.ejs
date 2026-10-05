@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%# Панель осознанно только на русском, переключателя языка в ней нет. %>
 <%- include('partials/tkHead', { title: title, metrics: false }) %>

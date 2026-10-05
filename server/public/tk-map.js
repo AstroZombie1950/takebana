@@ -24,7 +24,9 @@
 //   выбор.resize() — после показа окна, иначе карта считает себя нулевой
 //
 // TKMap.setLang('ru' | 'en') — подписи всех карт страницы на другом языке;
-// на событие `tk:lang` общего переключателя этот файл подписывается сам
+// на событие `tk:lang` общего переключателя этот файл подписывается сам.
+// Тема — так же: подложка светлая или тёмная по <html data-theme>, смена —
+// событием `tk:theme` (public/tk-theme.js)
 (function () {
   var LIB = '/vendor/maplibre-gl-6.9.0/maplibre-gl.mjs';
   var BELGRADE = [20.4612, 44.8125];
@@ -34,30 +36,35 @@
     return window.tkLang ? window.tkLang() : 'ru';
   }
 
+  function theme() {
+    return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  }
+
   function t(key) {
     return window.t ? window.t(key) : '';
   }
 
   // Стиль в git без адресов (ops/basemap/style.mjs): MapLibre нужны
   // абсолютные адреса шрифтов и значков, поэтому они — от адреса страницы.
-  // Ответ кэшируется: при смене языка тот же стиль нужен второй раз.
+  // Ответ кэшируется: при смене языка или темы тот же стиль нужен второй раз.
   var styles = {};
-  function loadStyle(l) {
-    if (styles[l]) return styles[l];
+  function loadStyle(l, th) {
+    var key = th + '.' + l;
+    if (styles[key]) return styles[key];
     var origin = location.origin;
-    styles[l] = tkFetch('/map/style.' + l + '.json')
+    styles[key] = tkFetch('/map/style' + (th === 'light' ? '.light.' : '.') + l + '.json')
       .then(function (r) { return r.json(); })
       .then(function (s) {
         s.glyphs = origin + '/basemap/fonts/{fontstack}/{range}.pbf';
-        s.sprite = origin + '/basemap/sprites/dark';
+        s.sprite = origin + '/basemap/sprites/' + th;
         s.sources.protomaps.url = 'pmtiles://' + origin + '/basemap/basemap.pmtiles';
         return s;
       })
       .catch(function (err) {
-        delete styles[l]; // не запоминаем неудачу
+        delete styles[key]; // не запоминаем неудачу
         throw err;
       });
-    return styles[l];
+    return styles[key];
   }
 
   // Все карты страницы: смена языка проходит по ним.
@@ -70,7 +77,7 @@
   // в момент открытия страницы, и менялись только с перезагрузкой.
   function setLang(next) {
     var l = next === 'en' ? 'en' : 'ru';
-    return loadStyle(l).then(function (s) {
+    return loadStyle(l, theme()).then(function (s) {
       live.forEach(function (map) {
         s.layers.forEach(function (layer) {
           var text = layer.layout && layer.layout['text-field'];
@@ -87,9 +94,27 @@
     if (live.length) setLang(e.detail && e.detail.lang);
   });
 
+  // Тема: стили светлой и тёмной подложки отличаются только цветами слоёв
+  // и значками (ops/basemap/style.mjs) — подменяем их, по той же причине,
+  // что и подписи выше.
+  document.addEventListener('tk:theme', function () {
+    if (!live.length) return;
+    loadStyle(lang(), theme()).then(function (s) {
+      live.forEach(function (map) {
+        s.layers.forEach(function (layer) {
+          if (!map.getLayer(layer.id)) return;
+          Object.keys(layer.paint || {}).forEach(function (k) {
+            map.setPaintProperty(layer.id, k, layer.paint[k]);
+          });
+        });
+        map.setSprite(s.sprite);
+      });
+    });
+  });
+
   // Общее для карты заведений и выбора точки: библиотека, стиль, базовая карта.
   function createMap(container, opts) {
-    return Promise.all([import(LIB), loadStyle(lang())]).then(function (res) {
+    return Promise.all([import(LIB), loadStyle(lang(), theme())]).then(function (res) {
       var lib = res[0].default || res[0];
       if (!protocolReady) {
         lib.addProtocol('pmtiles', new pmtiles.Protocol().tile);

@@ -12,7 +12,7 @@
    var day = new Date().getDay(), hours = day === 0 || day === 6 ? venue.weekendHours : venue.weekdayHours;
    var meta = [placeLabel('type', venue.type, venue.typeOther), placeLabel('city', venue.city, venue.cityOther)].filter(Boolean).join(' · '); %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%# Камера живёт часами и видна только с карты — в индекс не берём. %>
 <%- include('partials/tkHead', { title: venue.name + ' — Takebana', seo: { path: '/venue/' + venue._id + '/live', robots: 'noindex, follow', image: cover, imageAlt: venue.name } }) %>
@@ -37,7 +37,7 @@
     <div class="tk-live tk-vl">
       <div class="tk-live__grid" id="stage">
         <section class="tk-live__col">
-          <div class="tk-live__player" id="player">
+          <div class="tk-live__player tk-dark" id="player">
             <%# У владельца — своя камера без звука (иначе эхо). У гостя —
                 картинка заведения, знак поверх (app.css, .tk-wm) на обоих
                 путях: живое — поверх, в кадр сервер его не кладёт (05.10). %>

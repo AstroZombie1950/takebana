@@ -57,7 +57,7 @@
   letter-spacing: -.03em;
   font-weight: 900;
   text-transform: uppercase;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow-wrap: anywhere;
 }
 
@@ -80,7 +80,7 @@
 }
 
 .tk-prof__gear:hover,
-.tk-prof__gear[aria-expanded="true"] { color: var(--tk-paper); border-color: var(--tk-beige); }
+.tk-prof__gear[aria-expanded="true"] { color: var(--tk-fg); border-color: var(--tk-fg-2); }
 
 .tk-prof__menu {
   position: absolute;
@@ -90,9 +90,9 @@
   display: flex;
   flex-direction: column;
   padding: 6px 0;
-  background: var(--tk-ink);
+  background: var(--tk-bg);
   border: 1px solid var(--tk-rule);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .5);
+  box-shadow: 0 12px 32px var(--tk-shadow-c);
   text-align: left;
   animation: tk-prof-menu .16s ease both;
 }
@@ -108,7 +108,7 @@
   padding: 11px 16px;
   background: none;
   border: 0;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 14px;
   letter-spacing: .04em;
@@ -117,8 +117,8 @@
 }
 
 .tk-prof__menu button:hover,
-.tk-prof__menu button:focus-visible { background: rgba(245, 241, 234, .06); }
-.tk-prof__menu .is-danger { color: var(--tk-accent); }
+.tk-prof__menu button:focus-visible { background: rgb(var(--tk-fg-rgb) / .06); }
+.tk-prof__menu .is-danger { color: var(--tk-accent-text); }
 .tk-prof__menu svg { flex: none; }
 
 /* Присутствие: точка и одна подпись вплотную. Подпись — обычным текстом:
@@ -135,7 +135,7 @@
   color: var(--tk-muted);
 }
 
-.tk-prof__meta-live { color: var(--tk-paper); }
+.tk-prof__meta-live { color: var(--tk-fg); }
 
 /* Половина строки лишняя: у того, кто на связи, «Последний раз в сети»
  * повторяет «онлайн», а у ушедшего «не в сети» повторяет дату. */
@@ -159,7 +159,7 @@
   max-width: 640px;
   font-size: 15px;
   line-height: 1.5;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
@@ -178,12 +178,12 @@
   align-items: center;
   justify-content: center;
   border: 1px solid var(--tk-rule);
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   transition: color .18s ease, border-color .18s ease;
 }
 
 .tk-prof__link:hover,
-.tk-prof__link:focus-visible { color: var(--tk-accent); border-color: var(--tk-accent); }
+.tk-prof__link:focus-visible { color: var(--tk-accent-text); border-color: var(--tk-accent); }
 
 /* Полоса под шапкой: счётчики и действия на одной линии, между ними —
  * сколько останется. Не хватило ширины — действия уходят строкой ниже. */
@@ -214,7 +214,7 @@
  * к краю «2 подписчика» выглядел упёршимся (правки 29.09). */
 .tk-prof__stat:first-child { border-left: 0; }
 .tk-prof__stat:hover .tk-prof__lbl,
-.tk-prof__stat:focus-visible .tk-prof__lbl { color: var(--tk-paper); }
+.tk-prof__stat:focus-visible .tk-prof__lbl { color: var(--tk-fg); }
 
 .tk-prof__num {
   display: block;
@@ -222,7 +222,7 @@
   line-height: 1;
   font-weight: 900;
   letter-spacing: -.02em;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   font-variant-numeric: tabular-nums;
 }
 
@@ -277,7 +277,7 @@
   font-size: 13px;
   letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 .tk-prof__live-mark::before {
@@ -298,11 +298,11 @@
   font-size: 13px;
   letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
   transition: color .18s ease;
 }
 
-.tk-prof__live a:hover { color: var(--tk-paper); }
+.tk-prof__live a:hover { color: var(--tk-fg); }
 
 /* ── Пустое состояние внутри секции ── */
 .tk-prof__none {
@@ -342,7 +342,7 @@
 .tk-prof__gal-title { margin: 0; flex: 1; }
 /* «Галерея» — h2 со ссылкой внутри: рубрикой оформлена сама ссылка. */
 .tk-prof__gal-title a { text-decoration: none; }
-.tk-prof__gal-title a:hover { color: var(--tk-paper); }
+.tk-prof__gal-title a:hover { color: var(--tk-fg); }
 
 /* «Все» и «Добавить фото или видео» — под снимками, по центру блока. */
 .tk-prof__gal-add {
@@ -400,7 +400,7 @@
 }
 
 .tk-recard__len { right: 8px; bottom: 8px; }
-.tk-recard__adult { left: 8px; top: 8px; color: var(--tk-accent); }
+.tk-recard__adult { left: 8px; top: 8px; color: var(--tk-accent-text); }
 
 /* Сохраняется или не сохранилась — видит только автор. */
 .tk-recard__state { left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; }
@@ -410,7 +410,7 @@
   font-size: 14px;
   font-weight: 700;
   line-height: 1.3;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;

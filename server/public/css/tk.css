@@ -84,26 +84,28 @@
 }
 
 /* ── Токены ──────────────────────────────────────────────────
- * Тема тёплая светлая. Тёмный #0A0A0A — это текст и тёмные секции, а не фон
- * по умолчанию.
+ * Две темы (05.10): тёмная — по умолчанию, светлая — по выбору человека
+ * (data-theme="light" на <html>, utils/theme.js). Цвета двух видов:
+ *
+ * Постоянные — бренд, в обеих темах одни: --tk-ink, --tk-paper, --tk-accent.
+ * Ими пишут то, что лежит на киновари (тёмный текст кнопки) и поверх
+ * картинки или видео (светлая подпись на тёмной плашке).
+ *
+ * Роли — меняются с темой: фон, текст, рамки, подложки (блок ниже). Всё
+ * остальное на сайте берёт цвет через них. Зона, тёмная в любой теме
+ * (плеер, видео звонка, просмотр фото), помечается классом .tk-dark —
+ * внутри неё роли снова тёмные.
  *
  * Секция на бумажном фоне помечается атрибутом data-bg="paper": внутри неё
  * часть токенов меняет значение, потому что тот же приглушённый бежевый,
  * который читается на чёрном, на бумаге исчезает.
  */
 :root {
-  --tk-ink: #0A0A0A;          /* основной тёмный: текст и тёмные секции */
-  --tk-paper: #F5F1EA;        /* бумажный фон светлых секций */
+  --tk-ink: #0A0A0A;          /* чёрный бренда: текст на киновари и бумаге */
+  --tk-paper: #F5F1EA;        /* бумага бренда: подписи поверх картинок */
   --tk-accent: #E34234;       /* киноварь: акцент и главное действие */
-  --tk-beige: #C9C2B7;        /* приглушённый бежевый по тёмному */
-  --tk-green: #679267;        /* второстепенный акцент */
-  --tk-green-live: #5FD068;   /* «в сети» и счётчики онлайна: заметнее на тёмном */
-  --tk-ink-soft: #3A3733;     /* тёмно-серый текст */
-  --tk-rule: rgba(144, 113, 99, .5);  /* разделители */
-  --tk-label: #9A7C6C;        /* надписи-рубрики */
-  --tk-muted: #8A827C;        /* второстепенный текст */
-  --tk-link-hover: #F5F1EA;
-  --tk-link: #E34234;         /* ссылка: на тёмном это та же киноварь, 4.8:1 */
+  --tk-beige: #C9C2B7;        /* бежевый бренда: вторая подпись поверх картинок */
+  --tk-ink-soft: #3A3733;     /* тёмно-серый текст на бумаге (документы) */
 
   /* ── Вырезы экрана ──
    * Чёлка и «дом» на айфоне, полоса кнопок на Android: страница раскладывается
@@ -125,6 +127,62 @@
   --tk-head-h: calc(var(--tk-head) + var(--tk-safe-t));
 }
 
+/* Роли, тёмная тема. Видео звонка — тёмное всегда, но его рамку рисует
+ * app.css, а класс ей не поставить: видна она, пока идёт видео. */
+:root,
+.tk-dark,
+.tk-modal__card--call:has(.tk-call__stage:not(.hidden)) {
+  color-scheme: dark;
+  color: var(--tk-fg);
+  --tk-bg: #0A0A0A;           /* фон страницы, шапки, панелей */
+  --tk-bg-rgb: 10 10 10;      /* фон с прозрачностью: rgb(var(--tk-bg-rgb) / .9) */
+  --tk-fg: #F5F1EA;           /* основной текст */
+  --tk-fg-rgb: 245 241 234;   /* подсветка и дорожки: rgb(var(--tk-fg-rgb) / .06) */
+  --tk-fg-2: #C9C2B7;         /* второй текст: пункты меню, подписи */
+  --tk-muted: #8A827C;        /* второстепенный текст, 5.2:1 */
+  --tk-label: #9A7C6C;        /* надписи-рубрики */
+  --tk-dim: #3A3733;          /* погашенное: пустые звёзды, буква-заглушка */
+  --tk-rule: rgba(144, 113, 99, .5);  /* разделители */
+  --tk-accent-text: #E34234;  /* киноварь текстом, 4.8:1 */
+  --tk-link: #E34234;
+  --tk-link-hover: #F5F1EA;
+  --tk-green: #679267;        /* второстепенный акцент: рубрики, «доставлено» */
+  --tk-green-live: #5FD068;   /* «в сети», «готово»: заметнее на тёмном */
+  --tk-layer: #0A0A0A;        /* всплывающее: окна, меню, выпадающие списки */
+  --tk-raise: #121110;        /* карточка, приподнятая над фоном */
+  --tk-shot: #141414;         /* место под картинку, пока её нет */
+  --tk-shot-2: #1B1917;       /* то же светлее: полосы заглушки, наведение */
+  --tk-scrim: rgba(10, 10, 10, .78);  /* затемнение под окном */
+  --tk-shadow-c: rgba(0, 0, 0, .5);   /* цвет тени всплывающего */
+}
+
+/* Светлая тема. Фон — бумага бренда, текст — его чёрный. Каждый цвет
+ * текста держит на бумаге не меньше 4.5:1, как тёмная тема на чёрном:
+ * киноварь текстом темнее (у кнопок заливка прежняя), зелёные гуще,
+ * всплывающее — светлее фона, тени мягче. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --tk-bg: #F5F1EA;
+  --tk-bg-rgb: 245 241 234;
+  --tk-fg: #0A0A0A;
+  --tk-fg-rgb: 10 10 10;
+  --tk-fg-2: #3A3733;
+  --tk-muted: #625A53;         /* 6:1, и 4.6:1 на строке, подкрашенной киноварью */
+  --tk-label: #7D6255;
+  --tk-dim: #CFC6BA;
+  --tk-accent-text: #C4321F;
+  --tk-link: #C4321F;
+  --tk-link-hover: #0A0A0A;
+  --tk-green: #467346;
+  --tk-green-live: #1F7533;
+  --tk-layer: #FFFDF9;
+  --tk-raise: #FFFDF9;
+  --tk-shot: #E9E3D9;
+  --tk-shot-2: #E1D9CC;
+  --tk-scrim: rgba(10, 10, 10, .45);
+  --tk-shadow-c: rgba(58, 40, 30, .16);
+}
+
 [data-bg="paper"] {
   --tk-label: #7D6255;
   --tk-link-hover: #0A0A0A;   /* кремовый на бумаге не виден */
@@ -140,18 +198,18 @@
   box-sizing: border-box;
 }
 
-/* Фон — тёмный на всём сайте, а прокрутка не тянется за край страницы.
+/* Фон — цвета темы на всём сайте, а прокрутка не тянется за край страницы.
  * Без этого Safari и Chrome на тачпаде оттягивали страницу за шапку и подвал,
  * и под ними открывалась белая пустота, а липкая шапка дёргалась вместе
- * с ней. Тёмный фон на html, а не только на body: при оттяжке виден именно он. */
+ * с ней. Фон на html, а не только на body: при оттяжке виден именно он. */
 html {
-  background: var(--tk-ink);
+  background: var(--tk-bg);
   overscroll-behavior: none;
 }
 
 body {
   margin: 0;
-  background: var(--tk-ink);
+  background: var(--tk-bg);
   overscroll-behavior: none;
   font-family: 'Golos Text', 'Golos Text Fallback', Helvetica, sans-serif;
 }
@@ -165,10 +223,13 @@ a:hover {
   color: var(--tk-link-hover);
 }
 
+/* Буквы логотипа (partials/logo.ejs) — цвета текста темы. */
+.tk-logo__word { fill: var(--tk-fg); }
+
 /* ── Элементы управления ────────────────────────────────────── */
 
 a:focus-visible, button:focus-visible, input:focus-visible {
-  outline:2px solid #E34234;
+  outline:2px solid var(--tk-accent);
   outline-offset:3px;
 }
 
@@ -177,13 +238,13 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   font-weight:500;
   letter-spacing:.1em;
   text-transform:uppercase;
-  color:#C9C2B7;
+  color:var(--tk-fg-2);
   text-decoration:none;
   transition:color .18s ease;
 }
 
 .tk-login:hover, .tk-login:focus-visible {
-  color:#F5F1EA;
+  color:var(--tk-fg);
 }
 
 .tk-btn {
@@ -207,29 +268,31 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   transform:translateY(1px);
 }
 
+/* На киновари текст чёрный в обеих темах; при наведении кнопка
+ * становится цвета текста темы. */
 .tk-btn--primary {
-  background:#E34234;
-  border-color:#E34234;
-  color:#0A0A0A;
+  background:var(--tk-accent);
+  border-color:var(--tk-accent);
+  color:var(--tk-ink);
 }
 
 .tk-btn--primary:hover, .tk-btn--primary:focus-visible {
-  background:#F5F1EA;
-  border-color:#F5F1EA;
-  color:#0A0A0A;
+  background:var(--tk-fg);
+  border-color:var(--tk-fg);
+  color:var(--tk-bg);
 }
 
 .tk-btn--ghost {
   background:transparent;
-  border-color:#F5F1EA;
-  color:#F5F1EA;
+  border-color:var(--tk-fg);
+  color:var(--tk-fg);
   font-weight:500;
   padding:19px 28px;
 }
 
 .tk-btn--ghost:hover, .tk-btn--ghost:focus-visible {
-  background:#F5F1EA;
-  color:#0A0A0A;
+  background:var(--tk-fg);
+  color:var(--tk-bg);
 }
 
 .tk-btn--sm {
@@ -239,21 +302,21 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 }
 
 .tk-btn--dark {
-  background:#0A0A0A;
-  border-color:#0A0A0A;
-  color:#F5F1EA;
+  background:var(--tk-ink);
+  border-color:var(--tk-ink);
+  color:var(--tk-paper);
   font-size:17px;
   padding:24px 36px;
 }
 
 .tk-btn--dark:hover, .tk-btn--dark:focus-visible {
-  background:#F5F1EA;
-  border-color:#F5F1EA;
-  color:#0A0A0A;
+  background:var(--tk-paper);
+  border-color:var(--tk-paper);
+  color:var(--tk-ink);
 }
 
 .tk-btn--dark:focus-visible {
-  outline-color:#0A0A0A;
+  outline-color:var(--tk-ink);
 }
 
 .tk-btn--block {
@@ -267,16 +330,16 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   padding:9px 14px;
 }
 
-/* Второстепенное действие на тёмном: рамка вместо заливки. */
+/* Второстепенное действие: рамка вместо заливки. */
 .tk-btn--outline {
   background:transparent;
   border-color:rgba(144,113,99,.7);
-  color:#F5F1EA;
+  color:var(--tk-fg);
 }
 
 .tk-btn--outline:hover, .tk-btn--outline:focus-visible {
-  border-color:#F5F1EA;
-  background:rgba(245,241,234,.08);
+  border-color:var(--tk-fg);
+  background:rgb(var(--tk-fg-rgb) / .08);
 }
 
 /* Тихое второстепенное действие — текстом, без рамки: пожаловаться,
@@ -284,45 +347,45 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 .tk-btn--quiet {
   background: transparent;
   border-color: transparent;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   padding-left: 12px;
   padding-right: 12px;
 }
 
 .tk-btn--quiet:hover,
-.tk-btn--quiet:focus-visible { color: var(--tk-paper); background: rgba(245, 241, 234, .06); }
+.tk-btn--quiet:focus-visible { color: var(--tk-fg); background: rgb(var(--tk-fg-rgb) / .06); }
 
 /* Разрушающее действие: завершить эфир, отменить звонок. */
 .tk-btn--danger {
-  background:#E34234;
-  border-color:#E34234;
-  color:#0A0A0A;
+  background:var(--tk-accent);
+  border-color:var(--tk-accent);
+  color:var(--tk-ink);
 }
 
 .tk-btn--danger:hover, .tk-btn--danger:focus-visible {
   background:#C4342A;
   border-color:#C4342A;
-  color:#F5F1EA;
+  color:var(--tk-paper);
 }
 
 /* Согласие: принять звонок. */
 .tk-btn--ok {
   background:#679267;
   border-color:#679267;
-  color:#0A0A0A;
+  color:var(--tk-ink);
 }
 
 .tk-btn--ok:hover, .tk-btn--ok:focus-visible {
   background:#557A55;
   border-color:#557A55;
-  color:#F5F1EA;
+  color:var(--tk-paper);
 }
 
 /* Нейтральное состояние: разговор уже идёт, кнопка просто завершает. */
 .tk-btn--mute {
   background:#4A4640;
   border-color:#4A4640;
-  color:#F5F1EA;
+  color:var(--tk-paper);
 }
 
 .tk-btn--mute:hover, .tk-btn--mute:focus-visible {
@@ -353,14 +416,14 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   font-weight:500;
   letter-spacing:.24em;
   text-transform:uppercase;
-  color:#679267;
+  color:var(--tk-green);
 }
 
 .tk-kicker::after {
   content:"";
   flex:1;
   height:1px;
-  background:rgba(144, 113, 99, .5);
+  background:var(--tk-rule);
 }
 
 /* ── Поле ввода ────────────────────────────────────────────
@@ -379,20 +442,20 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   /* 16px — не только размер из ТЗ: на меньшем Safari на айфоне сам
    * приближает страницу при фокусе, и вёрстка уезжает. */
   font-size:16px;
-  color:#F5F1EA;
+  color:var(--tk-fg);
   letter-spacing:.01em;
 }
 
 .tk-field::placeholder {
-  color:#8A827C;
+  color:var(--tk-muted);
 }
 
 .tk-field:focus {
-  border-color:#E34234;
+  border-color:var(--tk-accent);
 }
 
 /* Выпадающий список на том же поле. Стрелка своя: у нативной не задать
- * цвет под тёмный фон. */
+ * цвет под тему. Серая #8A827C читается на обоих фонах. */
 .tk-select {
   appearance:none;
   padding-right:44px;
@@ -402,7 +465,7 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   background-size:16px;
 }
 
-.tk-select option { background:#0A0A0A; }
+.tk-select option { background:var(--tk-layer); color:var(--tk-fg); }
 
 /* Свой раскрывающийся список поверх <select class="tk-select"> — public/tk-listbox.js.
  * Обёртка не участвует в раскладке (display: contents): сетки и флексы форм
@@ -440,10 +503,10 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 }
 
 /* Пустое значение — подсказка («Город», «Не выбрано»), как плейсхолдер поля. */
-.tk-lb__button--empty { color:#8A827C; }
+.tk-lb__button--empty { color:var(--tk-muted); }
 
 .tk-lb--open .tk-lb__button {
-  border-color:#E34234;
+  border-color:var(--tk-accent);
   /* Открыт — стрелка смотрит вверх и киноварная. */
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23E34234' stroke-width='2'%3E%3Cpath d='M6 15l6-6 6 6'/%3E%3C/svg%3E");
 }
@@ -456,9 +519,9 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   list-style:none;
   overflow-y:auto;
   overscroll-behavior:contain;
-  background:#0A0A0A;
+  background:var(--tk-layer);
   border:1px solid rgba(144, 113, 99, .7);
-  box-shadow:0 16px 40px rgba(0, 0, 0, .55);
+  box-shadow:0 16px 40px var(--tk-shadow-c);
   outline:none;
   animation:tk-lb-in .14s ease-out;
 }
@@ -473,7 +536,7 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   font-family:Oswald, 'Oswald Fallback', sans-serif;
   font-size:16px;
   line-height:1.3;
-  color:#C9C2B7;
+  color:var(--tk-fg-2);
   cursor:pointer;
   white-space:nowrap;
 }
@@ -485,14 +548,14 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   font-size:11px;
   letter-spacing:.14em;
   text-transform:uppercase;
-  color:#8A827C;
+  color:var(--tk-muted);
   cursor:default;
 }
 
-.tk-lb__option--active { background:rgba(227, 66, 52, .14); color:#F5F1EA; }
+.tk-lb__option--active { background:rgba(227, 66, 52, .14); color:var(--tk-fg); }
 
 /* Выбранный — киноварная планка слева, как активный пункт в левой панели. */
-.tk-lb__option[aria-selected="true"] { color:#F5F1EA; box-shadow:inset 3px 0 0 #E34234; }
+.tk-lb__option[aria-selected="true"] { color:var(--tk-fg); box-shadow:inset 3px 0 0 var(--tk-accent); }
 .tk-lb__option[aria-disabled="true"] { opacity:.4; cursor:default; }
 
 .tk-field:disabled {
@@ -526,23 +589,23 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   border:none;
   padding:0;
   cursor:pointer;
-  color:#8A827C;
+  color:var(--tk-muted);
   transition:color .18s ease;
 }
 
 .tk-field-eye:hover,
 .tk-field-eye:focus-visible {
-  color:#F5F1EA;
+  color:var(--tk-fg);
 }
 
 .tk-flink {
-  color:#C9C2B7;
+  color:var(--tk-fg-2);
   text-decoration:none;
   transition:color .18s ease;
 }
 
 .tk-flink:hover, .tk-flink:focus-visible {
-  color:#E34234;
+  color:var(--tk-accent-text);
 }
 
 .tk-social {
@@ -559,13 +622,18 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   transition:stroke .18s ease;
 }
 
+.tk-social {
+  color:var(--tk-fg-2);
+}
+
 .tk-social:hover, .tk-social:focus-visible {
-  border-color:#E34234;
-  background:#E34234;
+  border-color:var(--tk-accent);
+  background:var(--tk-accent);
+  color:var(--tk-ink);
 }
 
 .tk-social:hover svg, .tk-social:focus-visible svg {
-  stroke:#0A0A0A;
+  stroke:var(--tk-ink);
 }
 
 @media (prefers-reduced-motion:reduce) {
@@ -582,7 +650,7 @@ a:focus-visible, button:focus-visible, input:focus-visible {
  */
 
 /* Полоса контента. Шире 1440 страница не растягивается — за её краями
- * тёмный фон body, в цвет шапки и подвала. */
+ * фон body, в цвет шапки и подвала. */
 /* Обёртка страниц без кабинетной сетки: «О нас», вход, документы. Боковые
  * вырезы (телефон боком) отодвигают содержимое здесь — так же, как
  * .tk-app-main делает это для страниц кабинета. */
@@ -592,8 +660,8 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   margin: 0 auto;
   padding-left: var(--tk-safe-l);
   padding-right: var(--tk-safe-r);
-  background: var(--tk-ink);
-  color: var(--tk-paper);
+  background: var(--tk-bg);
+  color: var(--tk-fg);
 }
 
 /* Светлая секция продолжает свой фон до краёв окна, а не обрывается на 1440:
@@ -626,7 +694,7 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   padding: 7px 10px;
   background: transparent;
   border: 1px solid rgba(144, 113, 99, .7);
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   font: inherit;
   letter-spacing: inherit;
   cursor: pointer;
@@ -635,9 +703,9 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 /* Активный язык. Раньше это состояние проставлял скрипт шестью строками
  * инлайновых стилей — теперь он только переставляет класс. */
 .tk-lang__btn--on {
-  background: var(--tk-paper);
+  background: var(--tk-fg);
   border-color: transparent;
-  color: var(--tk-ink);
+  color: var(--tk-bg);
 }
 
 /* ── Подвал ── */
@@ -658,7 +726,7 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   gap: 12px;
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 .tk-footer__brand {
@@ -770,25 +838,25 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   align-items: center;
   gap: 10px;
   padding: 10px 14px 10px 10px;
-  background: var(--tk-ink);
+  background: var(--tk-layer);
   border: 1px solid var(--tk-rule);
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .06em;
   text-decoration: none;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+  box-shadow: 0 8px 24px var(--tk-shadow-c);
 }
 
 .tk-upchip[hidden] { display: none; }
-.tk-upchip:hover { border-color: var(--tk-paper); }
+.tk-upchip:hover { border-color: var(--tk-fg); }
 
 .tk-upchip__ring {
   width: 22px;
   height: 22px;
   flex: none;
   border-radius: 50%;
-  background: conic-gradient(var(--tk-accent) calc(var(--p) * 360deg), rgba(201, 194, 183, .2) 0);
+  background: conic-gradient(var(--tk-accent) calc(var(--p) * 360deg), rgb(var(--tk-fg-rgb) / .2) 0);
   -webkit-mask: radial-gradient(circle, transparent 7px, #000 7.5px);
   mask: radial-gradient(circle, transparent 7px, #000 7.5px);
 }
@@ -833,10 +901,10 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   align-items:center;
   gap:20px;
   padding:16px 20px;
-  background:var(--tk-ink);
-  color:var(--tk-paper);
+  background:var(--tk-layer);
+  color:var(--tk-fg);
   border:1px solid var(--tk-rule);
-  box-shadow:0 16px 40px rgba(0, 0, 0, .45);
+  box-shadow:0 16px 40px var(--tk-shadow-c);
 }
 
 .tk-consent__text {
@@ -876,7 +944,7 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   content:"";
   position:absolute;
   inset:0;
-  background:var(--tk-paper, #fff);
+  background:var(--tk-paper);
   -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.5 12.3l3 3 6-6.3' fill='none' stroke='%23000' stroke-width='2.2'/%3E%3C/svg%3E") center/contain no-repeat;
   mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.5 12.3l3 3 6-6.3' fill='none' stroke='%23000' stroke-width='2.2'/%3E%3C/svg%3E") center/contain no-repeat;
 }
@@ -898,15 +966,15 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   align-items: center;
   gap: 10px;
   padding: 8px 14px;
-  background: var(--tk-ink);
-  color: var(--tk-paper);
+  background: var(--tk-layer);
+  color: var(--tk-fg);
   border: 1px solid var(--tk-rule);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, .5);
+  box-shadow: 0 8px 28px var(--tk-shadow-c);
   font: 500 13px/1.4 'Golos Text', 'Golos Text Fallback', Helvetica, sans-serif;
 }
 .tk-netbar[hidden] { display: none; }
 /* Сервер отвечает, рвётся только живое соединение — без тревоги. */
-.tk-netbar--soft { color: var(--tk-beige); }
+.tk-netbar--soft { color: var(--tk-fg-2); }
 .tk-netbar--soft::before { background: var(--tk-muted); }
 .tk-netbar::before {
   content: "";

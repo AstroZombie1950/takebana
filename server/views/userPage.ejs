@@ -4,7 +4,7 @@
 <% var lastAt = [recordings[0], photos[0], videos[0]].filter(Boolean).map(function (x) { return new Date(x.createdAt); })
      .sort(function (a, b) { return b - a; })[0]; %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName }, description: describe(user.bio, ta('seo.profileDesc', { name: user.displayName })),
          seo: { path: user.url, type: 'profile', robots: indexable ? '' : 'noindex, follow', image: ogImage, imageStd: !!ogImage, imageAlt: user.displayName,

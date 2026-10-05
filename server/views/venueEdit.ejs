@@ -13,7 +13,7 @@
    var wd = form.weekdayHours || {}, we = form.weekendHours || {};
    var loc = form.location && form.location.lat != null ? form.location : null; %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { title: venue.name + ' — Takebana', robots: 'noindex, nofollow' }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">

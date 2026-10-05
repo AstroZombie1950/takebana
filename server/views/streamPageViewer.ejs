@@ -12,7 +12,7 @@
     в странице нет. %>
 <% var playable = !locked && stream.isActive && (stream.streamType === 'obs-stream' || stream.streamType === 'daily-stream'); %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%# Эфир живёт часы — в индекс не берём, но ссылку на него пересылают:
     карточка с обложкой нужна. %>
@@ -42,7 +42,7 @@
     <div class="tk-live tk-live--viewer">
       <div class="tk-live__grid" id="stage">
         <section class="tk-live__col">
-          <div class="tk-live__player" id="player">
+          <div class="tk-live__player tk-dark" id="player">
             <%# Идущему эфиру — плеер, неидущему — карточка паузы. Плеер под
                 карточкой не ждём: после остановки он доигрывал бы хвост
                 плейлиста и прятал карточку. О старте придёт stream:update. %>

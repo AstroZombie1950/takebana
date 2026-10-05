@@ -17,8 +17,8 @@ body.tk-panel {
   /* Без этого на узком экране строки сетки делят высоту экрана поровну,
    * и между меню и содержимым встаёт пустая полоса. */
   align-content: start;
-  background: var(--tk-ink);
-  color: var(--tk-paper);
+  background: var(--tk-bg);
+  color: var(--tk-fg);
 }
 
 /* ── Меню слева ───────────────────────────────────────────────────────── */
@@ -40,7 +40,7 @@ body.tk-panel {
   font-weight: 700;
   letter-spacing: .02em;
   text-transform: uppercase;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   text-decoration: none;
 }
 
@@ -65,17 +65,17 @@ body.tk-panel {
   padding: 9px 12px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   text-decoration: none;
   border-left: 2px solid transparent;
 }
 
-.tk-panel__tab:hover { color: var(--tk-paper); background: rgba(245, 241, 234, .05); }
+.tk-panel__tab:hover { color: var(--tk-fg); background: rgb(var(--tk-fg-rgb) / .05); }
 
 .tk-panel__tab.is-on {
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   border-left-color: var(--tk-accent);
-  background: rgba(245, 241, 234, .07);
+  background: rgb(var(--tk-fg-rgb) / .07);
 }
 
 .tk-panel__badge {
@@ -84,7 +84,7 @@ body.tk-panel {
   font-size: 11px;
   font-weight: 700;
   text-align: center;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   background: var(--tk-accent);
 }
 
@@ -99,11 +99,11 @@ body.tk-panel {
 
 .tk-panel__exit {
   font-size: 13px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   text-decoration: none;
   border-bottom: 1px solid var(--tk-rule);
 }
-.tk-panel__exit:hover { color: var(--tk-paper); }
+.tk-panel__exit:hover { color: var(--tk-fg); }
 
 /* ── Правая часть ─────────────────────────────────────────────────────── */
 .tk-panel__main {
@@ -143,7 +143,7 @@ body.tk-panel {
   font-weight: 800;
   letter-spacing: .02em;
   text-transform: uppercase;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 /* Сторона встречи Daily в карточке звонка: участник над своей выжимкой. */
@@ -191,7 +191,7 @@ body.tk-panel {
   margin: 0 0 18px;
   padding: 10px 14px;
   font-size: 14px;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   border-left: 2px solid var(--tk-accent);
   background: rgba(227, 66, 52, .12);
 }
@@ -222,10 +222,10 @@ body.tk-panel {
   display: inline-block;
   margin-bottom: 14px;
   font-size: 13px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   text-decoration: none;
 }
-.tk-panel__back:hover, .tk-panel__more a:hover { color: var(--tk-paper); }
+.tk-panel__back:hover, .tk-panel__more a:hover { color: var(--tk-fg); }
 
 /* ── Плитки со сводкой ────────────────────────────────────────────────── */
 .tk-tiles {
@@ -261,7 +261,7 @@ body.tk-panel {
   color: var(--tk-muted);
 }
 
-.tk-tile__hint a, .tk-tile a { color: var(--tk-beige); }
+.tk-tile__hint a, .tk-tile a { color: var(--tk-fg-2); }
 
 /* ── Графики по дням ──────────────────────────────────────────────────── */
 .tk-charts {
@@ -312,7 +312,7 @@ body.tk-panel {
   font-size: 11px;
   line-height: 1;
   color: var(--tk-muted);
-  background: var(--tk-ink);
+  background: var(--tk-bg);
   font-variant-numeric: tabular-nums;
 }
 
@@ -333,7 +333,7 @@ body.tk-panel {
   cursor: default;
 }
 
-.tk-chart__col:hover { background: rgba(245, 241, 234, .05); }
+.tk-chart__col:hover { background: rgb(var(--tk-fg-rgb) / .05); }
 
 .tk-chart__col i {
   display: block;
@@ -359,8 +359,8 @@ body.tk-panel {
   font-size: 12px;
   white-space: nowrap;
   pointer-events: none;
-  color: var(--tk-ink);
-  background: var(--tk-paper);
+  color: var(--tk-bg);
+  background: var(--tk-fg);
 }
 
 .tk-charts__table { margin-top: 14px; }
@@ -398,14 +398,14 @@ body.tk-panel {
   border-bottom: 1px solid rgba(144, 113, 99, .22);
 }
 
-.tk-table tbody tr:hover { background: rgba(245, 241, 234, .04); }
+.tk-table tbody tr:hover { background: rgb(var(--tk-fg-rgb) / .04); }
 
 /* Первая колонка — название или человек: в узкой коробке она иначе
  * сжимается до слова в строке, хотя таблица и так прокручивается вбок. */
 .tk-table td:first-child { min-width: 150px; }
 .tk-table tbody tr:last-child td { border-bottom: 0; }
 
-.tk-table a { color: var(--tk-paper); }
+.tk-table a { color: var(--tk-fg); }
 .tk-table code { font-size: 12px; overflow-wrap: anywhere; }
 
 .tk-num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -448,7 +448,7 @@ body.tk-panel {
   font-weight: 600;
 }
 
-.tk-person:hover .tk-person__name { color: var(--tk-accent); }
+.tk-person:hover .tk-person__name { color: var(--tk-accent-text); }
 .tk-person__extra { font-weight: 400; color: var(--tk-muted); }
 
 /* ── Метки и точки ────────────────────────────────────────────────────── */
@@ -460,12 +460,12 @@ body.tk-panel {
   font-weight: 700;
   letter-spacing: .04em;
   text-transform: uppercase;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   border: 1px solid var(--tk-rule);
   text-decoration: none;
 }
 
-.tk-tag--bad { color: var(--tk-accent); border-color: rgba(227, 66, 52, .5); }
+.tk-tag--bad { color: var(--tk-accent-text); border-color: rgba(227, 66, 52, .5); }
 .tk-tag--on { color: var(--tk-green); border-color: rgba(103, 146, 103, .5); }
 
 .tk-dot {
@@ -512,7 +512,7 @@ body.tk-panel {
   flex-wrap: wrap;
   margin-bottom: 12px;
   padding: 10px 14px;
-  background: var(--tk-ink);
+  background: var(--tk-bg);
   border: 1px solid var(--tk-rule);
 }
 
@@ -551,13 +551,13 @@ body.tk-panel {
 }
 
 .tk-card__line { margin: 0; font-size: 14px; word-break: break-word; }
-.tk-card__line code { font-size: 13px; color: var(--tk-beige); }
+.tk-card__line code { font-size: 13px; color: var(--tk-fg-2); }
 
 .tk-card__quote {
   margin: 0;
   padding-left: 10px;
   font-size: 13px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   border-left: 2px solid var(--tk-rule);
 }
 
@@ -566,7 +566,7 @@ body.tk-panel {
 
 .tk-card__more summary {
   font-size: 12px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   cursor: pointer;
 }
 
@@ -577,8 +577,8 @@ body.tk-panel {
   overflow: auto;
   font-size: 11px;
   line-height: 1.5;
-  color: var(--tk-beige);
-  background: rgba(245, 241, 234, .05);
+  color: var(--tk-fg-2);
+  background: rgb(var(--tk-fg-rgb) / .05);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -604,8 +604,8 @@ body.tk-panel {
   border: 1px dashed var(--tk-accent);
 }
 
-.tk-draft__head { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tk-accent); }
-.tk-draft__list { margin: 0; padding-left: 16px; font-size: 13px; color: var(--tk-beige); display: flex; flex-direction: column; gap: 4px; }
+.tk-draft__head { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tk-accent-text); }
+.tk-draft__list { margin: 0; padding-left: 16px; font-size: 13px; color: var(--tk-fg-2); display: flex; flex-direction: column; gap: 4px; }
 .tk-draft__list s { color: var(--tk-muted); }
 .tk-draft__pics { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .tk-draft__pics img { width: 64px; height: 48px; object-fit: cover; display: block; }
@@ -613,7 +613,7 @@ body.tk-panel {
 /* Своё владельца, которого нет в справочнике (30.09): взять в общий список. */
 .tk-owns { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px dashed var(--tk-rule); }
 .tk-own { display: flex; flex-direction: column; gap: 6px; }
-.tk-own__what { margin: 0; font-size: 13px; color: var(--tk-beige); }
+.tk-own__what { margin: 0; font-size: 13px; color: var(--tk-fg-2); }
 .tk-own__line { display: flex; flex-wrap: wrap; gap: 6px; }
 .tk-own__line .tk-field { flex: 1 1 140px; min-width: 0; padding: 7px 10px; font-size: 13px; }
 .tk-field-row .tk-field + .tk-field { margin-top: 4px; }
@@ -643,7 +643,7 @@ body.tk-panel {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   white-space: nowrap;
 }
 
@@ -690,7 +690,7 @@ body.tk-panel {
 
 .tk-facts dt { color: var(--tk-muted); }
 .tk-facts dd { margin: 0; word-break: break-word; }
-.tk-facts code { font-size: 12px; color: var(--tk-beige); }
+.tk-facts code { font-size: 12px; color: var(--tk-fg-2); }
 /* Описание профиля — с переносами строк, как его написали. */
 .tk-facts__pre { white-space: pre-line; }
 
@@ -714,18 +714,18 @@ body.tk-panel {
 .tk-pager__page,
 .tk-pager__step {
   padding: 6px 10px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   text-decoration: none;
   border: 1px solid var(--tk-rule);
 }
 
 .tk-pager__page:hover,
-.tk-pager__step:hover { color: var(--tk-paper); border-color: var(--tk-beige); }
+.tk-pager__step:hover { color: var(--tk-fg); border-color: var(--tk-fg-2); }
 
 .tk-pager__page.is-on {
-  color: var(--tk-ink);
-  background: var(--tk-paper);
-  border-color: var(--tk-paper);
+  color: var(--tk-bg);
+  background: var(--tk-fg);
+  border-color: var(--tk-fg);
 }
 
 /* Крайние шаги не прячем, а гасим: список кнопок не должен прыгать
@@ -785,7 +785,7 @@ body.tk-panel {
   width: 100%;
   min-width: 80px;
   height: 8px;
-  background: rgba(245, 241, 234, .06);
+  background: rgb(var(--tk-fg-rgb) / .06);
 }
 
 .tk-share i {
@@ -796,8 +796,8 @@ body.tk-panel {
 }
 
 .tk-store__group td { font-weight: 600; }
-.tk-store__kind td:first-child { padding-left: 28px; color: var(--tk-beige); }
-.tk-store__kind.is-orphan td:first-child { color: var(--tk-accent); }
+.tk-store__kind td:first-child { padding-left: 28px; color: var(--tk-fg-2); }
+.tk-store__kind.is-orphan td:first-child { color: var(--tk-accent-text); }
 
 /* ── Поддержка: лента диалога и ответ (routes/admin/support.js) ───────── */
 .tk-sup {
@@ -838,7 +838,7 @@ body.tk-panel {
   overflow-wrap: anywhere;
 }
 
-.tk-sup__text a { color: var(--tk-accent); }
+.tk-sup__text a { color: var(--tk-accent-text); }
 
 .tk-sup__when {
   display: block;
@@ -856,8 +856,8 @@ body.tk-panel {
 .tk-sup__form .tk-field { width: 100%; padding: 10px 12px; font-size: 14px; resize: vertical; }
 .tk-sup__form .tk-btn { align-self: flex-end; }
 
-.tk-sup__last { color: var(--tk-beige); }
-.tk-sup__last:hover { color: var(--tk-paper); }
+.tk-sup__last { color: var(--tk-fg-2); }
+.tk-sup__last:hover { color: var(--tk-fg); }
 
 .tk-sup__area { resize: vertical; line-height: 1.5; }
 

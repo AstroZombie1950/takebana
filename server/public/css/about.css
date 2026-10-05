@@ -63,11 +63,11 @@
   margin: 34px 0 0;
   max-width: 560px;
   padding-left: 20px;
-  border-left: 2px solid #679267;
+  border-left: 2px solid var(--tk-green);
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 19px;
   line-height: 1.5;
-  color: #C9C2B7;
+  color: var(--tk-fg-2);
   text-wrap: pretty;
 }
 
@@ -79,12 +79,14 @@
   margin-top: 32px;
 }
 
-/* Кадр эфира справа: пока фотографии нет — штриховка с киноварной дымкой. */
+/* Кадр эфира справа: пока фотографии нет — штриховка с киноварной дымкой.
+ * Это картинка, поэтому тёмная в обеих темах. */
 .tk-about__shot {
   position: relative;
   min-height: 520px;
   background: repeating-linear-gradient(112deg, #1A1210 0 14px, #241713 14px 28px);
   border-left: 1px solid rgba(144, 113, 99, .5);
+  color: var(--tk-paper);
 }
 
 .tk-about__shot-tint {
@@ -172,7 +174,12 @@
 /* ── Секции ───────────────────────────────────────────────────────────── */
 .tk-about__sec { padding: 96px 56px 104px; }
 
-.tk-about__sec--paper { background: #F5F1EA; color: #0A0A0A; }
+.tk-about__sec--paper { background: var(--tk-paper); color: var(--tk-ink); }
+
+/* Светлая тема: тёмные секции становятся бумагой (фон темы), а бумажные —
+ * песком, иначе чередование секций пропадает. Рубрики и ссылки на песке
+ * держат 4.6 и 4.5:1. */
+[data-theme="light"] .tk-about__sec--paper { --tk-bleed: #EEE8DE; background: #EEE8DE; }
 
 /* Строка заголовка секции с линейкой снизу. На бумаге линейка — чернилами. */
 .tk-about__head {
@@ -205,11 +212,11 @@
   margin: 0;
   max-width: 560px;
   padding-left: 18px;
-  border-left: 2px solid #679267;
+  border-left: 2px solid var(--tk-green);
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 18px;
   line-height: 1.55;
-  color: #C9C2B7;
+  color: var(--tk-fg-2);
 }
 
 /* Растяжки. grow на узком экране прячется вместе с раскладкой в строку;
@@ -276,10 +283,10 @@
 .tk-about__legend-label {
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
-  color: #F5F1EA;
+  color: var(--tk-fg);
 }
 
-.tk-about__legend-label--muted { color: #C9C2B7; }
+.tk-about__legend-label--muted { color: var(--tk-fg-2); }
 
 .tk-about__map { height: 560px; margin-top: 40px; }
 
@@ -287,7 +294,7 @@
 .tk-homemap {
   position: relative;
   border: 1px solid rgba(144, 113, 99, .5);
-  background: #120E0C;
+  background: var(--tk-shot);
 }
 
 .tk-homemap__tip {
@@ -295,12 +302,12 @@
   z-index: 2;
   transform: translate(-50%, calc(-100% - 8px));
   padding: 6px 10px;
-  background: #0A0A0A;
+  background: var(--tk-layer);
   border: 1px solid rgba(144, 113, 99, .5);
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   white-space: nowrap;
-  color: #F5F1EA;
+  color: var(--tk-fg);
   pointer-events: none;
 }
 
@@ -321,7 +328,7 @@
 
 .tk-about__split-r {
   padding: 84px 56px 88px 48px;
-  background: #120E0C;
+  background: var(--tk-raise);
 }
 
 /* Список прижат к низу половины, чтобы строки обеих колонок стояли вровень. */
@@ -345,15 +352,15 @@
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .16em;
-  color: #E34234;
+  color: var(--tk-accent-text);
 }
 
-.tk-about__split-r .tk-about__item-num { color: #679267; }
+.tk-about__split-r .tk-about__item-num { color: var(--tk-green); }
 
 .tk-about__item-text {
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 20px;
-  color: #F5F1EA;
+  color: var(--tk-fg);
 }
 
 /* ── Как начать: три шага с крупными цифрами ──────────────────────────── */

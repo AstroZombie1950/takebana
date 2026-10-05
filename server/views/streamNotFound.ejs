@@ -5,7 +5,7 @@
 <% var k = typeof restricted !== 'undefined' && restricted ? 'restricted' : 'ended'; %>
 <% var authorUrl = locals.authorUrl || ''; var textKey = locals.processing ? 'ended.textSoon' : k + '.text'; %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: k === 'restricted' ? 'restricted.title' : 'page.ended.title' }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">

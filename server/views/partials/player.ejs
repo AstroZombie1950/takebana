@@ -26,7 +26,7 @@
   var pMark = typeof mark !== 'undefined' && mark;
   var ico = 'viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"';
 %>
-<div class="tk-player" data-mode="<%= pMode %>"<% if (pSrc) { %> data-src="<%= pSrc %>"<% } %> tabindex="-1">
+<div class="tk-player tk-dark" data-mode="<%= pMode %>"<% if (pSrc) { %> data-src="<%= pSrc %>"<% } %> tabindex="-1">
   <video class="tk-player__video" id="video" playsinline preload="metadata"<% if (pPoster) { %> poster="<%= pPoster %>"<% } %>
          controlslist="nodownload noremoteplayback noplaybackrate" disableremoteplayback></video>
   <% if (pMark) { %><span class="tk-player__wm" aria-hidden="true" hidden></span><% } %>

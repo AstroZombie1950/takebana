@@ -59,7 +59,7 @@
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   line-height: 1.4;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 .tk-company__time {
@@ -86,7 +86,7 @@
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 16px;
   line-height: 1.6;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 /* «Мои заведения» (/venues/mine): новая заявка и счётчик «N из 10». */

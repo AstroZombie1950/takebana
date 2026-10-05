@@ -29,7 +29,7 @@
 .tk-live__col {
   min-width: 0;
   border: 1px solid var(--tk-rule);
-  background: var(--tk-ink);
+  background: var(--tk-bg);
 }
 
 /* ── Картинка ─────────────────────────────────────────────────────────── */
@@ -63,7 +63,7 @@
   text-align: center;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 .tk-live__hint p { margin: 0; max-width: 40ch; }
@@ -74,7 +74,7 @@
   font-size: 13px;
   letter-spacing: .16em;
   text-transform: uppercase;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 /* Заставка приостановленного эфира: обложка уходит на фон и приглушается. */
@@ -90,9 +90,9 @@
 .tk-live__hint > :not(.tk-live__thumb) { position: relative; }
 
 /* Только для подписчиков: обложка размыта — видно, что эфир идёт, но не что в нём. */
-.tk-live__locked { gap: 8px; padding: 0 24px; text-align: center; color: var(--tk-beige); }
+.tk-live__locked { gap: 8px; padding: 0 24px; text-align: center; color: var(--tk-fg-2); }
 .tk-live__locked .tk-live__thumb { filter: blur(18px); transform: scale(1.1); }
-.tk-live__locked svg { color: var(--tk-accent); }
+.tk-live__locked svg { color: var(--tk-accent-text); }
 .tk-live__chat--locked { justify-content: flex-start; }
 .tk-live__chat--locked .tk-note { padding: 24px 16px; }
 
@@ -186,7 +186,7 @@
 .tk-live__fs:hover { color: var(--tk-paper); border-color: var(--tk-beige); }
 /* Кнопка чата — только во весь экран, левее кнопки экрана. */
 .tk-live__chatbtn { display: none; right: 58px; }
-.tk-live__chatbtn[aria-pressed="true"] { color: var(--tk-paper); border-color: var(--tk-accent); }
+.tk-live__chatbtn[aria-pressed="true"] { color: var(--tk-fg); border-color: var(--tk-accent); }
 .tk-live__fs-off,
 .tk-live__fs[aria-pressed="true"] .tk-live__fs-on { display: none; }
 .tk-live__fs[aria-pressed="true"] .tk-live__fs-off { display: block; }
@@ -214,19 +214,19 @@
   padding: 0;
   background: none;
   border: 1px solid var(--tk-rule);
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   cursor: pointer;
   transition: border-color .18s ease, color .18s ease, background-color .18s ease;
 }
 
-.tk-live__tool:hover:not(:disabled) { border-color: var(--tk-beige); color: var(--tk-paper); }
+.tk-live__tool:hover:not(:disabled) { border-color: var(--tk-fg-2); color: var(--tk-fg); }
 .tk-live__tool:disabled { opacity: .4; cursor: default; }
 
 /* Микрофон выключен — кнопка киноварная и перечёркнутая. */
 .tk-live__tool[aria-pressed="true"] {
   border-color: var(--tk-accent);
   background: rgba(227, 66, 52, .16);
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
 }
 
 .tk-live__mic-off,
@@ -247,20 +247,20 @@
   gap: 10px;
   font-size: 14px;
   line-height: 1.55;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
-.tk-live__steps a { color: var(--tk-accent); }
+.tk-live__steps a { color: var(--tk-accent-text); }
 
 .tk-live__key {
   display: block;
   margin-top: 6px;
   padding: 9px 12px;
   border: 1px solid var(--tk-rule);
-  background: rgba(201, 194, 183, .05);
+  background: rgb(var(--tk-fg-rgb) / .05);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   word-break: break-all;
   user-select: all;
 }
@@ -297,7 +297,7 @@
   letter-spacing: -.02em;
   font-weight: 900;
   text-transform: uppercase;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 /* «←» и «▾» нужны только на телефоне: на широком экране есть шапка сайта
@@ -313,7 +313,7 @@
   padding: 0;
   background: none;
   border: 1px solid var(--tk-rule);
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   cursor: pointer;
 }
 
@@ -356,18 +356,18 @@
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 16px;
   font-weight: 500;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tk-live__author-name:hover { color: var(--tk-accent); }
+.tk-live__author-name:hover { color: var(--tk-accent-text); }
 
 /* Эфир заведения (29.09): под названием заведения — кто ведёт. */
 .tk-live__host { display: block; margin-top: 2px; font-size: 12px; color: var(--tk-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tk-live__host a { color: var(--tk-beige); }
-.tk-live__host a:hover { color: var(--tk-accent); }
+.tk-live__host a { color: var(--tk-fg-2); }
+.tk-live__host a:hover { color: var(--tk-accent-text); }
 
 .tk-live__role {
   font-size: 12px;
@@ -384,7 +384,7 @@
   margin: 12px 0 0;
   font-size: 14px;
   line-height: 1.6;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   white-space: pre-line;
 }
 
@@ -396,7 +396,7 @@
   height: calc(100dvh - var(--tk-head-h) - 44px);
   min-height: 420px;
   border: 1px solid var(--tk-rule);
-  background: var(--tk-ink);
+  background: var(--tk-bg);
 }
 
 /* Широкий экран: низ чата — по низу блока с картинкой, именем и
@@ -449,9 +449,9 @@
 
 .chat-message--own { border-left-color: var(--tk-green); }
 .chat-message__line { margin: 0; }
-.chat-message__who { font-weight: 600; color: var(--tk-paper); }
+.chat-message__who { font-weight: 600; color: var(--tk-fg); }
 .chat-message--own .chat-message__who { color: var(--tk-green); }
-.chat-message__text { color: var(--tk-beige); overflow-wrap: anywhere; }
+.chat-message__text { color: var(--tk-fg-2); overflow-wrap: anywhere; }
 
 .chat-message__time {
   display: block;
@@ -497,7 +497,7 @@
   padding: 7px 34px 7px 12px;
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   background-position: right 10px center;
   background-size: 14px;
 }
@@ -576,7 +576,7 @@
 .tk-studio__venue-ava img { width: 100%; height: 100%; object-fit: cover; }
 .tk-studio__venue-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .tk-studio__venue-text .tk-form__label { margin: 0; }
-.tk-studio__venue-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tk-paper); }
+.tk-studio__venue-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tk-fg); }
 
 .tk-studio__venue-off {
   flex: none;
@@ -584,11 +584,11 @@
   font-size: 12px;
   letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 .tk-studio__venue-off:hover,
-.tk-studio__venue-off:focus-visible { color: var(--tk-accent); }
+.tk-studio__venue-off:focus-visible { color: var(--tk-accent-text); }
 .tk-studio__form .tk-form__row .tk-field { padding: 12px 14px; }
 .tk-studio__form .tk-select { padding-right: 40px; }
 
@@ -603,7 +603,7 @@
   align-items: center;
   justify-content: center;
   border: 1px dashed var(--tk-rule);
-  background: #000;
+  background: var(--tk-shot);
   overflow: hidden;
 }
 
@@ -660,7 +660,7 @@
   cursor: pointer;
 }
 
-.tk-seg__btn:hover { color: var(--tk-beige); }
+.tk-seg__btn:hover { color: var(--tk-fg-2); }
 
 .tk-seg__btn:has(:checked) {
   border-color: var(--tk-accent);
@@ -686,7 +686,7 @@
   text-align: center;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 .tk-rec__body { margin-top: 14px; }
@@ -759,11 +759,11 @@ html.tk-stage-open { overflow: hidden; }
   color: var(--tk-label);
 }
 
-.tk-vl__facts dd { margin: 0; line-height: 20px; color: var(--tk-beige); overflow-wrap: anywhere; }
+.tk-vl__facts dd { margin: 0; line-height: 20px; color: var(--tk-fg-2); overflow-wrap: anywhere; }
 .tk-vl__links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 /* Название — ссылка на страницу заведения: на телефоне кнопок под ним нет. */
 .tk-vl__name { color: inherit; }
-.tk-vl__name:hover { color: var(--tk-accent); }
+.tk-vl__name:hover { color: var(--tk-accent-text); }
 
 /* Знак — в правый нижний угол: верхний правый занят кнопкой «весь экран». */
 .tk-vl .tk-wm { top: auto; bottom: 10px; }

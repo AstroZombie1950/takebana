@@ -19,7 +19,7 @@
   var href = function (t) { return '/search?q=' + encodeURIComponent(query) + (t === 'all' ? '' : '&tab=' + t); };
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: query ? 'page.search.query' : 'page.search.title', titleVars: query ? { q: query } : undefined }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">

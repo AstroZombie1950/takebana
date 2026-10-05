@@ -10,7 +10,7 @@
   var k = st === 404 ? 'missing' : st === 403 ? 'forbidden' : st >= 500 ? 'fail' : 'bad';
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.' + k + '.title' }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">

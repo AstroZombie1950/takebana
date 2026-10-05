@@ -202,10 +202,14 @@ Object.assign(app.locals, require('./utils/snippet'));
 // страницах без commonDataMiddleware — вход, документы; вошедшему эти поля
 // перекрывает он же (routes/streaming/shared.js).
 Object.assign(app.locals, { currentUser: null, subscriptions: [], notifications: null, missedCalls: 0, unreadMessages: 0 });
+// Тема до utils/theme.js — страницы ошибок, отданные раньше него.
+Object.assign(app.locals, { theme: 'dark', themeOn: 'dark' });
 // Страницы и сообщения в JSON-ответах — на языке интерфейса (cookie `lang`,
 // utils/i18n.js). До маршрутов: переводить нужно всё, что они ответят.
 const { localizeMessages, pageLocals } = require('./utils/i18n');
 app.use(localizeMessages, pageLocals);
+// Тема — cookie `theme` (utils/theme.js): шаблон ставит её на <html> сразу.
+app.use(require('./utils/theme').pageLocals);
 // Адрес страницы — шапке и панели: что подсветить и куда вернуть после входа.
 // Нужен всем страницам, а commonDataMiddleware стоит не на всех.
 const places = require('./utils/places');

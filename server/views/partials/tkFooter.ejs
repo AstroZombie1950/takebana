@@ -11,8 +11,7 @@
 <footer class="tk-footer<%= socials.length ? '' : ' tk-footer--nosocial' %>">
   <div class="tk-footer__brand">
     <a href="/" class="tk-footer__home" aria-label="Takebana">
-      <img src="/img/logo.svg" alt="Takebana" class="tk-footer__logo"
-           width="93" height="48" decoding="async" loading="lazy">
+      <%- include('logo', { cls: 'tk-footer__logo', w: 93, h: 48 }) %>
     </a>
     <span class="tk-footer__tagline" data-i18n="foot.tagline"><%- t('foot.tagline') %></span>
   </div>
@@ -36,7 +35,7 @@
     <span class="tk-footer__title" data-i18n="foot.col3.title"><%- t('foot.col3.title') %></span>
     <div class="tk-footer__socials">
       <% socials.forEach(function (k) { %>
-      <a href="<%= contacts.social[k] %>" class="tk-social" rel="noopener" aria-label="<%= socialIcons[k][0] %>"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#C9C2B7" stroke-width="1.6" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><%- socialIcons[k][1] %></svg></a>
+      <a href="<%= contacts.social[k] %>" class="tk-social" rel="noopener" aria-label="<%= socialIcons[k][0] %>"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><%- socialIcons[k][1] %></svg></a>
       <% }); %>
     </div>
   </div>

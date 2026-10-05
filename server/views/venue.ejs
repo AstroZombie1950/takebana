@@ -16,7 +16,7 @@
    var draftAt = venue.pending && venue.pending.at;
    var votes = plural(rating.count, 'venues.votes'); %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%# В индекс — одобренное заведение с описанием (docs/VENUES.md, п. 5): без
     него страница — название и адрес, поиску в ней нечего взять. Фото, видео

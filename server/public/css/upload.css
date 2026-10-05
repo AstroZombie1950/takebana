@@ -11,7 +11,7 @@
   padding: 36px 20px;
   border: 1px dashed var(--tk-rule);
   text-align: center;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   cursor: pointer;
   transition: border-color .18s ease, background-color .18s ease;
 }
@@ -22,14 +22,14 @@
 .tk-up__or { font-family: Oswald, 'Oswald Fallback', sans-serif; font-size: 14px; letter-spacing: .04em; }
 
 /* От имени заведения (29.09): чьё это будет видео. */
-.tk-up__venue { margin: 0; padding: 12px 14px; border: 1px solid var(--tk-accent); background: rgba(227, 66, 52, .08); color: var(--tk-beige); }
-.tk-up__venue b { color: var(--tk-paper); }
+.tk-up__venue { margin: 0; padding: 12px 14px; border: 1px solid var(--tk-accent); background: rgba(227, 66, 52, .08); color: var(--tk-fg-2); }
+.tk-up__venue b { color: var(--tk-fg); }
 .tk-up__drop .tk-note { max-width: 520px; margin: 0; }
 
 /* ── Полоса загрузки: общая у фото и видео ── */
 .tk-up__bar {
   height: 4px;
-  background: rgba(201, 194, 183, .15);
+  background: rgb(var(--tk-fg-rgb) / .15);
   overflow: hidden;
 }
 
@@ -119,15 +119,15 @@
   margin: 0;
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 16px;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tk-upv__state { margin: 0; font-size: 14px; color: var(--tk-beige); }
+.tk-upv__state { margin: 0; font-size: 14px; color: var(--tk-fg-2); }
 .tk-upv[data-status="ready"] .tk-upv__state { color: var(--tk-green-live); }
-.tk-upv[data-status="failed"] .tk-upv__state { color: var(--tk-accent); }
+.tk-upv[data-status="failed"] .tk-upv__state { color: var(--tk-accent-text); }
 
 .tk-upv__edit { display: flex; flex-direction: column; gap: 10px; }
 .tk-upv__edit .tk-panel__title { margin: 6px 0 0; }
@@ -165,7 +165,7 @@
   height: 4px;
 }
 
-.tk-upv__trim::before { left: 0; right: 0; background: rgba(201, 194, 183, .18); }
+.tk-upv__trim::before { left: 0; right: 0; background: rgb(var(--tk-fg-rgb) / .18); }
 .tk-upv__fill { left: var(--a); width: calc(var(--b) - var(--a)); background: var(--tk-accent); }
 
 .tk-upv__trim input {
@@ -186,7 +186,7 @@
   -webkit-appearance: none;
   width: 14px;
   height: 28px;
-  background: var(--tk-paper);
+  background: var(--tk-fg);
   border: 0;
   pointer-events: auto;
   cursor: ew-resize;
@@ -197,7 +197,7 @@
   height: 28px;
   border: 0;
   border-radius: 0;
-  background: var(--tk-paper);
+  background: var(--tk-fg);
   pointer-events: auto;
   cursor: ew-resize;
 }
@@ -213,7 +213,7 @@
   align-items: center;
   gap: 10px;
   font-size: 15px;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   cursor: pointer;
 }
 
@@ -235,14 +235,14 @@
   padding: 7px 12px;
   background: none;
   border: 0;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .04em;
   cursor: pointer;
 }
 
-.tk-upv .tk-seg button[aria-checked="true"] { background: var(--tk-paper); color: var(--tk-ink); }
+.tk-upv .tk-seg button[aria-checked="true"] { background: var(--tk-fg); color: var(--tk-bg); }
 
 .tk-upv__acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
 .tk-upv__acts [hidden] { display: none; }

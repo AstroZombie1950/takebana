@@ -38,7 +38,7 @@
   ].filter(Boolean);
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: headDescription, seo: { path: base, type: 'video.other', image: rec.thumb && rec.thumb.url, imageAlt: mediaName, robots: rec.userId.banned ? 'noindex, follow' : '', jsonld: jsonld } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">

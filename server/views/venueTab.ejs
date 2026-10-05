@@ -12,7 +12,7 @@
    var pageHref = function (p) { return base + (p > 1 ? '?page=' + p : ''); };
    var tabKey = 'venue.tab.' + tab; %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { title: venue.name + ' — ' + ta(tabKey) + (page > 1 ? ', ' + ta('page.n', { n: page }) : '') + ' — Takebana', description: ta('venue.' + tab + 'Description', { name: venue.name }),
       seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow', image: venue.cover || (venue.photos || [])[0] || venue.avatar, imageAlt: venue.name,

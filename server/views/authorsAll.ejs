@@ -16,7 +16,7 @@
   var sorts = [['', 'authors.sortNew'], ['popular', 'authors.sortPopular'], ['name', 'authors.sortName']];
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: headKey, titleVars: { n: page },
       description: ta('page.authorsAll.description') + (page > 1 ? ' ' + ta('seo.page', { n: page }) : ''),

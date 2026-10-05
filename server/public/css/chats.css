@@ -51,11 +51,11 @@
   transition: color .18s ease, border-color .18s ease;
 }
 
-.tk-chat__tab:hover { color: var(--tk-paper); }
+.tk-chat__tab:hover { color: var(--tk-fg); }
 
 .tk-chat__tab[aria-selected="true"] {
   border-bottom-color: var(--tk-accent);
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 /* ── Недавние ──────────────────────────────────────────────────────────────
@@ -132,7 +132,7 @@
   color: var(--tk-muted);
 }
 
-.tk-recent__item:hover .tk-recent__name { color: var(--tk-paper); }
+.tk-recent__item:hover .tk-recent__name { color: var(--tk-fg); }
 
 /* Пропущенные звонки — тот же счётчик, что у «Сообщений» в левой панели. */
 .tk-chat__badge {
@@ -220,7 +220,7 @@
   margin: 0;
   font-size: 14px;
   font-weight: 700;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -338,7 +338,7 @@
   transition: color .18s ease, border-color .18s ease;
 }
 
-.tk-chat__tool:hover { color: var(--tk-accent); border-color: var(--tk-rule); }
+.tk-chat__tool:hover { color: var(--tk-accent-text); border-color: var(--tk-rule); }
 .tk-chat__tool[hidden] { display: none; }
 
 .tk-chat__peer {
@@ -352,7 +352,7 @@
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -420,7 +420,7 @@
 
 .tk-msg--in .tk-msg__bubble {
   border: 1px solid var(--tk-rule);
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 .tk-msg--out .tk-msg__bubble {
@@ -479,7 +479,7 @@
   background: rgba(144, 113, 99, .16);
   border: 1px solid var(--tk-rule);
   border-left: 3px solid var(--tk-accent);
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   font-weight: 400;
 }
 
@@ -496,7 +496,7 @@
   font-weight: 500;
   letter-spacing: .16em;
   text-transform: uppercase;
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
 }
 
 .tk-msg__fwd-name {
@@ -505,7 +505,7 @@
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   font-weight: 500;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 .tk-msg__fwd-head + .tk-msg__fwd-name { margin-top: 0; }
@@ -517,7 +517,7 @@
   color: var(--tk-muted);
 }
 
-.tk-msg--fwd .tk-msg__text { color: var(--tk-beige); }
+.tk-msg--fwd .tk-msg__text { color: var(--tk-fg-2); }
 .tk-msg__ava.is-blank { visibility: hidden; }
 
 /* ── Ответ ──
@@ -551,7 +551,7 @@
   font-size: 12px;
   font-weight: 500;
   letter-spacing: .02em;
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
 }
 
 .tk-msg--out .tk-quote__name { color: var(--tk-ink); }
@@ -590,7 +590,7 @@
   align-items: center;
   justify-content: center;
   background: rgba(144, 113, 99, .3);
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   opacity: 0;
   transform: scale(.6);
   transition: opacity .15s ease, transform .15s ease, background-color .15s ease, color .15s ease;
@@ -646,13 +646,13 @@
   border: 1px solid rgba(144, 113, 99, .35);
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 .tk-callnote svg { flex: none; color: var(--tk-green); }
 .tk-callnote time { font-size: 11px; color: var(--tk-muted); }
 .tk-callnote.is-missed,
-.tk-callnote.is-missed svg { color: var(--tk-accent); }
+.tk-callnote.is-missed svg { color: var(--tk-accent-text); }
 
 /* ── Поле ввода ── */
 /* Нижний отступ — с полосой системных кнопок: сама полоса лежит поверх
@@ -673,7 +673,7 @@
 }
 
 .tk-replybar[hidden] { display: none; }
-.tk-replybar__icon { flex: none; color: var(--tk-accent); }
+.tk-replybar__icon { flex: none; color: var(--tk-accent-text); }
 .tk-replybar .tk-quote { flex: 1; margin: 0; }
 
 /* position — для полосы записи: она ложится поверх всей строки. */
@@ -748,7 +748,7 @@
 }
 
 .tk-chat__send:hover,
-.tk-chat__send:focus-visible { background: var(--tk-paper); }
+.tk-chat__send:focus-visible { background: var(--tk-fg); color: var(--tk-bg); }
 
 /* Гнездо справа от поля (21.09): поле пустое — микрофон и кружок, в поле
  * текст — «Отправить». Обе смены лежат в одной клетке сетки, ширина гнезда
@@ -810,7 +810,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: var(--tk-ink);
+  background: var(--tk-bg);
   opacity: 0;
   transform: translateY(6px);
   visibility: hidden;
@@ -825,7 +825,7 @@
 }
 
 .tk-rec .tk-chat__send { align-self: stretch; }
-.tk-rec__cancel:hover { color: var(--tk-accent); }
+.tk-rec__cancel:hover { color: var(--tk-accent-text); }
 
 .tk-rec__dot {
   width: 10px;
@@ -845,7 +845,7 @@
   font-size: 15px;
   letter-spacing: .06em;
   font-variant-numeric: tabular-nums;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 /* Волна: узкие полоски, новые справа; что не влезло — уходит за левый край.
@@ -867,7 +867,7 @@
   width: 3px;
   height: 6%;
   min-height: 2px;
-  background: var(--tk-beige);
+  background: var(--tk-fg-2);
   transition: height .08s linear, background-color .2s ease;
 }
 
@@ -893,12 +893,12 @@
   align-items: center;
   justify-content: center;
   border: 2px dashed var(--tk-accent);
-  background: rgba(10, 10, 10, .82);
+  background: rgb(var(--tk-bg-rgb) / .82);
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 18px;
   letter-spacing: .08em;
   text-transform: uppercase;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   pointer-events: none;
 }
 
@@ -1034,7 +1034,7 @@
   width: 260px;
   max-width: 100%;
   border-left: 3px solid var(--tk-accent);
-  background: rgba(10, 10, 10, .35);
+  background: rgb(var(--tk-bg-rgb) / .35);
   color: inherit;
   text-decoration: none;
 }
@@ -1072,7 +1072,7 @@
   font-size: 11px;
   letter-spacing: .12em;
   text-transform: uppercase;
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
 }
 
 .tk-share__title {
@@ -1181,7 +1181,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   font: inherit;
   font-weight: 700;
   text-decoration: underline;
@@ -1189,8 +1189,8 @@
 }
 
 .tk-msg--pending .tk-msg__bubble { opacity: .85; }
-.tk-msg--pending.is-failed .tk-msg__bubble { background: none; border: 1px solid var(--tk-accent); color: var(--tk-paper); }
-.tk-msg--pending.is-failed .tk-upload__state { color: var(--tk-accent); }
+.tk-msg--pending.is-failed .tk-msg__bubble { background: none; border: 1px solid var(--tk-accent); color: var(--tk-fg); }
+.tk-msg--pending.is-failed .tk-upload__state { color: var(--tk-accent-text); }
 
 @media (prefers-reduced-motion: reduce) {
   .tk-rec__dot,
@@ -1340,7 +1340,7 @@
 
 /* ── Исчезающие ── */
 .tk-chat__limit { position: relative; }
-.tk-chat__limit.is-on { color: var(--tk-accent); border-color: var(--tk-accent); }
+.tk-chat__limit.is-on { color: var(--tk-accent-text); border-color: var(--tk-accent); }
 
 .tk-chat__limit-badge {
   position: absolute;
@@ -1435,7 +1435,7 @@
   background: transparent;
 }
 
-.tk-limitmenu [aria-checked="true"] { color: var(--tk-paper); }
+.tk-limitmenu [aria-checked="true"] { color: var(--tk-fg); }
 .tk-limitmenu [aria-checked="true"]::before { background: var(--tk-accent); }
 
 .tk-limitmenu__hint {
@@ -1567,7 +1567,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 }
 
 .tk-callbar__clear:hover,
-.tk-callbar__clear:focus-visible { color: var(--tk-accent); }
+.tk-callbar__clear:focus-visible { color: var(--tk-accent-text); }
 
 /* Строка: аватар, имя, итог и время — одна кнопка (открыть переписку),
  * справа — перезвонить голосом или с видео. */
@@ -1623,7 +1623,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 .tk-callrow__name {
   font-size: 14px;
   font-weight: 700;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1639,7 +1639,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 
 .tk-callrow__meta svg { vertical-align: -2px; margin-right: 4px; color: var(--tk-green); }
 .tk-callrow.is-missed .tk-callrow__meta,
-.tk-callrow.is-missed .tk-callrow__meta svg { color: var(--tk-accent); }
+.tk-callrow.is-missed .tk-callrow__meta svg { color: var(--tk-accent-text); }
 
 .tk-callrow__btn {
   width: 36px;
@@ -1652,7 +1652,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   border: 1px solid var(--tk-rule);
   padding: 0;
   cursor: pointer;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   transition: border-color .18s ease, color .18s ease, background-color .18s ease;
 }
 
@@ -1662,7 +1662,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 .tk-callrow__btn:hover,
 .tk-callrow__btn:focus-visible {
   border-color: var(--tk-accent);
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   background: rgba(227, 66, 52, .12);
 }
 
@@ -1748,13 +1748,13 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   gap: 6px;
   font-size: 14px;
   font-weight: 700;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tk-contact__star { flex: none; color: var(--tk-accent); }
+.tk-contact__star { flex: none; color: var(--tk-accent-text); }
 
 .tk-contact__btn {
   width: 36px;
@@ -1767,7 +1767,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   border: 1px solid var(--tk-rule);
   padding: 0;
   cursor: pointer;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   transition: border-color .18s ease, color .18s ease, background-color .18s ease;
 }
 
@@ -1776,7 +1776,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 .tk-contact__add:hover,
 .tk-contact__add:focus-visible {
   border-color: var(--tk-accent);
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   background: rgba(227, 66, 52, .12);
 }
 
@@ -1790,7 +1790,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .04em;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   transition: border-color .18s ease, color .18s ease, background-color .18s ease;
 }
 
@@ -1813,7 +1813,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   width: 20px;
   height: 20px;
   margin-top: -10px;
-  border: 2px solid var(--tk-beige);
+  border: 2px solid var(--tk-fg-2);
   border-radius: 50%;
   box-sizing: border-box;
 }
@@ -1877,7 +1877,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   letter-spacing: .04em;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 /* ── Меню сообщения ── */
@@ -1887,9 +1887,9 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   min-width: 180px;
   display: flex;
   flex-direction: column;
-  background: var(--tk-ink);
+  background: var(--tk-bg);
   border: 1px solid var(--tk-rule);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, .5);
+  box-shadow: 0 8px 28px var(--tk-shadow-c);
 }
 
 .tk-msgmenu[hidden] { display: none; }
@@ -1902,12 +1902,12 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   cursor: pointer;
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 14px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 .tk-msgmenu button:hover,
-.tk-msgmenu button:focus-visible { background: rgba(227, 66, 52, .12); color: var(--tk-paper); outline: none; }
-.tk-msgmenu .tk-msgmenu__danger { color: var(--tk-accent); }
+.tk-msgmenu button:focus-visible { background: rgba(227, 66, 52, .12); color: var(--tk-fg); outline: none; }
+.tk-msgmenu .tk-msgmenu__danger { color: var(--tk-accent-text); }
 
 /* ── Узкие экраны: одна панель за раз ─────────────────────────────────── */
 @media (max-width: 1023px) {
@@ -1929,10 +1929,10 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
     border: none;
     padding: 0;
     cursor: pointer;
-    color: var(--tk-beige);
+    color: var(--tk-fg-2);
   }
 
-  .tk-chat__back:hover { color: var(--tk-accent); }
+  .tk-chat__back:hover { color: var(--tk-accent-text); }
 
   .tk-msg > .tk-msg__bubble,
   .tk-msg > .tk-msg__row { max-width: 86%; }
@@ -1985,7 +1985,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   padding: 6px 0;
   border: 0;
   background: none;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 14px;
   letter-spacing: .04em;
@@ -1994,7 +1994,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 }
 
 .tk-newgroup:hover,
-.tk-newgroup:focus-visible { color: var(--tk-accent); }
+.tk-newgroup:focus-visible { color: var(--tk-accent-text); }
 
 .tk-dialog__group { flex: none; color: var(--tk-muted); }
 
@@ -2018,7 +2018,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   font-weight: 500;
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
 }
 
 .tk-sysnote {
@@ -2039,7 +2039,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   z-index: 6;
   display: flex;
   flex-direction: column;
-  background: var(--tk-ink);
+  background: var(--tk-bg);
 }
 
 .tk-gpane[hidden] { display: none; }
@@ -2058,7 +2058,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 .tk-gpane__body {
@@ -2092,7 +2092,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   padding: 3px 10px 3px 3px;
   border: 1px solid var(--tk-rule);
   background: none;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
@@ -2141,7 +2141,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   margin: 0;
   font-size: 20px;
   font-weight: 800;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow-wrap: anywhere;
 }
 
@@ -2152,7 +2152,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   cursor: pointer;
 }
 
@@ -2175,7 +2175,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   overflow-wrap: anywhere;
 }
 
-.tk-ginvite code { font-size: 13px; color: var(--tk-beige); }
+.tk-ginvite code { font-size: 13px; color: var(--tk-fg-2); }
 
 .tk-gmembers { align-self: stretch; display: flex; flex-direction: column; }
 
@@ -2194,7 +2194,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
 .tk-gmember__role {
@@ -2223,7 +2223,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 }
 
 .tk-gacts .tk-btn { padding-left: 10px; padding-right: 10px; }
-.tk-gdanger.tk-btn { color: var(--tk-accent); }
+.tk-gdanger.tk-btn { color: var(--tk-accent-text); }
 
 @media (max-width: 767px) {
   .tk-gacts { grid-auto-flow: row; }
@@ -2272,14 +2272,14 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   margin: 0;
   font-size: 13px;
   line-height: 1.45;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 .tk-chat__request-acts { display: flex; gap: 8px; }
 
 /* Ссылки — только в сообщениях официального аккаунта (chats.js, linkify). */
 .tk-msg__link {
-  color: var(--tk-accent);
+  color: var(--tk-accent-text);
   text-decoration: underline;
   text-underline-offset: 2px;
   overflow-wrap: anywhere;

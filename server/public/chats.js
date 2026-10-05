@@ -1178,6 +1178,32 @@
     }).catch(function (err) { toast(err.message, 'error'); });
   });
 
+  // ── «Назад» на телефоне ───────────────────────────────────────────────
+  // На узком экране диалог стоит вместо списка, и «Назад» браузера (жест,
+  // кнопка Android) должен вести к списку, а не уходить со страницы. Для
+  // этого открытый из списка диалог — своя запись в истории; переход из
+  // диалога в диалог её подменяет. На широком экране список и диалог видны
+  // вместе — адрес только подменяется. Граница — та же, что в chats.css.
+  var narrow = matchMedia('(max-width: 1023px)');
+  var stacked = false; // за диалогом в истории лежит список
+
+  function dialogUrl(url) {
+    if (stacked || !narrow.matches) return history.replaceState(history.state, '', url);
+    history.pushState({ tkDialog: 1 }, '', url);
+    stacked = true;
+  }
+
+  window.addEventListener('popstate', function (e) {
+    if (e.state && e.state.tkDialog) {
+      // «Вперёд» обратно в диалог.
+      var q = new URLSearchParams(location.search);
+      var el = q.get('group') ? groupEl(q.get('group')) : q.get('peer') && (dialogEl(q.get('peer')) || requestEl(q.get('peer')));
+      if (!el) return;
+      stacked = true;
+      select(el);
+    } else if (stacked) closeDialog(true);
+  });
+
   // ── Выбор диалога ─────────────────────────────────────────────────────
   function select(el) {
     if (el.hasAttribute('data-group')) return openGroup(groupOf(el));
@@ -1222,14 +1248,15 @@
     input.removeAttribute('data-i18n-placeholder');
     input.placeholder = t('chats.messageTo') + ' ' + peer.name + '…';
 
-    history.replaceState(null, '', '/chatsPage?peer=' + encodeURIComponent(peer.id));
+    dialogUrl('/chatsPage?peer=' + encodeURIComponent(peer.id));
     // has-peer — показать правую часть, is-open — на узком экране она
     // вместо списка.
     $('chat').classList.add('has-peer', 'is-open');
     openHistory();
   }
 
-  function closeDialog() {
+  // fromHistory — уже вернулись к списку «Назад»: историю не трогать.
+  function closeDialog(fromHistory) {
     closeAllSealed();
     stopVoice(false);
     stopPicking();
@@ -1245,7 +1272,12 @@
     setRequest(null);
     input.setAttribute('data-i18n-placeholder', 'chats.messagePh');
     input.placeholder = t('chats.messagePh');
-    history.replaceState(null, '', '/chatsPage');
+    // Закрыли сами (стрелка, Escape, группу удалили) — шаг назад убирает
+    // запись диалога, иначе «Назад» потом вернул бы в него.
+    if (stacked) {
+      stacked = false;
+      if (fromHistory !== true) history.back();
+    } else history.replaceState(null, '', '/chatsPage');
     $('chat').classList.remove('has-peer', 'is-open');
   }
 
@@ -1277,7 +1309,7 @@
     setLimit('');
     $('chat').classList.add('is-group');
     paintGroupHead();
-    history.replaceState(null, '', '/chatsPage?group=' + encodeURIComponent(g.id));
+    dialogUrl('/chatsPage?group=' + encodeURIComponent(g.id));
     $('chat').classList.add('has-peer', 'is-open');
     openHistory();
   }
@@ -1318,6 +1350,7 @@
   }
 
   $('backToList').addEventListener('click', function () {
+    if (stacked) return closeDialog();
     $('chat').classList.remove('is-open');
   });
 
@@ -2836,7 +2869,7 @@
     else if (onContacts) q.set('tab', 'contacts');
     else q.delete('tab');
     var qs = q.toString();
-    history.replaceState(null, '', '/chatsPage' + (qs ? '?' + qs : ''));
+    history.replaceState(history.state, '', '/chatsPage' + (qs ? '?' + qs : ''));
     // Подсветка того же пункта в левой панели (leftBar.ejs).
     document.querySelectorAll('.tk-aside__item[data-chat-tab]').forEach(function (item) {
       item.classList.toggle('tk-aside__item--on', item.getAttribute('data-chat-tab') === name);
@@ -3871,6 +3904,11 @@
   });
 
   var params = new URLSearchParams(location.search);
+  // Пришли сразу в диалог (пуш, «Сообщение» в профиле, ссылка): подложить
+  // под него список, чтобы «Назад» на телефоне вёл к нему. После
+  // перезагрузки список уже лежит в истории.
+  if (history.state && history.state.tkDialog) stacked = true;
+  else if (narrow.matches && (params.get('peer') || params.get('group'))) history.replaceState(null, '', '/chatsPage');
   var peerId = params.get('peer');
   var target = peerId && dialogEl(peerId);
   var groupId = params.get('group');

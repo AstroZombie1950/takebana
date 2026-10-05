@@ -118,7 +118,7 @@
 }
 
 .tk-set__status.is-ok { color: var(--tk-green-live); }
-.tk-set__status.is-bad { color: var(--tk-accent); }
+.tk-set__status.is-bad { color: var(--tk-accent-text); }
 
 /* ── Фото ── */
 .tk-set__photo {
@@ -162,16 +162,16 @@
 .tk-set .tk-btn[hidden],
 .tk-set [hidden] { display: none; }
 
-.tk-set__danger { border-color: transparent; color: var(--tk-accent); }
+.tk-set__danger { border-color: transparent; color: var(--tk-accent-text); }
 .tk-set__danger:hover,
-.tk-set__danger:focus-visible { background: rgba(227, 66, 52, .12); color: var(--tk-paper); }
+.tk-set__danger:focus-visible { background: rgba(227, 66, 52, .12); color: var(--tk-fg); }
 
 /* ── Почта ── */
 .tk-set__email {
   margin: 0 0 6px;
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 16px;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
   overflow-wrap: anywhere;
 }
 
@@ -180,7 +180,7 @@
 /* Подтверждена ли почта; «прислать письмо» — ссылкой в той же строке. */
 .tk-set__verified { margin: 0; font-size: 13px; line-height: 1.5; }
 .tk-set__verified.is-ok { color: var(--tk-green-live); }
-.tk-set__verified.is-bad { color: var(--tk-accent); }
+.tk-set__verified.is-bad { color: var(--tk-accent-text); }
 
 .tk-set__link {
   padding: 0;
@@ -188,19 +188,19 @@
   background: none;
   border: 0;
   font: inherit;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
 }
 
-.tk-set__link:hover { color: var(--tk-paper); }
+.tk-set__link:hover { color: var(--tk-fg); }
 .tk-set__link:disabled { opacity: .5; cursor: default; }
-.tk-set__pending b { color: var(--tk-paper); font-weight: 500; }
+.tk-set__pending b { color: var(--tk-fg); font-weight: 500; }
 
 /* ── Уведомления, камера и микрофон ── */
-.tk-set__form .tk-form__toggle { font-size: 13px; letter-spacing: .1em; color: var(--tk-beige); }
-.tk-set__warn { color: var(--tk-accent); }
+.tk-set__form .tk-form__toggle { font-size: 13px; letter-spacing: .1em; color: var(--tk-fg-2); }
+.tk-set__warn { color: var(--tk-accent-text); }
 
 /* «Как разрешить?» — свёрнутая подсказка под запретом браузера. */
 .tk-set__how { margin: -4px 0 0; }
@@ -210,7 +210,7 @@
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   letter-spacing: .04em;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -218,7 +218,7 @@
 }
 
 .tk-set__how summary::-webkit-details-marker { display: none; }
-.tk-set__how summary:hover { color: var(--tk-paper); }
+.tk-set__how summary:hover { color: var(--tk-fg); }
 .tk-set__how summary:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
 .tk-set__how[open] summary { margin-bottom: 6px; }
 .tk-set__how .tk-note { margin: 0; transition: opacity .26s; }
@@ -234,9 +234,9 @@
 }
 
 .tk-set__perms dt { color: var(--tk-label); text-transform: uppercase; letter-spacing: .12em; font-size: 12px; align-self: center; }
-.tk-set__perms dd { margin: 0; color: var(--tk-beige); }
+.tk-set__perms dd { margin: 0; color: var(--tk-fg-2); }
 .tk-set__perms dd.is-ok { color: var(--tk-green-live); }
-.tk-set__perms dd.is-bad { color: var(--tk-accent); }
+.tk-set__perms dd.is-bad { color: var(--tk-accent-text); }
 
 /* Проверка: своя картинка и уровень микрофона. */
 .tk-set__check { display: flex; flex-direction: column; gap: 8px; }
@@ -255,7 +255,7 @@
   width: 100%;
   max-width: 320px;
   height: 6px;
-  background: rgba(201, 194, 183, .12);
+  background: rgb(var(--tk-fg-rgb) / .12);
 }
 
 .tk-set__meter i {
@@ -272,7 +272,7 @@
 
 /* Удаление аккаунта: подписано красным — действие необратимо. */
 .tk-set__zone { border-color: rgba(227, 66, 52, .45); }
-.tk-set__zone .tk-panel__title { color: var(--tk-accent); }
+.tk-set__zone .tk-panel__title { color: var(--tk-accent-text); }
 
 /* Кому закрыт канал — список с «Вернуть доступ», во всю ширину ряда
  * «Приватность». */
@@ -303,10 +303,10 @@
   white-space: nowrap;
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
-  color: var(--tk-paper);
+  color: var(--tk-fg);
 }
 
-.tk-set__person-name:hover { color: var(--tk-accent); }
+.tk-set__person-name:hover { color: var(--tk-accent-text); }
 
 /* Устройство с пушами: имя и под ним даты, справа — «это устройство»
  * или «Убрать». */
@@ -376,7 +376,7 @@
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 14px;
   letter-spacing: .03em;
-  color: var(--tk-beige);
+  color: var(--tk-fg-2);
 }
 
 .tk-set__form .tk-set__net .tk-field { padding: 10px 14px; }
@@ -392,7 +392,7 @@
   color: var(--tk-muted);
 }
 
-.tk-set__net-out:hover { color: var(--tk-paper); }
+.tk-set__net-out:hover { color: var(--tk-fg); }
 .tk-set__net-out[hidden] { display: none; }
 
 @media (max-width: 1023px) {

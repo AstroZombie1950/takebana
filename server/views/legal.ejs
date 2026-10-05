@@ -8,7 +8,7 @@
   перезагрузкой: рвать нечего, звонка и эфира на странице нет.
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%# Документы в поиске не нужны, но ссылки из них — пусть робот ходит. %>
 <%- include('partials/tkHead', { titleKey: 'page.' + doc + '.title', descriptionKey: 'page.' + doc + '.description', robots: 'noindex, follow' }) %>

@@ -9,7 +9,7 @@
   (streamingMain.ejs), подкатегории выбирают там.
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%# В индексе (docs/seo/DECISIONS.md): h1 «Прямые эфиры», под ним лента. %>
 <%- include('partials/tkHead', { titleKey: 'page.home.title', descriptionKey: 'page.home.description', seo: { path: '/', jsonld: ld.site() } }) %>

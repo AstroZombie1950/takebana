@@ -3,7 +3,7 @@
   вошедший подтверждает здесь же, гостя гейт зовёт войти и возвращает обратно.
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.age.title' }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
