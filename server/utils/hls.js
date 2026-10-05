@@ -92,15 +92,23 @@ const PROFILES = {
         renditions: [{ height: 'src' }],
     },
     // Камера заведения (utils/venueCam.js): без записи, 15 кадров — это
-    // вид зала, а не эфир. Из VP8 браузера — 0,14 от одного 720p эфира
-    // (замер 25.09), ~0,11 ядра, и только пока камеру смотрят.
+    // вид зала, а не эфир. Знак — поверх плеера, как у эфиров (решение
+    // Ивана 05.10: живое — поверх, сохранённое — в кадре; камера не
+    // сохраняется). venue — браузер прислал VP8: пережимаем в H.264,
+    // 0,14 от одного 720p эфира (замер 25.09), ~0,11 ядра, и только пока
+    // камеру смотрят. venueCopy — прислал H.264 (tk-whip.js просит его
+    // первым): видео копией, размер — какой прислал браузер.
     venue: {
-        watermarkHeight: 38,
         fps: 15,
         exact: true,
         renditions: [{ height: 480, bitrate: 800, preset: 'superfast' }],
     },
+    venueCopy: {
+        copy: true,
+        renditions: [{ height: 'src' }],
+    },
 };
+const isVenue = (profile) => profile === 'venue' || profile === 'venueCopy';
 
 // Сколько ядер ест конвейер каждого вида — по замерам выше. Сумма больше
 // CPU_WARN — пишем в журнал: Node, Mongo и nginx остаются без процессора,
@@ -111,7 +119,9 @@ const PROFILES = {
 // 60 с вертикального 720×1280 с шумом как у камеры, в реальном времени:
 // полный — 0,87 ядра, копия — 0,08, из них 0,06 — кодирование звука AAC
 // (копия со звуком без пережатия — 0,013).
-const CORES = { full: 0.87, lite: 0.42, venue: 0.11, copy: 0.08 };
+// venueCopy — по замеру своего приёма на бою 05.10 (приём + копия видео +
+// звук быстрым AAC — 0,045 на 30 к/с), у камеры поток вчетверо меньше.
+const CORES = { full: 0.87, lite: 0.42, venue: 0.11, copy: 0.08, venueCopy: 0.04 };
 // Звук копией (веб-эфир, ниже) — без пережатия AAC.
 const AUDIO_CORES = 0.06;
 // Сколько ядер из четырёх отдаём живым эфирам — остальное Node, базе,
@@ -374,7 +384,9 @@ function ffmpegArgs(streamKey, dir, profile, part, audio, input, inFrame, audioC
         ...inputArgs(streamKey, input),
 
         ...(copy ? ['-c:v', 'copy'] : videoArgs(profile, inFrame)),
-        ...(audioCopy ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-af', profile === 'venue' ? AUDIO_SYNC_VENUE : AUDIO_SYNC]),
+        // Камере — быстрый кодировщик AAC: вдвое дешевле (замер на бою 05.10,
+        // 0,010 ядра против 0,020), а звук зала — не музыка эфира.
+        ...(audioCopy ? ['-c:a', 'copy'] : ['-c:a', 'aac', ...(isVenue(profile) ? ['-aac_coder', 'fast'] : []), '-b:a', '128k', '-ac', '2', '-af', isVenue(profile) ? AUDIO_SYNC_VENUE : AUDIO_SYNC]),
 
         // Очередь мультиплексора. Когда одна дорожка обгоняет другую (а после
         // обрыва RTMP это норма), ffmpeg копит пакеты опережающей, пока не
@@ -526,13 +538,14 @@ function cpuCheck() {
     if (cores < CPU_CALM) cpuWarned = false;
     if (cpuWarned || cores < CPU_WARN) return;
     cpuWarned = true;
-    errorLog.media(new Error(`Перекодирование близко к пределу процессора: ~${cores.toFixed(1)} ядра из 4 (эфиров ${(count.full || 0) + (count.lite || 0) + (count.copy || 0)}, камер ${count.venue || 0})`),
+    errorLog.media(new Error(`Перекодирование близко к пределу процессора: ~${cores.toFixed(1)} ядра из 4 (эфиров ${(count.full || 0) + (count.lite || 0) + (count.copy || 0)}, камер ${(count.venue || 0) + (count.venueCopy || 0)})`),
         'hls.cpu', { cores, ...count });
 }
 
 // Эфир — на postPublish, то есть после проверки подписи и ключа.
 // Камера заведения — по готовности потока в MediaMTX (utils/venueCam.js):
-// opts.input — его адрес, opts.profile — 'venue', opts.log — её хронология.
+// opts.input — его адрес, opts.profile — 'venue' или 'venueCopy', opts.log —
+// её хронология.
 function start(streamKey, opts = {}) {
     if (!isPlainFileName(streamKey)) {
         console.error(`[hls] некорректный streamKey, транскод не запущен: ${streamKey}`);
@@ -551,10 +564,9 @@ function start(streamKey, opts = {}) {
     clean(dir);
 
     // Где знак — решается раз на эфир: перезапуски после обрыва идут так же
-    // (held выше). Камера заведения — всегда в кадре: её пережимаем в любом
-    // случае (VP8 браузера), и знак там ничего не стоит.
+    // (held выше). Камера заведения — всегда поверх плеера (05.10).
     const kept = opts.profile ? null : heldFor(streamKey);
-    const mark = opts.profile === 'venue' ? 'frame' : kept ? kept.mark : streamWatermark.mode();
+    const mark = opts.profile ? 'overlay' : kept ? kept.mark : streamWatermark.mode();
 
     // Без файла знака такой эфир не начинаем: видео без знака отдавать нельзя,
     // а молча продолжить — значит нарушить это правило незаметно.
@@ -583,8 +595,8 @@ function start(streamKey, opts = {}) {
     jobs.set(streamKey, job);
     spawnFfmpeg(streamKey, job);
     cpuCheck();
-    const what = profile === 'copy' ? 'копия видео' : 'транскод ' + PROFILES[profile].renditions.map((r) => r.height + 'p').join('/');
-    const why = kept ? ' (режим эфира до обрыва)' : profile === 'lite' || profile === 'copy' ? ' (лимит полных транскодов)' : profile === 'venue' ? ' (камера заведения)' : '';
+    const what = PROFILES[profile].copy ? 'копия видео' : 'транскод ' + PROFILES[profile].renditions.map((r) => r.height + 'p').join('/');
+    const why = kept ? ' (режим эфира до обрыва)' : profile === 'lite' || profile === 'copy' ? ' (лимит полных транскодов)' : isVenue(profile) ? ' (камера заведения)' : '';
     console.log(`[hls ${streamKey}] ${what}, знак ${mark === 'frame' ? 'в кадре' : 'поверх плеера'}${why} → /live/${streamKey}/index.m3u8`);
     note(streamKey, job, 'hls.start', { profile, mark, kept: !!kept });
 }

@@ -120,6 +120,9 @@
   }
 
   function preview(m) {
+    // Исчезающее: содержимого у браузера нет до «Открыть», вид вложения
+    // («Фото») сбивал бы с толку. Так же говорит пуш (push.disappearing).
+    if (m.limit) return t('push.disappearing');
     if (m.forwardedFrom) return t('notify.forwarded');
     var s = String(m.content || '').replace(/\s+/g, ' ').trim();
     // Файл без подписи — «Фото», «Голосовое» и т. п.

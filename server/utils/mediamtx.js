@@ -79,6 +79,25 @@ async function livePaths() {
   }
 }
 
+// Кодек видео публикации: H.264 ffmpeg берёт копией, остальное (VP8)
+// пережимает (utils/hls.js, venueCopy и venue). MediaMTX 1.21 отдаёт
+// дорожки строками (tracks) и объектами (tracks2) — берём что есть.
+// null — видео у публикации нет; не ответил — undefined (пережатие
+// годится для любого кодека).
+async function videoCodec(path) {
+  if (!configured()) return undefined;
+  try {
+    const res = await fetch(`${process.env.MTX_API.replace(/\/$/, '')}/v3/paths/get/${encodeURIComponent(path)}`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const p = await res.json();
+    const names = [...(p.tracks || []), ...(p.tracks2 || []).map((t) => t && t.codec)].map(String);
+    return names.find((n) => /^(H264|H265|VP8|VP9|AV1)$/i.test(n)) || null;
+  } catch (e) {
+    errorLog.external(e, 'mediamtx.videoCodec', { path });
+    return undefined;
+  }
+}
+
 // Выключить камеру: закрываем того, кто вещает. Нужно, когда владелец
 // нажал «выключить» не на той вкладке, откуда вещал, и при бане.
 async function kick(path) {
@@ -96,4 +115,4 @@ async function kick(path) {
   }
 }
 
-module.exports = { configured, pathOf, grant, allowed, url, readUrl, livePaths, kick };
+module.exports = { configured, pathOf, grant, allowed, url, readUrl, livePaths, videoCodec, kick };

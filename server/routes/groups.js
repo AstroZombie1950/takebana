@@ -160,8 +160,8 @@ router.post('/api/groups/:id/members/remove', requireAuthApi, validate({
     return res.status(403).json({ message: 'Удалить администратора может только создатель группы' });
   }
   const [actor, user] = await Promise.all([actorOf(req), User.findById(req.body.userId).select(groups.PEOPLE).lean()]);
+  await groups.pullMember(group._id, req.body.userId);
   group.members = group.members.filter((m) => String(m.user) !== req.body.userId);
-  await group.save();
   // Удалённому — отдельно: в рассылку группы он уже не попадает.
   if (io(req)) io(req).to('user:' + req.body.userId).emit('group:removed', { groupId: String(group._id), reason: 'removed' });
   await groups.note(req, group, actor, 'removed', { target: user || { _id: req.body.userId } });
@@ -229,17 +229,22 @@ router.post('/api/groups/:id/leave', requireAuthApi, async (req, res) => {
   const was = groups.memberOf(group, me(req));
   if (was.role === 'owner') {
     const next = groups.successor(group);
-    if (next) next.role = 'owner';
+    if (next) {
+      next.role = 'owner';
+      await Group.updateOne({ _id: group._id }, { $set: { 'members.$[h].role': 'owner' } }, { arrayFilters: [{ 'h.user': next.user }] });
+    }
   }
+  // Своим запросом, а не save() всего списка: одновременный выход или
+  // удаление другого участника иначе возвращали его обратно.
+  const rest = await groups.pullMember(group._id, me(req));
   group.members = group.members.filter((m) => String(m.user) !== me(req));
   if (io(req)) io(req).to('user:' + me(req)).emit('group:removed', { groupId: String(group._id), reason: 'left' });
-  if (!group.members.length) {
+  if (!rest || !rest.members.length) {
     await attachments.deleteMessages({ conversationId: group._id });
-    await group.deleteOne();
+    await Group.deleteOne({ _id: group._id });
     groups.removePhoto(group.avatar);
     return res.json({ success: true, deleted: true });
   }
-  await group.save();
   await groups.note(req, group, actor, 'left');
   const heir = group.members.find((m) => m.role === 'owner');
   if (was.role === 'owner' && heir) {
@@ -309,8 +314,19 @@ router.post('/api/groups/join', requireAuthApi, requireNotBanned, validate({
   if (groups.memberOf(group, me(req))) return res.json({ groupId: String(group._id) });
   if (group.members.length >= groups.MAX_MEMBERS) return res.status(409).json({ message: 'В группе не больше 100 участников' });
   const actor = await actorOf(req);
+  // Одним условным запросом: две вкладки или двойное нажатие записывали
+  // человека в группу дважды, а одновременные вступления — сверх ста.
+  const r = await Group.updateOne(
+    { _id: group._id, invite: req.body.code, 'members.user': { $ne: actor._id }, [`members.${groups.MAX_MEMBERS - 1}`]: { $exists: false } },
+    { $push: { members: { user: actor._id, role: 'member', joinedAt: new Date(), readAt: new Date() } } },
+  );
+  if (!r.modifiedCount) {
+    const now = await Group.findById(group._id).select('invite members.user').lean();
+    if (now && now.members.some((m) => String(m.user) === String(actor._id))) return res.json({ groupId: String(group._id) });
+    if (!now || now.invite !== req.body.code) return res.status(404).json({ message: 'Ссылка не работает: её выключили или перевыпустили' });
+    return res.status(409).json({ message: 'В группе не больше 100 участников' });
+  }
   group.members.push({ user: actor._id, role: 'member' });
-  await group.save();
   await groups.note(req, group, actor, 'joined');
   groups.emit(io(req), group, 'group:updated', { group: groups.brief(group) });
   res.json({ groupId: String(group._id) });

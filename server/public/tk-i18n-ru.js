@@ -544,6 +544,7 @@
   "chats.forwardSearch": "Кому переслать…",
   "chats.forwardSend": "Переслать",
   "chats.forwardDone": "Переслано",
+  "chats.forwardPartial": "Переслано не всем: не принимают сообщения — {n}",
   "chats.forwardEmpty": "Никого не нашли",
   "chats.forwardFailed": "Не удалось переслать",
   "chats.attach": "Прикрепить файл",

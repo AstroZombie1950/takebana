@@ -1655,7 +1655,9 @@ document.addEventListener('DOMContentLoaded', function(){
   function chatBubble(m) {
     const mine = String(m.sender) === String(TK.userId);
     let text = m.content || '';
-    if (m.limit) text = t('call.chatSealed');
+    // Исчезнувшее приходит без текста и файла — пустой пузырь сбивал бы с толку.
+    if (m.expired) text = t('chats.gone');
+    else if (m.limit) text = t('call.chatSealed');
     else if (!text && (m.attachments || []).length) text = t('call.chatAttachment');
     const at = new Date(m.sentAt);
     const time = String(at.getHours()).padStart(2, '0') + ':' + String(at.getMinutes()).padStart(2, '0');
@@ -1721,13 +1723,19 @@ document.addEventListener('DOMContentLoaded', function(){
     const send = () => post('/sendMessage', { recipientId: s.peerId, content });
     send()
       // Первое сообщение этому человеку: диалога ещё нет, заводим и шлём снова.
-      .then((r) => (r.status === 404 ? post('/start-conversation', { recipientId: s.peerId }).then(send) : r))
-      .then((r) => { if (!r.ok) throw new Error(TKNet.explain(r)); return r.json(); })
+      // Не завёлся (закрытая личка, ограничение) — его отказ и показываем.
+      .then((r) => (r.status === 404 ? post('/start-conversation', { recipientId: s.peerId }).then((c) => (c.ok ? send() : c)) : r))
+      .then((r) => {
+        if (r.ok) return r.json();
+        // 403 — правило собеседника: сервер объясняет словами, их и показать.
+        if (r.status === 403) return r.json().catch(() => ({})).then((d) => { throw Object.assign(new Error(d.message || ''), { said: !!d.message }); });
+        throw new Error(TKNet.explain(r));
+      })
       .then((m) => {
         s.chatInput.value = '';
         addChatMessage(s, m);
       })
-      .catch(() => toast(t('call.chatFailed'), 'error'))
+      .catch((e) => toast(e.said ? e.message : t('call.chatFailed'), 'error'))
       .then(() => { s.chatBusy = false; });
   }
 

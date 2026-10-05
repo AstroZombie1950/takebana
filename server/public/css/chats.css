@@ -692,23 +692,45 @@
 
 .tk-chat__blocked[hidden] { display: none; }
 
+/* Строка ввода прижата к низу: поле растёт вверх, скрепка, исчезающее
+ * и гнездо справа остаются у нижней строки текста, как в Telegram. */
 .tk-chat__compose form {
   position: relative;
   display: flex;
-  align-items: stretch;
+  align-items: flex-end;
   gap: 10px;
   --tk-acts-media: 82px;   /* микрофон и кружок: 36 + 10 + 36 */
   --tk-ease: cubic-bezier(.2, .7, .2, 1);
 }
 
+/* Поле растёт по тексту (chats.js, fitInput) до --tk-input-max: шесть
+ * строк на компьютере, четыре на телефоне, две — телефон боком; дальше
+ * прокрутка внутри поля, а лента над ним не съедается. Высота одной
+ * строки — --tk-input-h: по ней же стоят кнопки справа. */
+.tk-chat__compose {
+  --tk-input-line: 22px;
+  --tk-input-h: calc(var(--tk-input-line) + 24px + 2px);
+  --tk-input-max: calc(var(--tk-input-line) * 6 + 24px + 2px);
+}
+
 .tk-chat__compose .tk-field {
   flex: 1;
   min-width: 0;
+  display: block;
+  height: var(--tk-input-h);
+  max-height: var(--tk-input-max);
   padding: 12px 16px;
+  line-height: var(--tk-input-line);
+  resize: none;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
-/* Скрепка и исчезающее по краям поля. */
-.tk-chat__compose .tk-chat__tool { align-self: center; }
+.tk-chat__compose .tk-field.is-scroll { overflow-y: auto; }
+
+/* Скрепка и исчезающее — у нижней строки поля. */
+#composeForm > .tk-chat__tool { margin-bottom: calc((var(--tk-input-h) - 36px) / 2); }
 
 /* «Отправить» — квадрат со стрелкой, во всю высоту поля. */
 .tk-chat__send {
@@ -735,6 +757,7 @@
  * и фокус, но успела доиграть. */
 .tk-chat__acts {
   flex: none;
+  height: var(--tk-input-h);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   width: var(--tk-acts-media);
@@ -1439,6 +1462,7 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   .tk-chat__compose .tk-chat__tool { width: 32px; }
   .tk-chat__media { gap: 4px; }
   .tk-chat__compose .tk-field { padding: 12px; }
+  .tk-chat__compose { --tk-input-max: calc(var(--tk-input-line) * 4 + 24px + 2px); }
   /* Гнездо микрофона и стрелки отодвинуто от поля: четырёх точек зазора
    * на узком экране не видно вовсе, стрелка упиралась в рамку поля
    * (проверка 23.09). Отступ снаружи гнезда — ширина самой кнопки не
@@ -2265,3 +2289,9 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 }
 
 .tk-dialog__who .tk-official { margin-left: 0; }
+
+/* Телефон боком: клавиатура закрывает больше половины экрана — поле
+ * не выше двух строк, чтобы над ним оставалась переписка. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .tk-chat__compose { --tk-input-max: calc(var(--tk-input-line) * 2 + 24px + 2px); }
+}

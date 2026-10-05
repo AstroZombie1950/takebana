@@ -798,9 +798,12 @@
   document.addEventListener('visibilitychange', markRead);
 
   // ── Список диалогов ───────────────────────────────────────────────────
+  // data-last — какое сообщение в подписи: истёкшее исчезающее меняет её
+  // и у диалога, который сейчас не открыт (tk:message:expired).
   function setLast(el, m) {
     var last = el.querySelector('.tk-dialog__last');
     last.innerHTML = (m.sender === ME ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : '') + summaryHtml(m);
+    el.setAttribute('data-last', m._id);
     var when = el.querySelector('.tk-dialog__when');
     when.setAttribute('data-time', m.sentAt);
     when.textContent = timeAgo(m.sentAt);
@@ -854,6 +857,7 @@
     var el = dialogNode(p);
     el.querySelector('.presence-dot').className = 'presence-dot ' + (p.isOnline ? 'presence-online' : 'presence-offline');
     el.querySelector('.tk-dialog__last').innerHTML = lastHtml(c.last);
+    if (c.last && c.last.id) el.setAttribute('data-last', c.last.id);
     var when = el.querySelector('.tk-dialog__when');
     when.setAttribute('data-time', c.lastActivity);
     when.textContent = timeAgo(c.lastActivity);
@@ -927,8 +931,10 @@
           } else {
             var p = c.interlocutor;
             el = dialogEl(p.id);
-            if (el) el.querySelector('.tk-dialog__last').innerHTML = lastHtml(c.last);
-            else { el = filledDialog(c); fresh.push(p.id); }
+            if (el) {
+              el.querySelector('.tk-dialog__last').innerHTML = lastHtml(c.last);
+              if (c.last && c.last.id) el.setAttribute('data-last', c.last.id);
+            } else { el = filledDialog(c); fresh.push(p.id); }
             open = peer && peer.id === p.id;
           }
           var when = el.querySelector('.tk-dialog__when');
@@ -1337,6 +1343,7 @@
     var content = input.value.trim();
     if (!chatKey() || !content) return;
     input.value = '';
+    fitInput();
     syncActs();
     var limit = limitOpt;
     setLimit('');
@@ -1368,7 +1375,7 @@
       .catch(function (err) {
         unpend();
         console.error('sendMessage:', err);
-        if (!input.value) { input.value = content; setLimit(limit); syncActs(); if (quoted && !replyTo) setReply(quoted); } // текст не теряем
+        if (!input.value) { input.value = content; fitInput(); setLimit(limit); syncActs(); if (quoted && !replyTo) setReply(quoted); } // текст не теряем
         // Ограничение доступа (utils/restrict.js) — сервер объясняет сам;
         // иначе — что не ушло и почему: сеть, тайм-аут, сервер (TKNet).
         toast(err.status === 403 && err.message ? err.message
@@ -1498,6 +1505,7 @@
     var limit = limitOpt;
     var reply = takeReply();
     input.value = '';
+    fitInput();
     setLimit('');
     Array.prototype.forEach.call(files, function (file, i) {
       uploads.push({
@@ -1880,8 +1888,8 @@
 
   // ── Микрофон и кружок ↔ «Отправить» ───────────────────────────────────
   // Поле пустое — микрофон и кружок, в поле текст — стрелка отправки на их
-  // месте (как в WhatsApp). Отправить можно и клавишей ввода на клавиатуре
-  // телефона (enterkeyhint="send"). Смена плавная — chats.css, .has-text.
+  // месте (как в WhatsApp). Клавиша Enter — ниже, у высоты поля.
+  // Смена плавная — chats.css, .has-text.
   function syncActs() {
     var has = input.value.trim().length > 0;
     if (composeForm.classList.contains('has-text') === has) return;
@@ -1889,8 +1897,42 @@
     $('sendBtn').tabIndex = has ? 0 : -1;
     micBtn.tabIndex = $('roundBtn').tabIndex = has ? -1 : 0;
   }
-  input.addEventListener('input', syncActs);
+  input.addEventListener('input', function () { syncActs(); fitInput(); });
   syncActs();
+
+  // ── Высота поля и Enter ───────────────────────────────────────────────
+  // Поле многострочное (04.10): растёт по тексту до потолка из chats.css
+  // (max-height), дальше прокручивается внутри. Лента, прижатая к низу,
+  // остаётся прижатой — иначе выросшее поле закрывало бы последнее сообщение.
+  function fitInput() {
+    var stick = chatKey() && atBottom();
+    var was = input.offsetHeight;
+    input.style.height = '';
+    var edge = input.offsetHeight - input.clientHeight; // рамка
+    var max = parseFloat(getComputedStyle(input).maxHeight) || Infinity;
+    var need = input.scrollHeight + edge;
+    if (need > input.offsetHeight) input.style.height = Math.min(need, max) + 'px';
+    input.classList.toggle('is-scroll', need > max);
+    if (stick && input.offsetHeight !== was) scrollToBottom();
+  }
+
+  // Enter — отправить, Shift+Enter — перенос строки. На телефоне наоборот,
+  // как в Telegram и WhatsApp: у экранной клавиатуры Shift+Enter нет, и Enter
+  // — единственный способ начать строку; отправляет стрелка. «Телефон» —
+  // только сенсор без мыши: планшет с клавиатурой отправляет по Enter.
+  // Ctrl/⌘+Enter отправляет везде. Пока идёт набор иероглифов или
+  // подсказка клавиатуры (isComposing), Enter — её, а не наш.
+  function touchOnly() {
+    return matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
+  }
+  input.setAttribute('enterkeyhint', touchOnly() ? 'enter' : 'send');
+  input.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+    var force = e.ctrlKey || e.metaKey;
+    if (!force && (e.shiftKey || e.altKey || touchOnly())) return;
+    e.preventDefault();
+    composeForm.requestSubmit();
+  });
   recBar.querySelectorAll('button').forEach(function (b) { b.tabIndex = -1; });
 
   // ── Когда медиа не играет ─────────────────────────────────────────────
@@ -2624,16 +2666,25 @@
     if (viewing === fresh._id) closeViewers(true);
     if (roundPlayer.url && roundPlayer.url.indexOf('/messages/' + fresh._id + '/') === 0) stopRound();
     if (sound.url && sound.url.indexOf('/messages/' + fresh._id + '/') === 0) { sound.audio.pause(); sound.url = ''; sound.el = null; }
+    // Подпись в списке — у любого диалога, где это сообщение последнее,
+    // открыт он или нет: иначе там до перезагрузки стояло «Исчезающее фото».
+    var other = fresh.sender === ME ? fresh.recipient : fresh.sender;
+    var row = other && (dialogEl(other) || requestEl(other));
+    if (row && row.getAttribute('data-last') === fresh._id) setLastQuiet(row, fresh);
     var quoted = dropQuotes([fresh._id]);
     if (i === -1 && !quoted) return;
     if (i !== -1) messages[i] = fresh;
     var top = feed.scrollTop;
     render();
     feed.scrollTop = top;
-    var last = messages[messages.length - 1];
-    var el = dialogEl(peer.id);
-    if (el && last && last._id === fresh._id) el.querySelector('.tk-dialog__last').innerHTML = summaryHtml(fresh);
   });
+
+  // Подпись строки без подъёма наверх и без смены времени: сообщение
+  // не новое, у него только поменялся вид.
+  function setLastQuiet(el, m) {
+    el.querySelector('.tk-dialog__last').innerHTML =
+      (m.sender === ME ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : '') + summaryHtml(m);
+  }
 
   // Собеседник открыл моё исчезающее — «Открыто» и сколько осталось.
   // Получателю — тоже: дослушал или закрыл исчезающее с таймером, и срок
@@ -3434,9 +3485,18 @@
     render();
     feed.scrollTop = top;
     var last = messages[messages.length - 1];
+    if (!last) return;
+    // Удалили последнее — в строке списка встаёт то, что теперь последнее:
+    // у диалога и у группы.
+    if (group) {
+      var gEl = groupEl(group.id);
+      if (gEl) gEl.querySelector('.tk-dialog__last').innerHTML = groupLastHtml(last);
+      return;
+    }
     var el = peer && dialogEl(peer.id);
-    if (el && last) el.querySelector('.tk-dialog__last').innerHTML =
-      (last.sender === ME ? '<span data-i18n="chats.you">' + escapeHtml(t('chats.you')) + '</span> ' : '') + summaryHtml(last);
+    if (!el) return;
+    setLastQuiet(el, last);
+    el.setAttribute('data-last', last._id);
   }
 
   // Звонки ушли — из ленты открытого диалога и из вкладки «Звонки».
@@ -3738,8 +3798,9 @@
       groupIds: Object.keys(fwdPicked).filter(function (k) { return k.indexOf('g:') === 0; }).map(function (k) { return k.slice(2); }),
       comment: fwdComment.value.trim()
     })
-      .then(function () {
-        toast(t('chats.forwardDone'), 'ok');
+      .then(function (r) {
+        if (r && r.skipped) toast(t('chats.forwardPartial', { n: r.skipped }), 'error');
+        else toast(t('chats.forwardDone'), 'ok');
         closeForward();
         stopPicking();
       })

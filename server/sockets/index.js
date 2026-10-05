@@ -145,7 +145,8 @@ function registerSockets(io) {
 
   // Счётчик уходит всей комнате, и слать его на каждый вход и выход нельзя:
   // тысяча входов на эфир с тысячей зрителей — миллион сообщений. Не чаще
-  // раза в COUNT_MS на комнату, с последним числом.
+  // раза в COUNT_MS на комнату, с последним числом. Это же число отдаём
+  // входящему (join-stream-room) и по нему включаем медленный режим.
   const COUNT_MS = 2000;
   const countTimers = new Map();
   function announceViewers(streamKey) {
@@ -153,7 +154,15 @@ function registerSockets(io) {
     countTimers.set(streamKey, setTimeout(() => {
       countTimers.delete(streamKey);
       const roomName = `stream:${streamKey}`;
-      io.to(roomName).emit('viewers-count-updated', { streamKey, count: viewersIn(roomName, streamKey) });
+      const count = viewersIn(roomName, streamKey);
+      const wasSlow = ioHolder.autoSlow(streamKey);
+      ioHolder.setCount(streamKey, count);
+      io.to(roomName).emit('viewers-count-updated', { streamKey, count });
+      if (ioHolder.autoSlow(streamKey) === wasSlow) return;
+      // Эфир перешёл порог большого — подсказка над полем у всех меняется сразу.
+      Stream.findOne({ streamKey }).select('streamKey slowMode').lean()
+        .then((s) => { if (s) io.to(roomName).emit('chat:slow', { streamKey, seconds: ioHolder.slowFor(s), manual: s.slowMode || 0 }); })
+        .catch((e) => errorLog.server(e, 'socket.autoSlow', { streamKey }));
     }, COUNT_MS).unref());
   }
 
@@ -502,8 +511,9 @@ function registerSockets(io) {
       if (typeof streamKey !== 'string' || !STREAM_KEY.test(streamKey)) {
         return done({ error: 'Invalid streamKey' });
       }
+      let stream;
       try {
-        const stream = await Stream.findOne({ streamKey }).select('userId isAdult subscribersOnly').lean();
+        stream = await Stream.findOne({ streamKey }).select('userId isAdult subscribersOnly slowMode streamKey').lean();
         if (!stream) return done({ error: 'Unknown stream' });
         // Те же ворота, что у чата по HTTP (streamChat.js, chatStream):
         // ограниченный автором и не подтвердивший 18+ читали чат сокетом.
@@ -529,7 +539,12 @@ function registerSockets(io) {
       const roomName = `stream:${streamKey}`;
       socket.join(roomName);
       announceViewers(streamKey);
-      done({ success: true, count: viewersIn(roomName, streamKey) });
+      // Большая комната — последнее разосланное число (не старше COUNT_MS):
+      // пересчёт на каждый вход растёт с квадратом зрителей. Малую считаем
+      // сразу, иначе первый зритель две секунды видел бы ноль.
+      const count = io.sockets.adapter.rooms.get(roomName).size > 500
+        ? ioHolder.count(streamKey) : viewersIn(roomName, streamKey);
+      done({ success: true, count, slow: ioHolder.slowFor(stream) });
     });
 
     on('disconnect', async () => {

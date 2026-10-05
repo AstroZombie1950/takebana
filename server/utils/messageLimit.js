@@ -123,11 +123,19 @@ async function open(id, me) {
   const last = (lim.used || 0) + 1 >= lim.n;
   set = { 'limit.grantUntil': grant, 'limit.openedAt': lim.openedAt || now };
   if (last) set['limit.expiresAt'] = grant;
-  return Message.findOneAndUpdate(
+  const r = await Message.findOneAndUpdate(
     { _id: id, expiredAt: null, 'limit.used': { $lt: lim.n } },
     { $inc: { 'limit.used': 1 }, $set: set },
     { returnDocument: 'after' },
   ).lean();
+  // Два открытия разом (две вкладки, двойное нажатие): оба прочли used
+  // до прибавки, и ни одно не сочло себя последним — исчерпанное жило бы
+  // до недельного срока. Последним оказался этот — срок стирания по окну.
+  if (r && !last && r.limit.used >= r.limit.n && r.limit.expiresAt > grant) {
+    await Message.updateOne({ _id: id, expiredAt: null }, { $set: { 'limit.expiresAt': grant } });
+    r.limit.expiresAt = grant;
+  }
+  return r;
 }
 
 // Окно просмотра закрыто: если раз был последним — стираем сейчас, не дожидаясь

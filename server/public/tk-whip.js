@@ -3,8 +3,8 @@
  * Зачем. До 23.09.2026 камера была комнатой Daily: каждая зрительская
  * минута стоила денег. Теперь заведение вещает один раз на наш MediaMTX
  * (ops/mediamtx/), а зрители смотрят HLS через Bunny — его режет наш
- * ffmpeg со знаком (server/utils/venueCam.js). Смотреть по WHEP больше
- * некому: с 25.09 MediaMTX — только приёмник.
+ * ffmpeg, знак рисует страница зрителя (server/utils/venueCam.js). Смотреть
+ * по WHEP больше некому: с 25.09 MediaMTX — только приёмник.
  *
  * Почему это короткий файл. Вся сложная часть WebRTC — согласование ролей,
  * повторы, перезапуск ICE — нужна в звонке, где две равные стороны
@@ -71,6 +71,32 @@
   // а лишнее — входящий трафик нашего канала.
   var VIDEO = { maxBitrate: 800000, maxFramerate: 15 };
 
+  // H.264 сервер берёт копией (utils/hls.js, venueCopy) — в разы дешевле
+  // пережатия VP8. Но 23.09 зонд поймал браузер, который на H.264
+  // соглашается и не шлёт ни кадра. Поэтому с h264 «в эфире» — только
+  // когда кадры пошли; не пошли за VERIFY_MS — ошибка с codec: true,
+  // и страница публикует заново без него (tk-venue-live.js).
+  var VERIFY_MS = 4000;
+
+  function preferH264(tr) {
+    var caps = window.RTCRtpSender && RTCRtpSender.getCapabilities && RTCRtpSender.getCapabilities('video');
+    var all = (caps && caps.codecs) || [];
+    var isH264 = function (c) { return /h264/i.test(c.mimeType); };
+    if (!tr.setCodecPreferences || !all.some(isH264)) return false;
+    try {
+      tr.setCodecPreferences(all.filter(isH264).concat(all.filter(function (c) { return !isH264(c); })));
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function framesSent(pc) {
+    return pc.getStats().then(function (stats) {
+      var n = 0;
+      stats.forEach(function (s) { if (s.type === 'outbound-rtp' && s.kind === 'video') n += s.framesEncoded || 0; });
+      return n;
+    });
+  }
+
   // Каким путём пошло видео: host / srflx / relay и протокол — для
   // телеметрии владельца (docs/TELEMETRY.md, venue.host).
   function route(pc) {
@@ -87,7 +113,8 @@
 
   // Вещание: дорожки stream уходят на сервер. Дорожки — страницы, публикация
   // их не останавливает. opts: onState('connecting' | 'live' | 'ended'),
-  // onError(e) — e.status у отказа сервера, onRoute('host/udp').
+  // onError(e) — e.status у отказа сервера, e.codec — H.264 не пошёл,
+  // onRoute('host/udp'), h264 — просить H.264 первым.
   // Возвращает { pc, leave(), replaceTrack(track) }.
   function publish(url, stream, opts) {
     opts = opts || {};
@@ -95,13 +122,33 @@
     var place = '';
     var pc = new RTCPeerConnection({ bundlePolicy: 'max-bundle' });
 
+    var h264 = false;
+
     function emit(name, v) { if (opts[name]) opts[name](v); }
+
+    function wentLive() {
+      emit('onState', 'live');
+      route(pc).then(function (r) { if (r) emit('onRoute', r); }, noop);
+    }
+
+    // Кадры пошли — в эфире; нет за VERIFY_MS — H.264 у этого браузера
+    // не работает.
+    function verify(t0) {
+      framesSent(pc).then(function (n) {
+        if (closed) return;
+        if (n > 0) return wentLive();
+        if (Date.now() - t0 < VERIFY_MS) return setTimeout(function () { verify(t0); }, 500);
+        var e = new Error('H.264: кадры не идут');
+        e.codec = true;
+        emit('onError', e);
+        leave('ended');
+      }, wentLive);
+    }
 
     pc.onconnectionstatechange = function () {
       if (closed) return;
       if (pc.connectionState === 'connected') {
-        emit('onState', 'live');
-        route(pc).then(function (r) { if (r) emit('onRoute', r); }, noop);
+        if (h264) verify(Date.now()); else wentLive();
       }
       // Разорвалось и не вернулось само — публикация кончилась. Пересобирать
       // соединение здесь незачем: страница попросит новую, если камеру ещё смотрят.
@@ -116,12 +163,12 @@
       if (why) emit('onState', why);
     }
 
-    // Кодек выбирает браузер (сегодня VP8): ffmpeg на сервере переводит
-    // в H.264 сам. Ставить H.264 первым пробовали 23.09 — видео пропадало
-    // совсем: браузер соглашался в согласовании, а закодировать не мог.
+    // Без opts.h264 кодек выбирает браузер (обычно VP8) — сервер его
+    // пережмёт сам.
     stream.getTracks().forEach(function (t) {
       var tr = pc.addTransceiver(t, { direction: 'sendonly', streams: [stream], sendEncodings: t.kind === 'video' ? [VIDEO] : undefined });
       if (t.kind !== 'video') return;
+      if (opts.h264) h264 = preferH264(tr);
       // При слабом канале — меньше кадров, но не меньше кадр. По умолчанию
       // браузер первые секунды шлёт 320×180, пока оценивает канал (зонд
       // 25.09), а зрителю вид зала нужен резким, плавность — дело второе.

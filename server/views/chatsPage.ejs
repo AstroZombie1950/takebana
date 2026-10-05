@@ -143,7 +143,8 @@
             data-ava-url="<%= p.avatarStyle.url || '' %>"
             data-ava-bg="<%= p.avatarStyle.gradient || '' %>"
             data-ava-initial="<%= p.avatarStyle.initial || '' %>"
-            data-presence-user="<%= p.id %>"<% if (p.official) { %>
+            data-presence-user="<%= p.id %>"<% if (c.last) { %>
+            data-last="<%= c.last.id %>"<% } %><% if (p.official) { %>
             data-official<% } %>
           >
             <span class="tk-dialog__ava"<% if (!p.avatarStyle.url) { %> data-bg="<%= p.avatarStyle.gradient %>"<% } %>>
@@ -267,7 +268,11 @@
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14M5 21h14M7 3l5 9-5 9M17 3l-5 9 5 9"></path></svg>
               <span class="tk-chat__limit-badge" id="limitBadge" hidden></span>
             </button>
-            <input type="text" id="messageInput" class="tk-field" placeholder="<%= ta('chats.messagePh') %>" data-i18n-placeholder="chats.messagePh" autocomplete="off" maxlength="5000" enterkeyhint="send">
+            <%# Многострочное (04.10): растёт по тексту до потолка (chats.css),
+                дальше прокручивается внутри. Enter на компьютере — отправить,
+                Shift+Enter — перенос; на телефоне Enter — перенос, отправляет
+                стрелка (chats.js, sendKey). %>
+            <textarea id="messageInput" class="tk-field" rows="1" placeholder="<%= ta('chats.messagePh') %>" data-i18n-placeholder="chats.messagePh" autocomplete="off" maxlength="5000"></textarea>
             <%# Одно гнездо на две смены, как в WhatsApp (21.09): поле пустое —
                 микрофон и кружок, в поле текст — «Отправить». Смена плавная
                 (chats.css, .has-text). %>

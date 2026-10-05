@@ -168,9 +168,10 @@ function encodeNow() {
 }
 
 // Счётчики — явными нулями: пустой объект mongoose не сохраняет вовсе.
+// Камеры — одним числом, пережатые и копией (utils/hls.js, venueCopy).
 function streamsNow() {
   const c = hls.usage().count;
-  return { full: c.full || 0, lite: c.lite || 0, copy: c.copy || 0, venue: c.venue || 0 };
+  return { full: c.full || 0, lite: c.lite || 0, copy: c.copy || 0, venue: (c.venue || 0) + (c.venueCopy || 0) };
 }
 
 function sample() {

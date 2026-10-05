@@ -544,6 +544,7 @@
   "chats.forwardSearch": "Forward to…",
   "chats.forwardSend": "Forward",
   "chats.forwardDone": "Forwarded",
+  "chats.forwardPartial": "Not forwarded to everyone: {n} don't accept messages",
   "chats.forwardEmpty": "Nobody found",
   "chats.forwardFailed": "Could not forward",
   "chats.attach": "Attach a file",

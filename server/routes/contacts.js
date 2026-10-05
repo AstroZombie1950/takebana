@@ -18,6 +18,7 @@ const userView = require('../utils/userView');
 const restriction = require('../utils/restrict');
 const privacy = require('../utils/privacy');
 const { rankPeers } = require('../utils/recentPeers');
+const errorLog = require('../utils/errorLog');
 
 const FIELDS = 'nickname login email avatar isOnline lastSeen role';
 
@@ -101,6 +102,9 @@ router.post('/api/contacts/remove', requireAuthApi, validate({
 }), async (req, res) => {
   const me = String(req.session.userId);
   const { deletedCount } = await Contact.deleteOne({ owner: me, peer: req.body.peerId });
+  // «В сети» только для контактов: убранный из них перестаёт видеть его сразу,
+  // а не после перезагрузки своей страницы (utils/privacy.js).
+  if (deletedCount) privacy.recheckPresence(req.app.get('io'), me).catch((e) => errorLog.server(e, 'privacy.recheck'));
   res.json({ success: true, removed: deletedCount });
 });
 

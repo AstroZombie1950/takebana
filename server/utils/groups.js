@@ -159,6 +159,17 @@ function successor(group) {
 
 const inviteCode = () => crypto.randomBytes(9).toString('base64url');
 
+// Убрать участника одним запросом и вернуть, кто остался. __v — как
+// у save(): сохранение ролей по номеру в списке (members.N.role) после
+// такого сдвига должно получить VersionError, а не попасть в соседа.
+function pullMember(groupId, userId) {
+  return Group.findOneAndUpdate(
+    { _id: groupId },
+    { $pull: { members: { user: oid(userId) } }, $inc: { __v: 1 } },
+    { returnDocument: 'after', projection: { members: 1 } },
+  ).lean();
+}
+
 // Непрочитанное по группам: всего и по каждой. Служебные строки и свои
 // сообщения не считаются; удалённые у себя — тоже.
 async function unread(me) {
@@ -223,5 +234,5 @@ async function forgetUser(userId, removeMessages) {
 
 module.exports = {
   MAX_MEMBERS, TITLE_MAX, PEOPLE, PHOTOS,
-  removePhoto, memberOf, roleOf, canManage, forMember, person, brief, info, emit, deliver, note, successor, inviteCode, unread, unreadTotal, forgetUser,
+  removePhoto, memberOf, roleOf, canManage, forMember, pullMember, person, brief, info, emit, deliver, note, successor, inviteCode, unread, unreadTotal, forgetUser,
 };

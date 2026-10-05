@@ -275,6 +275,9 @@ async function dialogPage(me, before, { requests = false } = {}) {
           isOnline: !!peer.isOnline,
         },
         last: last && {
+          // id — строке в списке: истёкшее исчезающее меняет подпись и
+          // у диалога, который сейчас не открыт (public/chats.js).
+          id: String(last._id),
           // У сообщения с ограничением текст закрыт — в списке только вид.
           content: last.limit && last.limit.mode ? '' : last.content || '',
           kind: last.attachments && last.attachments[0] ? last.attachments[0].kind : '',
@@ -631,10 +634,18 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
   // в корзину. Текст уходит отдельным обычным сообщением перед ним.
   // Ответ — на первом из ушедших: на подписи, если она идёт отдельно.
   const limit = limits.parse(option, info.kind);
-  let reply = await replyOf(conversation, replyTo);
-  if (limit && content) {
-    await post({ content, reply });
-    reply = null;
+  let reply;
+  try {
+    reply = await replyOf(conversation, replyTo);
+    if (limit && content) {
+      await post({ content, reply });
+      reply = null;
+    }
+  } catch (e) {
+    // До store() файл не дошёл — временный удаляем здесь, иначе он
+    // оставался бы в tmp (до 200 МБ на каждый сбой).
+    drop();
+    throw e;
   }
   const send = async () => {
     const stored = await attachments.store(info, conversation._id);
@@ -754,10 +765,13 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, sendLimiter, 
 
   const sent = [];
   let closed = null;
+  // Кому не ушло: ограничение доступа, удалённый аккаунт, закрытая личка.
+  // Число — в ответ: «Переслано» без оговорки выглядело бы как «ушло всем».
+  let skipped = chosen.length - recipients.length;
   for (const recipient of recipients) {
     // Закрытая личка (utils/privacy.js) — мимо, как и ограничение выше.
     const g = await privacy.messageGate(await findConversation(me, recipient._id), me, recipient._id);
-    if (!g.ok) { closed = closed || g; continue; }
+    if (!g.ok) { closed = closed || g; skipped++; continue; }
     const conversation = await openConversation(me, recipient._id);
     if (g.request && !conversation.requestFor) conversation.requestFor = recipient._id;
     if (g.accept) conversation.requestFor = undefined;
@@ -776,7 +790,7 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, sendLimiter, 
     for (let i = 0; i < batch.length; i++) sent.push(await groups.deliver(req, group, sender, { ...batch[i], silent: i < batch.length - 1 }));
   }
 
-  res.json({ success: true, messages: sent });
+  res.json({ success: true, messages: sent, skipped });
 });
 
 

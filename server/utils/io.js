@@ -35,8 +35,31 @@ function viewers(instance, roomName, skip) {
   return n;
 }
 
+// Последний разосланный счёт зрителей эфира (sockets/index.js, раз в 2 с).
+// Пересчитывать комнату на каждый вход нельзя: десять тысяч входов к началу
+// матча в комнату на десять тысяч — сто миллионов шагов. Пустые — вон.
+const counts = new Map();
+function setCount(streamKey, n) {
+  if (n) counts.set(streamKey, n);
+  else counts.delete(streamKey);
+}
+const count = (streamKey) => counts.get(streamKey) || 0;
+
+// На большом эфире медленный режим включается сам: тысячи пишущих — это
+// тысячи записей в базу в секунду, а прочесть такой чат всё равно нельзя.
+// Ручной режим ведущего длиннее — действует он. stream — с streamKey
+// и slowMode.
+const AUTO_SLOW_FROM = 1000;
+const AUTO_SLOW = 10;
+const autoSlow = (streamKey) => (count(streamKey) >= AUTO_SLOW_FROM ? AUTO_SLOW : 0);
+const slowFor = (stream) => Math.max(stream.slowMode || 0, autoSlow(stream.streamKey));
+
 module.exports = {
   set(instance) { io = instance; },
   get() { return io; },
   viewers,
+  setCount,
+  count,
+  autoSlow,
+  slowFor,
 };

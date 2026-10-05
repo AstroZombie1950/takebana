@@ -118,7 +118,34 @@ async function presenceVisible(viewer, ids) {
   return docs.filter((d) => !d.presenceHidden).map((d) => String(d._id));
 }
 
+// Правило «в сети» ужесточилось или человек убран из контактов: подписка
+// сокета проверялась только при входе в комнату (sockets/index.js,
+// presence:subscribe), и уже открытые страницы продолжали получать
+// presence:update — скрытое «в сети» утекало до их перезагрузки. Здесь
+// комнату presence:<owner> пересматриваем: кому теперь нельзя — гасим точку
+// и выводим из комнаты. Открыл обратно — новые подписчики войдут сами,
+// прежние — при следующем подключении сокета.
+async function recheckPresence(io, ownerId) {
+  if (!io || !ownerId) return;
+  const room = 'presence:' + ownerId;
+  const sockets = await io.in(room).fetchSockets();
+  if (!sockets.length) return;
+  const owner = await User.findById(ownerId).select('privacy').lean();
+  const rule = of(owner).presence;
+  if (rule === 'all') return;
+  const viewers = [...new Set(sockets.map((s) => s.data.userId).filter(Boolean).map(String))];
+  const allowed = new Set(rule === 'contacts' && viewers.length
+    ? (await Contact.find({ owner: ownerId, peer: { $in: viewers } }).select('peer').lean()).map((c) => String(c.peer))
+    : []);
+  allowed.add(String(ownerId));
+  for (const s of sockets) {
+    if (allowed.has(String(s.data.userId))) continue;
+    s.emit('presence:update', { userId: String(ownerId), isOnline: false, lastSeen: null });
+    s.leave(room);
+  }
+}
+
 // Условие выборки «виден в поиске и подборках людей».
 const SEARCHABLE = { 'privacy.searchable': { $ne: false } };
 
-module.exports = { DEFAULTS, OPTIONS, of, isOfficial, decide, messageGate, maskPresence, presenceVisible, SEARCHABLE };
+module.exports = { DEFAULTS, OPTIONS, of, isOfficial, decide, messageGate, maskPresence, presenceVisible, recheckPresence, SEARCHABLE };

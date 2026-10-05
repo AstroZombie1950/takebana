@@ -2,11 +2,12 @@
 //
 // Заведение вещает по WHIP на наш MediaMTX — он здесь только приёмник,
 // зрителям он не отдаёт ничего. Наш ffmpeg забирает поток с петли
-// (RTSP), кладёт знак в кадр и режет HLS 480p/15 кадров в тот же
-// /live/, что у эфиров (utils/hls.js), — зрители берут его через CDN
-// live.takebana.com. Наш исходящий трафик — одна копия на камеру для
-// Bunny, сколько бы людей ни смотрело; процессор — ~0,11 ядра на
-// камеру, которую смотрят (замер 25.09).
+// (RTSP) и режет HLS в тот же /live/, что у эфиров (utils/hls.js), —
+// зрители берут его через CDN live.takebana.com. Знак — поверх плеера
+// (05.10). H.264 — копией (~0,04 ядра), VP8 — пережатием в 480p/15
+// кадров (~0,11); процессор тратится только на камеру, которую смотрят.
+// Наш исходящий трафик — одна копия на камеру для Bunny, сколько бы
+// людей ни смотрело.
 //
 // Камера вещает, только когда её смотрят. Страница владельца открыта
 // весь день, но видео уходит, лишь пока на странице камеры есть хоть
@@ -156,16 +157,35 @@ function ownerLeft(venueId) {
 }
 
 // Публикация пошла или кончилась (routes/venueLive.js, хуки MediaMTX).
-function available(path) {
+// Пока спрашиваем кодек, публикация могла и кончиться — тогда не запускаем:
+// номер публикации (seq) сверяется после ответа.
+const published = new Map(); // venueId → номер текущей публикации
+let seq = 0;
+async function available(path) {
   const venueId = venueOf(path);
   if (!venueId) return;
-  venueLog.event(venueId, 'mtx.ready');
-  hls.start(hlsKey(venueId), { input: mediamtx.readUrl(path), profile: 'venue', log: (e, d) => venueLog.event(venueId, e, d) });
+  const mine = ++seq;
+  published.set(venueId, mine);
+  const codec = await mediamtx.videoCodec(path);
+  if (published.get(venueId) !== mine) return;
+  // Публикация без видео: браузер согласился на H.264 и кадров не дал.
+  // Странице владельца — venue:codec (она публикует заново на VP8),
+  // публикацию — закрыть: зрителю картинка придёт со следующей.
+  if (codec === null) {
+    venueLog.event(venueId, 'mtx.novideo');
+    emit(venueId, 'venue:codec', {});
+    await mediamtx.kick(path);
+    return;
+  }
+  const profile = /^H264$/i.test(codec || '') ? 'venueCopy' : 'venue';
+  venueLog.event(venueId, 'mtx.ready', { codec });
+  hls.start(hlsKey(venueId), { input: mediamtx.readUrl(path), profile, log: (e, d) => venueLog.event(venueId, e, d) });
 }
 
 function unavailable(path) {
   const venueId = venueOf(path);
   if (!venueId) return;
+  published.delete(venueId);
   venueLog.event(venueId, 'mtx.gone');
   hls.stop(hlsKey(venueId));
 }

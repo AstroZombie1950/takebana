@@ -197,8 +197,9 @@
   }
 
   // HLS через CDN. Плейлиста ещё нет — камеру только что попросили, первые
-  // секунды видео будут через ~5–10 с: tk-hls.js ждёт его сам. Знак уже
-  // в кадре (utils/hls.js, профиль venue) — наложение здесь не нужно.
+  // секунды видео будут через ~5–10 с: tk-hls.js ждёт его сам. Знак —
+  // поверх картинки, как у эфиров (решение 05.10): в кадр его сервер
+  // больше не кладёт (utils/hls.js, профили venue и venueCopy).
   //
   // CDN из сети зрителя не отвечает — плеер сам уходит на запасной путь /lf/
   // (utils/mediaFallback.js), как у эфира. Адрес уже /lf — сервер подменил его
@@ -249,6 +250,7 @@
       if (started) return;
       started = true;
       video.hidden = false;
+      if ($('venueWm')) $('venueWm').hidden = false;
       play();
     };
     var onWaiting = function () {
@@ -269,6 +271,7 @@
         video.removeAttribute('src');
         video.load();
         video.hidden = true;
+        if ($('venueWm')) $('venueWm').hidden = true;
       },
     };
   }
@@ -364,6 +367,22 @@
     toast(t('vlive.noRoute'), 'error');
   }
 
+  // H.264 сервер берёт копией — дешевле в разы (tk-whip.js). Не пошёл на
+  // этом устройстве — дальше VP8, и это помним: не проверять заново при
+  // каждом зрителе.
+  var VP8_KEY = 'tk:whip:vp8';
+  var h264 = true;
+  try { h264 = !localStorage.getItem(VP8_KEY); } catch (e) { /* без хранилища — пробуем H.264 */ }
+
+  // Кадры не пошли у браузера (tk-whip.js) или до сервера дошёл один звук
+  // (venue:codec, utils/venueCam.js) — дальше VP8.
+  function noH264() {
+    if (!h264) return;
+    h264 = false;
+    try { localStorage.setItem(VP8_KEY, '1'); } catch (e) { /* только на эту страницу */ }
+    if (htr) htr.mark('vp8_fallback');
+  }
+
   function publishNow() {
     if (!local || pub) return;
     clearTimeout(retry);
@@ -372,6 +391,7 @@
       var reached = false, failure = null;
       if (htr) { htr.set('pubs', ++pubs); if (streak < NO_ROUTE) htr.mark('publish'); }
       var mine = pub = TKWhip.publish(r.url, local, {
+        h264: h264,
         onState: function (s) {
           if (s === 'live' && pub === mine) {
             reached = everLive = true;
@@ -383,6 +403,11 @@
           if (s === 'ended' && pub === mine) {
             pub = null;
             badgeText('vlive.waitingBadge');
+            // H.264 не пошёл — это не сбой связи: сразу заново на VP8.
+            if (failure && failure.codec) {
+              if (wanted) publishNow();
+              return;
+            }
             if (!reached) pubFailed(failure);
             // Оборвалось, а камеру всё ещё смотрят, — просим снова.
             if (wanted) retry = setTimeout(publishNow, 3000);
@@ -391,7 +416,7 @@
         // Путь известен чуть позже «в эфире» — с ним и отправляем: страница
         // владельца открыта часами, первая публикация не должна ждать минуты.
         onRoute: function (route) { if (htr) { htr.set('ice', route); htr.send(); } },
-        onError: function (e) { failure = e; },
+        onError: function (e) { failure = e; if (e.codec) noH264(); },
       });
     }).catch(function (e) {
       // 409 — камера на сервере уже выключена: просить снова бесполезно,
@@ -711,6 +736,8 @@
     fetchMissed();
   });
   socket.on('venue:demand', function (d) { if (OWNER && local && d.venueId === ID) demand(d.on); });
+  // Сервер закрывает такую публикацию сам — следующая пойдёт на VP8.
+  socket.on('venue:codec', function (d) { if (OWNER && d.venueId === ID) noH264(); });
   socket.on('venue:chat', function (m) { if (m.venueId === ID) render(m); });
   socket.on('venue:viewers', function (d) { if (d.venueId === ID) viewers(d.count); });
   socket.on('venue:state', function (d) { if (d.venueId === ID) applyState(d.online, d.reason); });

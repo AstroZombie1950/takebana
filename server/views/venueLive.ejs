@@ -39,9 +39,8 @@
         <section class="tk-live__col">
           <div class="tk-live__player" id="player">
             <%# У владельца — своя камера без звука (иначе эхо). У гостя —
-                картинка заведения: на своём приёме знак уже в кадре (HLS,
-                utils/hls.js), в комнате Daily — поверх (app.css, .tk-wm):
-                кадр там собирает браузер. %>
+                картинка заведения, знак поверх (app.css, .tk-wm) на обоих
+                путях: живое — поверх, в кадр сервер его не кладёт (05.10). %>
             <video id="venueVideo" class="video-fit-contain" autoplay playsinline<% if (isOwner) { %> muted<% } %> hidden></video>
             <% if (!isOwner) { %><span class="tk-wm" id="venueWm" aria-hidden="true" hidden></span><% } %>
 

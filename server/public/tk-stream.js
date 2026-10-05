@@ -27,6 +27,8 @@
     box.scrollTop = narrow.matches ? 0 : box.scrollHeight;
   }
 
+  var CHAT_KEEP = 200;
+
   function render(m) {
     if (m._id && box.querySelector('[data-message-id="' + m._id + '"]')) return;
     var el = document.createElement('div');
@@ -42,6 +44,9 @@
         tkDate(m.createdAt, { hour: '2-digit', minute: '2-digit' }) +
       '</time>';
     if (narrow.matches) box.prepend(el); else box.appendChild(el);
+    // На большом матче за два часа приходят сотни тысяч строк: держим
+    // последние CHAT_KEEP, иначе телефон зрителя встаёт. Старое — в истории.
+    while (box.children.length > CHAT_KEEP) box.removeChild(narrow.matches ? box.lastElementChild : box.firstElementChild);
     toNewest();
     if (m.createdAt > lastMessageTime) lastMessageTime = m.createdAt;
   }
@@ -71,7 +76,12 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ streamId: streamId, message: text }),
     }).then(function (r) {
-      if (r.ok) { input.value = ''; return; }
+      // Своё — из ответа, не дожидаясь пачки: на большом эфире она могла
+      // его и не взять (streamChat.js, PER_FLUSH). Повтор отсечёт render.
+      if (r.ok) {
+        input.value = '';
+        return r.json().then(function (b) { if (b.chat) render(b.chat); }, function () {});
+      }
       return r.json().catch(function () { return {}; }).then(function (b) {
         // Медленный режим: сервер говорит, сколько секунд ждать.
         toast(b.wait ? t('chat.slowWait', { n: b.wait }) : b.message || t('chat.sendFailed'), 'error');
@@ -152,17 +162,27 @@
   // в комнату и добор чата повторяются сами. Путь плеера (TKStream.route) —
   // тоже: новый сокет на сервере его не знает.
   var route = '';
+  // Ответ на вход — счётчик и действующий медленный режим (на большом
+  // эфире он включён сам, а страница отрисована с ручным).
   socket.on('connect', function () {
-    socket.emit('join-stream-room', streamKey, fetchMissed);
+    socket.emit('join-stream-room', streamKey, function (r) {
+      fetchMissed();
+      if (!r || !r.success) return;
+      showViewers(r.count);
+      showSlow(r.slow);
+    });
     if (route) socket.emit('stream:route', route);
   });
-  socket.on('chat:message', render);
+  // Чат приходит пачками (streamChat.js, FLUSH_MS).
+  socket.on('chat:messages', function (list) { list.forEach(render); });
+  // Через tkText: ключ остаётся на элементе, и слово переводится
+  // при переключении языка, а не только при следующем обновлении счётчика.
+  function showViewers(n) {
+    viewersNum.textContent = n;
+    tkText(viewersText, viewersKey(n));
+  }
   socket.on('viewers-count-updated', function (d) {
-    if (d.streamKey !== streamKey) return;
-    viewersNum.textContent = d.count;
-    // Через tkText: ключ остаётся на элементе, и слово переводится
-    // при переключении языка, а не только при следующем обновлении счётчика.
-    tkText(viewersText, viewersKey(d.count));
+    if (d.streamKey === streamKey) showViewers(d.count);
   });
   socket.on('stream:update', function (u) {
     if (!u || u.streamKey !== streamKey) return;
@@ -171,16 +191,19 @@
 
   // ── Медленный режим чата ──
   // Зрителю — подсказка над полем; ведущему — выбор паузы (streamChat.ejs).
-  // Включил ведущий или модератор — приходит chat:slow.
+  // Включил ведущий или модератор, или эфир перешёл порог большого —
+  // приходит chat:slow: seconds — что действует, manual — выбор ведущего.
   var slowHint = document.getElementById('chatSlow');
   var slowPick = document.getElementById('chatSlowPick');
+  function showSlow(seconds) {
+    if (!slowHint) return;
+    slowHint.hidden = !seconds;
+    tkText(slowHint.firstElementChild, 'chat.slowOn', { n: seconds });
+  }
   socket.on('chat:slow', function (d) {
     if (!d || d.streamKey !== streamKey) return;
-    if (slowPick) slowPick.value = String(d.seconds);
-    if (slowHint) {
-      slowHint.hidden = !d.seconds;
-      tkText(slowHint.firstElementChild, 'chat.slowOn', { n: d.seconds });
-    }
+    if (slowPick) slowPick.value = String(d.manual);
+    showSlow(d.seconds);
   });
   if (slowPick) slowPick.addEventListener('change', function () {
     tkFetch('/chat/slow-mode', {

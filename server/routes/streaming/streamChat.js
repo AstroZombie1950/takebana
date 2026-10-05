@@ -12,6 +12,7 @@ const Stream = require('../../models/Stream');
 const { requireAuth, requireNotBanned, canModerate } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validate');
 const userView = require('../../utils/userView');
+const ioHolder = require('../../utils/io');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 // Сколько истории отдаём входящему зрителю. Больше на экране чата не
@@ -41,6 +42,28 @@ setInterval(() => {
   const old = Date.now() - 60 * 1000;
   for (const [k, at] of lastSaid) if (at < old) lastSaid.delete(k);
 }, 60 * 1000).unref();
+
+// Рассылка пачками: раз в FLUSH_MS одна отправка на комнату, сколько бы
+// ни написали. На эфире с десятью тысячами зрителей каждое сообщение — это
+// десять тысяч отправок; пачкой их две в секунду на зрителя при любом чате.
+// В пачке не больше PER_FLUSH новейших (до 50 в секунду): быстрее этого чат
+// никто не прочтёт, а всё сохранено и придёт с историей. Автор своё видит
+// по ответу на отправку, даже если пачка его отбросила.
+const FLUSH_MS = 500;
+const PER_FLUSH = 25;
+const pending = new Map();
+function broadcast(io, streamKey, chat) {
+  let list = pending.get(streamKey);
+  if (!list) {
+    pending.set(streamKey, list = []);
+    setTimeout(() => {
+      pending.delete(streamKey);
+      io.to(`stream:${streamKey}`).emit('chat:messages', list.slice(-PER_FLUSH));
+    }, FLUSH_MS).unref();
+  }
+  list.push(chat);
+  if (list.length > PER_FLUSH * 2) list.splice(0, list.length - PER_FLUSH);
+}
 
 // Эфир, чат которого этот человек вправе видеть: тот же доступ, что у
 // страницы эфира (streamPages.js) — ограничение и гейт 18+. Ответ — эфир
@@ -88,9 +111,11 @@ router.post('/chat/message', requireAuth, requireNotBanned, chatLimiter, validat
   }
   // Медленный режим — для зрителей; ведущий пишет без пауз. wait — сколько
   // секунд ждать: число клиент подставляет в подсказку на языке страницы.
-  if (stream.slowMode && !access.own) {
+  // На большом эфире он включается сам (utils/io.js, slowFor).
+  const slow = ioHolder.slowFor(stream);
+  if (slow && !access.own) {
       const key = `${streamId}:${author._id}`;
-      const wait = Math.ceil(((lastSaid.get(key) || 0) + stream.slowMode * 1000 - Date.now()) / 1000);
+      const wait = Math.ceil(((lastSaid.get(key) || 0) + slow * 1000 - Date.now()) / 1000);
       if (wait > 0) return res.status(429).json({ message: 'Включён медленный режим — подождите', wait });
       lastSaid.set(key, Date.now());
   }
@@ -104,19 +129,18 @@ router.post('/chat/message', requireAuth, requireNotBanned, chatLimiter, validat
 
   await chatMessage.save();
 
+  const chat = {
+      _id: chatMessage._id,
+      streamId: String(streamId),
+      userId: String(author._id),
+      username,
+      message,
+      createdAt: chatMessage.createdAt,
+  };
   const io = req.app.get('io');
-  if (io) {
-      io.to(`stream:${stream.streamKey}`).emit('chat:message', {
-          _id: chatMessage._id,
-          streamId: String(streamId),
-          userId: String(author._id),
-          username,
-          message,
-          createdAt: chatMessage.createdAt,
-      });
-  }
+  if (io) broadcast(io, stream.streamKey, chat);
 
-  return res.status(200).json({ message: 'Сообщение успешно отправлено и сохранено' });
+  return res.status(200).json({ chat });
 });
 
 
@@ -135,7 +159,13 @@ router.post('/chat/slow-mode', requireAuth, validate({
   }
   await Stream.updateOne({ _id: streamId }, { slowMode: seconds });
   const io = req.app.get('io');
-  if (io) io.to(`stream:${stream.streamKey}`).emit('chat:slow', { streamKey: stream.streamKey, seconds });
+  // seconds — что действует (с автоматическим на большом эфире), manual —
+  // выбор ведущего для его переключателя.
+  if (io) io.to(`stream:${stream.streamKey}`).emit('chat:slow', {
+    streamKey: stream.streamKey,
+    seconds: ioHolder.slowFor({ streamKey: stream.streamKey, slowMode: seconds }),
+    manual: seconds,
+  });
   res.json({ ok: true, seconds });
 });
 
