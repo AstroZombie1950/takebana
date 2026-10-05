@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>">
 <head>
-<%# Разделы — в индексе (docs/seo/DECISIONS.md): у раздела свой вводный
-    текст, описание, блок «о разделе» внизу и записи под эфирами, поэтому
+<%# Разделы — в индексе (docs/seo/DECISIONS.md): у раздела описание, блок
+    «о разделе» внизу и записи под эфирами, поэтому
     и без эфиров страница не пустая. Фильтры (?sub=, ?city=) в canonical
     не попадают — у всех комбинаций один адрес раздела. Главная с 28.09 —
     свой шаблон, home.ejs. %>
@@ -42,7 +42,7 @@
       <%- include('partials/catTabs', { current: category }) %>
 
       <%# Раздел с 02.10 — одной строкой: название, сколько в эфире и фильтры,
-          под ней вводка и сразу эфиры. Прежде первый экран занимали
+          под ней сразу эфиры (вводку убрали 05.10). Прежде первый экран занимали
           статичные блоки — шапка с метриками, трое авторов и рамка
           «Категории контента» с тегами, — и эфиры уходили под сгиб даже
           тогда, когда они были. Авторы — в левой панели (/authors),
@@ -61,7 +61,7 @@
             <%- include('partials/liveCount', { count: streams.length }) %>
           </div>
           <div class="tk-home__bar">
-            <select name="sub" class="tk-field tk-select" aria-label="<%= ta('catalog.sub') %>" data-i18n-aria="catalog.sub">
+            <select name="sub" class="tk-field tk-select tk-home__sub" aria-label="<%= ta('catalog.sub') %>" data-i18n-aria="catalog.sub">
               <option value="" data-i18n="catalog.allSubs"><%- t('catalog.allSubs') %></option>
               <% catalog.CATEGORIES[category].subs.forEach(function (sub) { %>
               <option value="<%= sub.code %>"<%= filters.subs.includes(sub.code) ? ' selected' : '' %> data-i18n="<%= sub.i18n %>"><%= ta(sub.i18n, sub.name) %></option>
@@ -78,13 +78,12 @@
               <option value="new"<%= filters.sort === 'new' ? ' selected' : '' %> data-i18n="catalog.sortNew"><%- t('catalog.sortNew') %></option>
             </select>
             <%# Нужна только без скрипта: со скриптом фильтр применяется сразу
-                при смене значения, и catalog.js кнопку убирает. %>
-            <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="common.show"><%- t('common.show') %></button>
+                при смене значения. В noscript, а не убирать скриптом: убранная
+                после отрисовки, она мигала на телефоне (05.10). %>
+            <noscript><button type="submit" class="tk-btn tk-btn--outline tk-btn--sm"><%- t('common.show') %></button></noscript>
             <a href="<%= base %>" class="tk-cat__reset" data-reset<%= filtered ? '' : ' hidden' %> data-i18n="common.resetFilters"><%- t('common.resetFilters') %></a>
           </div>
         </div>
-
-        <p class="tk-cat__lede" data-i18n="cat.<%= category %>Lede"><%- t('cat.' + category + 'Lede') %></p>
 
         <div class="tk-cat__results" id="catResults">
           <%- include('partials/catalogGrid') %>

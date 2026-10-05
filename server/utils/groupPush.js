@@ -23,7 +23,7 @@ function send(group, message, sender) {
 
   const name = userView.displayName(sender);
   const content = String(message.content || '').trim();
-  const kind = message.attachments && message.attachments[0] && message.attachments[0].kind;
+  const kind = (message.attachments && message.attachments[0] && message.attachments[0].kind) || (message.share && message.share.kind ? 'share' : '');
   const note = {
     topic: 'message',
     title: group.title,

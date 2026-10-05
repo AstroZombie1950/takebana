@@ -325,6 +325,20 @@
       '<svg class="tk-file__dl" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg></a>';
   }
 
+  // Публикация, которой поделились (05.10, utils/share.js): карточка
+  // с картинкой, видом и автором — ведёт на страницу публикации.
+  // Названия нет — подпись видом: «Фото», «Видео», «Запись эфира».
+  var SHARE_KIND = { photo: 'chats.att.image', video: 'chats.att.video', recording: 'feed.recording' };
+  function shareHtml(s) {
+    var kind = SHARE_KIND[s.kind] || 'chats.att.share';
+    return '<a class="tk-share tk-share--' + escapeHtml(s.kind) + '" href="' + escapeHtml(s.url) + '">' +
+      '<span class="tk-share__pic">' + (s.image ? '<img src="' + escapeHtml(src(s.image)) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' : '') +
+        (s.kind === 'photo' ? '' : '<span class="tk-share__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22">' + PLAY + '</svg></span>') + '</span>' +
+      '<span class="tk-share__body"><span class="tk-share__kind">' + i18nSpan(kind) + '</span>' +
+        (s.title ? '<span class="tk-share__title">' + escapeHtml(s.title) + '</span>' : '') +
+        '<span class="tk-share__author">' + escapeHtml(s.author) + '</span></span></a>';
+  }
+
   // Подпись сообщения в списке диалогов и в окне пересылки: текст, а у файла —
   // «Фото», «Голосовое» и т. п. перед подписью. Уже экранировано.
   function summaryHtml(m) {
@@ -332,16 +346,24 @@
       var k = m.expired ? 'chats.gone' : 'chats.sealed.' + ((m.attachments[0] || {}).kind || 'text');
       return '<span data-i18n="' + k + '">' + escapeHtml(t(k)) + '</span>';
     }
-    var a = m.attachments && m.attachments[0];
-    var label = a ? '<span data-i18n="chats.att.' + a.kind + '">' + escapeHtml(t('chats.att.' + a.kind)) + '</span>' : '';
-    return label + (label && m.content ? ' · ' : '') + escapeHtml(m.content || '');
+    var k = attKind(m);
+    var label = k ? '<span data-i18n="chats.att.' + k + '">' + escapeHtml(t('chats.att.' + k)) + '</span>' : '';
+    var text = m.content || (m.share && m.share.title) || '';
+    return label + (label && text ? ' · ' : '') + escapeHtml(text);
   }
 
   function summaryText(m) {
     if (m.expired) return t('chats.gone');
     if (m.limit) return t('chats.sealed.' + ((m.attachments[0] || {}).kind || 'text'));
+    var k = attKind(m);
+    var text = m.content || (m.share && m.share.title) || '';
+    return (k ? t('chats.att.' + k) + (text ? ' · ' : '') : '') + text;
+  }
+
+  // Вид для подписи: вложение или публикация («Публикация»).
+  function attKind(m) {
     var a = m.attachments && m.attachments[0];
-    return (a ? t('chats.att.' + a.kind) + (m.content ? ' · ' : '') : '') + (m.content || '');
+    return a ? a.kind : m.share ? 'share' : '';
   }
 
   // ── Исчезающие ──────────────────────────────────────────────────────
@@ -405,8 +427,8 @@
 
   function quoteOf(m) {
     var a = m.attachments[0];
-    return { id: m._id, sender: m.sender, text: m.content || '', kind: a ? a.kind : '', sealed: !!m.limit,
-      thumb: !m.limit && a ? a.preview || (a.kind === 'image' ? a.url : '') : '' };
+    return { id: m._id, sender: m.sender, text: m.content || (m.share && m.share.title) || '', kind: attKind(m), sealed: !!m.limit,
+      thumb: m.limit ? '' : a ? a.preview || (a.kind === 'image' ? a.url : '') : (m.share && m.share.image) || '' };
   }
 
   function quoteInner(r) {
@@ -450,14 +472,14 @@
     else if (m.limit && revealed[m._id]) body = revealedHtml(m, revealed[m._id]);
     else if (m.limit) body = sealedHtml(m);
     else {
-      var att = (m.attachments || []).map(attachmentHtml).join('');
+      var att = (m.attachments || []).map(attachmentHtml).join('') + (m.share ? shareHtml(m.share) : '');
       // Картинка, видео или кружок без подписи — пузырь без полей.
-      bare = att && !m.content && !head && /^(image|video|round)$/.test(m.attachments[0].kind);
+      bare = att && !m.content && !head && m.attachments.length && /^(image|video|round)$/.test(m.attachments[0].kind);
       var text = escapeHtml(m.content || '');
       if (!out && !group && peer && peer.official) text = linkify(text);
       body = att + (m.content ? '<p class="tk-msg__text">' + text + '</p>' : '');
     }
-    var special = m.expired || m.limit || (m.attachments && m.attachments.length);
+    var special = m.expired || m.limit || (m.attachments && m.attachments.length) || m.share;
     // Хвостик — у последнего пузыря серии, в сторону автора (chats.css).
     // У пачки пересланного своя рамка, у картинки без подписи пузыря нет.
     var tail = g.tail && !f && !bare;

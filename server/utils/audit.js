@@ -118,6 +118,7 @@ const ACTIONS = {
   'admin.export': 'Выгрузка из панели',
   'admin.user.delete': 'Удаление аккаунта',
   'admin.audit.clear': 'Очистка журнала',
+  'admin.traces.clear': 'Очистка попыток',
   'admin.session.kill': 'Сеанс завершён администратором',
   'admin.password.set': 'Пароль задан администратором',
   'admin.links.follow': 'Индексация ссылки на сайт',

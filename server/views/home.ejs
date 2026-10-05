@@ -58,7 +58,18 @@
             <%- include('partials/liveCount', { count: streams.length }) %>
           </div>
           <div class="tk-home__bar">
-            <% filters.subs.forEach(function (sub) { %><input type="hidden" name="sub" value="<%= sub %>"><% }); %>
+            <%# Темы всех категорий, группами (05.10): три фильтра, как в
+                каждом разделе, — вкладки выглядят одинаково. %>
+            <select name="sub" class="tk-field tk-select tk-home__sub" aria-label="<%= ta('catalog.sub') %>" data-i18n-aria="catalog.sub">
+              <option value="" data-i18n="catalog.allSubs"><%- t('catalog.allSubs') %></option>
+              <% Object.keys(catalog.CATEGORIES).forEach(function (code) { var c = catalog.CATEGORIES[code]; %>
+              <optgroup label="<%= ta(c.i18n) %>" data-i18n-label="<%= c.i18n %>">
+                <% c.subs.forEach(function (sub) { %>
+                <option value="<%= sub.code %>"<%= filters.subs.includes(sub.code) ? ' selected' : '' %> data-i18n="<%= sub.i18n %>"><%= ta(sub.i18n, sub.name) %></option>
+                <% }); %>
+              </optgroup>
+              <% }); %>
+            </select>
             <select name="city" class="tk-field tk-select" aria-label="<%= ta('common.city') %>" data-i18n-aria="common.city">
               <option value="" data-i18n="common.allCities"><%- t('common.allCities') %></option>
               <% catalog.CITIES.forEach(function (city) { %>
@@ -69,7 +80,7 @@
               <option value="" data-i18n="catalog.sortViewers"><%- t('catalog.sortViewers') %></option>
               <option value="new"<%= filters.sort === 'new' ? ' selected' : '' %> data-i18n="catalog.sortNew"><%- t('catalog.sortNew') %></option>
             </select>
-            <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="common.show"><%- t('common.show') %></button>
+            <noscript><button type="submit" class="tk-btn tk-btn--outline tk-btn--sm"><%- t('common.show') %></button></noscript>
             <a href="/" class="tk-cat__reset" data-reset<%= filtered ? '' : ' hidden' %> data-i18n="common.resetFilters"><%- t('common.resetFilters') %></a>
           </div>
         </div>

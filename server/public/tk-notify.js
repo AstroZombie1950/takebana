@@ -127,6 +127,7 @@
     var s = String(m.content || '').replace(/\s+/g, ' ').trim();
     // Файл без подписи — «Фото», «Голосовое» и т. п.
     if (!s && m.attachments && m.attachments[0]) s = t('chats.att.' + m.attachments[0].kind);
+    if (!s && m.share) s = t('chats.att.share');
     return s.length > 120 ? s.slice(0, 117) + '…' : s;
   }
 

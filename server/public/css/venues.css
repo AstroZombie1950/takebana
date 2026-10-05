@@ -255,6 +255,13 @@
 .tk-venues__flags { display: flex; gap: 6px; }
 .tk-venues__flags .tk-tag { white-space: nowrap; }
 
+/* Телефон: до переноса в выпадашку меток в строке не видно — иначе они
+ * мелькали на первой отрисовке и уезжали (05.10). Без скрипта переносить
+ * некому — тогда остаются в строке. */
+@media (max-width: 639px) and (scripting: enabled) {
+  .tk-venues__filters > .tk-venues__flags { display: none; }
+}
+
 .tk-venues__ddpanel .tk-venues__flags {
   flex-wrap: wrap;
   margin-top: 6px;

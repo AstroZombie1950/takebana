@@ -5,7 +5,7 @@
 const Message = require('../models/Message');
 
 // Поля оригинала, из которых собирается цитата ответа.
-const QUOTED = 'sender content attachments limit expiredAt';
+const QUOTED = 'sender content attachments limit expiredAt share';
 
 // Вложение: без ключей хранилища. sealed — сообщение с ограничением: ни адреса
 // файла, ни превью, пока его не открыли (их выдаёт /messages/:id/open).
@@ -40,8 +40,9 @@ function replyView(id, o) {
   if (!o || o.expiredAt) return { id: String(id), gone: true };
   const sealed = !!(o.limit && o.limit.mode);
   const a = o.attachments && o.attachments[0];
-  const out = { id: String(o._id), sender: String(o.sender), text: sealed ? '' : String(o.content || '').slice(0, 140), kind: a ? a.kind : '', sealed };
-  const thumb = !sealed && a && (a.preview || (a.kind === 'image' && a.url));
+  const s = o.share && o.share.kind ? o.share : null;
+  const out = { id: String(o._id), sender: String(o.sender), text: sealed ? '' : String(o.content || (s && s.title) || '').slice(0, 140), kind: a ? a.kind : s ? 'share' : '', sealed };
+  const thumb = !sealed && ((a && (a.preview || (a.kind === 'image' && a.url))) || (s && s.image));
   if (thumb) out.thumb = thumb;
   return out;
 }
@@ -65,6 +66,9 @@ function view(m, original) {
       ? { name: m.forwardedFrom.name, sentAt: m.forwardedFrom.sentAt || null, batch: m.forwardedFrom.batch || null }
       : null,
     reply: m.replyTo ? replyView(m.replyTo, original) : null,
+    share: m.share && m.share.kind
+      ? { kind: m.share.kind, url: m.share.url, title: m.share.title || '', image: m.share.image || '', author: m.share.author || '' }
+      : null,
     system: m.system && m.system.kind ? {
       kind: m.system.kind, actor: m.system.actor ? String(m.system.actor) : null, actorName: m.system.actorName || '',
       target: m.system.target ? String(m.system.target) : null, targetName: m.system.targetName || '', text: m.system.text || '',

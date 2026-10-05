@@ -92,7 +92,20 @@
       button.classList.toggle('tk-lb__button--empty', !current || current.value === '');
 
       list.innerHTML = '';
+      // Группы <optgroup> (темы по категориям на главной, 05.10) — заголовком
+      // над своими пунктами. Заголовок не пункт: индексы пунктов совпадают
+      // с select.options, поэтому ходим по .tk-lb__option, а не по children.
+      var group = null;
       opts.forEach(function (o, i) {
+        var g = o.parentNode.tagName === 'OPTGROUP' ? o.parentNode : null;
+        if (g && g !== group) {
+          var head = document.createElement('li');
+          head.className = 'tk-lb__group';
+          head.setAttribute('role', 'presentation');
+          head.textContent = g.label;
+          list.appendChild(head);
+        }
+        group = g;
         var li = document.createElement('li');
         li.className = 'tk-lb__option';
         li.id = id + '-o' + i;
@@ -106,8 +119,10 @@
       if (!list.hidden) highlight(active);
     }
 
+    function options() { return list.querySelectorAll('.tk-lb__option'); }
+
     function highlight(i) {
-      var lis = list.children;
+      var lis = options();
       if (!lis.length) return;
       active = Math.max(0, Math.min(i, lis.length - 1));
       for (var k = 0; k < lis.length; k++) lis[k].classList.toggle('tk-lb__option--active', k === active);
@@ -180,7 +195,7 @@
       var now = Date.now();
       typed = now - typedAt > 700 ? ch : typed + ch;
       typedAt = now;
-      var lis = list.children;
+      var lis = options();
       for (var k = 0; k < lis.length; k++) {
         var n = (active + 1 + k) % lis.length;
         if (typed.length > 1) n = (active + k) % lis.length;
@@ -204,7 +219,7 @@
     });
 
     list.addEventListener('keydown', function (e) {
-      var last = list.children.length - 1;
+      var last = select.options.length - 1;
       switch (e.key) {
         case 'ArrowDown': e.preventDefault(); highlight(active + 1); break;
         case 'ArrowUp': e.preventDefault(); highlight(active - 1); break;

@@ -32,7 +32,14 @@ const urls = new Map();
 // Старые копии от прошлых выкладок: страницы с их адресами давно закрыты,
 // а браузеры, у которых они в кэше, на сервер за ними не придут.
 // Неделя — с запасом на вкладку, открытую перед выкладкой.
+//
+// Неделя — от того, как копия перестала быть текущей, а не от её создания
+// (05.10): текущие копии освежают время файла (build, touchCurrent). Прежде
+// словарь, созданный 21.09 и заменённый выкладкой 02.10, стирался той же
+// выкладкой — и вкладка, открытая до неё, при переключении языка просила
+// уже стёртый адрес (ResourceError «не загрузился script» в журнале).
 const KEEP_MS = 7 * 24 * 3600 * 1000;
+const TOUCH_MS = 12 * 3600 * 1000;
 
 function sweep(dir) {
   let entries;
@@ -75,7 +82,9 @@ function build(url) {
   const minUrl = '/min' + url.slice(0, -ext.length) + '.' + hash + ext;
   const target = path.join(PUBLIC, minUrl);
 
-  if (!fs.existsSync(target)) {
+  if (fs.existsSync(target)) {
+    touch(target);
+  } else {
     const { code } = esbuild.transformSync(source.toString('utf8'), { ...OPTIONS, loader: ext.slice(1) });
     fs.mkdirSync(path.dirname(target), { recursive: true });
     // Через временный файл: nginx не должен отдать наполовину записанный.
@@ -85,6 +94,17 @@ function build(url) {
   }
   return minUrl;
 }
+
+function touch(file) {
+  const now = new Date();
+  try { fs.utimesSync(file, now, now); } catch {}
+}
+
+// Процесс живёт неделями: текущие копии освежаем и по часам, иначе после
+// долгой работы без перезапуска их время снова было бы временем создания.
+setInterval(() => {
+  for (const out of urls.values()) if (out.startsWith('/min/')) touch(path.join(PUBLIC, out));
+}, TOUCH_MS).unref();
 
 function asset(url) {
   if (!urls.has(url)) {

@@ -1,0 +1,18 @@
+<%#
+  «Поделиться» и «Пожаловаться» иконками (05.10, решение Ивана): на странице
+  видео, записи и фото они стоят в ряд с оценками, в ленте — под постом.
+  Подписи — только для читалки и всплывающей подсказкой: словом «Пожаловаться»
+  ряд выглядел неприятно. «Поделиться» отправляет публикацию сообщением
+  (public/tk-share.js), жалобу открывает report.js.
+  Параметры: cls — класс кнопок; s — { kind, id, title, image, author,
+  reportName — как назвать в окне жалобы };
+  report — показывать ли жалобу (вошедшему и не автору).
+%>
+<button type="button" class="<%= cls %>" data-share="<%= s.kind %>" data-share-id="<%= s.id %>" data-share-title="<%= s.title || '' %>" data-share-image="<%= s.image || '' %>" data-share-author="<%= s.author || '' %>" aria-label="<%= ta('rec.share') %>" data-i18n-aria="rec.share" title="<%= ta('rec.share') %>" data-i18n-title="rec.share">
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 4l7 7-7 7M21 11H9a6 6 0 00-6 6v3"/></svg>
+</button>
+<% if (report) { %>
+<button type="button" class="<%= cls %>" data-report="<%= s.kind %>" data-report-id="<%= s.id %>" data-report-name="<%= s.reportName %>" aria-label="<%= ta('common.report') %>" data-i18n-aria="common.report" title="<%= ta('common.report') %>" data-i18n-title="common.report">
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4M5 4h12l-2 4.5 2 4.5H5"/></svg>
+</button>
+<% } %>

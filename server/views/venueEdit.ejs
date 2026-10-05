@@ -126,6 +126,14 @@
         <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>
       </form>
 
+      <%# Удаление — здесь, последним (05.10): на странице заведения кнопка
+          стояла рядом с ежедневными и могла нажаться случайно. Что пропадёт —
+          в окне подтверждения. %>
+      <section class="tk-panel tk-vp__zone">
+        <p class="tk-panel__title" data-i18n="venue.page.deleteTitle"><%- t('venue.page.deleteTitle') %></p>
+        <button type="button" class="tk-btn tk-btn--danger tk-btn--sm" data-venue-delete data-i18n="venue.page.deleteBtn"><%- t('venue.page.deleteBtn') %></button>
+      </section>
+
     </div>
   </main>
 </div>

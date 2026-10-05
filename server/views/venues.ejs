@@ -72,7 +72,7 @@
         <label class="tk-venues__search">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
           <input type="search" name="q" value="<%= filters.q %>" class="tk-venues__q" id="venueQuery" maxlength="100" autocomplete="off" enterkeyhint="search"
-                 placeholder="<%= ta('venues.searchPh') %>" data-i18n-placeholder="venues.searchPh" aria-label="<%= ta('venues.searchPh') %>" data-i18n-aria="venues.searchPh">
+                 placeholder="<%= ta('app.search') %>" data-i18n-placeholder="app.search" aria-label="<%= ta('app.search') %>" data-i18n-aria="app.search">
           <button type="button" class="tk-venues__clear" id="venueClear" aria-label="<%= ta('common.clear') %>" data-i18n-aria="common.clear"<%= filters.q ? '' : ' hidden' %>>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
           </button>
@@ -138,7 +138,7 @@
         </label>
         <a href="/venues" class="tk-venues__reset" data-reset<%= anyFilter ? '' : ' hidden' %> data-i18n="common.resetFilters"><%- t('common.resetFilters') %></a>
         <%# Нужна только без скрипта: со скриптом фильтр применяется сразу. %>
-        <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm" data-nojs data-i18n="common.show"><%- t('common.show') %></button>
+        <noscript><button type="submit" class="tk-btn tk-btn--outline tk-btn--sm"><%- t('common.show') %></button></noscript>
       </div>
     </form>
 

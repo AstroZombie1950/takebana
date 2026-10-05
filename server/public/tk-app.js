@@ -61,12 +61,10 @@ document.addEventListener('click', (e) => {
 });
 
 // Фильтры-формы с data-autosubmit («Все авторы», 04.10): со скриптом
-// применяются сразу при смене выпадашки, и кнопка «Показать» не нужна.
-// Без скрипта форма уходит кнопкой — адрес тот же.
+// применяются сразу при смене выпадашки. Без скрипта форма уходит кнопкой
+// «Показать» — она в noscript, адрес тот же.
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('form[data-autosubmit]').forEach((form) => {
-    const submit = form.querySelector('[type="submit"]');
-    if (submit) submit.remove(); // у .tk-btn свой display — hidden его не спрячет
     form.addEventListener('change', (e) => {
       if (e.target.matches('select')) form.requestSubmit();
     });
@@ -490,15 +488,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  const field = document.getElementById('searchInput');
-  // На телефоне длинная подсказка не помещалась и обрывалась на полуслове
-  // («…эфиры, завед») — там просто «Поиск». Ключ меняем, а не только текст:
-  // переключение языка берёт подсказку по ключу.
-  if (field && matchMedia('(max-width: 767px)').matches) {
-    field.setAttribute('data-i18n-placeholder', 'app.searchPhShort');
-    field.placeholder = t('app.searchPhShort');
-  }
-  attach(field, document.getElementById('searchResults'));
+  attach(document.getElementById('searchInput'), document.getElementById('searchResults'));
 
   // Поле на странице результатов показывает, что искали, — но новый запрос
   // набирают с чистого: фокус выделяет прежний, и первая же буква его заменяет.

@@ -179,7 +179,7 @@ router.get('/feed', commonDataMiddleware, async (req, res) => {
   const kind = postKinds(req.query.kind);
   const before = feed.cursor(req.query.before);
   const page = await feed.page({ before, viewer: req.session.userId, kinds: POST_KINDS[kind] || ['photo', 'video'] });
-  res.render('feed', { kind, before: !!before, items: page.items, next: page.next });
+  res.render('feed', { kind, before: !!before, items: await feed.withTalk(page.items, req.session.userId), next: page.next });
 });
 
 // Следующая страница «Ленты» для catalog.js — как /home/next.
@@ -187,7 +187,7 @@ router.get('/feed/next', fragmentOnly(() => '/feed'), async (req, res) => {
   const kind = postKinds(req.query.kind);
   const page = await feed.page({ before: feed.cursor(req.query.before), viewer: req.session.userId, kinds: POST_KINDS[kind] || ['photo', 'video'] });
   res.set('X-Feed-Next', page.next || '');
-  res.render('partials/postPage', { items: page.items });
+  res.render('partials/postPage', { items: await feed.withTalk(page.items, req.session.userId), me: req.session.userId ? String(req.session.userId) : '' });
 });
 
 // Прежние адреса «Популярного» — на главную, с фильтрами: ими делились ссылками.

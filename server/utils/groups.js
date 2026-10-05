@@ -104,7 +104,7 @@ function emit(io, group, event, payload) {
 // fields — как у личного deliver: content, attachments, forwardedFrom,
 // reply, ref; или system — служебная строка. silent — без пуша: пересылка
 // пачкой будит один раз, с последним сообщением.
-async function deliver(req, group, sender, { content = '', attachments: files, forwardedFrom, reply, ref, system, silent }) {
+async function deliver(req, group, sender, { content = '', attachments: files, forwardedFrom, share, reply, ref, system, silent }) {
   const now = new Date();
   const message = await Message.create({
     conversationId: group._id,
@@ -113,6 +113,7 @@ async function deliver(req, group, sender, { content = '', attachments: files, f
     attachments: files || [],
     sentAt: now,
     forwardedFrom,
+    share,
     replyTo: reply ? reply._id : null,
     system,
   });

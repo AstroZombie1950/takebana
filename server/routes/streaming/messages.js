@@ -37,6 +37,8 @@ const restriction = require('../../utils/restrict');
 const privacy = require('../../utils/privacy');
 const groups = require('../../utils/groups');
 const { tr, langOf } = require('../../utils/i18n');
+const share = require('../../utils/share');
+const Contact = require('../../models/Contact');
 
 // Ограничение доступа закрывает и переписку (utils/restrict.js): 403
 // с объяснением, кто кого ограничил. true — ответ уже отправлен.
@@ -145,6 +147,7 @@ function pushText(m) {
   if (m.forwardedFrom && m.forwardedFrom.name) return { previewKey: 'notify.forwarded' };
   const content = String(m.content || '').trim();
   if (content) return { preview: content };
+  if (m.share && m.share.kind) return { previewKey: 'chats.att.share' };
   const kind = m.attachments && m.attachments[0] && m.attachments[0].kind;
   return kind ? { previewKey: 'chats.att.' + kind } : {};
 }
@@ -174,7 +177,7 @@ function pushMessage({ message, sender, recipient }) {
 // Сохранить сообщение и разослать: получателю и вкладкам отправителя.
 // Общее у отправки, вложений и пересылки. ref — метка вкладки, отправившей
 // файл: по ней она меняет свою заглушку загрузки на готовое сообщение.
-async function deliver(req, { conversation, sender, recipient, content = '', attachments: files, forwardedFrom, ref, limit, silent, reply }) {
+async function deliver(req, { conversation, sender, recipient, content = '', attachments: files, forwardedFrom, share, ref, limit, silent, reply }) {
   const now = new Date();
   const message = await Message.create({
     conversationId: conversation._id,
@@ -187,6 +190,7 @@ async function deliver(req, { conversation, sender, recipient, content = '', att
     // Получатель на связи — сообщение дошло до его браузера сразу.
     deliveredAt: isOnline(req, recipient._id) ? now : null,
     forwardedFrom,
+    share,
     replyTo: reply ? reply._id : null,
   });
 
@@ -280,7 +284,7 @@ async function dialogPage(me, before, { requests = false } = {}) {
           id: String(last._id),
           // У сообщения с ограничением текст закрыт — в списке только вид.
           content: last.limit && last.limit.mode ? '' : last.content || '',
-          kind: last.attachments && last.attachments[0] ? last.attachments[0].kind : '',
+          kind: last.attachments && last.attachments[0] ? last.attachments[0].kind : last.share && last.share.kind ? 'share' : '',
           limited: !!(last.limit && last.limit.mode),
           expired: !!last.expiredAt,
           mine: String(last.sender) === String(me),
@@ -328,7 +332,7 @@ async function groupRows(me, before) {
       group: groups.brief(g),
       last: last && {
         content: last.content || '',
-        kind: last.attachments && last.attachments[0] ? last.attachments[0].kind : '',
+        kind: last.attachments && last.attachments[0] ? last.attachments[0].kind : last.share && last.share.kind ? 'share' : '',
         system: last.system && last.system.kind ? view(last).system : null,
         mine: String(last.sender) === String(me),
         author: nameOf.get(String(last.sender)) || '',
@@ -699,6 +703,58 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
 // и рассылок одним запросом.
 const FORWARD_MAX = 200;
 
+// Разослать пачку людям и группам — общее у пересылки и «Поделиться»
+// (routes/share.js). chosen — id людей, себя среди них нет; targetGroups —
+// группы, где отправитель состоит. Ограничение доступа (utils/restrict.js),
+// закрытая личка (utils/privacy.js) и удалённый аккаунт — мимо, их число —
+// skipped: «Отправлено» без оговорки выглядело бы как «ушло всем». Не ушло
+// никому — error с кодом и телом отказа.
+async function fanOut(req, { chosen, targetGroups, batch, comment }) {
+  const me = String(req.session.userId);
+  const barred = await Promise.all(chosen.map((id) => restriction.between(me, id)));
+  const recipientIds = chosen.filter((id, i) => !barred[i]);
+  if (!recipientIds.length && !targetGroups.length) {
+    return { error: { status: 403, body: { restricted: barred[0], message: restriction.BLOCKED[barred[0]] } } };
+  }
+  const [sender, recipients] = await Promise.all([
+    User.findById(me).select('nickname login email avatar role').lean(),
+    User.find({ _id: { $in: recipientIds } }).select('nickname login email avatar role').lean(),
+  ]);
+
+  const sent = [];
+  let closed = null;
+  let skipped = chosen.length - recipients.length;
+  for (const recipient of recipients) {
+    const g = await privacy.messageGate(await findConversation(me, recipient._id), me, recipient._id);
+    if (!g.ok) { closed = closed || g; skipped++; continue; }
+    const conversation = await openConversation(me, recipient._id);
+    if (g.request && !conversation.requestFor) conversation.requestFor = recipient._id;
+    if (g.accept) conversation.requestFor = undefined;
+    // Пуш — один на всю пачку, с последним её сообщением.
+    if (comment) sent.push(await deliver(req, { conversation, sender, recipient, content: comment, silent: batch.length > 0 }));
+    for (let i = 0; i < batch.length; i++) {
+      sent.push(await deliver(req, { conversation, sender, recipient, ...batch[i], silent: i < batch.length - 1 }));
+    }
+  }
+  if (!sent.length && !targetGroups.length && closed) {
+    return { error: { status: 403, body: { privacy: closed.rule, message: closed.message } } };
+  }
+  for (const group of targetGroups) {
+    if (comment) sent.push(await groups.deliver(req, group, sender, { content: comment, silent: batch.length > 0 }));
+    for (let i = 0; i < batch.length; i++) sent.push(await groups.deliver(req, group, sender, { ...batch[i], silent: i < batch.length - 1 }));
+  }
+  return { sent, skipped };
+}
+
+// Кому: люди без себя и группы, где отправитель состоит. Общее у пересылки
+// и «Поделиться».
+async function targetsOf(req) {
+  const me = String(req.session.userId);
+  const chosen = [...new Set(req.body.recipientIds)].filter((id) => id !== me);
+  const targetGroups = req.body.groupIds.length ? await Group.find({ _id: { $in: req.body.groupIds }, 'members.user': me }) : [];
+  return { chosen, targetGroups };
+}
+
 router.post('/messages/forward', requireAuthApi, requireNotBanned, sendLimiter, validate({
   messageIds: { type: 'array', required: true, max: 50, of: { type: 'objectId' }, label: 'Сообщения' },
   recipientIds: { type: 'array', default: [], max: 20, of: { type: 'objectId' }, label: 'Кому' },
@@ -708,19 +764,12 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, sendLimiter, 
 }), async (req, res) => {
   const me = String(req.session.userId);
   const { comment } = req.body;
-  const chosen = [...new Set(req.body.recipientIds)].filter((id) => id !== me);
-  const [targetGroups, myGroups] = await Promise.all([
-    req.body.groupIds.length ? Group.find({ _id: { $in: req.body.groupIds }, 'members.user': me }) : [],
+  const [{ chosen, targetGroups }, myGroups] = await Promise.all([
+    targetsOf(req),
     Group.find({ 'members.user': me }).select('_id').lean(),
   ]);
   if (!chosen.length && !targetGroups.length) {
     return res.status(400).json({ message: 'Выберите, кому переслать' });
-  }
-  // Тем, с кем стоит ограничение доступа, не пересылается (utils/restrict.js).
-  const barred = await Promise.all(chosen.map((id) => restriction.between(me, id)));
-  const recipientIds = chosen.filter((id, i) => !barred[i]);
-  if (!recipientIds.length && !targetGroups.length) {
-    return res.status(403).json({ restricted: barred[0], message: restriction.BLOCKED[barred[0]] });
   }
 
   // Порядок — как в переписке, по времени, а не как их выделяли.
@@ -736,17 +785,12 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, sendLimiter, 
   if (!originals.length) {
     return res.status(404).json({ message: 'Сообщение не найдено' });
   }
-  if ((originals.length + (comment ? 1 : 0)) * (recipientIds.length + targetGroups.length) > FORWARD_MAX) {
+  if ((originals.length + (comment ? 1 : 0)) * (chosen.length + targetGroups.length) > FORWARD_MAX) {
     return res.status(400).json({ message: 'Слишком много сразу: выберите меньше сообщений или адресатов' });
   }
 
-  const [sender, recipients] = await Promise.all([
-    User.findById(me).select('nickname login email avatar role').lean(),
-    User.find({ _id: { $in: recipientIds } }).select('nickname login email avatar role').lean(),
-  ]);
-
   // Автор каждого — один раз на всю пачку: в выделении обычно два человека.
-  const authors = new Map([[me, sender]]);
+  const authors = new Map();
   // Пересланное дальше — с исходным автором и временем, но в новой пачке.
   const batchId = new ObjectId().toString();
   const origin = async (m) => {
@@ -761,36 +805,61 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, sendLimiter, 
       : { user: m.sender, name: '#' + id.slice(-6), sentAt: m.sentAt, batch: batchId };
   };
   const batch = [];
-  for (const m of originals) batch.push({ content: m.content, attachments: m.attachments, forwardedFrom: await origin(m) });
+  for (const m of originals) batch.push({ content: m.content, attachments: m.attachments, share: m.share, forwardedFrom: await origin(m) });
 
-  const sent = [];
-  let closed = null;
-  // Кому не ушло: ограничение доступа, удалённый аккаунт, закрытая личка.
-  // Число — в ответ: «Переслано» без оговорки выглядело бы как «ушло всем».
-  let skipped = chosen.length - recipients.length;
-  for (const recipient of recipients) {
-    // Закрытая личка (utils/privacy.js) — мимо, как и ограничение выше.
-    const g = await privacy.messageGate(await findConversation(me, recipient._id), me, recipient._id);
-    if (!g.ok) { closed = closed || g; skipped++; continue; }
-    const conversation = await openConversation(me, recipient._id);
-    if (g.request && !conversation.requestFor) conversation.requestFor = recipient._id;
-    if (g.accept) conversation.requestFor = undefined;
-    // Пуш — один на всю пересылку, с последним сообщением пачки.
-    if (comment) sent.push(await deliver(req, { conversation, sender, recipient, content: comment, silent: batch.length > 0 }));
-    for (let i = 0; i < batch.length; i++) {
-      sent.push(await deliver(req, { conversation, sender, recipient, ...batch[i], silent: i < batch.length - 1 }));
-    }
-  }
-  // Не ушло никому — личка закрыта у всех: отказ с причиной, а не «успех».
-  if (!sent.length && !targetGroups.length && closed) {
-    return res.status(403).json({ privacy: closed.rule, message: closed.message });
-  }
-  for (const group of targetGroups) {
-    if (comment) sent.push(await groups.deliver(req, group, sender, { content: comment, silent: batch.length > 0 }));
-    for (let i = 0; i < batch.length; i++) sent.push(await groups.deliver(req, group, sender, { ...batch[i], silent: i < batch.length - 1 }));
-  }
+  const out = await fanOut(req, { chosen, targetGroups, batch, comment });
+  if (out.error) return res.status(out.error.status).json(out.error.body);
+  res.json({ success: true, messages: out.sent, skipped: out.skipped });
+});
 
-  res.json({ success: true, messages: sent, skipped });
+
+// ── «Поделиться» (05.10, utils/share.js) ──
+// Кому: недавние собеседники и группы по времени, за ними контакты, которых
+// среди недавних нет. Один лёгкий запрос на открытие окна (public/tk-share.js):
+// список диалогов /api/dialogs тянет последние сообщения и счётчики, здесь
+// они не нужны. Остальных людей окно находит поиском.
+const SHARE_RECENT = 20;
+
+router.get('/api/share/targets', requireAuthApi, async (req, res) => {
+  const me = new ObjectId(String(req.session.userId));
+  const [conversations, groupList, contacts] = await Promise.all([
+    Conversation.find({ $or: [{ userOne: me }, { userTwo: me }], lastMessage: { $ne: null }, hiddenFor: { $ne: me }, requestFor: { $ne: me } })
+      .sort({ lastUpdated: -1 }).limit(SHARE_RECENT)
+      .select('userOne userTwo lastUpdated')
+      .populate('userOne userTwo', 'nickname login email avatar role')
+      .lean(),
+    Group.find({ 'members.user': me }).sort({ lastUpdated: -1 }).limit(SHARE_RECENT).select('title avatar members.user lastUpdated').lean(),
+    Contact.find({ owner: me }).populate('peer', 'nickname login email avatar role').lean(),
+  ]);
+  const recent = conversations
+    .filter((c) => c.userOne && c.userTwo)
+    .map((c) => ({ at: c.lastUpdated, p: person(String(c.userOne._id) === String(me) ? c.userTwo : c.userOne) }))
+    .concat(groupList.map((g) => ({ at: g.lastUpdated, p: { ...groups.brief(g), group: true } })))
+    .sort((a, b) => b.at - a.at)
+    .slice(0, SHARE_RECENT)
+    .map((r) => r.p);
+  const seen = new Set(recent.map((p) => p.id));
+  const more = contacts.filter((c) => c.peer && !seen.has(String(c.peer._id))).map((c) => person(c.peer))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, ['ru', 'en'], { sensitivity: 'base' }));
+  res.json({ targets: recent.concat(more) });
+});
+
+router.post('/api/share', requireAuthApi, requireNotBanned, sendLimiter, validate({
+  kind: { type: 'string', required: true, max: 16, label: 'Что' },
+  id: { type: 'objectId', required: true, label: 'Что' },
+  recipientIds: { type: 'array', default: [], max: 20, of: { type: 'objectId' }, label: 'Кому' },
+  groupIds: { type: 'array', default: [], max: 20, of: { type: 'objectId' }, label: 'Кому' },
+  comment: { type: 'string', max: 5000, default: '', label: 'Комментарий' },
+}), async (req, res) => {
+  if (!share.KINDS.includes(req.body.kind)) return res.status(400).json({ message: 'Неверный запрос' });
+  const { chosen, targetGroups } = await targetsOf(req);
+  if (!chosen.length && !targetGroups.length) return res.status(400).json({ message: 'Выберите, кому отправить' });
+  const card = await share.snapshot(req.body.kind, req.body.id, req.session.userId);
+  if (!card) return res.status(404).json({ message: 'Публикация не найдена' });
+
+  const out = await fanOut(req, { chosen, targetGroups, batch: [{ share: card }], comment: req.body.comment.trim() });
+  if (out.error) return res.status(out.error.status).json(out.error.body);
+  res.json({ success: true, sent: out.sent.length, skipped: out.skipped });
 });
 
 

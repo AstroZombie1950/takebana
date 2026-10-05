@@ -81,18 +81,6 @@
     });
   });
 
-  // ── Поделиться: на телефоне — системное меню, иначе ссылка в буфер ──
-  var share = $('shareRecording');
-  if (share) share.addEventListener('click', function () {
-    var url = location.origin + base;
-    if (navigator.share && window.matchMedia('(pointer: coarse)').matches) {
-      navigator.share({ title: document.title, url: url }).catch(function () {});
-      return;
-    }
-    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject())
-      .then(function () { toast(t('rec.linkCopied'), 'ok'); }, function () { prompt('', url); });
-  });
-
   // ── Фото: к соседним стрелками клавиатуры и пальцем ──
   // Адреса соседей — data-prev (новее) и data-next (старше), ставит сервер.
   var go = function (dir) {

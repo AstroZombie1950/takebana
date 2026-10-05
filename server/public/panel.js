@@ -1177,6 +1177,8 @@ VIEWS.traces = {
   admin: true,
   api: '/traces',
   csv: true,
+  // Очищает то, что отобрано фильтрами, — без отбора все попытки.
+  tools: () => '<button type="button" class="tk-btn tk-btn--danger tk-btn--xs" data-act="traces-clear">Очистить</button>',
   filters: [
     { name: 'kind', options: [{ value: '', title: 'Все направления' }].concat(Object.entries(KIND_TITLE).map(([value, title]) => ({ value, title }))) },
     { name: 'outcome', options: [{ value: '', title: 'Любой исход' }, { value: 'bad', title: 'Не вышло' }].concat(
@@ -2392,16 +2394,20 @@ view.addEventListener('click', async (e) => {
   }
 });
 
-// Очистка журнала — кнопка в шапке вкладки, рядом с фильтрами.
+// Очистка журнала и попыток — кнопка в шапке вкладки, рядом с фильтрами.
+const CLEAR = {
+  'audit-clear': { api: '/audit', some: 'Удалить из журнала все записи по текущему отбору?', all: 'Очистить весь журнал?' },
+  'traces-clear': { api: '/traces', some: 'Удалить все попытки по текущему отбору?', all: 'Удалить все попытки?' },
+};
 viewTools.addEventListener('click', async (e) => {
-  if (!e.target.closest('[data-act="audit-clear"]')) return;
+  const btn = e.target.closest('[data-act]');
+  const c = btn && CLEAR[btn.dataset.act];
+  if (!c) return;
   const params = serverParams(route().params);
   const filtered = Object.keys(params).length > 0;
-  if (!await confirmDialog(filtered
-    ? 'Удалить из журнала все записи по текущему отбору? Вернуть нельзя.'
-    : 'Очистить весь журнал? Вернуть нельзя.', { okText: 'Очистить' })) return;
+  if (!await confirmDialog((filtered ? c.some : c.all) + ' Вернуть нельзя.', { okText: 'Очистить' })) return;
   try {
-    const r = await send('DELETE', '/api/admin/audit?' + new URLSearchParams(params).toString());
+    const r = await send('DELETE', '/api/admin' + c.api + '?' + new URLSearchParams(params).toString());
     toast('Удалено записей: ' + num(r.rows), 'ok');
     show();
   } catch (err) {

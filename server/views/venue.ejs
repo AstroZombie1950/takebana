@@ -136,8 +136,9 @@
           <a href="/studio?venue=<%= venue._id %>" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="venue.page.goLive"><%- t('venue.page.goLive') %></a>
           <a href="/upload?venue=<%= venue._id %>" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="venue.page.upload"><%- t('venue.page.upload') %></a>
           <% } %>
+          <%# «Удалить» — в настройках (05.10): здесь, рядом с ежедневными
+              кнопками, его нажимали бы случайно. %>
           <a href="/venue/<%= venue._id %>/edit" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="venue.tab.settings"><%- t('venue.tab.settings') %></a>
-          <button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-vp__danger" data-venue-delete data-i18n="common.delete"><%- t('common.delete') %></button>
         </div>
         <% if (approved) { %><p class="tk-note" data-i18n="venue.page.liveHint"><%- t('venue.page.liveHint') %></p><% } %>
       </section>

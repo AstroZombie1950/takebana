@@ -1,6 +1,7 @@
 <%#
   «Лента» (/feed, 04.10.2026, решение Ивана) — фото и видео, которые
   выкладывают люди, одной колонкой, новые сверху: листаешь, как в Инстаграме.
+  С 05.10 — на всю ширину, действия и разговор у каждого поста (postCard).
   Записи эфиров сюда не идут — они в «Популярном». Маршрут —
   routes/streaming/catalog.js, лента — utils/feed.js, пост —
   partials/postCard.ejs, вид — css/feed.css. Дальше по ленте подгружает
@@ -41,7 +42,6 @@
           <h1 class="tk-home__h1" data-i18n="feed.h1"><%- t('feed.h1') %></h1>
         </div>
       </div>
-      <p class="tk-cat__lede" data-i18n="feed.lede"><%- t('feed.lede') %></p>
 
       <nav class="tk-tabs tk-cat__tabs" aria-label="<%= ta('feed.tabsAria') %>" data-i18n-aria="feed.tabsAria">
         <% tabs.forEach(function (tb) { var on = kind === tb[0]; %>
@@ -51,7 +51,8 @@
 
       <% if (items.length) { %>
       <div class="tk-posts__list" id="feed">
-        <% items.forEach(function (item) { %><%- include('partials/postCard', { item: item }) %><% }); %>
+        <% var me = currentUser ? String(currentUser._id) : ''; %>
+        <% items.forEach(function (item) { %><%- include('partials/postCard', { item: item, me: me }) %><% }); %>
       </div>
       <% if (next) { %>
       <a href="<%= nextHref(next) %>" class="tk-btn tk-btn--outline tk-btn--sm tk-posts__more" id="feedMore" data-src="/feed/next<%= kindQs %>" data-next="<%= next %>" data-auto data-i18n="feed.more"><%- t('feed.more') %></a>
@@ -69,5 +70,7 @@
 </div>
 
 <script defer src="<%= asset('/catalog.js') %>"></script>
+<script defer src="<%= asset('/tk-posts.js') %>"></script>
+<script defer src="<%= asset('/tk-share.js') %>"></script>
 </body>
 </html>

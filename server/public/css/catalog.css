@@ -158,19 +158,13 @@
 @media (max-width: 767px) {
   .tk-home__h1 { font-size: 24px; }
   .tk-home__h2 { font-size: 20px; }
-  .tk-home__bar { width: 100%; }
-  .tk-home__bar .tk-select { flex: 1 1 140px; width: auto; }
-}
-
-/* Вводка раздела — под строкой фильтров, мелко: для пришедшего из
- * поиска, а не на весь первый экран. */
-.tk-cat__lede {
-  margin: -8px 0 20px;
-  max-width: 760px;
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--tk-muted);
-  text-wrap: pretty;
+  /* Сеткой, а не переносом флекса (05.10): ширину родного <select> задаёт
+   * самый длинный пункт внутри, и строки ломались по-разному в каждом
+   * разделе. Тема — во всю ширину, город и порядок — пополам. */
+  .tk-home__bar { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tk-home__bar .tk-select { width: auto; min-width: 0; }
+  .tk-home__bar .tk-home__sub,
+  .tk-home__bar .tk-cat__reset { grid-column: 1 / -1; }
 }
 
 /* ── Секции ── */
@@ -491,7 +485,6 @@
   .tk-intro__body { flex-basis: calc(100% - 60px); }
   .tk-intro__close { align-self: flex-start; }
   .tk-intro__more { order: 1; }
-  .tk-cat__lede { margin-top: -4px; font-size: 14px; }
   .tk-cat__h2 { font-size: 20px; }
   .tk-cat__sec { padding-top: 32px; }
   .tk-grid { grid-template-columns: 1fr; }

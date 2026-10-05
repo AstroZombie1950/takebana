@@ -594,12 +594,12 @@ body.tk-app {
   padding: 14px 18px;
 }
 
-/* Низ панели: документы и выход. Прилипает
- * к низу: на невысоком экране середина панели прокручивается, а «Выход»
- * остаётся на виду. */
+/* Низ панели: документы и выход — всегда после «Начать стрим». До 05.10
+ * прилипал к низу (sticky) и, когда панель не помещалась, ложился поверх
+ * кнопки: в переписке на телефоне страница не прокручивается, адресная
+ * строка браузера не уезжает, и экран ниже, чем на остальных страницах.
+ * Не помещается — панель прокручивается целиком, ничто ничего не закрывает. */
 .tk-aside__foot {
-  position: sticky;
-  bottom: 0;
   border-top: 1px solid var(--tk-rule);
   padding: 10px 0 calc(6px + var(--tk-safe-b));
   background: var(--tk-ink);
@@ -805,6 +805,107 @@ body.tk-app {
 
 .tk-modal__close:hover,
 .tk-modal__close:focus-visible { color: var(--tk-accent); }
+
+/* ── Выбор адресатов: пересылка в переписке и «Поделиться» (tk-share.js) ──
+ * Здесь, а не в chats.css (05.10): окно «Поделиться» живёт на страницах
+ * медиа и в ленте, где стилей переписки нет. */
+.tk-fwd__quote {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--tk-green);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--tk-beige);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tk-fwd__comment {
+  resize: vertical;
+  min-height: 56px;
+  padding: 12px 16px;
+}
+
+.tk-fwd__list {
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 -22px;
+}
+
+.tk-fwd__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 22px;
+  cursor: pointer;
+  transition: background-color .18s ease;
+}
+
+.tk-fwd__row:hover { background: rgba(227, 66, 52, .08); }
+
+.tk-fwd__row input {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  accent-color: var(--tk-accent);
+}
+
+.tk-fwd__ava {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--tk-paper);
+}
+
+.tk-fwd__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-fwd__name {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tk-paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* «Поделиться»: что отправляем — картинка, вид, название, автор. */
+.tk-sharebox__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 12px;
+  border-left: 2px solid var(--tk-accent);
+}
+
+.tk-sharebox__pic { width: 56px; height: 56px; flex: none; object-fit: cover; background: #000; }
+.tk-sharebox__text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.tk-sharebox__kind {
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-accent);
+}
+
+.tk-sharebox__title,
+.tk-sharebox__author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-sharebox__title { font-size: 14px; font-weight: 700; color: var(--tk-paper); }
+.tk-sharebox__author { font-size: 13px; color: var(--tk-muted); }
+
+/* Подвал: ссылка — скромно слева, «Отправить» — главная, во всю остальную ширину. */
+.tk-sharebox__foot { display: flex; gap: 10px; }
+.tk-sharebox__foot [data-send] { flex: 1; }
 
 /* Действие над всем списком рядом с крестиком: «Очистить». Прижато вправо,
  * к крестику, — заголовок остаётся слева. */
@@ -1894,6 +1995,8 @@ body.tk-app {
   .tk-modal__body { padding: 16px 16px calc(16px + var(--tk-safe-b)); }
   .tk-modal__body--list { padding: 0 16px calc(8px + var(--tk-safe-b)); }
   .tk-modal__foot { padding: 14px 16px calc(14px + var(--tk-safe-b)); }
+  .tk-fwd__list { margin: 0 -16px; }
+  .tk-fwd__row { padding-left: 16px; padding-right: 16px; }
   .tk-notice { margin: 0 -16px; padding-left: 13px; padding-right: 16px; }
 
   /* Звонок без видео — дозвон, аудиозвонок, «только голос»: статус и кнопки

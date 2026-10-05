@@ -16,9 +16,6 @@ document.addEventListener('DOMContentLoaded', function () {
   var results = document.getElementById('catResults');
 
   if (form && results) {
-    var submit = form.querySelector('[type="submit"]');
-    if (submit) submit.remove();
-
     var topReset = form.querySelector('.tk-cat__reset');
     var liveCount = document.getElementById('liveCount');
     var pending = null;

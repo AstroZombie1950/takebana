@@ -1025,6 +1025,75 @@
   opacity: .8;
 }
 
+/* Публикация, которой поделились (05.10, chats.js shareHtml): как пересланный
+ * пост — картинка сверху, под ней вид, название и автор, планка слева.
+ * Рамка картинки задана заранее — лента не прыгает, пока она грузится. */
+.tk-share {
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  max-width: 100%;
+  border-left: 3px solid var(--tk-accent);
+  background: rgba(10, 10, 10, .35);
+  color: inherit;
+  text-decoration: none;
+}
+
+.tk-share__pic {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  background: #000;
+  overflow: hidden;
+}
+
+.tk-share--photo .tk-share__pic { aspect-ratio: 4 / 5; }
+.tk-share__pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-share__play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  background: rgba(10, 10, 10, .65);
+  border: 1px solid rgba(245, 241, 234, .4);
+  color: var(--tk-paper);
+}
+
+.tk-share__body { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 12px; }
+
+.tk-share__kind {
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tk-accent);
+}
+
+.tk-share__title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.tk-share__author { font-size: 12px; opacity: .8; }
+
+/* В моём киноварном пузыре — планка и вид тёмные, как у цитаты. */
+.tk-msg--out .tk-share { border-left-color: var(--tk-ink); background: rgba(0, 0, 0, .12); }
+.tk-msg--out .tk-share__kind { color: var(--tk-ink); }
+.tk-share:hover .tk-share__title,
+.tk-share:hover .tk-share__author { text-decoration: underline; }
+
 /* Документ: расширение, имя, размер, стрелка «скачать». */
 .tk-file {
   display: flex;
@@ -1840,76 +1909,6 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 .tk-msgmenu button:focus-visible { background: rgba(227, 66, 52, .12); color: var(--tk-paper); outline: none; }
 .tk-msgmenu .tk-msgmenu__danger { color: var(--tk-accent); }
 
-/* ── Пересылка ── */
-.tk-fwd__quote {
-  margin: 0;
-  padding-left: 12px;
-  border-left: 2px solid var(--tk-green);
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--tk-beige);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.tk-fwd__comment {
-  resize: vertical;
-  min-height: 56px;
-  padding: 12px 16px;
-}
-
-.tk-fwd__list {
-  max-height: 320px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  margin: 0 -22px;
-}
-
-.tk-fwd__row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 9px 22px;
-  cursor: pointer;
-  transition: background-color .18s ease;
-}
-
-.tk-fwd__row:hover { background: rgba(227, 66, 52, .08); }
-
-.tk-fwd__row input {
-  width: 16px;
-  height: 16px;
-  flex: none;
-  accent-color: var(--tk-accent);
-}
-
-.tk-fwd__ava {
-  width: 34px;
-  height: 34px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  font-size: 13px;
-  font-weight: 900;
-  color: var(--tk-paper);
-}
-
-.tk-fwd__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-.tk-fwd__name {
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--tk-paper);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* ── Узкие экраны: одна панель за раз ─────────────────────────────────── */
 @media (max-width: 1023px) {
   .tk-chat__list { width: 100%; border-right: none; }
@@ -1957,8 +1956,6 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   .tk-msg > .tk-msg__row { max-width: 92%; }
   .tk-msg--fwd > .tk-msg__bubble,
   .tk-msg--fwd > .tk-msg__row { width: 92%; }
-  .tk-fwd__list { margin: 0 -16px; }
-  .tk-fwd__row { padding-left: 16px; padding-right: 16px; }
 
   /* Полоса выбора в две строки: счётчик сверху, три действия во всю ширину. */
   .tk-chat__pickbar { flex-wrap: wrap; padding: 10px 16px; }

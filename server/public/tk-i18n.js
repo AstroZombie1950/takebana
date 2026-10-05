@@ -21,6 +21,7 @@
 //   data-i18n-placeholder="ключ"  — подсказка поля, разметка вырезается
 //   data-i18n-title="ключ"        — всплывающая подсказка
 //   data-i18n-aria="ключ"         — подпись для читалки экрана
+//   data-i18n-label="ключ"        — подпись группы <optgroup> (атрибут label)
 //
 //   window.t('ключ' [, запасная строка | подстановки]) — строка на текущем
 //     языке для скриптов, которые собирают разметку сами:
@@ -163,6 +164,7 @@
     fill('data-i18n-placeholder', function (el, v) { el.placeholder = strip(v); });
     fill('data-i18n-title', function (el, v) { el.title = strip(v); });
     fill('data-i18n-aria', function (el, v) { el.setAttribute('aria-label', strip(v)); });
+    fill('data-i18n-label', function (el, v) { el.label = strip(v); });
 
     document.documentElement.setAttribute('lang', current);
 

@@ -20,6 +20,7 @@ const Establishments = require('../../models/Establishments');
 const daily = require('../../utils/daily');
 const errorLog = require('../../utils/errorLog');
 const { requireAdmin, paging, list, period, namesFor, csvRoute, nameOf } = require('./shared');
+const { audit } = require('../../utils/audit');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 const CALL_ID = /^[a-f\d-]{36}$/i;
@@ -88,6 +89,15 @@ async function loadTraces(req) {
 }
 
 router.get('/traces', requireAdmin, async (req, res) => res.json(await loadTraces(req)));
+
+// Очистка (05.10, просьба Ивана) — как у журнала действий: тем же отбором,
+// что на экране, без отбора — все попытки. Кто и сколько стёр — в журнал.
+router.delete('/traces', requireAdmin, async (req, res) => {
+  const filter = traceFilter(req);
+  const { deletedCount } = await Trace.deleteMany(filter);
+  audit(req, 'admin.traces.clear', { meta: { rows: deletedCount, filter: Object.keys(filter) } });
+  res.json({ ok: true, rows: deletedCount });
+});
 const stepsText = (t) => t.steps.map((x) => `${x.s} ${(x.ms / 1000).toFixed(1)}`).join(', ');
 csvRoute(router, '/traces', requireAdmin, 'traces', loadTraces, [
   ['Когда', (t) => t.at],

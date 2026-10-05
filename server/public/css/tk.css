@@ -478,6 +478,17 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   white-space:nowrap;
 }
 
+/* Заголовок группы <optgroup> — подпись над пунктами, не выбирается. */
+.tk-lb__group {
+  padding:12px 20px 4px;
+  font-family:Oswald, 'Oswald Fallback', sans-serif;
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:#8A827C;
+  cursor:default;
+}
+
 .tk-lb__option--active { background:rgba(227, 66, 52, .14); color:#F5F1EA; }
 
 /* Выбранный — киноварная планка слева, как активный пункт в левой панели. */

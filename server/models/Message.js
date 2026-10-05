@@ -77,6 +77,21 @@ const messageSchema = new Schema({
     default: undefined
   },
   expiredAt: { type: Date, default: null },
+  // «Поделиться» (05.10): фото, видео или запись эфира карточкой — как
+  // пересылка поста в мессенджере (utils/share.js). Снимок на момент
+  // отправки: название, картинка и автор не тянут за собой запросов при
+  // каждой выдаче ленты. Публикацию удалили — ссылка ведёт на «не найдено».
+  share: {
+    type: new Schema({
+      kind: { type: String, enum: ['photo', 'video', 'recording'], required: true },
+      ref: { type: Schema.Types.ObjectId, required: true },
+      url: { type: String, required: true },   // путь на сайте: /photo/<id>
+      title: String,
+      image: String,                           // снимок или обложка; у 18+ нет
+      author: String,
+    }, { _id: false }),
+    default: undefined
+  },
   // Ответ: на какое сообщение этого же диалога. Хранится только ссылка,
   // цитату сервер собирает при выдаче (utils/messageView.js): текст,
   // удалённый «у всех» или исчезнувший, не должен жить дальше в цитате.

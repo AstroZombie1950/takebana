@@ -18,6 +18,8 @@
 const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
 const GalleryPhoto = require('../models/GalleryPhoto');
+const RecordingComment = require('../models/RecordingComment');
+const RecordingReaction = require('../models/RecordingReaction');
 const User = require('../models/User');
 const userView = require('./userView');
 const { VENUE_AUTHOR, venueAuthor } = require('./venueAuthor');
@@ -82,8 +84,36 @@ function card(r) {
     comments: r.comments || 0,
     // У записи — когда шёл эфир; курсор при этом — createdAt.
     at: r.recordedAt || r.createdAt,
+    // Чей пост на самом деле — даже от имени заведения: свой не жалуются.
+    ownerId: String(user._id),
     author: venueAuthor(r.venue) || { displayName, url: profileUrl(user), avatarStyle: userView.avatarStyle(user, displayName) },
   };
+}
+
+// «Лента» (05.10): под постом — лайкнул ли я и последние комментарии,
+// чтобы ответить и оценить, не открывая страницу публикации. По запросу
+// на страницу ленты, а не на пост: оценки — по индексу (recordingId, userId),
+// комментарии — по (recordingId, createdAt), последние TALK на пост ($topN).
+const TALK = 2;
+
+async function withTalk(items, viewer) {
+  if (!items.length) return items;
+  const ids = items.map((i) => i._id);
+  const [mine, recent] = await Promise.all([
+    viewer ? RecordingReaction.find({ recordingId: { $in: ids }, userId: viewer, value: 1 }).select('recordingId').lean() : [],
+    RecordingComment.aggregate([
+      { $match: { recordingId: { $in: ids } } },
+      { $group: { _id: '$recordingId', last: { $topN: { n: TALK, sortBy: { createdAt: -1 }, output: { text: '$text', userId: '$userId', createdAt: '$createdAt' } } } } },
+    ]),
+  ]);
+  const authors = await User.find({ _id: { $in: recent.flatMap((r) => r.last.map((c) => c.userId)) } }).select(AUTHOR).lean();
+  const byUser = new Map(authors.map((u) => [String(u._id), u]));
+  const liked = new Set(mine.map((r) => String(r.recordingId)));
+  const talk = new Map(recent.map((r) => [String(r._id), r.last
+    .filter((c) => byUser.has(String(c.userId)))
+    .reverse() // старые сверху, как на странице разговора
+    .map((c) => { const u = byUser.get(String(c.userId)); return { text: c.text, name: userView.displayName(u), url: profileUrl(u) }; })]));
+  return items.map((i) => ({ ...i, liked: liked.has(String(i._id)), talk: talk.get(String(i._id)) || [] }));
 }
 
 // Курсор из адреса: ISO-дата, чужое — первая страница.
@@ -93,4 +123,4 @@ function cursor(raw) {
   return isNaN(d) ? null : d;
 }
 
-module.exports = { page, cursor, PAGE };
+module.exports = { page, withTalk, cursor, PAGE };

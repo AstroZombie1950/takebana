@@ -1,2 +1,2 @@
 <%# Следующая страница «Ленты» (/feed/next, подгружает catalog.js). %>
-<% items.forEach(function (item) { %><%- include('postCard', { item: item }) %><% }); %>
+<% items.forEach(function (item) { %><%- include('postCard', { item: item, me: me }) %><% }); %>

@@ -57,7 +57,7 @@
           <select name="sort" class="tk-field tk-select" aria-label="<%= ta('catalog.sort') %>" data-i18n-aria="catalog.sort">
             <% sorts.forEach(function (o) { %><option value="<%= o[0] %>"<%= sort === o[0] ? ' selected' : '' %> data-i18n="<%= o[1] %>"><%- t(o[1]) %></option><% }); %>
           </select>
-          <button type="submit" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="common.show"><%- t('common.show') %></button>
+          <noscript><button type="submit" class="tk-btn tk-btn--outline tk-btn--sm"><%- t('common.show') %></button></noscript>
           <% if (filtered) { %><a href="/authors/all" class="tk-cat__reset" data-i18n="common.resetFilters"><%- t('common.resetFilters') %></a><% } %>
         </div>
       </form>

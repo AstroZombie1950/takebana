@@ -19,7 +19,26 @@
 /* Страница и вкладки — на всю ширину (30.09: в 880px на широком экране
  * профиль жался к левому краю, справа пустело полэкрана). Форма настроек
  * остаётся узкой: поле в 1600px не читается. */
-.tk-vp--edit { max-width: 880px; }
+/* Настройки — тоже на всю ширину (05.10). На широком экране двумя колонками:
+ * сведения слева, оформление, разделы и удаление справа, — иначе поля
+ * тянулись бы на весь экран. Последняя строка 1fr забирает лишнюю высоту
+ * формы, и панели справа не разъезжаются. */
+@media (min-width: 1200px) {
+  .tk-vp--edit {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+    grid-template-areas: "back back" "h1 h1" "form look" "form set" "form zone" "form .";
+    grid-template-rows: auto auto auto auto auto 1fr;
+    gap: 20px 24px;
+    align-items: start;
+  }
+  .tk-vp--edit > .tk-page__back { grid-area: back; justify-self: start; }
+  .tk-vp--edit > .tk-page__h1 { grid-area: h1; }
+  .tk-vp--edit > .tk-vp__look { grid-area: look; }
+  .tk-vp--edit > .tk-vset { grid-area: set; }
+  .tk-vp--edit > .tk-vp__form { grid-area: form; }
+  .tk-vp--edit > .tk-vp__zone { grid-area: zone; }
+}
 
 /* ── Шапка: логотип, тип и город, название, адрес, часы, оценка ── */
 .tk-vp__head { display: flex; align-items: center; gap: 24px; }
