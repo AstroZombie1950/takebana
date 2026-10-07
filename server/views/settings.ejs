@@ -8,8 +8,9 @@
     кто может      | видимость
     ограниченный доступ — во всю ширину
     ── Это устройство ──
-    уведомления    | камера и микрофон
-    язык           | удаление аккаунта
+    уведомления    | пуши
+    камера и микрофон | проверка связи
+    язык и тема    | удаление аккаунта
   Уведомления и доступ к камере — свойство браузера, не аккаунта: настройки
   хранятся в нём (tk-notify.js), разрешения выдаёт он сам.
   На телефоне — одной колонкой в том же порядке. Галерея живёт на странице
@@ -205,12 +206,20 @@
           ['groups', ['all', 'contacts', 'nobody']],
         ]; var SEEN = [
           ['presence', ['all', 'contacts', 'nobody']],
+          ['lastSeen', ['all', 'contacts', 'nobody']],
           ['comments', ['all', 'followers', 'nobody']],
-        ]; %>
-        <% function privSelect(key, values) { %>
+        ];
+        // Время визита — ступенькой под «в сети» (utils/privacy.js,
+        // lastSeenRule): пункты шире «в сети» недоступны, при «никто»
+        // поле выключено, показано действующее значение. Свой выбор
+        // человека — в data-raw: ослабит «в сети» — он вернётся.
+        var RANK = { all: 0, contacts: 1, nobody: 2 }; %>
+        <% function privSelect(key, values) {
+             var last = key === 'lastSeen', floor = RANK[privacy.presence];
+             var cur = last && RANK[privacy.lastSeen] < floor ? privacy.presence : privacy[key]; %>
             <label class="tk-form__label" for="priv-<%= key %>" data-i18n="settings.priv.<%= key %>"><%- t('settings.priv.' + key) %></label>
-            <select class="tk-field tk-select" id="priv-<%= key %>" data-privacy="<%= key %>">
-              <% values.forEach(function (v) { %><option value="<%= v %>"<% if (privacy[key] === v) { %> selected<% } %> data-i18n="settings.priv.<%= key %>.<%= v %>"><%- t('settings.priv.' + key + '.' + v) %></option><% }) %>
+            <select class="tk-field tk-select" id="priv-<%= key %>" data-privacy="<%= key %>"<% if (last) { %> data-raw="<%= privacy.lastSeen %>"<% if (privacy.presence === 'nobody') { %> disabled<% } %><% } %>>
+              <% values.forEach(function (v) { %><option value="<%= v %>"<% if (cur === v) { %> selected<% } %><% if (last && RANK[v] < floor) { %> disabled<% } %> data-i18n="settings.priv.<%= key %>.<%= v %>"><%- t('settings.priv.' + key + '.' + v) %></option><% }) %>
             </select>
         <% } %>
         <section class="tk-panel" id="privacyPanel">
@@ -325,22 +334,29 @@
           </div>
         </section>
 
-        <!-- Язык: общий переключатель public/tk-i18n.js, без перезагрузки -->
+        <%# Язык и тема — одним блоком (правки 06.10): по отдельности каждый
+            стоял пустым на полэкрана. Язык слева — общий переключатель
+            public/tk-i18n.js, без перезагрузки; тема справа значками —
+            public/tk-theme.js, меняется сразу, сохраняется в аккаунт. %>
+        <% var THEME_ICONS = {
+             dark: '<path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5Z"></path>',
+             light: '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>',
+             auto: '<circle cx="12" cy="12" r="8"></circle><path d="M12 4a8 8 0 010 16Z" fill="currentColor"></path>'
+           }; %>
         <section class="tk-panel">
-          <p class="tk-panel__title" data-i18n="settings.lang"><%- t('settings.lang') %></p>
-          <div class="tk-lang tk-set__lang">
-            <button type="button" class="tk-lang__btn<%= lang === 'ru' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'ru' %>" data-lang="ru">RU</button>
-            <button type="button" class="tk-lang__btn<%= lang === 'en' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'en' %>" data-lang="en">EN</button>
-          </div>
-        </section>
-
-        <%# Тема (public/tk-theme.js): меняется сразу, сохраняется в аккаунт. %>
-        <section class="tk-panel">
-          <p class="tk-panel__title" data-i18n="settings.theme"><%- t('settings.theme') %></p>
-          <div class="tk-lang tk-set__lang">
-            <% ['dark', 'light', 'auto'].forEach(function (k) { %>
-            <button type="button" class="tk-lang__btn<%= theme === k ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= theme === k %>" data-theme-set="<%= k %>" data-i18n="theme.<%= k %>"><%- t('theme.' + k) %></button>
-            <% }); %>
+          <p class="tk-panel__title" data-i18n="settings.look"><%- t('settings.look') %></p>
+          <div class="tk-set__look">
+            <div class="tk-lang tk-set__lang" role="group" aria-label="<%= ta('settings.lang') %>" data-i18n-aria="settings.lang">
+              <button type="button" class="tk-lang__btn<%= lang === 'ru' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'ru' %>" data-lang="ru">RU</button>
+              <button type="button" class="tk-lang__btn<%= lang === 'en' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'en' %>" data-lang="en">EN</button>
+            </div>
+            <div class="tk-lang tk-set__lang" role="group" aria-label="<%= ta('settings.theme') %>" data-i18n-aria="settings.theme">
+              <% ['dark', 'light', 'auto'].forEach(function (k) { %>
+              <button type="button" class="tk-lang__btn<%= theme === k ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= theme === k %>" data-theme-set="<%= k %>" aria-label="<%= ta('theme.' + k) %>" data-i18n-aria="theme.<%= k %>" title="<%= ta('theme.' + k) %>" data-i18n-title="theme.<%= k %>">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><%- THEME_ICONS[k] %></svg>
+              </button>
+              <% }); %>
+            </div>
           </div>
         </section>
 

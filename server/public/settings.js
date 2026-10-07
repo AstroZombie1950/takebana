@@ -611,4 +611,21 @@
       });
     });
   });
+
+  // Время визита — ступенькой под «в сети» (utils/privacy.js, lastSeenRule):
+  // пункты шире «в сети» гаснут, при «никто» поле выключено, показано
+  // действующее значение. Свой выбор человека — data-raw: ослабил «в сети» —
+  // он возвращается. Значение ставится скриптом и change не шлёт — на
+  // сервер ничего не уходит.
+  var presence = document.querySelector('[data-privacy="presence"]');
+  var last = document.querySelector('[data-privacy="lastSeen"]');
+  if (!presence || !last) return;
+  var RANK = { all: 0, contacts: 1, nobody: 2 };
+  last.addEventListener('change', function () { last.dataset.raw = last.value; });
+  presence.addEventListener('change', function () {
+    var floor = RANK[presence.value];
+    for (var i = 0; i < last.options.length; i++) last.options[i].disabled = RANK[last.options[i].value] < floor;
+    last.disabled = presence.value === 'nobody';
+    last.value = RANK[last.dataset.raw] < floor ? presence.value : last.dataset.raw;
+  });
 })();

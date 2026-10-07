@@ -40,7 +40,10 @@ function open(type, id, name) {
   reasonInput.value = 'abuse';
   commentInput.value = '';
   modal.classList.remove('hidden');
-  reasonInput.focus();
+  // Фокус — только с клавиатурой и мышью. На телефоне фокус на поле
+  // причины сам раскрывал системный список поверх окна (правки 06.10):
+  // список открывается нажатием на поле, не раньше.
+  if (matchMedia('(hover: hover) and (pointer: fine)').matches) reasonInput.focus();
 }
 
 function close() {

@@ -20,10 +20,19 @@
 
 <% if (!guest) { %><%- include('appModals') %><% } %>
 
-<%# Шапка: бургер (открывает левую панель), логотип, поиск, «Что такое
-    Takebana?», справа — у вошедшего уведомления, переписка и запуск эфира,
-    у гостя язык, вход и регистрация; у обоих — смена темы. Профиль, выход и остальные ссылки —
-    в левой панели (leftBar.ejs). Язык вошедшего — на странице настроек. %>
+<%# Шапка: бургер (открывает левую панель), логотип, поиск — прижаты влево;
+    у гостя вход и регистрация прижаты вправо, а «Что такое Takebana?», тема
+    и язык — посередине между ними (правки 06.10: при смене языка ширина
+    кнопок менялась, и весь ряд прыгал). У вошедшего справа — тема,
+    уведомления, переписка и запуск эфира. Всё в рамке — одной высоты
+    (--tk-ahead-ctl, css/app.css). Профиль, выход и остальные ссылки —
+    в левой панели (leftBar.ejs). Язык вошедшего — в настройках и в панели. %>
+<% function themeBtn() { %>
+    <button type="button" class="tk-ahead__icon tk-ahead__theme" data-theme-toggle aria-label="<%= ta('theme.toggle') %>" data-i18n-aria="theme.toggle">
+      <svg class="tk-theme-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+      <svg class="tk-theme-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5Z"></path></svg>
+    </button>
+<% } %>
 <header class="tk-ahead<%= guest ? ' tk-ahead--guest' : '' %><%= onAuthPage ? ' tk-ahead--auth' : '' %>">
   <button class="tk-ahead__burger" id="sidebarToggle" aria-label="<%= ta('app.menu') %>" data-i18n-aria="app.menu" aria-controls="sidebar" aria-expanded="false">
     <span></span><span></span>
@@ -49,37 +58,34 @@
   </form>
   <% } %>
 
-  <div class="tk-ahead__right">
-    <%# Заметный вход в «что это за сервис»: не мелкая ссылка в подвале.
-        В правой группе, а не за поиском: поиска нет на входе и регистрации,
-        и кнопка уезжала к логотипу. Здесь она всегда у правого края —
-        слева от языка у гостя и левее колокольчика у вошедшего.
-        На самой «О нас» её нет: она вела бы на эту же страницу.
-        Только гостю (решение 21.09.2026): вошедший уже знает, куда пришёл,
-        а «О нас» у него есть в левой панели. %>
-    <% if (guest && path !== '/about') { %>
+  <% if (guest) { %>
+  <%# Середина гостя. «Что такое Takebana?» — заметный вход в «что это за
+      сервис», не мелкая ссылка в подвале. На самой «О нас» её нет: она
+      вела бы на эту же страницу. Только гостю (решение 21.09.2026):
+      вошедший уже знает, куда пришёл, а «О нас» у него в левой панели.
+      Тема (public/tk-theme.js): солнце — включить светлую, луна — тёмную;
+      какой значок виден, решает css/app.css по data-theme. %>
+  <div class="tk-ahead__mid">
+    <% if (path !== '/about') { %>
     <a href="/about" class="tk-btn tk-btn--outline tk-btn--sm tk-ahead__about" data-i18n="nav.whatIs"><%- t('nav.whatIs') %></a>
     <% } %>
-
-    <%# Тема (public/tk-theme.js): солнце — включить светлую, луна — тёмную;
-        какой значок виден, решает css/app.css по data-theme. %>
-    <button type="button" class="tk-ahead__icon tk-ahead__theme" data-theme-toggle aria-label="<%= ta('theme.toggle') %>" data-i18n-aria="theme.toggle">
-      <svg class="tk-theme-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
-      <svg class="tk-theme-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5Z"></path></svg>
-    </button>
-
-    <% if (guest) { %>
+    <% themeBtn() %>
     <div class="tk-lang tk-ahead__lang">
       <button type="button" class="tk-lang__btn<%= lang === 'ru' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'ru' %>" data-lang="ru">RU</button>
       <button type="button" class="tk-lang__btn<%= lang === 'en' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'en' %>" data-lang="en">EN</button>
     </div>
+  </div>
+  <% } %>
 
+  <div class="tk-ahead__right">
+    <% if (guest) { %>
     <% if (!onAuthPage) { %>
     <% var back = url && url !== '/' ? '?next=' + encodeURIComponent(url) : ''; %>
     <a href="/login<%= back %>" class="tk-login tk-ahead__login" data-i18n="nav.login"><%- t('nav.login') %></a>
     <a href="/register<%= back %>" class="tk-btn tk-btn--primary tk-btn--sm tk-ahead__signup" data-i18n="nav.signup"><%- t('nav.signup') %></a>
     <% } %>
     <% } else { %>
+    <% themeBtn() %>
     <button class="tk-ahead__icon" id="notificationButton" aria-label="<%= ta('app.notifications') %>" data-i18n-aria="app.notifications">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 5-2 6-2 6h16s-2-1-2-6Z"></path><path d="M10 20h4"></path></svg>
       <span class="tk-ahead__dot<%= notifications && notifications.hasUnread ? '' : ' hidden' %>" id="notificationDot"></span>

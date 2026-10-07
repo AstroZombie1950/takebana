@@ -279,14 +279,16 @@ document.addEventListener('DOMContentLoaded', () => {
             // Эфир: ведёт на сам эфир, а текстом — его название (utils/liveNotify.js).
             const isLive = n.type === 'live';
             const isFollow = n.type === 'follow';
+            const isReply = n.type === 'reply';
             // Звонок группе (utils/groupPush.js) ведёт в группу, в content —
             // её название.
             const href = isCall ? (n.link || '/chatsPage?tab=calls')
-              : isComment || isLive || isFollow ? (n.link || '/')
+              : isComment || isReply || isLive || isFollow ? (n.link || '/')
               : '/chatsPage?peer=' + encodeURIComponent(sender._id || '');
             const title = isCall && n.link ? t('modal.notifications.missedGroupCall', { name, group: n.content || '' })
               : isCall ? t('modal.notifications.missedCall', { name })
               : isComment ? t('modal.notifications.comment', { name })
+              : isReply ? t('modal.notifications.reply', { name })
               : isLive ? t('modal.notifications.live', { name })
               : isFollow ? t('modal.notifications.follow', { name })
               : t('modal.notifications.from') + ' ' + name;

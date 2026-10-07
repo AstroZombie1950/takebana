@@ -216,7 +216,9 @@
 
         <div class="tk-form__row">
           <label class="tk-form__label" for="reportReason" data-i18n="report.reason"><%- t('report.reason') %></label>
-          <select id="reportReason" class="tk-field tk-select">
+          <%# Свой список и на телефоне (правки 06.10): системная белая шторка
+              выпадала мимо оформления. %>
+          <select id="reportReason" class="tk-field tk-select" data-listbox-touch>
             <option value="abuse" data-i18n="report.abuse"><%- t('report.abuse') %></option>
             <option value="spam" data-i18n="report.spam"><%- t('report.spam') %></option>
             <option value="adult" data-i18n="report.adult"><%- t('report.adult') %></option>

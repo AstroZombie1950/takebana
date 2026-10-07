@@ -8,13 +8,14 @@
  * !important на размеры аватаров, шрифтов и отступов.
  */
 
-/* Высота = экран минус шапка. dvh — видимая часть экрана: на айфоне 100vh
- * выше неё на панель Safari, и поле ввода пряталось под адресной строкой.
- * Высота шапки — с вырезом сверху (--tk-head-h, tk.css), --tk-kb — сколько
- * экрана закрыла клавиатура на айфоне (chats.js). */
+/* Высота = видимая часть экрана минус шапка. --tk-vh ставит chats.js по
+ * visualViewport: она верна и с клавиатурой айфона поверх страницы, и у
+ * приложения с иконки, где 100dvh выше видимого (06.10). Без скрипта —
+ * dvh: на айфоне 100vh выше видимого на панель Safari. Высота шапки —
+ * с вырезом сверху (--tk-head-h, tk.css). */
 .tk-chat {
-  height: calc(100vh - var(--tk-head-h) - var(--tk-kb, 0px));
-  height: calc(100dvh - var(--tk-head-h) - var(--tk-kb, 0px));
+  height: calc(100vh - var(--tk-head-h));
+  height: calc(var(--tk-vh, 100dvh) - var(--tk-head-h));
   display: flex;
   overflow: hidden;
 }
@@ -655,12 +656,15 @@
 .tk-callnote.is-missed svg { color: var(--tk-accent-text); }
 
 /* ── Поле ввода ── */
-/* Нижний отступ — с полосой системных кнопок: сама полоса лежит поверх
- * страницы, и без добавки поле ввода наполовину уходило под неё (скриншот
- * заказчика от 20.09.2026). Фон при этом доходит до края экрана. */
+/* Нижний отступ — не меньше полосы системных кнопок: сама полоса лежит
+ * поверх страницы, и без него поле ввода наполовину уходило под неё
+ * (скриншот заказчика от 20.09.2026). Фон при этом доходит до края экрана.
+ * Наибольшее из двух, а не сумма (06.10): сумма на айфоне давала под полем
+ * почти 50px пустоты. С открытой клавиатурой полосы не видно — отступ
+ * обычный (tk-kb-open, chats.js). */
 .tk-chat__compose {
   flex: none;
-  padding: 14px 20px calc(14px + var(--tk-safe-b));
+  padding: 14px 20px max(14px, var(--tk-safe-b));
   border-top: 1px solid var(--tk-rule);
 }
 
@@ -1951,7 +1955,8 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   .tk-chat__head { padding: 10px 16px; gap: 8px; }
   .tk-chat__head .tk-chat__tool { width: 32px; height: 32px; }
   .tk-chat__feed { --feed-x: 16px; padding: 10px 0; }
-  .tk-chat__compose { padding: 12px 16px calc(12px + var(--tk-safe-b)); }
+  .tk-chat__compose { padding: 12px 16px max(12px, var(--tk-safe-b)); }
+  .tk-kb-open .tk-chat__compose { padding-bottom: 12px; }
   .tk-msg > .tk-msg__bubble,
   .tk-msg > .tk-msg__row { max-width: 92%; }
   .tk-msg--fwd > .tk-msg__bubble,

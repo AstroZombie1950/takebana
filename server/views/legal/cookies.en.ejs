@@ -1,4 +1,4 @@
-<p class="tk-prose__lead">In force since 24 September 2026. Second edition: visit analytics added.</p>
+<p class="tk-prose__lead">In force since 6 October 2026. Third edition: adds the theme, the backup route to video, and everything the site keeps in the browser itself.</p>
 
 <h3>1. Analytics and your consent</h3>
 <p>Most of our files are needed for the site to work. Besides them, the site uses the Yandex Metrica visit counter, which shows us which pages people need. By using the site you agree that the counter runs and sets its files. A notice at the bottom of the page says so on your first visit.</p>
@@ -8,10 +8,12 @@
 <table>
 <thead><tr><th>Name</th><th>Purpose</th><th>Lifetime</th></tr></thead>
 <tbody>
-<tr><td><code>connect.sid</code></td><td>Remembers that you are signed in. Without it, sign-in does not hold.</td><td>7 days</td></tr>
-<tr><td><code>lang</code></td><td>Interface language, so the page arrives in the right language.</td><td>1 year</td></tr>
-<tr><td><code>tz</code></td><td>Time zone, so stream and message times are shown as your own.</td><td>1 year</td></tr>
-<tr><td><code>tk_intro</code></td><td>Remembers that you closed the catalogue’s intro screen.</td><td>1 year</td></tr>
+<tr><td><code>connect.sid</code></td><td>Remembers that you are signed in. Without it, sign-in does not hold.</td><td>30 days from the last visit</td></tr>
+<tr><td><code>lang</code></td><td>Interface language, so the page arrives in the right language straight away.</td><td>1 year</td></tr>
+<tr><td><code>tz</code></td><td>Time zone, so stream and message times are shown in yours.</td><td>1 year</td></tr>
+<tr><td><code>theme</code></td><td>The theme — dark, light or as in the system — so the page arrives in it straight away.</td><td>1 year</td></tr>
+<tr><td><code>tkmedia</code></td><td>Set only if video and files did not open from our delivery network but did open directly from our server: from then on they take that route straight away.</td><td>30 days</td></tr>
+<tr><td><code>tk_intro</code></td><td>Remembers that you closed the welcome banner.</td><td>1 year</td></tr>
 <tr><td><code>tk_consent</code></td><td>Remembers that you closed the cookie notice.</td><td>1 year</td></tr>
 </tbody>
 </table>
@@ -30,18 +32,23 @@
 <p>Besides these, Metrica may set short-lived technical files whose names start with <code>_ym</code>, and Yandex files on its own domains. Metrica collects which pages were opened, where you came from, how long you stayed and where you clicked, as well as device type, browser and approximate location by IP address. We see the reports in anonymised form. How Yandex handles this data is in its <a href="https://yandex.com/legal/confidential/" rel="noopener">privacy policy</a>.</p>
 
 <h3>4. What stays in your browser</h3>
-<p>Besides cookies, the site keeps two entries in browser storage (localStorage). They are never sent to the server and stay on your device:</p>
+<p>Besides cookies, the site keeps a few entries in browser storage. They are never sent to the server and stay on your device:</p>
 <ul>
 <li><code>tk_camera</code> — which camera and microphone you chose last time;</li>
-<li><code>tk_lang</code> — an earlier language choice left over from older versions of the site.</li>
+<li><code>tk.notify</code> — message and call sounds and system notifications: whether they are on for this device;</li>
+<li><code>tk.player.*</code> — volume, mute and speed in the video player;</li>
+<li><code>tk.call.own</code> — that calls from this device go by our own route rather than through the video calling service (30 days);</li>
+<li><code>tk.uploads</code> and the <code>tk-upload</code> database — a video being uploaded to the gallery: the file stays in the browser until it fully reaches the server, so the upload continues after you move to another page; then it is deleted;</li>
+<li>short service marks that last a minute or until the tab is closed — so a new-message sound plays once rather than in every open tab, and so the result of an action is still shown on the next page.</li>
 </ul>
+<p>The browser also keeps the “No connection” page shown when you are offline and — if you turned on device notifications — its subscription to them. You can turn notifications off in the site settings or in your browser settings.</p>
 
 <h3>5. Third-party files</h3>
-<p>During a call, a browser stream or a venue camera, the Daily video service connects, and stream and recording video is delivered by the Bunny network. These services may set their own technical files needed for the connection and for video delivery. There are no advertising or tracking files among them. If you sign in with Google, Google sets files on its own sign-in page.</p>
+<p>During a call or a stream from the browser, the Daily video service connects, and video from streams, recordings and venue cameras is delivered by the Bunny network. These services may set their own technical files needed for the connection and for video delivery. There are no advertising or tracking files among them. If you sign in with Google, Google sets files on its own sign-in page.</p>
 
 <h3>6. How to refuse</h3>
 <p>Analytics — with an ad and tracker blocker or <a href="https://yandex.com/support/metrica/general/opt-out.html" rel="noopener">Yandex’s Metrica opt-out extension</a>. This does not affect how the site works.</p>
-<p>Other cookies can be deleted or blocked in your browser settings. Note that without <code>connect.sid</code> sign-in will not hold and your account pages become unreachable, and without the others the site will forget your language, your time zone and the closed intro screen every time.</p>
+<p>Other cookies and entries can be deleted or blocked in your browser settings. Note that without <code>connect.sid</code> sign-in will not hold and your account pages become unreachable, and without the others the site will forget your language, time zone, theme, chosen camera and sound settings every time.</p>
 
 <h3>7. Questions</h3>
 <p>Write to <a href="mailto:private@takebana.com">private@takebana.com</a>. What we do with the rest of your data is in the <a href="/privacy">privacy policy</a>.</p>

@@ -33,23 +33,32 @@
 
   function uiLang() { return window.tkLang ? window.tkLang() : 'ru'; }
 
-  // Экранная клавиатура. На Android её берёт на себя браузер: страница
-  // ужимается (interactive-widget=resizes-content в partials/tkHead.ejs),
-  // вместе с ней ужимается и 100dvh. Safari на айфоне этого не умеет —
-  // он кладёт клавиатуру поверх страницы, и поле ввода оказывалось под ней.
-  // Считаем, сколько экрана она закрыла, и на столько же укорачиваем
-  // переписку: высота .tk-chat вычитает --tk-kb (chats.css).
-  //
-  // Порог в 80px — чтобы не принять за клавиатуру адресную строку Safari:
-  // её появление и так учитывает dvh.
+  // Высота переписки — по видимой части экрана (visualViewport), а не по
+  // 100dvh (жалоба Ивана 06.10, айфон с иконки):
+  //   — без клавиатуры 100dvh там выше видимого, страница прокручивалась,
+  //     и под полем ввода стояла пустота;
+  //   — с клавиатурой Safari кладёт её поверх страницы и ещё сдвигает
+  //     видимую часть к полю (vv.offsetTop): поле и лента уезжали вверх,
+  //     под ними — пустой экран.
+  // Видимая высота верна в обоих случаях и на Android (там страницу ужимает
+  // сам браузер, interactive-widget=resizes-content в partials/tkHead.ejs).
+  // Сдвиг возвращаем: страница целиком помещается в видимую часть. При
+  // увеличении пальцами (scale > 1) не трогаем ни высоту, ни прокрутку.
+  // tk-kb-open — под полем ввода не нужен отступ полосы «домой»: её
+  // закрывает клавиатура (chats.css). Порог в 80px — чтобы не принять за
+  // клавиатуру адресную строку Safari.
   var vv = window.visualViewport;
   if (vv) {
-    var keyboard = function () {
-      var hidden = Math.max(0, window.innerHeight - vv.height);
-      document.documentElement.style.setProperty('--tk-kb', hidden > 80 ? hidden + 'px' : '0px');
+    var root = document.documentElement;
+    var viewport = function () {
+      if (vv.scale > 1.01) return;
+      root.style.setProperty('--tk-vh', Math.round(vv.height) + 'px');
+      root.classList.toggle('tk-kb-open', window.innerHeight - vv.height > 80);
+      if (vv.offsetTop > 0 || window.scrollY > 0) window.scrollTo(0, 0);
     };
-    vv.addEventListener('resize', keyboard);
-    keyboard();
+    vv.addEventListener('resize', viewport);
+    vv.addEventListener('scroll', viewport);
+    viewport();
   }
 
   // Выпадающие меню кладём в живую часть экрана: по краям лежат системные

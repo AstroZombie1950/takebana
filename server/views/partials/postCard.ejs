@@ -3,8 +3,9 @@
   Шапка — автор и дата, ниже снимок или обложка ролика (ведут на его
   страницу), под ним название у видео и подпись.
   С 05.10 (решение Ивана) действия — прямо в ленте: «нравится», разговор,
-  «Поделиться» сообщением, жалоба, два последних комментария и поле
-  ответа, — страницу публикации открывать не нужно. На широком экране
+  «Поделиться» сообщением, жалоба (красным флажком у правого края, 06.10),
+  последние комментарии с ответом и удалением и поле ответа, — страницу
+  публикации открывать не нужно. На широком экране
   снимок слева, всё остальное колонкой справа (css/feed.css). Поведение —
   public/tk-posts.js, «Поделиться» — tk-share.js, жалоба — report.js.
   Подписи и alt — по правилу «текст что-то говорит» (utils/snippet.js,
@@ -62,13 +63,22 @@
       <% } %>
     </div>
 
+    <%# Разговор (правки 06.10): у каждого комментария — ответить и удалить
+        значками. Телефон показывает два последних и ссылку на все — разговор
+        целиком на странице публикации; широкий экран — все пришедшие,
+        с прокруткой внутри колонки (css/feed.css). Поле — в рамке,
+        стрелка отправки внутри неё и только когда есть текст. %>
     <div class="tk-post__talk">
-      <% if (item.comments > (item.talk || []).length) { var all = plural(item.comments, 'rec.comments'); %>
-      <a class="tk-post__all" href="<%= item.href %>#comments" data-i18n="<%= all.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(item.comments) }) %>'><%= all.text %></a>
+      <% var talk = item.talk || []; if (item.comments > 2) { var all = plural(item.comments, 'rec.comments'); %>
+      <a class="tk-post__all<%= item.comments > talk.length ? ' tk-post__all--more' : '' %>" href="<%= item.href %>#comments" data-i18n="<%= all.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(item.comments) }) %>'><%= all.text %></a>
       <% } %>
       <ul class="tk-post__said" data-said>
-        <% (item.talk || []).forEach(function (c) { %>
-        <li><a href="<%= c.url %>" class="tk-post__said-who"><%= c.name %></a> <span data-user-content><%= snippet(c.text, 200) %></span></li>
+        <% talk.forEach(function (c) { %>
+        <li class="tk-post__c" data-cid="<%= c._id %>">
+          <p class="tk-post__c-text"><a href="<%= c.url %>" class="tk-post__said-who"><%= c.name %></a> <span data-user-content><%= snippet(c.text, 200) %></span></p>
+          <% if (me && !c.mine) { %><button type="button" class="tk-post__c-btn" data-reply="<%= c.nick || c.name %>" aria-label="<%= ta('chats.reply') %>" data-i18n-aria="chats.reply" title="<%= ta('chats.reply') %>" data-i18n-title="chats.reply"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M9 7L4 12l5 5M4 12h11a5 5 0 015 5v2"/></svg></button><% } %>
+          <% if (c.canDelete) { %><button type="button" class="tk-post__c-btn" data-cdel aria-label="<%= ta('common.delete') %>" data-i18n-aria="common.delete" title="<%= ta('common.delete') %>" data-i18n-title="common.delete"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button><% } %>
+        </li>
         <% }); %>
       </ul>
       <% if (me) { %>

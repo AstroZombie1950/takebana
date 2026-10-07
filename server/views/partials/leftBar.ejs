@@ -144,18 +144,22 @@
   </div>
 
   <div class="tk-aside__foot">
-    <%# Язык гостя и тема — на телефоне в шапке им нет места. %>
-    <div class="tk-aside__prefs">
-      <% if (guest) { %>
-      <div class="tk-lang">
+    <%# Тема и язык — на телефоне в шапке им нет места (правки 06.10):
+        тема переключателем слева, язык справа, как в настройках. Тема —
+        public/tk-theme.js (data-theme-pick), язык — public/tk-i18n.js. %>
+    <div class="tk-aside__prefs<%= guest ? '' : ' tk-aside__prefs--user' %>">
+      <div class="tk-lang tk-aside__theme" role="group" aria-label="<%= ta('settings.theme') %>" data-i18n-aria="settings.theme">
+        <button type="button" class="tk-lang__btn<%= themeOn === 'dark' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= themeOn === 'dark' %>" data-theme-pick="dark" aria-label="<%= ta('theme.dark') %>" data-i18n-aria="theme.dark" title="<%= ta('theme.dark') %>" data-i18n-title="theme.dark">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5Z"></path></svg>
+        </button>
+        <button type="button" class="tk-lang__btn<%= themeOn === 'light' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= themeOn === 'light' %>" data-theme-pick="light" aria-label="<%= ta('theme.light') %>" data-i18n-aria="theme.light" title="<%= ta('theme.light') %>" data-i18n-title="theme.light">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+        </button>
+      </div>
+      <div class="tk-lang" role="group" aria-label="<%= ta('settings.lang') %>" data-i18n-aria="settings.lang">
         <button type="button" class="tk-lang__btn<%= lang === 'ru' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'ru' %>" data-lang="ru">RU</button>
         <button type="button" class="tk-lang__btn<%= lang === 'en' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'en' %>" data-lang="en">EN</button>
       </div>
-      <% } %>
-      <button type="button" class="tk-ahead__icon tk-aside__theme" data-theme-toggle aria-label="<%= ta('theme.toggle') %>" data-i18n-aria="theme.toggle">
-        <svg class="tk-theme-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
-        <svg class="tk-theme-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5Z"></path></svg>
-      </button>
     </div>
     <nav class="tk-aside__docs" aria-label="<%= ta('side.docs') %>" data-i18n-aria="side.docs">
       <a href="/terms" data-i18n="app.terms"><%- t('app.terms') %></a>

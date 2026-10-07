@@ -173,17 +173,25 @@
 .tk-post__act:disabled { cursor: default; }
 .tk-post__num { font-variant-numeric: tabular-nums; }
 
+/* Просмотры и жалоба — у правого края: просмотры, за ними красный флажок
+ * (правки 06.10: флажок терялся среди остальных и не читался как
+ * «пожаловаться»). Без просмотров (фото) к краю уходит сам флажок. */
 .tk-post__views {
+  order: 1;
   margin-left: auto;
-  padding-right: 8px;
+  padding-right: 4px;
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 13px;
   color: var(--tk-muted);
   white-space: nowrap;
 }
 
-/* Разговор: «все N комментариев», два последних, поле ответа. */
-.tk-post__talk { display: grid; gap: 8px; padding: 0 16px 14px; }
+.tk-post__act[data-report] { order: 2; color: var(--tk-accent-text); }
+.tk-post__act[data-report]:hover { color: var(--tk-accent); }
+.tk-post__acts:not(:has(.tk-post__views)) .tk-post__act[data-report] { margin-left: auto; }
+
+/* Разговор: «все N комментариев», последние, поле ответа. */
+.tk-post__talk { display: grid; gap: 6px; padding: 0 16px 14px; }
 
 .tk-post__all {
   justify-self: start;
@@ -198,7 +206,7 @@
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 4px;
+  gap: 2px;
   font-size: 14px;
   line-height: 1.45;
   color: var(--tk-fg-2);
@@ -209,25 +217,59 @@
 .tk-post__said-who { font-weight: 700; color: var(--tk-fg); }
 .tk-post__said-who:hover { color: var(--tk-accent-text); }
 
+/* Комментарий: текст, справа значки «ответить» и «удалить» — приглушённые,
+ * чтобы не спорить с текстом; на телефоне видны всегда (наведения нет). */
+.tk-post__c { display: flex; align-items: flex-start; gap: 2px; }
+.tk-post__c-text { flex: 1; min-width: 0; margin: 0; padding: 3px 0; }
+
+.tk-post__c-btn {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--tk-muted);
+  cursor: pointer;
+  transition: color .15s ease;
+}
+
+.tk-post__c-btn:hover { color: var(--tk-fg); }
+.tk-post__c-btn[data-cdel]:hover { color: var(--tk-accent-text); }
+.tk-post__c-btn:disabled { opacity: .5; pointer-events: none; }
+
+@media (hover: hover) {
+  .tk-post__c-btn { opacity: 0; }
+  .tk-post__c:hover .tk-post__c-btn,
+  .tk-post__c-btn:focus-visible { opacity: 1; }
+}
+
+/* Поле ответа — в рамке, стрелка отправки внутри неё и только когда есть
+ * текст (правки 06.10: была линия над полем и стрелка за его краем).
+ * 16px — иначе Safari на айфоне приближает страницу при фокусе. */
 .tk-post__say {
   display: flex;
   align-items: center;
-  gap: 8px;
   margin-top: 4px;
-  border-top: 1px solid var(--tk-rule);
-  padding-top: 8px;
+  border: 1px solid rgba(144, 113, 99, .7);
+  transition: border-color .15s ease;
 }
+
+.tk-post__say:focus-within { border-color: var(--tk-accent); }
 
 .tk-post__input {
   flex: 1;
   min-width: 0;
-  height: 36px;
-  padding: 0;
+  height: 40px;
+  padding: 0 12px;
   background: none;
   border: 0;
   outline: none;
   font: inherit;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--tk-fg);
 }
 
@@ -235,8 +277,8 @@
 
 .tk-post__send {
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -247,7 +289,7 @@
   cursor: pointer;
 }
 
-.tk-post__say:has(.tk-post__input:placeholder-shown) .tk-post__send { color: var(--tk-muted); }
+.tk-post__input:placeholder-shown + .tk-post__send { display: none; }
 .tk-post__say[data-busy] .tk-post__send { opacity: .5; pointer-events: none; }
 
 /* Широкий экран: снимок слева, автор и всё остальное — колонкой справа.
@@ -266,10 +308,15 @@
   .tk-post__media--photo { aspect-ratio: auto; height: min(78vh, 720px); }
   .tk-post__media--video { aspect-ratio: auto; height: 100%; min-height: min(56vh, 480px); }
   .tk-post__media--video img { object-fit: contain; }
-  .tk-post__side { grid-area: side; border-left: 1px solid var(--tk-rule); }
+  /* Колонка не растягивает пост: высоту задаёт снимок, а комментарии
+   * прокручиваются внутри (contain: size — содержимое не влияет на размер
+   * ячейки, растяжка сетки отдаёт ей ровно высоту снимка). */
+  .tk-post__side { grid-area: side; border-left: 1px solid var(--tk-rule); contain: size; overflow: hidden; }
   /* Поле ответа — к низу колонки, как в Инстаграме. */
-  .tk-post__talk { flex: 1; display: flex; flex-direction: column; }
+  .tk-post__talk { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .tk-post__all { align-self: flex-start; }
+  .tk-post__all:not(.tk-post__all--more) { display: none; }
+  .tk-post__said { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start; }
   .tk-post__say { margin-top: auto; }
 }
 
@@ -284,6 +331,12 @@
   .tk-post { border-inline: 0; }
   .tk-post__head { padding: 10px 20px; }
   .tk-post__body { padding: 12px 20px 2px; }
-  .tk-post__acts { padding: 4px 12px; }
+  .tk-post__acts { padding: 2px 12px; }
   .tk-post__talk { padding: 0 20px 14px; }
+}
+
+/* Уже широкого экрана — два последних комментария, остальные — по ссылке
+ * «все N комментариев» на странице публикации. */
+@media (max-width: 1099px) {
+  .tk-post__c:nth-last-child(n + 3) { display: none; }
 }

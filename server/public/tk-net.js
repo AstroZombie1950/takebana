@@ -297,7 +297,16 @@
       if (outer && outer.aborted) { if (tr) tr.drop(); throw e; } // отменила сама страница — не сбой
       var reason = timedOut ? 'timeout' : navigator.onLine === false ? 'offline' : 'no_server';
       fileDone(tr, 'fail', reason);
-      note(reason, url);
+      if (reason !== 'no_server') note(reason, url);
+      // «Сервер не отвечает» — только если он и правда не отвечает. Сорванный
+      // запрос без ответа бывает и при живом сервере: iOS рвёт запросы
+      // уходящей страницы и приложения, вернувшегося из фона, — до 06.10
+      // это была почти вся запись «сбой связи» в журнале (присутствие,
+      // счётчики шапки, подписка пушей с телефона с иконки). Ушли со
+      // страницы или она в фоне — тоже не пишем.
+      else if (!leaving && document.visibilityState !== 'hidden') {
+        healthy().then(function (ok) { if (!ok && !leaving) note(reason, url); });
+      }
       if (reason === 'no_server' && !hasSocket) { requestDown = true; paint(); probe(); }
       var err = new Error(text(reason));
       err.reason = reason;

@@ -25,6 +25,8 @@ const RecordingReaction = require('../models/RecordingReaction');
 const RecordingComment = require('../models/RecordingComment');
 const RecordingView = require('../models/RecordingView');
 const Notification = require('../models/Notification');
+const push = require('../utils/push');
+const errorLog = require('../utils/errorLog');
 const User = require('../models/User');
 const { requireAuth, requireAuthApi, requireOwner, requireNotBanned, canModerate } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
@@ -143,6 +145,37 @@ async function isModerator(req) {
   return canModerate(await User.findById(req.session.userId).select('role').lean());
 }
 
+// Ответ на комментарий (06.10, решение Ивана): «Ответить» ставит в начало
+// поля @ник (tk-watch.js, tk-posts.js). Если так начинается комментарий
+// и этот человек уже писал под публикацией — ему строка в колокольчик и пуш,
+// когда вкладки нет. Себе, автору публикации (ему хватает «нового
+// комментария») и тому, кто закрыл от пишущего общение, — нет.
+const REPLY_TO = /^@([a-z][a-z0-9_]{2,19})(?![a-z0-9_])/;
+async function notifyReply(io, kind, item, comment, author) {
+  const m = REPLY_TO.exec(comment.text);
+  if (!m) return;
+  const to = await User.findOne({ nickname: m[1] }).select('_id').lean();
+  if (!to || String(to._id) === String(author._id) || String(to._id) === String(item.userId)) return;
+  const [wrote, closed] = await Promise.all([
+    RecordingComment.exists({ recordingId: item._id, userId: to._id, _id: { $ne: comment._id } }),
+    restriction.between(to._id, author._id),
+  ]);
+  if (!wrote || closed) return;
+  const link = `/${kind}/${item._id}#c-${comment._id}`;
+  const text = comment.text.slice(m[0].length).trim().slice(0, 140);
+  await Notification.create({ recipient: to._id, sender: author._id, type: 'reply', content: text, link });
+  if (io) io.to(`user:${to._id}`).emit('notification:new', { type: 'reply' });
+  if (push.onScreen(to._id)) return;
+  await push.send(to._id, {
+    topic: 'comment',
+    title: userView.displayName(author),
+    bodyKey: 'push.reply',
+    preview: text,
+    tag: 'reply-' + String(comment._id),
+    url: link,
+  });
+}
+
 // Автор комментария для ленты: имя и аватар — как везде на сайте.
 function commentView(c, me, ownerId, moderator) {
   const u = c.userId || {};
@@ -152,7 +185,7 @@ function commentView(c, me, ownerId, moderator) {
     _id: String(c._id),
     text: c.text,
     createdAt: c.createdAt,
-    author: { _id: u._id ? String(u._id) : '', url: profileUrl(u), name, avatar: userView.avatarStyle(u, name), official: privacy.isOfficial(u) },
+    author: { _id: u._id ? String(u._id) : '', url: profileUrl(u), name, nick: u.nickname || '', avatar: userView.avatarStyle(u, name), official: privacy.isOfficial(u) },
     mine,
     canDelete: mine || String(ownerId) === String(me) || moderator,
   };
@@ -369,6 +402,7 @@ function mount(kind) {
     audit(req, `${kind}.comment`, { targetType: kind, target: item, meta: { comment: String(c._id) } });
 
     const full = await RecordingComment.findById(c._id).populate('userId', 'nickname login email avatar').lean();
+    notifyReply(req.app.get('io'), kind, item, c, full.userId).catch((e) => errorLog.server(e, 'comment.reply'));
     res.status(201).json(commentView(full, me, item.userId, false));
   });
 

@@ -97,12 +97,15 @@
                 <% var presenceKey = user.isOnline ? 'common.online' : 'common.offline'; %>
                 <span data-i18n="<%= presenceKey %>"><%- t(presenceKey) %></span>
               </span>
+              <%# Время визита скрыто отдельным правилом — только «не в сети». %>
+              <% if (!user.lastSeenHidden) { %>
               <span class="tk-prof__meta-seen">
                 <span data-i18n="user.lastSeen"><%- t('user.lastSeen') %></span>
                 <%# Дата последнего входа — не словарная строка, поэтому ключ только
                     у «Сейчас»: иначе перевод затирал бы дату. %>
                 <span data-presence-lastseen-user="<%= user._id %>"<% if (user.isOnline) { %> data-i18n="common.now"<% } %>><%= user.isOnline ? ta('common.now') : (user.lastSeen ? date(user.lastSeen) : ta('common.dash')) %></span>
               </span>
+              <% } %>
             </p>
             <% } %>
             </div>

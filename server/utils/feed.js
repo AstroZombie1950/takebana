@@ -24,6 +24,7 @@ const User = require('../models/User');
 const userView = require('./userView');
 const { VENUE_AUTHOR, venueAuthor } = require('./venueAuthor');
 const { profileUrl } = require('./profileUrl');
+const { canModerate } = require('../middleware/auth');
 
 const PAGE = 24;
 const AUTHOR = 'nickname login email avatar';
@@ -94,25 +95,39 @@ function card(r) {
 // чтобы ответить и оценить, не открывая страницу публикации. По запросу
 // на страницу ленты, а не на пост: оценки — по индексу (recordingId, userId),
 // комментарии — по (recordingId, createdAt), последние TALK на пост ($topN).
-const TALK = 2;
+// С 06.10 у каждого — id, ник для ответа и можно ли удалить: удаляют
+// автор комментария, автор поста и модератор (как routes/watch.js).
+// Телефон показывает из них два последних (css/feed.css), широкий экран —
+// все TALK с прокруткой в колонке.
+const TALK = 10;
 
 async function withTalk(items, viewer) {
   if (!items.length) return items;
   const ids = items.map((i) => i._id);
-  const [mine, recent] = await Promise.all([
+  const [mine, recent, me] = await Promise.all([
     viewer ? RecordingReaction.find({ recordingId: { $in: ids }, userId: viewer, value: 1 }).select('recordingId').lean() : [],
     RecordingComment.aggregate([
       { $match: { recordingId: { $in: ids } } },
-      { $group: { _id: '$recordingId', last: { $topN: { n: TALK, sortBy: { createdAt: -1 }, output: { text: '$text', userId: '$userId', createdAt: '$createdAt' } } } } },
+      { $group: { _id: '$recordingId', last: { $topN: { n: TALK, sortBy: { createdAt: -1 }, output: { _id: '$_id', text: '$text', userId: '$userId', createdAt: '$createdAt' } } } } },
     ]),
+    viewer ? User.findById(viewer).select('role').lean() : null,
   ]);
+  const moderator = canModerate(me);
   const authors = await User.find({ _id: { $in: recent.flatMap((r) => r.last.map((c) => c.userId)) } }).select(AUTHOR).lean();
   const byUser = new Map(authors.map((u) => [String(u._id), u]));
   const liked = new Set(mine.map((r) => String(r.recordingId)));
+  const owner = new Map(items.map((i) => [String(i._id), i.ownerId]));
   const talk = new Map(recent.map((r) => [String(r._id), r.last
     .filter((c) => byUser.has(String(c.userId)))
     .reverse() // старые сверху, как на странице разговора
-    .map((c) => { const u = byUser.get(String(c.userId)); return { text: c.text, name: userView.displayName(u), url: profileUrl(u) }; })]));
+    .map((c) => {
+      const u = byUser.get(String(c.userId));
+      const own = !!viewer && String(c.userId) === String(viewer);
+      return {
+        _id: String(c._id), text: c.text, name: userView.displayName(u), nick: u.nickname || '', url: profileUrl(u),
+        mine: own, canDelete: own || (!!viewer && owner.get(String(r._id)) === String(viewer)) || moderator,
+      };
+    })]));
   return items.map((i) => ({ ...i, liked: liked.has(String(i._id)), talk: talk.get(String(i._id)) || [] }));
 }
 

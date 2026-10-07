@@ -4,6 +4,7 @@
   и всё ниже ленты уезжало — у Google это сдвиг вёрстки, а текст
   комментариев не попадал в разметку. Новые и «Ещё» рисует тот же
   скрипт (item в tk-watch.js) — разметка у них одна, правятся вместе.
+  Ответить (06.10) — ник в начало поля, удалить, пожаловаться — значками.
   c — из commentView (routes/watch.js).
 %>
 <% var a = c.author, av = a.avatar || {}; %>
@@ -12,5 +13,5 @@
   <div><div class="tk-watch__c-head"><a class="tk-watch__c-name" href="<%= a.url %>"><%= a.name %><% if (a.official) { %><%- include('official') %><% } %></a>
     <time class="tk-watch__c-when" datetime="<%= new Date(c.createdAt).toISOString() %>"><%= date(c.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %></time></div>
     <p class="tk-watch__c-text"><%= c.text %></p></div>
-  <div class="tk-watch__c-acts"><% if (c.canDelete) { %><button type="button" class="tk-watch__c-btn" data-del aria-label="<%= ta('common.delete') %>" title="<%= ta('common.delete') %>"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button><% } %><% if (currentUser && !c.mine) { %><button type="button" class="tk-watch__c-btn" data-report="comment" data-report-id="<%= c._id %>" data-report-name="<%= a.name %>" aria-label="<%= ta('common.report') %>" title="<%= ta('common.report') %>"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 21V4h11l-2 4 2 4H5"/></svg></button><% } %></div>
+  <div class="tk-watch__c-acts"><% if (currentUser && !c.mine) { %><button type="button" class="tk-watch__c-btn" data-reply="<%= a.nick || a.name %>" aria-label="<%= ta('chats.reply') %>" title="<%= ta('chats.reply') %>"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M9 7L4 12l5 5M4 12h11a5 5 0 015 5v2"/></svg></button><% } %><% if (c.canDelete) { %><button type="button" class="tk-watch__c-btn" data-del aria-label="<%= ta('common.delete') %>" title="<%= ta('common.delete') %>"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button><% } %><% if (currentUser && !c.mine) { %><button type="button" class="tk-watch__c-btn" data-report="comment" data-report-id="<%= c._id %>" data-report-name="<%= a.name %>" aria-label="<%= ta('common.report') %>" title="<%= ta('common.report') %>"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 21V4h11l-2 4 2 4H5"/></svg></button><% } %></div>
 </li>

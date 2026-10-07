@@ -292,7 +292,7 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
   const [seen, canWrite, canCall] = isSelf
     ? [true, true, true]
     : await Promise.all([
-      privacy.presenceVisible(currentUserId, [userId]).then((ids) => ids.length > 0),
+      privacy.presenceVisible(currentUserId, [userId]).then((v) => v[0] || false),
       currentUserId ? privacy.messageGate(conversation, currentUserId, userId).then((g) => g.ok) : true,
       currentUserId ? privacy.decide('calls', userId, currentUserId).then((g) => g.ok) : true,
     ]);
@@ -356,7 +356,9 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
       // успела записать база.
       // Скрытое «в сети» — ни точки, ни даты (utils/privacy.js).
       isOnline: isSelf || (seen && !!user.isOnline),
-      lastSeen: seen ? user.lastSeen || null : null,
+      // Время визита — отдельным правилом, не шире «в сети».
+      lastSeen: seen && (isSelf || seen.time) ? user.lastSeen || null : null,
+      lastSeenHidden: !!seen && !isSelf && !seen.time,
       presenceHidden: !seen,
     }
   });

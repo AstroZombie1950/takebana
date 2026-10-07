@@ -1,5 +1,6 @@
 // Приватность: кто может писать, звонить, добавлять в группы, видеть
-// «в сети» и комментировать; виден ли человек в поиске (решение 24.09.2026).
+// «в сети» и время последнего визита, комментировать; виден ли человек
+// в поиске (решение 24.09.2026; время визита — 06.10).
 // Настройки — в User.privacy, меняются на /settings (routes/userRoutes.js).
 //
 // «Контакты» — те, кого человек сам записал себе (models/Contact.js): связь
@@ -16,13 +17,14 @@ const User = require('../models/User');
 const Contact = require('../models/Contact');
 const Subscription = require('../models/Subscription');
 
-const DEFAULTS = { messages: 'all', calls: 'all', groups: 'all', presence: 'all', comments: 'all', searchable: true };
+const DEFAULTS = { messages: 'all', calls: 'all', groups: 'all', presence: 'all', lastSeen: 'all', comments: 'all', searchable: true };
 const OPTIONS = {
   // requests — пишут все, но незнакомые попадают в «Заявки»
   messages: ['all', 'requests', 'contacts', 'nobody'],
   calls: ['all', 'contacts', 'nobody'],
   groups: ['all', 'contacts', 'nobody'],
   presence: ['all', 'contacts', 'nobody'],
+  lastSeen: ['all', 'contacts', 'nobody'],
   comments: ['all', 'followers', 'nobody'],
 };
 
@@ -34,6 +36,16 @@ function of(user) {
   const out = {};
   for (const key of Object.keys(DEFAULTS)) out[key] = p[key] == null ? DEFAULTS[key] : p[key];
   return out;
+}
+
+// Время последнего визита ступенькой под «в сети» (решение Ивана 06.10):
+// оно не бывает видно шире, чем само «в сети», — иначе время входа
+// выдавало бы невидимку. «В сети» видят контакты — время визита видят
+// контакты или никто; никто — никто. Хранится выбор человека как есть,
+// действует более строгое из двух.
+const RANK = { all: 0, contacts: 1, nobody: 2 };
+function lastSeenRule(p) {
+  return RANK[p.lastSeen] > RANK[p.presence] ? p.lastSeen : p.presence;
 }
 
 // Отказ — русский текст для ответа (перевод — utils/i18n.js).
@@ -86,66 +98,88 @@ async function messageGate(conversation, senderId, recipientId) {
   return decide('messages', recipientId, senderId);
 }
 
-// Кого из людей viewer видит «в сети». Остальным isOnline и lastSeen
-// стираются прямо в переданных документах — дальше их рисует кто угодно.
-// Гость (viewer пуст) — не контакт никому.
+// Кого из людей viewer видит «в сети» и чьё время визита. Остальным
+// isOnline и lastSeen стираются прямо в переданных документах — дальше их
+// рисует кто угодно: скрытое «в сети» — presenceHidden, скрытое только
+// время — lastSeenHidden. Гость (viewer пуст) — не контакт никому.
 async function maskPresence(viewer, users) {
   const list = (users || []).filter(Boolean);
   if (!list.length) return users;
   const ids = list.map((u) => u._id).filter((id) => !viewer || !same(id, viewer));
   if (!ids.length) return users;
-  const closed = await User.find({ _id: { $in: ids }, 'privacy.presence': { $in: ['contacts', 'nobody'] } })
-    .select('privacy.presence').lean();
+  const closed = await User.find({
+    _id: { $in: ids },
+    $or: [{ 'privacy.presence': { $in: ['contacts', 'nobody'] } }, { 'privacy.lastSeen': { $in: ['contacts', 'nobody'] } }],
+  }).select('privacy.presence privacy.lastSeen').lean();
   if (!closed.length) return users;
-  const byContacts = closed.filter((u) => u.privacy.presence === 'contacts').map((u) => u._id);
-  const open = new Set(viewer && byContacts.length
+  const rules = closed.map((u) => { const p = of(u); return { id: String(u._id), presence: p.presence, last: lastSeenRule(p) }; });
+  const byContacts = rules.filter((r) => r.presence === 'contacts' || r.last === 'contacts').map((r) => r.id);
+  const known = new Set(viewer && byContacts.length
     ? (await Contact.find({ owner: { $in: byContacts }, peer: viewer }).select('owner').lean()).map((c) => String(c.owner))
     : []);
-  const hidden = new Set(closed.map((u) => String(u._id)).filter((id) => !open.has(id)));
+  const sees = (rule, id) => rule === 'all' || (rule === 'contacts' && known.has(id));
+  const hidden = new Set(), noTime = new Set();
+  for (const r of rules) {
+    if (!sees(r.presence, r.id)) hidden.add(r.id);
+    else if (!sees(r.last, r.id)) noTime.add(r.id);
+  }
   for (const u of list) {
-    if (!hidden.has(String(u._id))) continue;
-    u.isOnline = false;
-    u.lastSeen = null;
-    u.presenceHidden = true;
+    const id = String(u._id);
+    if (hidden.has(id)) {
+      u.isOnline = false;
+      u.lastSeen = null;
+      u.presenceHidden = true;
+    } else if (noTime.has(id)) {
+      u.lastSeen = null;
+      u.lastSeenHidden = true;
+    }
   }
   return users;
 }
 
-// Кого из ids viewer может видеть «в сети» — для подписки сокета.
+// Что из присутствия людей ids viewer видит — для подписки сокета:
+// [{ id, time }] — «в сети» виден, time — видно ли и время визита.
 async function presenceVisible(viewer, ids) {
   const docs = ids.map((id) => ({ _id: id }));
   await maskPresence(viewer, docs);
-  return docs.filter((d) => !d.presenceHidden).map((d) => String(d._id));
+  return docs.filter((d) => !d.presenceHidden).map((d) => ({ id: String(d._id), time: !d.lastSeenHidden }));
 }
 
-// Правило «в сети» ужесточилось или человек убран из контактов: подписка
-// сокета проверялась только при входе в комнату (sockets/index.js,
-// presence:subscribe), и уже открытые страницы продолжали получать
-// presence:update — скрытое «в сети» утекало до их перезагрузки. Здесь
-// комнату presence:<owner> пересматриваем: кому теперь нельзя — гасим точку
-// и выводим из комнаты. Открыл обратно — новые подписчики войдут сами,
-// прежние — при следующем подключении сокета.
+// Правило «в сети» или времени визита сменилось, человек убран из
+// контактов: подписка сокета проверялась только при входе в комнату
+// (sockets/index.js, presence:subscribe), и уже открытые страницы
+// продолжали получать presence:update — скрытое утекало до их перезагрузки.
+// Здесь комнату presence:<owner> пересматриваем: кому теперь «в сети»
+// нельзя — гасим точку и выводим из комнаты; кому нельзя только время —
+// кладём в комнату nolast:<owner>, туда событие уходит без времени
+// (sockets/index.js, syncPresence). Открыл обратно — новые подписчики
+// войдут сами, прежние — при следующем подключении сокета.
 async function recheckPresence(io, ownerId) {
   if (!io || !ownerId) return;
   const room = 'presence:' + ownerId;
+  const quiet = 'nolast:' + ownerId;
   const sockets = await io.in(room).fetchSockets();
   if (!sockets.length) return;
-  const owner = await User.findById(ownerId).select('privacy').lean();
-  const rule = of(owner).presence;
-  if (rule === 'all') return;
+  const p = of(await User.findById(ownerId).select('privacy').lean());
+  const rule = { presence: p.presence, last: lastSeenRule(p) };
   const viewers = [...new Set(sockets.map((s) => s.data.userId).filter(Boolean).map(String))];
-  const allowed = new Set(rule === 'contacts' && viewers.length
+  const known = new Set(viewers.length && (rule.presence === 'contacts' || rule.last === 'contacts')
     ? (await Contact.find({ owner: ownerId, peer: { $in: viewers } }).select('peer').lean()).map((c) => String(c.peer))
     : []);
-  allowed.add(String(ownerId));
+  const sees = (r, v) => r === 'all' || (r === 'contacts' && known.has(v));
   for (const s of sockets) {
-    if (allowed.has(String(s.data.userId))) continue;
-    s.emit('presence:update', { userId: String(ownerId), isOnline: false, lastSeen: null });
-    s.leave(room);
+    const v = s.data.userId ? String(s.data.userId) : '';
+    if (v === String(ownerId)) continue;
+    if (!sees(rule.presence, v)) {
+      s.emit('presence:update', { userId: String(ownerId), isOnline: false, lastSeen: null });
+      s.leave(room);
+      s.leave(quiet);
+    } else if (sees(rule.last, v)) s.leave(quiet);
+    else s.join(quiet);
   }
 }
 
 // Условие выборки «виден в поиске и подборках людей».
 const SEARCHABLE = { 'privacy.searchable': { $ne: false } };
 
-module.exports = { DEFAULTS, OPTIONS, of, isOfficial, decide, messageGate, maskPresence, presenceVisible, recheckPresence, SEARCHABLE };
+module.exports = { DEFAULTS, OPTIONS, of, lastSeenRule, isOfficial, decide, messageGate, maskPresence, presenceVisible, recheckPresence, SEARCHABLE };

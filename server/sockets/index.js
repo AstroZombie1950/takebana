@@ -93,7 +93,10 @@ function registerSockets(io) {
       const before = await User.findOneAndUpdate({ _id: userId }, { $set: set }, { projection: { isOnline: 1 } }).lean();
       if (!isOnline) leftAt.delete(userId);
       if (before && !!before.isOnline === isOnline) return; // ничего не поменялось — и звать некого
-      io.to(`presence:${userId}`).emit('presence:update', { userId, isOnline, lastSeen: set.lastSeen });
+      // Кому время визита скрыто (utils/privacy.js, lastSeenRule), те
+      // сидят ещё и в nolast:<id> — им то же событие без времени.
+      io.to(`presence:${userId}`).except(`nolast:${userId}`).emit('presence:update', { userId, isOnline, lastSeen: set.lastSeen });
+      io.to(`nolast:${userId}`).emit('presence:update', { userId, isOnline, lastSeen: null });
     }).catch((e) => errorLog.server(e, 'socket.presence'));
     presenceWrites.set(userId, next);
     next.then(() => { if (presenceWrites.get(userId) === next) presenceWrites.delete(userId); });
@@ -430,7 +433,11 @@ function registerSockets(io) {
       const wanted = ids.slice(0, PRESENCE_SUBSCRIBE_LIMIT).filter((id) => typeof id === 'string' && OBJECT_ID.test(id));
       if (!wanted.length) return;
       try {
-        for (const id of await privacy.presenceVisible(socket.data.userId, wanted)) socket.join(`presence:${id}`);
+        for (const v of await privacy.presenceVisible(socket.data.userId, wanted)) {
+          socket.join(`presence:${v.id}`);
+          if (v.time) socket.leave(`nolast:${v.id}`);
+          else socket.join(`nolast:${v.id}`);
+        }
       } catch (e) {
         errorLog.server(e, 'socket.presenceSubscribe');
       }
@@ -458,7 +465,7 @@ function registerSockets(io) {
     on('presence:unsubscribe', (ids) => {
       if (!Array.isArray(ids)) return;
       for (const id of ids.slice(0, PRESENCE_SUBSCRIBE_LIMIT)) {
-        if (typeof id === 'string' && OBJECT_ID.test(id)) socket.leave(`presence:${id}`);
+        if (typeof id === 'string' && OBJECT_ID.test(id)) { socket.leave(`presence:${id}`); socket.leave(`nolast:${id}`); }
       }
     });
 

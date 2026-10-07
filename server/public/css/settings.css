@@ -266,9 +266,25 @@
   transition: width .08s linear;
 }
 
-/* Тумблер языка — тот же, что в публичной шапке (tk.css). */
-.tk-set__lang { align-self: flex-start; margin-left: 0; }
-.tk-set__lang .tk-lang__btn { padding: 9px 16px; }
+/* Язык и тема — одной строкой: язык слева, тема справа (правки 06.10).
+ * Переключатели — те же, что в шапке (tk.css). */
+.tk-set__look {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tk-set__lang { margin-left: 0; }
+.tk-set__lang .tk-lang__btn {
+  height: 40px;
+  min-width: 52px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
 /* Удаление аккаунта: подписано красным — действие необратимо. */
 .tk-set__zone { border-color: rgba(227, 66, 52, .45); }

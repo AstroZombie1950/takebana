@@ -81,6 +81,8 @@ const UserSchema = new mongoose.Schema({
       calls: { type: String, enum: ['all', 'contacts', 'nobody'] },
       groups: { type: String, enum: ['all', 'contacts', 'nobody'] },
       presence: { type: String, enum: ['all', 'contacts', 'nobody'] },
+      // Время последнего визита — не шире «в сети» (utils/privacy.js, lastSeenRule).
+      lastSeen: { type: String, enum: ['all', 'contacts', 'nobody'] },
       comments: { type: String, enum: ['all', 'followers', 'nobody'] },
       searchable: Boolean,
     }, { _id: false }),

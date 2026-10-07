@@ -198,8 +198,9 @@ router.post('/settings/privacy', requireAuthApi, validate({
     .select('privacy nickname login email').lean();
   if (!user) return res.status(401).json({ message: 'Необходима авторизация' });
   audit(req, 'profile.privacy', { targetType: 'user', target: user, meta: { privacy: Object.entries(changed).map(([k, v]) => k + '=' + v).join(', ') } });
-  // Скрыл «в сети» — уже открытые чужие страницы перестают его получать.
-  if (changed.presence) {
+  // Скрыл «в сети» или время визита — уже открытые чужие страницы
+  // перестают его получать.
+  if (changed.presence || changed.lastSeen) {
     privacy.recheckPresence(req.app.get('io'), req.session.userId).catch((e) => errorLog.server(e, 'privacy.recheck'));
   }
   res.json({ privacy: privacy.of(user) });

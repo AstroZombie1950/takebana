@@ -210,6 +210,7 @@
 
   var WHEN = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
   var TRASH = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
+  var REPLY = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M9 7L4 12l5 5M4 12h11a5 5 0 015 5v2"/></svg>';
   var FLAG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 21V4h11l-2 4 2 4H5"/></svg>';
 
   function item(c) {
@@ -221,6 +222,9 @@
     var a = c.author, av = a.avatar || {};
     var profile = a.url || '/userPage/' + encodeURIComponent(a._id);
     var acts = '';
+    if (me && !c.mine) {
+      acts += '<button type="button" class="tk-watch__c-btn" data-reply="' + escapeHtml(a.nick || a.name) + '" aria-label="' + escapeHtml(t('chats.reply')) + '" title="' + escapeHtml(t('chats.reply')) + '">' + REPLY + '</button>';
+    }
     if (c.canDelete) {
       acts += '<button type="button" class="tk-watch__c-btn" data-del aria-label="' + escapeHtml(t('common.delete')) + '" title="' + escapeHtml(t('common.delete')) + '">' + TRASH + '</button>';
     }
@@ -293,6 +297,18 @@
     grow();
     cacts.hidden = true;
     text.blur();
+  });
+
+  // Ответить — ник в начало поля, курсор за ним.
+  list.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-reply]');
+    if (!b) return;
+    var at = '@' + b.dataset.reply + ' ';
+    if (text.value.indexOf(at) !== 0) text.value = at + text.value.replace(/^@\S+\s*/, '');
+    cacts.hidden = false;
+    grow();
+    text.focus();
+    text.setSelectionRange(text.value.length, text.value.length);
   });
 
   cform.addEventListener('submit', function (e) {

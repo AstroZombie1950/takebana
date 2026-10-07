@@ -1,7 +1,9 @@
 // Переключатель темы — один на весь сайт (utils/theme.js, цвета — css/tk.css).
 //
 // Кнопки в разметке:
-//   [data-theme-toggle]      — значок в шапке и левой панели: тёмная ⇄ светлая
+//   [data-theme-toggle]      — значок в шапке: тёмная ⇄ светлая
+//   [data-theme-pick="…"]    — переключатель в левой панели: dark | light;
+//                              нажата та, что на экране, и при «как в системе»
 //   [data-theme-set="…"]     — выбор в настройках: dark | light | auto
 //
 // Тема меняется на месте, без перезагрузки: атрибут data-theme на <html>,
@@ -30,9 +32,14 @@
       if (meta) meta.setAttribute('content', COLORS[on]);
       document.dispatchEvent(new CustomEvent('tk:theme', { detail: { theme: on } }));
     }
-    var set = document.querySelectorAll('[data-theme-set]');
+    mark('[data-theme-set]', 'data-theme-set', p);
+    mark('[data-theme-pick]', 'data-theme-pick', on);
+  }
+
+  function mark(sel, attr, value) {
+    var set = document.querySelectorAll(sel);
     for (var i = 0; i < set.length; i++) {
-      var mine = set[i].getAttribute('data-theme-set') === p;
+      var mine = set[i].getAttribute(attr) === value;
       set[i].classList.toggle('tk-lang__btn--on', mine);
       set[i].setAttribute('aria-pressed', mine);
     }
@@ -48,6 +55,11 @@
     }
   }
 
+  // При «как в системе» сервер не знает, какая тема на экране: её ставит
+  // строка в partials/tkHead.ejs ещё до отрисовки. Переключатель панели
+  // сверяем с ней.
+  mark('[data-theme-pick]', 'data-theme-pick', root.getAttribute('data-theme'));
+
   // Страница, отданная до выбора «как в системе», уже стоит в нужной теме
   // (строка в partials/tkHead.ejs); здесь — смена системы при открытой.
   system.addEventListener('change', function () {
@@ -55,9 +67,11 @@
   });
 
   document.addEventListener('click', function (e) {
-    var btn = e.target.closest && e.target.closest('[data-theme-toggle], [data-theme-set]');
+    var btn = e.target.closest && e.target.closest('[data-theme-toggle], [data-theme-set], [data-theme-pick]');
     if (!btn) return;
-    var p = btn.getAttribute('data-theme-set');
+    var p = btn.getAttribute('data-theme-set') || btn.getAttribute('data-theme-pick');
+    // Нажата уже горящая тема при «как в системе» — выбор не меняем.
+    if (btn.hasAttribute('data-theme-pick') && p === root.getAttribute('data-theme')) return;
     choose(p || (root.getAttribute('data-theme') === 'light' ? 'dark' : 'light'));
   });
 
