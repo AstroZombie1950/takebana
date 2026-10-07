@@ -1,7 +1,6 @@
 // Переключатель темы — один на весь сайт (utils/theme.js, цвета — css/tk.css).
 //
 // Кнопки в разметке:
-//   [data-theme-toggle]      — значок в шапке: тёмная ⇄ светлая
 //   [data-theme-pick="…"]    — переключатель в левой панели: dark | light;
 //                              нажата та, что на экране, и при «как в системе»
 //   [data-theme-set="…"]     — выбор в настройках: dark | light | auto
@@ -67,12 +66,15 @@
   });
 
   document.addEventListener('click', function (e) {
-    var btn = e.target.closest && e.target.closest('[data-theme-toggle], [data-theme-set], [data-theme-pick]');
+    var btn = e.target.closest && e.target.closest('[data-theme-set], [data-theme-pick]');
     if (!btn) return;
-    var p = btn.getAttribute('data-theme-set') || btn.getAttribute('data-theme-pick');
-    // Нажата уже горящая тема при «как в системе» — выбор не меняем.
-    if (btn.hasAttribute('data-theme-pick') && p === root.getAttribute('data-theme')) return;
-    choose(p || (root.getAttribute('data-theme') === 'light' ? 'dark' : 'light'));
+    var p = btn.getAttribute('data-theme-set');
+    if (!p) {
+      p = btn.getAttribute('data-theme-pick');
+      // Нажата уже горящая тема при «как в системе» — выбор не меняем.
+      if (p === root.getAttribute('data-theme')) return;
+    }
+    choose(p);
   });
 
   // Страницу вернули кнопкой «назад» из кэша браузера — тема могла смениться

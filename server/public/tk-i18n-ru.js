@@ -283,7 +283,6 @@
   "theme.dark": "Тёмная",
   "theme.light": "Светлая",
   "theme.auto": "Как в системе",
-  "theme.toggle": "Сменить тему",
   "theme.saveFailed": "Тему не удалось сохранить в аккаунте",
   "settings.namePh": "Укажите ваше имя",
   "settings.security": "Безопасность",

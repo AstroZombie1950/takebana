@@ -144,10 +144,10 @@
   </div>
 
   <div class="tk-aside__foot">
-    <%# Тема и язык — на телефоне в шапке им нет места (правки 06.10):
-        тема переключателем слева, язык справа, как в настройках. Тема —
-        public/tk-theme.js (data-theme-pick), язык — public/tk-i18n.js. %>
-    <div class="tk-aside__prefs<%= guest ? '' : ' tk-aside__prefs--user' %>">
+    <%# Тема и язык — только здесь, у всех и на любой ширине (правки
+        06.10: из шапки убраны). Тема переключателем слева, язык справа.
+        Тема — public/tk-theme.js (data-theme-pick), язык — public/tk-i18n.js. %>
+    <div class="tk-aside__prefs">
       <div class="tk-lang tk-aside__theme" role="group" aria-label="<%= ta('settings.theme') %>" data-i18n-aria="settings.theme">
         <button type="button" class="tk-lang__btn<%= themeOn === 'dark' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= themeOn === 'dark' %>" data-theme-pick="dark" aria-label="<%= ta('theme.dark') %>" data-i18n-aria="theme.dark" title="<%= ta('theme.dark') %>" data-i18n-title="theme.dark">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5Z"></path></svg>

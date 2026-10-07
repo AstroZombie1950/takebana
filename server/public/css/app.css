@@ -245,19 +245,22 @@ body.tk-app {
   margin-left: auto;
 }
 
-/* Середина гостя — «Что такое Takebana?», тема, язык — посередине между
- * поиском и правой группой: свободное место делят её поля поровну. Слева
- * и справа ряд прижат к краям, и смена языка двигает только середину,
- * на полразницы ширины «Войти» и «Регистрации». */
+/* Середина гостя — «Что такое Takebana?» — посередине между поиском
+ * и правой группой: свободное место делят её поля поровну. Слева и справа
+ * ряд прижат к краям, и смена языка двигает только середину, на
+ * полразницы ширины «Войти». */
 .tk-ahead__mid {
   display: flex;
   align-items: center;
-  gap: 12px;
   flex: none;
   margin: 0 auto;
 }
 
 .tk-ahead__mid + .tk-ahead__right { margin-left: 0; }
+
+/* Вход и регистрация (06.10): поиска нет, правой группы нет — середине
+ * не между чем стоять, она прижата к правому краю. */
+.tk-ahead--auth .tk-ahead__mid { margin-right: 0; }
 
 /* Всё в рамке — одной высоты. */
 .tk-ahead .tk-btn--sm {
@@ -271,20 +274,16 @@ body.tk-app {
 .tk-ahead__about { flex: none; white-space: nowrap; min-width: 17.2em; }
 .tk-ahead__signup { min-width: 12em; }
 
-.tk-ahead__lang { margin-left: 0; }
-.tk-ahead__lang .tk-lang__btn { height: var(--tk-ahead-ctl); padding: 0 12px; }
 .tk-ahead__login,
 .tk-ahead__signup { white-space: nowrap; }
 
 /* «Что такое Takebana?» — на телефоне и планшете места нет, в том числе
  * на телефоне боком: кнопка съедала поле поиска до одной лупы. Там тот же
- * пункт в левой панели и плашка над витриной. Язык — в левой панели. */
-@media (max-width: 1199px) {
-  .tk-ahead__lang { display: none; }
-}
-
+ * пункт в левой панели и плашка над витриной. Середина без неё пуста —
+ * убираем, и правая группа прижимается к краю сама. */
 @media (max-width: 1023px) {
-  .tk-ahead__about { display: none; }
+  .tk-ahead__mid { display: none; }
+  .tk-ahead__mid + .tk-ahead__right { margin-left: auto; }
 }
 
 @media (max-width: 767px) {
@@ -293,7 +292,8 @@ body.tk-app {
 
 /* Телефон боком: ширина как у планшета, а высоты нет — ориентируемся на неё. */
 @media (max-height: 500px) and (orientation: landscape) {
-  .tk-ahead__about { display: none; }
+  .tk-ahead__mid { display: none; }
+  .tk-ahead__mid + .tk-ahead__right { margin-left: auto; }
 }
 
 .tk-ahead__icon {
@@ -312,28 +312,6 @@ body.tk-app {
 }
 
 .tk-ahead__icon:hover { color: var(--tk-fg); }
-
-/* Смена темы (public/tk-theme.js): виден значок той, на которую переключит.
- * В рамке, как кнопки рядом (правки 06.10). */
-.tk-ahead__theme {
-  width: var(--tk-ahead-ctl);
-  height: var(--tk-ahead-ctl);
-  flex: none;
-  border: 1px solid rgba(144, 113, 99, .7);
-}
-
-.tk-ahead__theme:hover { border-color: var(--tk-fg-2); }
-
-[data-theme="light"] .tk-theme-sun,
-:root:not([data-theme="light"]) .tk-theme-moon { display: none; }
-
-/* На телефоне шапке места нет — тема и язык в левой панели. Середина
- * гостя пуста — убираем её, и правая группа прижимается к краю сама. */
-@media (max-width: 767px) {
-  .tk-ahead__theme,
-  .tk-ahead__mid { display: none; }
-  .tk-ahead__mid + .tk-ahead__right { margin-left: auto; }
-}
 
 /* Счётчик пропущенных звонков у иконки сообщений. */
 .tk-ahead__count {
@@ -462,18 +440,13 @@ body.tk-app {
   margin-top: 12px;
 }
 
-/* Тема и язык — одной строкой внизу панели: тема слева, язык справа,
- * оба переключателями одной высоты. */
-.tk-aside__prefs { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 18px 8px; }
+/* Тема и язык — одной строкой внизу панели, у всех и на любой ширине
+ * (правки 06.10: в шапке их больше нет): тема слева, язык справа, оба
+ * переключателями одной высоты. */
+/* Высота 32 — чтобы панель гостя на 1440×900 не стала длиннее экрана. */
+.tk-aside__prefs { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 18px 4px; }
 .tk-aside__prefs .tk-lang { margin-left: 0; }
-.tk-aside__prefs .tk-lang__btn { height: 36px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
-/* Тема в панели — для телефона; шире она в шапке. Язык вошедшего на
- * широком экране — в настройках, гостю панель его оставляет: в шапке
- * язык только от 1200px. */
-@media (min-width: 768px) {
-  .tk-aside__theme,
-  .tk-aside__prefs--user { display: none; }
-}
+.tk-aside__prefs .tk-lang__btn { height: 32px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
 
 /* Боковые вырезы (телефон боком): содержимое любой страницы кабинета
  * отодвигается от них здесь, одним правилом, — отдельным страницам считать

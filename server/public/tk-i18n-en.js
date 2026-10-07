@@ -283,7 +283,6 @@
   "theme.dark": "Dark",
   "theme.light": "Light",
   "theme.auto": "System",
-  "theme.toggle": "Switch theme",
   "theme.saveFailed": "Could not save the theme to your account",
   "settings.namePh": "Enter your name",
   "settings.security": "Security",
