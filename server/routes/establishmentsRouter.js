@@ -9,6 +9,8 @@ asyncify(router); // ошибки async-обработчиков уходят в
 
 const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
+const User = require('../models/User');
+const meetups = require('../utils/meetups');
 const gallery = require('../utils/gallery');
 const { removeVenue, unlinkUpload } = require('../utils/userDelete');
 const { readVenueFilters } = require('../utils/venueFilters');
@@ -403,12 +405,17 @@ router.get('/venue/:venueId', commonDataMiddleware, wrap(async (req, res, next) 
     const { venue, own, admin } = found;
     // Средняя — в самом заведении (utils/venueRating.js); своя — чтобы
     // звёзды голосования показали, что уже поставлено.
-    const mine = req.session.userId
-        ? await Rating.findOne({ user: req.session.userId, establishment: venue._id }).select('rating').lean()
-        : null;
+    // Дата рождения смотрящего — встречам (utils/meetups.js): людей в них
+    // видит только совершеннолетний.
+    const [mine, viewer] = req.session.userId ? await Promise.all([
+        Rating.findOne({ user: req.session.userId, establishment: venue._id }).select('rating').lean(),
+        User.findById(req.session.userId).select('birthDate').lean(),
+    ]) : [null, null];
     res.render('venue', {
         venue,
         own,
+        viewer,
+        meet: venue.status === true ? await meetups.forVenue(venue, viewer, res.locals.lang) : null,
         manage: own || admin,
         tabs: await tabsFor(venue, own || admin),
         // Часы на сегодня — по местному дню недели заведения, как в карточках выдачи.

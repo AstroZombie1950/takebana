@@ -280,10 +280,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const isLive = n.type === 'live';
             const isFollow = n.type === 'follow';
             const isReply = n.type === 'reply';
+            // К отметке о встрече присоединились (routes/meetups.js): ведёт
+            // на её строку на странице заведения, текстом — заведение и день.
+            const isMeetup = n.type === 'meetup';
             // Звонок группе (utils/groupPush.js) ведёт в группу, в content —
             // её название.
             const href = isCall ? (n.link || '/chatsPage?tab=calls')
-              : isComment || isReply || isLive || isFollow ? (n.link || '/')
+              : isComment || isReply || isLive || isFollow || isMeetup ? (n.link || '/')
               : '/chatsPage?peer=' + encodeURIComponent(sender._id || '');
             const title = isCall && n.link ? t('modal.notifications.missedGroupCall', { name, group: n.content || '' })
               : isCall ? t('modal.notifications.missedCall', { name })
@@ -291,8 +294,9 @@ document.addEventListener('DOMContentLoaded', () => {
               : isReply ? t('modal.notifications.reply', { name })
               : isLive ? t('modal.notifications.live', { name })
               : isFollow ? t('modal.notifications.follow', { name })
+              : isMeetup ? t('modal.notifications.meetup', { name })
               : t('modal.notifications.from') + ' ' + name;
-            const text = isCall || isFollow ? '' : isLive ? (n.content || '') : (n.content || t('modal.notifications.fallback'));
+            const text = isCall || isFollow ? '' : isLive || isMeetup ? (n.content || '') : (n.content || t('modal.notifications.fallback'));
             return `
             <a class="tk-notice${n.isRead ? '' : ' tk-notice--new'}" href="${escapeHtml(href)}">
               <span class="tk-notice__top">
@@ -889,6 +893,22 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     socket.on('call:switch', (access) => {
       if (access.callId === window.currentCallId && window._call) window.switchCallToOwn(access);
     });
+
+    // Сокет вернулся, а звонок идёт: события, ушедшие в мёртвый сокет,
+    // пропали (sockets/index.js, call:sync). Не дошло «принят» — входим
+    // в разговор сейчас; не дошло «на свой путь» — переходим; звонка уже
+    // нет — закрываем окно и говорим об этом, а не висим на «Звоним…».
+    socket.on('connect', () => {
+      const callId = window.currentCallId;
+      if (!callId) return;
+      socket.timeout(10000).emit('call:sync', { callId }, (err, res) => {
+        if (err || !res || callId !== window.currentCallId) return;
+        if (res.ended) { if (closeCall(callId)) toast(t('call.lost'), 'error'); return; }
+        if (!res.callId) return;
+        if (!window._call) window.startCallMedia(callId, res.type, res);
+        else if (res.engine === 'own' && !window._call.signal) window.switchCallToOwn(res);
+      });
+    });
     socket.on('call:signal', ({ callId, from, data }) => {
       if (callId === window.currentCallId && window._call && window._call.signal) window._call.signal(from, data);
     });
@@ -1204,9 +1224,13 @@ document.addEventListener('DOMContentLoaded', function(){
       tr.set('role', s === OUT ? 'caller' : 'callee');
     }
     // Итог: обрыв — его причиной; иначе соединились — ok, нет — не дождались.
+    // Вошли, а собеседник так и не появился — тоже не разговор: 07.10 такой
+    // звонок Ивана с заказчиком стоял в «Попытках» успешным.
     window.tkCallEnd = (outcome, reason) => {
       window.tkCallEnd = null;
-      if (tr) tr.end(outcome || (started ? 'ok' : 'gave_up'), reason || (started ? '' : 'not_connected'));
+      if (!tr) return;
+      if (!outcome && started && !hadPeer) tr.end('gave_up', 'no_peer');
+      else tr.end(outcome || (started ? 'ok' : 'gave_up'), reason || (started ? '' : 'not_connected'));
     };
 
     function remember(userId, track, on) {
@@ -1421,11 +1445,11 @@ document.addEventListener('DOMContentLoaded', function(){
       // (reachMs в tk-daily.js), и тогда уходим по нему.
       joinMs: 10000,
       mediaMs: 5000,
-      onStuck: (reason) => {
+      onStuck: (reason, peer) => {
         switching = true;
         paint();
         if (tr) { tr.step('stuck'); tr.set('stuck', String(reason).slice(0, 60)); }
-        window.callSocket.emit('call:fallback', { callId, reason });
+        window.callSocket.emit('call:fallback', { callId, reason, peer });
       },
     }, view));
 
@@ -1452,10 +1476,10 @@ document.addEventListener('DOMContentLoaded', function(){
     window._call = first.engine === 'own' ? viaOwn(first) : viaDaily();
 
     // Переход посреди звонка: Daily — прочь, сцена — пустая до первых
-    // дорожек своего пути. Запоминает путь только тот, у кого Daily застрял:
-    // у собеседника он, возможно, работает.
+    // дорожек своего пути. Запоминает путь только тот, у кого Daily не
+    // работает (сервер решает, sockets/index.js, call:fallback): у
+    // собеседника он, возможно, в порядке.
     window.switchCallToOwn = (access) => {
-      const stuck = window._call.stuck;
       if (!started) { switching = true; paint(); }
       if (tr) { tr.route = 'own'; tr.step('switch_own'); }
       window._call.leave();
@@ -1463,7 +1487,7 @@ document.addEventListener('DOMContentLoaded', function(){
       s.stage.classList.add('tk-call__stage--empty', 'tk-call__stage--nolocal');
       s.remoteOn = false;
       paintVideo(s);
-      if (stuck) window.rememberOwnCallPath();
+      if (access.remember) window.rememberOwnCallPath();
       window._call = viaOwn(access);
       // Выключенные кнопкой микрофон и камера остаются выключенными (правки
       // 29.09): новое соединение начинало с обоими включёнными, а кнопки

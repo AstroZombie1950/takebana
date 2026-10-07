@@ -103,21 +103,40 @@
     var v = nick.value.trim().toLowerCase();
     if (!NICK_RULE.test(v)) { nickReason('format'); return nick.focus(); }
     var btn = e.target.querySelector('[type="submit"]');
-    btn.disabled = true;
-    tkFetch('/update-profile', json({ login: $('profileName').value.trim(), nickname: v }))
-      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
-      .then(function (x) {
-        if (!x.ok) {
-          if (x.b.reason) nickReason(x.b.reason, x.b.until);
-          return toast(t('app.errorPrefix', { message: x.b.message || '' }), 'error');
-        }
-        // Ник стоит по всей странице — в шапке панели, подписях: проще
-        // перезагрузить, чем искать каждое место.
-        if (x.b.nickname !== nick.dataset.current) return location.reload();
-        toast(t('settings.saved'), 'ok');
-      })
-      .catch(function () { toast(t('common.noNetwork'), 'error'); })
-      .finally(function () { btn.disabled = false; });
+    var birth = $('profileBirth');
+    var day = birth ? birth.value : '';
+    // Дата рождения — один раз (utils/age.js): сначала спрашиваем, верно ли,
+    // и уходит она первой — не принял сервер, имя и ник ждут исправления.
+    var asked = day
+      ? confirmDialog(t('settings.birthConfirm', { date: new Date(day + 'T00:00:00Z').toLocaleDateString(window.tkLang && window.tkLang() === 'en' ? 'en-US' : 'ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' }) }), { okText: t('common.save') })
+      : Promise.resolve(true);
+    asked.then(function (yes) {
+      if (!yes) return;
+      btn.disabled = true;
+      var first = day
+        ? tkFetch('/settings/birthdate', json({ birthDate: day }))
+          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+        : Promise.resolve(null);
+      return first
+        .then(function (b) {
+          if (b && !b.ok) { toast(t('app.errorPrefix', { message: b.b.message || '' }), 'error'); return; }
+          return tkFetch('/update-profile', json({ login: $('profileName').value.trim(), nickname: v }))
+            .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+            .then(function (x) {
+              if (!x.ok) {
+                if (x.b.reason) nickReason(x.b.reason, x.b.until);
+                return toast(t('app.errorPrefix', { message: x.b.message || '' }), 'error');
+              }
+              // Ник стоит по всей странице — в шапке панели, подписях: проще
+              // перезагрузить, чем искать каждое место. Дата рождения после
+              // записи — строкой вместо поля, тоже перезагрузкой.
+              if (x.b.nickname !== nick.dataset.current || day) return location.reload();
+              toast(t('settings.saved'), 'ok');
+            });
+        })
+        .catch(function () { toast(t('common.noNetwork'), 'error'); })
+        .finally(function () { btn.disabled = false; });
+    });
   });
 
   // ── О себе и ссылки ───────────────────────────────────────────────────

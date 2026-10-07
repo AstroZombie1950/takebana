@@ -4,6 +4,7 @@
   идёт она сейчас или нет. Владельцу (и администратору) сверху ещё пульт:
   запустить трансляцию, настройки, удалить, что сейчас на проверке.
   Оценить — здесь же (с 29.09; до того — в карточке на карте): public/tk-venue.js.
+  Встречи «хочу сюда» (07.10) — partials/venueMeetups.ejs, public/tk-meetups.js.
   Своё заведение владелец не оценивает (30.09) — звёзд у него нет.
   Действия пульта — public/tk-venue-edit.js, вид — css/venue.css.
 %>
@@ -116,6 +117,9 @@
       </div>
       <% } %>
 
+      <%# Встречи (07.10): «Хочу сюда» и «Я тоже» — у одобренного заведения. %>
+      <% if (approved) { %><%- include('partials/venueMeetups', { venue: venue, viewer: viewer, meet: meet }) %><% } %>
+
       <% if (manage) { %>
       <%# Пульт владельца. Сверху — что ждёт проверки: от этого зависит, что
           можно. Одобренное без правки строки не несёт (30.09): что оно на
@@ -166,6 +170,7 @@
   </main>
 </div>
 <% if (approved && !own) { %><script defer src="<%= asset('/tk-venue.js') %>"></script><% } %>
+<% if (approved) { %><script defer src="<%= asset('/tk-meetups.js') %>"></script><% } %>
 <% if (manage) { %><script defer src="<%= asset('/tk-venue-edit.js') %>"></script><% } %>
 </body>
 </html>

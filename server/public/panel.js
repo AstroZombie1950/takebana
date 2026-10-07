@@ -573,6 +573,8 @@ VIEWS.person = {
     html += fact('Заведён', esc(when(p.createdAt)));
     html += fact('Был на связи', esc(p.isOnline ? 'сейчас' : ago(p.lastSeen)));
     html += fact('Подтвердил 18+', a.adultConfirmedAt ? esc(when(a.adultConfirmedAt)) : 'нет');
+    html += fact('Дата рождения', a.birthDate ? esc(a.birthDate) + ' · ' + a.age + ' лет' +
+      (IS_ADMIN ? ' <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="birthdate-reset" data-id="' + esc(p.id) + '">Сбросить</button>' : '') : 'не указана');
     if (a.bio) html += fact('Описание', '<span class="tk-facts__pre">' + esc(a.bio) + '</span>');
     if (a.links.length) {
       html += fact('Ссылки', a.links.map((l) => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + esc(l.url) + '</a>').join('<br>'));
@@ -626,7 +628,7 @@ const REASONS = {
   spam: 'спам', abuse: 'оскорбления', adult: 'контент 18+',
   violence: 'насилие', copyright: 'права на контент', other: 'другое',
 };
-const TARGETS = { stream: 'эфир', user: 'пользователь', message: 'сообщение чата', recording: 'запись эфира', video: 'видео галереи', photo: 'фото галереи', comment: 'комментарий' };
+const TARGETS = { stream: 'эфир', user: 'пользователь', message: 'сообщение чата', recording: 'запись эфира', video: 'видео галереи', photo: 'фото галереи', comment: 'комментарий', meetup: 'отметка в заведении' };
 
 VIEWS.reports = {
   title: 'Жалобы',
@@ -679,6 +681,10 @@ VIEWS.reports = {
         if (r.targetType === 'comment' && t) {
           acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="' + esc(t.href) + '#c-' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
                   '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="comment-delete" data-id="' + esc(r.targetId) + '" data-href="' + esc(t.href) + '">Удалить комментарий</button>';
+        }
+        if (r.targetType === 'meetup' && t) {
+          acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="' + esc(t.href) + '" target="_blank" rel="noopener">Открыть</a>' +
+                  '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="meetup-delete" data-id="' + esc(r.targetId) + '">Удалить отметку</button>';
         }
         if (r.targetType === 'stream' && t && t.isActive) {
           acts += '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="stop-stream" data-id="' + esc(r.targetId) + '">Остановить эфир</button>';
@@ -1084,7 +1090,7 @@ const REASON_TITLE = {
   error: 'ошибка', no_camera: 'нет камеры',
   camera_denied: 'камера запрещена', no_publish: 'видео не дошло до сервера ни разу',
   host_lost: 'ведущий выпал из Daily, пока запускали выход',
-  lost: 'связь пропала и не вернулась', not_connected: 'не соединились',
+  lost: 'связь пропала и не вернулась', not_connected: 'не соединились', no_peer: 'собеседник так и не вошёл',
   canceled: 'отменили', too_big: 'слишком большой', novideo: 'не видео', long: 'слишком длинное', encode: 'пережатие', store: 'хранилище',
   processing: 'не обработалось на сервере', processing_timeout: 'обработка дольше 5 минут', stalled: 'отправка встала',
   network: 'не открылось (сеть)', decode: 'не открылось (файл)', unsupported: 'запись не поддерживается', recorder: 'сбой записи',
@@ -2281,6 +2287,13 @@ view.addEventListener('click', async (e) => {
       return show();
     }
 
+    if (act === 'birthdate-reset') {
+      if (!await confirmDialog('Сбросить дату рождения? Человек сможет указать её заново в настройках.', { okText: 'Сбросить' })) return;
+      await send('POST', '/api/admin/users/' + id + '/birthdate/reset');
+      toast('Дата рождения сброшена', 'ok');
+      return show();
+    }
+
     if (act === 'links-follow') {
       const on = !!el.dataset.on;
       if (!await confirmDialog(on ? 'Открыть ссылку на сайт поисковикам? Она будет без nofollow.' : 'Вернуть ссылке на сайт nofollow?', { okText: on ? 'Открыть' : 'Закрыть' })) return;
@@ -2332,6 +2345,13 @@ view.addEventListener('click', async (e) => {
       if (!await confirmDialog('Удалить фото? Файл уйдёт из хранилища навсегда.', { okText: 'Удалить' })) return;
       await send('DELETE', '/photo/' + id);
       toast('Фото удалено', 'ok');
+      return show();
+    }
+
+    if (act === 'meetup-delete') {
+      if (!await confirmDialog('Удалить отметку?', { okText: 'Удалить' })) return;
+      await send('DELETE', '/meetups/' + id);
+      toast('Отметка удалена', 'ok');
       return show();
     }
 

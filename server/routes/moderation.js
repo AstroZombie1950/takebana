@@ -19,6 +19,8 @@ const GalleryVideo = require('../models/GalleryVideo');
 const GalleryPhoto = require('../models/GalleryPhoto');
 const RecordingComment = require('../models/RecordingComment');
 const liveSignal = require('../utils/liveSignal');
+const age = require('../utils/age');
+const Meetup = require('../models/Meetup');
 
 // Где живёт цель жалобы каждого вида: жалоба на то, чего нет, — мусор в панели.
 const TARGET_MODELS = {
@@ -29,6 +31,7 @@ const TARGET_MODELS = {
     video: GalleryVideo,
     photo: GalleryPhoto,
     comment: RecordingComment,
+    meetup: Meetup,
 };
 
 // Разрыв идущего вещания. Подключается лениво и намеренно: require('../mediaServer')
@@ -76,7 +79,7 @@ router.param('id', (req, res, next, id) => (
 ));
 
 const REASONS = ['spam', 'abuse', 'adult', 'violence', 'copyright', 'other'];
-const TARGETS = ['stream', 'user', 'message', 'recording', 'video', 'photo', 'comment'];
+const TARGETS = ['stream', 'user', 'message', 'recording', 'video', 'photo', 'comment', 'meetup'];
 
 // ── Подача жалобы ────────────────────────────────────────────────────────────
 //
@@ -300,7 +303,13 @@ router.post('/api/moderation/streams/:id/stop', requireAuthApi, validate({
 //
 // Спрашиваем один раз и запоминаем. Повторное подтверждение дату не сдвигает:
 // важно, когда человек подтвердил впервые.
+// Дата рождения (utils/age.js), если указана, решает сама: по ней младше 18 —
+// кнопкой этого не обойти.
 router.post('/api/age/confirm', requireAuthApi, wrap(async (req, res) => {
+    const me = await User.findById(req.session.userId).select('birthDate').lean();
+    if (me && me.birthDate && !age.isAdult(me)) {
+        return res.status(403).json({ message: 'По дате рождения вам меньше 18 лет' });
+    }
     const done = await User.updateOne(
         { _id: req.session.userId, adultConfirmedAt: null },
         { adultConfirmedAt: new Date() }

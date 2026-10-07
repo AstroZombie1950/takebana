@@ -68,6 +68,18 @@
             <p class="tk-set__status" id="nickStatus" aria-live="polite"></p>
             <p class="tk-note" id="nickHint" data-i18n="settings.nickHint"><%- t('settings.nickHint') %></p>
 
+            <%# Дата рождения (07.10, utils/age.js) — один раз: указанная
+                становится строкой, сбросить её может только администратор.
+                Уходит той же кнопкой, что имя и ник (public/settings.js). %>
+            <% if (profile.birthDate) { %>
+            <p class="tk-form__label" data-i18n="settings.birth"><%- t('settings.birth') %></p>
+            <p class="tk-set__fixed"><%= profile.birthLabel %></p>
+            <% } else { %>
+            <label class="tk-form__label" for="profileBirth" data-i18n="settings.birth"><%- t('settings.birth') %></label>
+            <input id="profileBirth" class="tk-field" type="date" min="1900-01-01" max="<%= profile.birthMax %>" aria-describedby="birthHint">
+            <p class="tk-note" id="birthHint" data-i18n="settings.birthOnce"><%- t('settings.birthOnce') %></p>
+            <% } %>
+
             <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>
           </form>
         </section>

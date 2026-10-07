@@ -19,6 +19,7 @@ const privacy = require('../utils/privacy');
 const support = require('../utils/support');
 const { langOf } = require('../utils/i18n');
 const theme = require('../utils/theme');
+const age = require('../utils/age');
 const errorLog = require('../utils/errorLog');
 // Подтверждение почты после регистрации (router.sendVerify есть, когда настроена почта).
 const emailRoutes = require('./emailChange');
@@ -180,6 +181,30 @@ router.post('/settings/about', requireAuthApi, validate({
   if (!user) return res.status(401).json({ message: 'Необходима авторизация' });
   audit(req, 'profile.update', { targetType: 'user', target: user, meta: { bio: bio.length, ...(parsed ? { links: Object.keys(parsed.links) } : {}) } });
   res.json({ bio: user.bio, links: parsed ? profileLinks.list(user.links) : [] });
+});
+
+// Дата рождения (07.10, utils/age.js) — один раз: запись только туда, где её
+// ещё нет, так что вторая вкладка или повторный запрос старую не перепишут.
+// Ошибся — исправляет администратор. Заодно она решает и 18+: старше —
+// подтверждение ставится, если его не было; младше — снимается.
+router.post('/settings/birthdate', requireAuthApi, validate({
+  birthDate: { type: 'string', required: true, max: 10, label: 'Дата рождения' },
+}), async (req, res) => {
+  const birthDate = age.parse(req.body.birthDate);
+  if (!birthDate) return res.status(400).json({ message: 'Дата рождения указана неверно' });
+  const adult = age.ageOf(birthDate) >= age.ADULT;
+  const user = await User.findOneAndUpdate(
+    { _id: req.session.userId, birthDate: null },
+    [{ $set: { birthDate, adultConfirmedAt: adult ? { $ifNull: ['$adultConfirmedAt', '$$NOW'] } : null } }],
+    { returnDocument: 'after', updatePipeline: true }
+  ).select('birthDate nickname login email').lean();
+  if (!user) {
+    if (!(await User.exists({ _id: req.session.userId }))) return res.status(401).json({ message: 'Необходима авторизация' });
+    return res.status(409).json({ message: 'Дата рождения уже указана' });
+  }
+  // Саму дату в журнал не пишем — довольно, взрослый ли.
+  audit(req, 'profile.birthdate', { targetType: 'user', target: user, meta: { adult } });
+  res.json({ birthDate: age.iso(user.birthDate), adult });
 });
 
 // Приватность (utils/privacy.js): поле за полем, сохраняется сразу по

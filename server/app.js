@@ -248,6 +248,7 @@ app.use(require('./routes/userRoutes'));
 app.use(require('./routes/passwordReset'));
 app.use(require('./routes/emailChange'));
 app.use(require('./routes/establishmentsRouter'));
+app.use(require('./routes/meetups'));
 app.use(require('./routes/venueMenu'));
 app.use(require('./routes/admin'));
 app.use(require('./routes/streaming'));

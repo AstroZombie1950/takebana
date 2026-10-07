@@ -1,0 +1,94 @@
+<%#
+  Встречи на странице заведения (07.10, docs/MEETUPS.md): «Хочу сюда»
+  в такой-то день и «Я тоже». Тот же шаблон отдаёт фрагмент
+  /venue/:id/meetups — им страница обновляет блок после действия
+  (routes/meetups.js). Поведение — public/tk-meetups.js, вид — css/venue.css.
+
+  Людей видит только совершеннолетний по дате рождения (utils/meetups.js,
+  forVenue). Гостю и тому, кто дату не указал, — число отметок и кнопка:
+  гостя она ведёт на вход, второму открывает форму с полем даты рождения.
+  Младше 18 блока нет совсем.
+
+  venue, viewer ({ _id, birthDate } | null), meet ({ count, adult, items, bounds }).
+%>
+<% var under = viewer && viewer.birthDate && !meet.adult; %>
+<% if (!under) { %>
+<section class="tk-vp__sec tk-meet" id="meetups" data-meetups="<%= venue._id %>">
+  <div class="tk-meet__head">
+    <h2 class="tk-kicker" data-i18n="meet.title"><%- t('meet.title') %></h2>
+    <% if (viewer) { %>
+    <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" data-meet-new aria-expanded="false" aria-controls="meetForm" data-i18n="meet.want"><%- t('meet.want') %></button>
+    <% } else { %>
+    <a href="/login?next=<%= encodeURIComponent('/venue/' + venue._id + '#meetups') %>" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="meet.want"><%- t('meet.want') %></a>
+    <% } %>
+  </div>
+
+  <% if (viewer) { %>
+  <form class="tk-form tk-meet__form" id="meetForm" novalidate hidden>
+    <% if (!viewer.birthDate) { %>
+    <label class="tk-meet__field tk-meet__field--wide">
+      <span class="tk-form__label" data-i18n="settings.birth"><%- t('settings.birth') %></span>
+      <input class="tk-field" type="date" name="birthDate" min="1900-01-01" max="<%= meet.bounds.min %>" required>
+      <span class="tk-note" data-i18n="settings.birthOnce"><%- t('settings.birthOnce') %></span>
+    </label>
+    <% } %>
+    <label class="tk-meet__field">
+      <span class="tk-form__label" data-i18n="meet.day"><%- t('meet.day') %></span>
+      <input class="tk-field" type="date" name="day" min="<%= meet.bounds.min %>" max="<%= meet.bounds.max %>" value="<%= meet.bounds.min %>" required>
+    </label>
+    <label class="tk-meet__field">
+      <span class="tk-form__label" data-i18n="meet.time"><%- t('meet.time') %></span>
+      <input class="tk-field" type="time" name="time">
+    </label>
+    <label class="tk-meet__field tk-meet__field--wide">
+      <span class="tk-form__label" data-i18n="meet.note"><%- t('meet.note') %></span>
+      <input class="tk-field" type="text" name="note" maxlength="140" autocomplete="off">
+    </label>
+    <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="meet.go"><%- t('meet.go') %></button>
+  </form>
+  <% } %>
+
+  <% if (meet.adult && meet.items.length) { %>
+  <ul class="tk-meet__list">
+    <% meet.items.forEach(function (m) { %>
+    <li class="tk-meet__row" id="m-<%= m._id %>">
+      <a href="<%= m.author.url %>" class="tk-meet__ava"<% if (!m.author.avatarStyle.url) { %> data-bg="<%= m.author.avatarStyle.gradient %>"<% } %>><% if (m.author.avatarStyle.url) { %><img src="<%= m.author.avatarStyle.url %>" alt="" loading="lazy" decoding="async"><% } else { %><%= m.author.avatarStyle.initial %><% } %></a>
+      <div class="tk-meet__body">
+        <p class="tk-meet__top">
+          <a href="<%= m.author.url %>" class="tk-meet__name" data-user-content><%= m.author.name %></a>
+          <span class="tk-meet__when"><% if (m.today) { %><span data-i18n="meet.today"><%- t('meet.today') %></span><% } else { %><%= m.dayLabel %><% } %><% if (m.time) { %> · <%= m.time %><% } %></span>
+        </p>
+        <% if (m.note) { %><p class="tk-meet__note" data-user-content><%= m.note %></p><% } %>
+        <% if (m.going) { %>
+        <p class="tk-meet__faces">
+          <% m.faces.forEach(function (p) { %><a href="<%= p.url %>" class="tk-meet__face"<% if (!p.avatarStyle.url) { %> data-bg="<%= p.avatarStyle.gradient %>"<% } %> title="<%= p.name %>" aria-label="<%= p.name %>"><% if (p.avatarStyle.url) { %><img src="<%= p.avatarStyle.url %>" alt="" loading="lazy" decoding="async"><% } else { %><%= p.avatarStyle.initial %><% } %></a><% }); %>
+          <% if (m.more) { %><span class="tk-meet__more">+<%= m.more %></span><% } %>
+        </p>
+        <% } %>
+      </div>
+      <div class="tk-meet__acts">
+        <% if (m.mine) { %>
+        <button type="button" class="tk-meet__icon" data-meet-del="<%= m._id %>" aria-label="<%= ta('common.delete') %>" title="<%= ta('common.delete') %>" data-i18n-aria="common.delete" data-i18n-title="common.delete">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+        </button>
+        <% } else { %>
+        <% if (m.joined || !m.full) { %>
+        <button type="button" class="tk-btn tk-btn--sm <%= m.joined ? 'tk-btn--primary is-on' : 'tk-btn--outline' %>" data-meet-join="<%= m._id %>"<% if (m.joined) { %> data-joined<% } %> aria-pressed="<%= m.joined %>" data-i18n="meet.join"><%- t('meet.join') %></button>
+        <% } %>
+        <button type="button" class="tk-meet__icon" data-meet-write="<%= m.author._id %>" aria-label="<%= ta('user.message') %>" title="<%= ta('user.message') %>" data-i18n-aria="user.message" data-i18n-title="user.message">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>
+        </button>
+        <button type="button" class="tk-meet__icon" data-report="meetup" data-report-id="<%= m._id %>" data-report-name="<%= m.author.name %>" aria-label="<%= ta('common.report') %>" title="<%= ta('common.report') %>" data-i18n-aria="common.report" data-i18n-title="common.report">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 21V4h11l-2 4 2 4H5"/></svg>
+        </button>
+        <% } %>
+      </div>
+    </li>
+    <% }); %>
+  </ul>
+  <% } else if (!meet.adult && meet.count) { %>
+  <% var marks = plural(meet.count, 'meet.marks'); %>
+  <p class="tk-meet__sum"><%= num(meet.count) %> <span data-i18n="<%= marks.key %>"><%= marks.text %></span></p>
+  <% } %>
+</section>
+<% } %>

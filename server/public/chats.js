@@ -1254,9 +1254,6 @@
       })
       .catch(function () {});
 
-    input.removeAttribute('data-i18n-placeholder');
-    input.placeholder = t('chats.messageTo') + ' ' + peer.name + '…';
-
     dialogUrl('/chatsPage?peer=' + encodeURIComponent(peer.id));
     // has-peer — показать правую часть, is-open — на узком экране она
     // вместо списка.
@@ -1279,8 +1276,6 @@
     feed.innerHTML = '';
     document.querySelectorAll('.tk-dialog--on').forEach(function (d) { d.classList.remove('tk-dialog--on'); });
     setRequest(null);
-    input.setAttribute('data-i18n-placeholder', 'chats.messagePh');
-    input.placeholder = t('chats.messagePh');
     // Закрыли сами (стрелка, Escape, группу удалили) — шаг назад убирает
     // запись диалога, иначе «Назад» потом вернул бы в него.
     if (stacked) {
@@ -1328,8 +1323,6 @@
     $('chatAvatar').outerHTML = avatar('tk-chat__ava-big', group, ' id="chatAvatar" data-group-info role="button" tabindex="0" aria-label="' + escapeHtml(t('groups.info')) + '"');
     $('chatSub').textContent = t('groups.count', { n: group.count });
     $('chatHeaderPresence').setAttribute('data-presence-user', '');
-    input.removeAttribute('data-i18n-placeholder');
-    input.placeholder = t('groups.messagePh', { title: group.title });
     paintContactBtn();
   }
 
@@ -3886,7 +3879,6 @@
     render();
     feed.scrollTop = feed.scrollHeight - fromBottom;
     if (group) paintGroupHead();
-    else input.placeholder = t('chats.messageTo') + ' ' + peer.name + '…';
   });
 
   refreshTimes();

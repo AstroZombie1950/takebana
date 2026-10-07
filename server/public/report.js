@@ -1,4 +1,5 @@
-/* Жалоба на эфир, пользователя, сообщение, запись эфира или комментарий.
+/* Жалоба на эфир, пользователя, сообщение, запись эфира, комментарий
+ * или отметку о встрече в заведении.
  *
  * Окно лежит в общем партиале шапки, поэтому кнопку можно поставить на любой
  * странице кабинета: достаточно атрибутов data-report и data-report-id.
@@ -25,7 +26,7 @@ var sendButton = document.getElementById('sendReport');
 
 var KINDS = { stream: 'report.onStream', user: 'report.onUser', message: 'report.onMessage',
               recording: 'report.onRecording', video: 'report.onVideo', photo: 'report.onPhoto',
-              comment: 'report.onComment' };
+              comment: 'report.onComment', meetup: 'report.onMeetup' };
 
 var current = null;
 

@@ -24,6 +24,7 @@ const attachments = require('./attachments');
 const groups = require('./groups');
 const Establishments = require('../models/Establishments');
 const Rating = require('../models/Rating');
+const Meetup = require('../models/Meetup');
 const venueRating = require('./venueRating');
 const venueMenu = require('./venueMenu');
 const Report = require('../models/Report');
@@ -76,6 +77,7 @@ async function removeVenue(venue) {
   await Promise.all([Stream, Recording, GalleryVideo].map((M) => M.updateMany({ venue: venue._id }, { $set: { venue: null } })));
   await Rating.deleteMany({ establishment: venue._id });
   await ChatMessage.deleteMany({ venueId: venue._id });
+  await Meetup.deleteMany({ venue: venue._id });
   // Видео-меню — вместе с роликами в хранилище.
   await venueMenu.removeAll(venue._id);
   const photos = new Set([...(venue.photos || []), ...((venue.pending && venue.pending.photos) || [])]);
@@ -134,6 +136,7 @@ async function removeUser(user, io) {
   const rated = await Rating.distinct('establishment', { user: id });
   const chatIds = await ChatMessage.distinct('_id', { userId: id });
   const conversations = await Conversation.find({ $or: [{ userOne: id }, { userTwo: id }] }).select('_id').lean();
+  const meetupIds = await Meetup.distinct('_id', { user: id });
 
   const [reports, messages, chat, subs, calls] = await Promise.all([
     Report.deleteMany({ $or: [
@@ -141,6 +144,7 @@ async function removeUser(user, io) {
       { targetType: 'user', targetId: id },
       { targetType: 'stream', targetId: { $in: streams.map((s) => s._id) } },
       { targetType: 'message', targetId: { $in: chatIds } },
+      { targetType: 'meetup', targetId: { $in: meetupIds } },
     ] }),
     // Вложения переписки уходят из хранилища вместе с сообщениями.
     attachments.deleteMessages({ $or: [{ sender: id }, { recipient: id }, { conversationId: { $in: conversations.map((c) => c._id) } }] }),
@@ -150,6 +154,9 @@ async function removeUser(user, io) {
     Conversation.deleteMany({ _id: { $in: conversations.map((c) => c._id) } }),
     Notification.deleteMany({ $or: [{ recipient: id }, { sender: id }] }),
     Rating.deleteMany({ user: id }),
+    // Его отметки в заведениях и его «Я тоже» под чужими.
+    Meetup.deleteMany({ user: id }),
+    Meetup.updateMany({ 'members.user': id }, { $pull: { members: { user: id } } }),
     StreamSession.deleteMany({ user: id }),
     Stream.deleteMany({ userId: id }),
     // Его контакты и он в чужих контактах; подписки его устройств на пуши.

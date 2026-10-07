@@ -34,6 +34,7 @@ const { mailConfigured } = require('../../utils/mail');
 const profileLinks = require('../../utils/profileLinks');
 const privacy = require('../../utils/privacy');
 const avatarSmall = require('../../utils/avatarSmall');
+const age = require('../../utils/age');
 
 // Страница настроек: имя и ник, фото, пароль, почта, язык, удаление. Раньше — окно поверх
 // любой страницы кабинета, и его разметка со скриптом ехали с каждой из них.
@@ -42,7 +43,7 @@ router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
   // commonDataMiddleware роль не тянет, и ради одной страницы добавлять её
   // в выборку каждой страницы кабинета незачем.
   const user = await User.findById(req.session.userId)
-    .select('provider role login nickname nicknameChangedAt email emailChange emailVerifiedAt restricted bio links privacy').lean();
+    .select('provider role login nickname nicknameChangedAt email emailChange emailVerifiedAt restricted bio links privacy birthDate').lean();
   if (!user) return res.redirect('/login');
   // Кому закрыт канал (utils/restrict.js): здесь доступ можно вернуть.
   const restrictedUsers = (user.restricted || []).length
@@ -74,6 +75,10 @@ router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
       // У входа через Google почту подтвердил Google.
       emailVerified: !!user.emailVerifiedAt || (user.provider || '') !== PASSWORD_PROVIDER,
       bio: user.bio || '',
+      // Дата рождения (utils/age.js): указана — строкой, нет — поле до сегодня.
+      birthDate: age.iso(user.birthDate),
+      birthLabel: user.birthDate ? new Intl.DateTimeFormat(res.locals.lang === 'en' ? 'en-US' : 'ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' }).format(user.birthDate) : '',
+      birthMax: age.iso(new Date()),
       // Ссылки — как их показать в полях: kind → { display, url }.
       links: Object.fromEntries(profileLinks.list(user.links).map((l) => [l.kind, l])),
     },

@@ -69,9 +69,10 @@
   //   onPeers(n) — сколько видимых участников, кроме себя
   //   onMediaError(e) — камера или микрофон недоступны
   //   diag       — подпись для отчёта о несоединившемся звонке (см. ниже)
-  //   onStuck(reason) — Daily не соединился: звонок уходит на свой сервер
-  //                (tk-app.js). Только вместе с diag; пороги — joinMs,
-  //                mediaMs и reachMs (ответ от домена Daily, см. probe)
+  //   onStuck(reason, peer) — Daily не соединился: звонок уходит на свой
+  //                сервер (tk-app.js); peer — не работает у собеседника.
+  //                Только вместе с diag; пороги — joinMs, mediaMs и reachMs
+  //                (ответ от домена Daily, см. probe)
   function connect(opts) {
     var call = null;
     var dying = Promise.resolve();
@@ -154,12 +155,13 @@
 
     function sec(ms) { return Math.round(ms / 1000) + ' с'; }
 
-    // Отчёт и, для звонка, уход на свой сервер — один раз.
-    function trouble(kind) {
+    // Отчёт и, для звонка, уход на свой сервер — один раз. peer — не
+    // работает Daily у собеседника: он в комнате, а от него ничего нет.
+    function trouble(kind, peer) {
       report(kind);
       if (!opts.onStuck || diag.stuck) return;
       diag.stuck = true;
-      opts.onStuck(kind);
+      opts.onStuck(kind, peer === true);
     }
 
     // Открывается ли домен Daily вообще — отдельным запросом и одновременно
@@ -216,7 +218,7 @@
           return ['audio', 'video'].every(function (kind) { return !tr[kind] || /^(blocked|off)$/.test(tr[kind].state); });
         });
         if (silent && round < MEDIA_ROUNDS) return awaitMedia(round + 1);
-        trouble('собеседник в комнате, но звук и видео от него не пришли за ' + sec(MEDIA_MS * round));
+        trouble('собеседник в комнате, но звук и видео от него не пришли за ' + sec(MEDIA_MS * round), true);
       }, MEDIA_MS);
     }
 
@@ -405,8 +407,6 @@
         camOff = !on;
         if (call && call.meetingState() === 'joined-meeting') call.setLocalVideo(wantCamera());
       },
-      // Застрял ли Daily у этой стороны (onStuck уже вызван).
-      get stuck() { return !!(diag && diag.stuck); },
       // Видео в звонке. Выключено — только голос: своя камера гаснет, чужое
       // видео не принимается, на слабой сети это освобождает почти весь канал
       // под звук. Включено — камера и чужое видео, и в аудиозвонке тоже.

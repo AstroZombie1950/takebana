@@ -19,11 +19,13 @@ const Recording = require('../../models/Recording');
 const RecordingComment = require('../../models/RecordingComment');
 const GalleryVideo = require('../../models/GalleryVideo');
 const GalleryPhoto = require('../../models/GalleryPhoto');
+const Meetup = require('../../models/Meetup');
+const Establishments = require('../../models/Establishments');
 const { requireModerator, paging, list, period, namesFor, csvRoute, nameOf } = require('./shared');
 
 const STATUSES = ['new', 'resolved', 'rejected'];
 const REASONS = ['spam', 'abuse', 'adult', 'violence', 'copyright', 'other'];
-const TARGETS = ['stream', 'user', 'message', 'recording', 'video', 'photo', 'comment'];
+const TARGETS = ['stream', 'user', 'message', 'recording', 'video', 'photo', 'comment', 'meetup'];
 
 async function loadReports(req) {
   const p = paging(req);
@@ -40,10 +42,10 @@ async function loadReports(req) {
     Report.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
   ]);
 
-  const ids = { user: [], stream: [], message: [], recording: [], video: [], photo: [], comment: [] };
+  const ids = { user: [], stream: [], message: [], recording: [], video: [], photo: [], comment: [], meetup: [] };
   for (const r of reports) ids[r.targetType].push(r.targetId);
 
-  const [users, streams, messages, recordings, videos, photos, comments, names, sameTarget] = await Promise.all([
+  const [users, streams, messages, recordings, videos, photos, comments, meets, names, sameTarget] = await Promise.all([
     ids.user.length ? User.find({ _id: { $in: ids.user } }).select('nickname login email banned role').lean() : [],
     ids.stream.length ? Stream.find({ _id: { $in: ids.stream } }).select('title isActive userId stoppedByModeration isAdult').lean() : [],
     ids.message.length ? ChatMessage.find({ _id: { $in: ids.message } }).select('message userId streamId').lean() : [],
@@ -51,6 +53,7 @@ async function loadReports(req) {
     ids.video.length ? GalleryVideo.find({ _id: { $in: ids.video } }).select('title userId createdAt').lean() : [],
     ids.photo.length ? GalleryPhoto.find({ _id: { $in: ids.photo } }).select('caption userId').lean() : [],
     ids.comment.length ? RecordingComment.find({ _id: { $in: ids.comment } }).select('text userId recordingId').lean() : [],
+    ids.meetup.length ? Meetup.find({ _id: { $in: ids.meetup } }).select('user venue day note').lean() : [],
     namesFor([...reports.map((r) => r.reporter), ...reports.map((r) => r.resolvedBy)]),
     // Сколько всего жалоб на те же объекты: одна жалоба и двадцатая на один
     // эфир разбираются по-разному.
@@ -77,6 +80,15 @@ async function loadReports(req) {
   for (const c of comments) {
     const parent = String(c.recordingId);
     target.set(String(c._id), { kind: 'comment', title: c.text, ownerId: String(c.userId), recordingId: parent, href: parentHref(parent) });
+  }
+
+  // Отметка в заведении: в панели — заведение, день и комментарий.
+  const venueNames = meets.length
+    ? new Map((await Establishments.find({ _id: { $in: meets.map((m) => m.venue) } }).select('name').lean()).map((v) => [String(v._id), v.name]))
+    : new Map();
+  for (const m of meets) {
+    const title = [venueNames.get(String(m.venue)) || '', m.day, m.note].filter(Boolean).join(' · ');
+    target.set(String(m._id), { kind: 'meetup', title, ownerId: String(m.user), href: `/venue/${m.venue}#m-${m._id}` });
   }
 
   const total4 = new Map(sameTarget.map((t) => [String(t._id), t.n]));

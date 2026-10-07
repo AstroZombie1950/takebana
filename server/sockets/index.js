@@ -221,10 +221,12 @@ function registerSockets(io) {
     return { type: call.type, engine: 'own', group: call.members.size > 2, ice: turn.iceServers(userId, { callId }), peers };
   }
 
-  function goOwn(callId, call, event) {
+  // suspect — тот, у кого Daily не работает: его браузер запомнит свой путь
+  // (public/tk-app.js, OWN_KEY), у второго Daily, возможно, в порядке.
+  function goOwn(callId, call, event, suspect) {
     call.engine = 'own';
     for (const userId of call.members.keys()) {
-      io.to(`user:${userId}`).emit(event, { callId, ...ownAccess(callId, call, userId) });
+      io.to(`user:${userId}`).emit(event, { callId, ...ownAccess(callId, call, userId), remember: userId === suspect });
     }
     turnLoad();
   }
@@ -751,6 +753,28 @@ function registerSockets(io) {
       }, INVITE_MS).unref();
     });
 
+    // Сокет вернулся посреди звонка (public/tk-app.js, connect). Всё, что
+    // сервер слал в мёртвый сокет, пропало — «принят» и «переходим на свой
+    // путь» тоже. 07.10 заказчик позвонил с телефона, у которого сокет уже
+    // молчал: звонок создался запросом, Иван принял, а «принят» до звонящего
+    // не дошёл — Иван ждал в пустой комнате, заказчик смотрел на «Звоним…».
+    // Ответ — то же, что пришло бы событием, или ended: звонка больше нет.
+    onCall('call:sync', async ({ callId }, ack) => {
+      if (typeof ack !== 'function') return;
+      const userId = socket.data.userId;
+      if (isParty(pendingCalls.get(callId), userId)) return ack({ ringing: true });
+      const call = activeCalls.get(callId);
+      if (!isParty(call, userId)) return ack({ ended: true });
+      if (call.engine === 'own') return ack({ callId, ...ownAccess(callId, call, userId) });
+      try {
+        const token = await daily.meetingToken({ room: call.roomName, userId, canSend: true });
+        ack({ callId, type: call.type, url: daily.roomUrl(call.roomName), token });
+      } catch (e) {
+        errorLog.external(e, 'daily.callToken');
+        ack({ error: 'token_failed' });
+      }
+    });
+
     // Повторный вход после обрыва: Daily выкинул участника, а звонок жив.
     // Токен выдаётся заново, только участнику и только пока звонок активен.
     onCall('call:token', async ({ callId }, ack) => {
@@ -770,13 +794,20 @@ function registerSockets(io) {
     // Daily у одного из двоих не соединился (tk-daily.js, onStuck): оба
     // переходят на свой сервер. Повтор от второго участника не нужен —
     // звонок уже там. Без TURN переходить некуда: Daily пробует дальше.
-    onCall('call:fallback', ({ callId, reason }) => {
+    //
+    // peer — от собеседника в комнате Daily не пришло ни звука, ни видео:
+    // не работает Daily у него, а не у того, кто заметил. 07.10 так было
+    // у заказчика (Россия, Android): запоминал свой путь айфон Ивана,
+    // у которого Daily в порядке, а телефон заказчика — нет.
+    onCall('call:fallback', ({ callId, reason, peer }) => {
       const call = activeCalls.get(callId);
-      if (!isParty(call, socket.data.userId) || call.engine !== 'daily' || !turn.configured()) return;
+      const userId = socket.data.userId;
+      if (!isParty(call, userId) || call.engine !== 'daily' || !turn.configured()) return;
       const room = call.roomName;
       call.roomName = null;
       callLog.switched(callId, String(reason || '').slice(0, 200));
-      goOwn(callId, call, 'call:switch');
+      const suspect = peer === true ? [...call.members.keys()].find((id) => id !== userId) : userId;
+      goOwn(callId, call, 'call:switch', suspect);
       if (room) daily.deleteRoom(room).catch((e) => errorLog.external(e, 'daily.deleteRoom', { call: callId }));
     });
 

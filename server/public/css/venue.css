@@ -389,6 +389,85 @@
 .tk-vp__photos img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s ease; }
 .tk-vp__photos a:hover img { transform: scale(1.03); }
 
+/* ── Встречи: «Хочу сюда» и «Я тоже» (07.10, partials/venueMeetups.ejs) ── */
+.tk-meet__head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+
+.tk-meet__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  gap: 12px 14px;
+  padding: 16px;
+  border: 1px solid var(--tk-rule);
+}
+
+.tk-meet__form[hidden] { display: none; }
+.tk-meet__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tk-meet__field--wide { grid-column: 1 / -1; max-width: 454px; }
+.tk-meet__field .tk-field { width: 100%; }
+.tk-meet__field .tk-note { margin: 0; }
+.tk-meet__form > .tk-btn { grid-column: 1 / -1; justify-self: start; }
+
+.tk-meet__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+
+.tk-meet__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--tk-rule);
+  scroll-margin-top: 80px;
+}
+
+.tk-meet__row:last-child { border-bottom: 1px solid var(--tk-rule); }
+/* Переход из колокольчика (#m-…) — строку видно сразу. */
+.tk-meet__row:target { background: rgb(var(--tk-fg-rgb) / .05); }
+
+.tk-meet__ava, .tk-meet__face {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--tk-shot);
+  color: var(--tk-paper);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.tk-meet__ava { width: 44px; height: 44px; font-size: 16px; }
+.tk-meet__ava img, .tk-meet__face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tk-meet__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.tk-meet__top { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.tk-meet__name { font-weight: 700; color: var(--tk-fg); text-decoration: none; overflow-wrap: anywhere; }
+.tk-meet__name:hover { color: var(--tk-accent-text); }
+.tk-meet__when { font-family: Oswald, 'Oswald Fallback', sans-serif; font-size: 13px; letter-spacing: .04em; color: var(--tk-muted); }
+.tk-meet__note { margin: 0; font-size: 14px; line-height: 1.5; color: var(--tk-fg-2); overflow-wrap: anywhere; }
+
+.tk-meet__faces { margin: 2px 0 0; display: flex; align-items: center; }
+.tk-meet__face { width: 26px; height: 26px; font-size: 11px; border: 2px solid var(--tk-bg); }
+.tk-meet__face + .tk-meet__face { margin-left: -8px; }
+.tk-meet__more { margin-left: 6px; font-size: 13px; color: var(--tk-muted); }
+
+.tk-meet__acts { flex: none; display: flex; align-items: center; gap: 4px; }
+
+.tk-meet__icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--tk-muted);
+  cursor: pointer;
+}
+
+.tk-meet__icon:hover, .tk-meet__icon:focus-visible { color: var(--tk-fg); }
+.tk-meet__sum { margin: 0; font-size: 14px; color: var(--tk-fg-2); }
+
 /* ── Правка: оформление ── */
 .tk-vp__look { display: flex; flex-direction: column; gap: 18px; }
 .tk-vp__look-row { display: flex; align-items: center; gap: 20px; }
@@ -444,6 +523,14 @@
   /* «Показать на карте» — во всю ширину, под палец. */
   .tk-vp__acts .tk-btn { flex: 1; padding-top: 14px; padding-bottom: 14px; }
   .tk-vp__photos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Встречи: действия строки — под текстом, во всю ширину; поля формы — столбиком. */
+  .tk-meet__row { flex-wrap: wrap; }
+  .tk-meet__acts { width: 100%; padding-left: 58px; }
+  .tk-meet__acts .tk-btn { flex: 1; }
+  .tk-meet__icon { width: 44px; height: 44px; }
+  .tk-meet__form { grid-template-columns: minmax(0, 1fr); }
+  .tk-meet__field--wide { max-width: none; }
+  .tk-meet__form > .tk-btn { justify-self: stretch; padding-top: 14px; padding-bottom: 14px; }
   .tk-menu__nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
   .tk-menu__nav .tk-tag { flex: none; }
   .tk-menu__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
