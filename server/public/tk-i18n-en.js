@@ -1002,6 +1002,7 @@
   "call.connected": "Connected",
   "call.otherPath": "Connecting another way…",
   "call.peerSilent": "Can't hear the other person — their microphone may be off",
+  "call.micDead": "They can't hear you — your microphone is silent",
   "call.lost": "The connection was lost, the call ended",
   "call.mediaDenied": "No access to the microphone or camera — allow it in your browser settings",
   "call.outgoingAudio": "Outgoing audio call",

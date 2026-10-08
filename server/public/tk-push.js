@@ -103,7 +103,9 @@
   function sync() {
     if (!supported() || Notification.permission !== 'granted') return Promise.resolve(false);
     return current()
-      .then(function (sub) { return sub ? post('/api/push/subscribe', { subscription: sub.toJSON() }) : false; })
+      // Фоновый запрос — ни к какой кнопке: иначе нажатие за секунду до
+      // него (плеер записи) получало «медленно» за чужой запрос (08.10).
+      .then(function (sub) { return sub ? TKNet.json('/api/push/subscribe', { method: 'POST', body: { subscription: sub.toJSON() }, button: null }) : false; })
       .then(function (r) { return !!r; })
       .catch(function () { return false; });
   }

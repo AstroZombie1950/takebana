@@ -38,6 +38,7 @@
   var SOCKET_GRACE = 10000;
   var SOFT_MS = 30000;
   var PROBE_MS = 10000;     // пока связи нет — проверяем снова; гость без сокета — так же
+  var NO_SERVER_MS = 3000;  // «сервер не отвечает» — только если и через столько
   var PRESS_MS = 1000;      // запрос через столько после нажатия — от этой кнопки
 
   var KEYS = {
@@ -303,9 +304,15 @@
       // уходящей страницы и приложения, вернувшегося из фона, — до 06.10
       // это была почти вся запись «сбой связи» в журнале (присутствие,
       // счётчики шапки, подписка пушей с телефона с иконки). Ушли со
-      // страницы или она в фоне — тоже не пишем.
+      // страницы или она в фоне — тоже не пишем. Проверка — через
+      // NO_SERVER_MS: приложение с иконки, вернувшись из фона, роняет и
+      // запрос, и проверку в ту же секунду, пока сеть телефона просыпается
+      // (08.10 — бейдж и присутствие у Ивана).
       else if (!leaving && document.visibilityState !== 'hidden') {
-        healthy().then(function (ok) { if (!ok && !leaving) note(reason, url); });
+        setTimeout(function () {
+          if (leaving || document.visibilityState === 'hidden') return;
+          healthy().then(function (ok) { if (!ok && !leaving) note(reason, url); });
+        }, NO_SERVER_MS);
       }
       if (reason === 'no_server' && !hasSocket) { requestDown = true; paint(); probe(); }
       var err = new Error(text(reason));

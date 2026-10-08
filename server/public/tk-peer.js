@@ -54,6 +54,19 @@
       }).catch(function (e) { if (onError) onError(e); });
     };
 
+    // Захват заново. Айфон отдаёт дорожку живой, но глушит её, когда звук
+    // забирает система или другое приложение (track.muted), и сам не всегда
+    // возвращает: 08.10 заказчик не слышал Ивана ни в одном из семи звонков.
+    // Новая дорожка уходит в соединения через watch, как первая.
+    self.restartMic = function (onError) {
+      if (self.closed || !self.mic) return;
+      var old = self.mic;
+      self.mic = null;
+      self.micAsked = false;
+      old.stop();
+      self.startMic(onError);
+    };
+
     self.startCamera = function (onError) {
       if (self.camera || starting) return;
       starting = true;
@@ -148,6 +161,7 @@
     var lastRestart = 0;
     var timers = [];
     var heard = null;   // последняя снятая статистика звука собеседника
+    var voice = null;   // и своего микрофона — сколько он снял
     var path = '';      // каким путём пошло соединение: напрямую или через TURN
     var t0 = Date.now();
     var log = [];
@@ -436,7 +450,12 @@
       pc.getStats().then(function (stats) {
         var lost = 0, got = 0, rtt = 0;
         var sound = null;
+        var mine = null;
         stats.forEach(function (s) {
+          // Свой микрофон — до кодека: заглушённый захват даёт здесь ровный
+          // ноль, а у собеседника после декодера и тишина бывает «не нулём».
+          // Дорожка, которая не отдаёт и сэмплов, — тоже ноль: тоже мёртвая.
+          if (s.type === 'media-source' && s.kind === 'audio' && s.totalAudioEnergy != null) mine = s.totalAudioEnergy;
           if (s.type === 'inbound-rtp') {
             lost += s.packetsLost || 0;
             got += s.packetsReceived || 0;
@@ -464,6 +483,18 @@
           sound.grew = heard ? Math.max(0, sound.energy - heard.energy) : 0;
           heard = sound;
           emit('onAudio', sound);
+        }
+        // Свой микрофон: muted — дорожку глушит система; grew — сколько
+        // снято за срез (null — браузер свой захват не меряет). Новая
+        // дорожка после restartMic считает энергию с нуля.
+        if (own.mic) {
+          var was = voice && voice.energy != null ? voice.energy : null;
+          voice = {
+            energy: mine,
+            muted: own.mic.muted === true,
+            grew: mine == null ? null : was == null ? 0 : mine >= was ? mine - was : mine,
+          };
+          emit('onVoice', voice);
         }
         if (prev) {
           var dl = lost - prev.lost, dg = got - prev.got;
@@ -508,7 +539,9 @@
       signal: receive,
       // Для отчёта о звуке (public/tk-audio.js): что пришло по сети и как.
       sound: function () { return heard; },
+      voice: function () { return voice; },
       mic: function () { return own.mic; },
+      restartMic: function () { own.restartMic(onMediaError); },
       // Свой микрофон и своя камера — кнопками в окне звонка. Это не то же,
       // что «Только голос» ниже: там гаснет видео в обе стороны ради канала,
       // здесь — только своё, собеседника по-прежнему видно и слышно.
@@ -585,6 +618,7 @@
         onPeers: function () { emit('onPeers', ids().length); },
         onNetwork: function (n) { emit('onNetwork', n, id); },
         onAudio: function (sound) { emit('onAudio', sound, id); },
+        onVoice: function (v) { emit('onVoice', v, id); },
         onIce: function (x) { emit('onIce', x, id); },
         onMediaError: onMediaError,
         onState: function (st) {
@@ -627,7 +661,15 @@
           .filter(Boolean)
           .sort(function (a, b) { return b.energy - a.energy; })[0] || null;
       },
+      // Свой микрофон один на всех: снял ли он что-то — видно по любому
+      // соединению, берём то, где снято больше.
+      voice: function () {
+        return ids().map(function (id) { return links[id].voice(); })
+          .filter(Boolean)
+          .sort(function (a, b) { return (b.energy || 0) - (a.energy || 0); })[0] || null;
+      },
       mic: function () { return own.mic; },
+      restartMic: function () { own.restartMic(onMediaError); },
       setMic: function (on) { own.setEnabled('mic', on); },
       setCamera: function (on) { own.setEnabled('camera', on); },
       // Сигнал от участника — его же соединению.

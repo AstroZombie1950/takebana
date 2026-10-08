@@ -1208,8 +1208,23 @@ document.addEventListener('DOMContentLoaded', function(){
     // подсказка: скорее всего, у него выключен микрофон. Тишина в комнате
     // даёт хоть какой-то уровень, ноль — нет.
     const SILENT_MS = 10000;
+    // «Тишина» — не ноль: ровные нули собеседника доходят после декодера
+    // единицей младшего разряда, ~3e-9 энергии за срез STATS_MS (замер
+    // 08.10, temp/probe-mic-1008.mjs). С порогом «больше нуля» подсказка
+    // не всплывала никогда, а попытка писала «звук есть» на тишине.
+    // QUIET — за срез, HEARD — с начала разговора; живая комната выше обоих.
+    const QUIET = 1e-8;
+    const HEARD = 1e-6;
     let quietSince = 0;
     let silent = false;
+    // Свой микрофон молчит не по кнопке столько же — «вас не слышно»
+    // и один захват заново (tk-peer.js, restartMic). Айфон глушит дорожку,
+    // когда звук забирает система: 08.10 заказчик не слышал Ивана в семи
+    // звонках подряд, а «Попытки» писали «звук есть» — мерили только
+    // входящий звук, и то с порогом «больше нуля».
+    let micQuietSince = 0;
+    let micDead = false;
+    let micRetried = false;
 
     // Телеметрия разговора (docs/TELEMETRY.md, kind call), у каждой стороны
     // своя: путь, собеседник появился, соединились, переподключения, уход
@@ -1297,7 +1312,7 @@ document.addEventListener('DOMContentLoaded', function(){
       if (switching && state !== 'live') tkText(s.status, 'call.otherPath');
       else if (state === 'reconnecting') tkText(s.status, 'call.reconnecting');
       else if (state === 'connecting') tkText(s.status, 'call.connectingShort');
-      else if (peers) tkText(s.status, silent ? 'call.peerSilent' : 'call.connected');
+      else if (peers) tkText(s.status, micDead ? 'call.micDead' : silent ? 'call.peerSilent' : 'call.connected');
       else tkText(s.status, hadPeer ? 'call.peerReconnecting' : 'call.waitingPeer');
     }
 
@@ -1320,10 +1335,25 @@ document.addEventListener('DOMContentLoaded', function(){
       // «Звука нет» — только когда есть чем мерить и мера нулевая. Без
       // чисел это был ложный сигнал: на пути Daily их не было вовсе, и
       // журнал панели копил «звука нет» на разговорах, где звук был.
-      const verdict = !sound ? 'нечем измерить' : sound.energy > 0 ? 'звук доходит' : 'звука нет';
+      const verdict = !sound ? 'нечем измерить' : sound.energy > HEARD ? 'звук доходит' : 'звука нет';
       // Вердикт — и в попытку: по ней видно звонки без звука строкой, а не
       // разбором журнала (CallAudio там остаётся — ждём отчёт с айфона).
-      if (tr) tr.set(reported === 1 ? 'heard' : 'heardEnd', !sound ? 'unknown' : sound.energy > 0 ? 'yes' : 'no');
+      if (tr) tr.set(reported === 1 ? 'heard' : 'heardEnd', !sound ? 'unknown' : sound.energy > HEARD ? 'yes' : 'no');
+      // Свой микрофон: снял ли он хоть что-то. Энергия — числом, строкой:
+      // сервер округляет числа до сотых, а тишина и речь различаются
+      // в тысячных и меньше. Перезаписываются — в конце итог за разговор.
+      const voice = window._call && window._call.voice ? window._call.voice() : null;
+      const energy = (x) => (x == null ? 'нет' : x.toPrecision(2));
+      if (tr) {
+        tr.set(reported === 1 ? 'mic' : 'micEnd', mic && mic.muted ? 'muted' : !voice || voice.energy == null ? 'unknown' : voice.energy > 0 ? 'yes' : 'no');
+        tr.set('eIn', energy(sound && sound.energy));
+        tr.set('eOut', energy(voice && voice.energy));
+        // Играет ли звук собеседника у нас: звук дошёл, а не слышно —
+        // ответ здесь. CallAudio это тоже пишет, но журнал склеивает
+        // одинаковые отчёты и хранит подробности последнего (08.10 утренние
+        // затёрли вечерние звонки) — в попытке строка у каждого звонка своя.
+        tr.set(reported === 1 ? 'play' : 'playEnd', !el ? 'none' : el.paused ? 'paused' : el.muted ? 'muted' : el.volume === 0 ? 'vol0' : 'yes');
+      }
       window.TKAudio.outputs().then((list) => window.TKAudio.send(
         'Звук в звонке (' + when + '): ' + verdict,
         [
@@ -1334,6 +1364,7 @@ document.addEventListener('DOMContentLoaded', function(){
           .concat(window.TKAudio.heard(sound))
           .concat(window.TKAudio.element(el, 'элемент звука'))
           .concat(window.TKAudio.track(mic, 'свой микрофон'))
+          .concat(['свой микрофон снял: энергия ' + energy(voice && voice.energy)])
           .concat(window.TKAudio.device())
           .concat(list)
       ));
@@ -1404,7 +1435,7 @@ document.addEventListener('DOMContentLoaded', function(){
         s.level.dataset.sound = grew > 0.0001 ? 'yes' : 'no';
         // Тишина от собеседника: только вдвоём — в группе молчат по очереди.
         const now = Date.now();
-        if (grew > 0 || group || state !== 'live' || !peers) quietSince = 0;
+        if (grew > QUIET || group || state !== 'live' || !peers) quietSince = 0;
         else if (!quietSince) quietSince = now;
         const quiet = !!quietSince && now - quietSince >= SILENT_MS;
         if (quiet !== silent) {
@@ -1412,6 +1443,26 @@ document.addEventListener('DOMContentLoaded', function(){
           if (silent && tr) tr.step('notice_silent');
           paint();
         }
+      },
+      // Свой микрофон (только свой путь): заглушён системой или ровный ноль
+      // при включённой кнопке. Настоящий микрофон и в тихой комнате снимает
+      // хоть что-то, ноль бывает только у мёртвого захвата.
+      onVoice: (v) => {
+        const now = Date.now();
+        const quiet = v.muted || v.grew === 0;
+        if (!quiet || !s.micOn || state !== 'live' || !peers) micQuietSince = 0;
+        else if (!micQuietSince) micQuietSince = now;
+        const dead = !!micQuietSince && now - micQuietSince >= SILENT_MS;
+        if (dead === micDead) return;
+        micDead = dead;
+        paint();
+        if (!dead) return;
+        if (tr) tr.step('notice_mic');
+        if (micRetried || !window._call.restartMic) return;
+        micRetried = true;
+        micQuietSince = 0;
+        if (tr) tr.step('mic_retry');
+        window._call.restartMic();
       },
       // Свой путь: каким путём пошло (напрямую или через наш TURN), дал ли
       // TURN реле, его отказы (tk-peer.js). В группе — последнее соединение.
