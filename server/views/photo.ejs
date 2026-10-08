@@ -24,7 +24,7 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
-<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: describe(rec.caption, ta('seo.photoDesc', { name: author.displayName, date: when })), seo: { path: base, type: 'article', image: rec.url, imageAlt: alt, robots: rec.userId.banned ? 'noindex, follow' : '',
+<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: describe(rec.caption, ta('seo.photoDesc', { name: author.displayName, k: around.total - around.n + 1, date: when })), seo: { path: base, type: 'article', image: rec.url, imageAlt: alt, robots: rec.userId.banned ? 'noindex, follow' : '',
          jsonld: ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [ta('gallery.photos'), author.url + '/photos'], [headTitle, base]]) } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
@@ -99,7 +99,7 @@
 
         <div class="tk-watch__about" id="about">
           <% if (rec.caption) { %>
-          <p class="tk-watch__desc" id="recDesc"><%= rec.caption %></p>
+          <p class="tk-watch__desc" id="recDesc"><%- textHtml %></p>
           <button type="button" class="tk-watch__more" id="descMore" hidden data-i18n="rec.more"><%- t('rec.more') %></button>
           <% } else if (isOwner) { %>
           <p class="tk-watch__desc tk-watch__desc--empty" id="recDesc" data-i18n="photo.noDesc"><%- t('photo.noDesc') %></p>

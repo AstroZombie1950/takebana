@@ -139,6 +139,10 @@
 
 .tk-watch__desc--empty { color: var(--tk-muted); font-style: italic; }
 
+/* @ник в описании — ссылка на страницу человека (utils/mentions.js). */
+.tk-mention { color: var(--tk-accent-text); text-decoration: none; }
+.tk-mention:hover { text-decoration: underline; }
+
 .tk-watch__more {
   margin-top: 6px;
   padding: 0;

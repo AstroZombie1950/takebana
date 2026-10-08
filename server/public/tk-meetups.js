@@ -12,9 +12,11 @@
   if (!box) return;
   const venueId = box.dataset.meetups;
 
-  // Градиент аватара без фото — как tk-app.js при загрузке страницы.
+  // Градиент аватара без фото — как tk-app.js при загрузке страницы; списки
+  // формы — своими (tk-listbox.js): он оформляет только то, что было при загрузке.
   function paint(root) {
     root.querySelectorAll('[data-bg]').forEach((el) => { el.style.background = el.dataset.bg; });
+    if (window.TKListbox) window.TKListbox.init(root);
   }
 
   function refresh() {
@@ -32,15 +34,18 @@
       .catch((e) => TKNet.say(e));
   }
 
-  // Дата рождения — один раз, как в настройках: сначала спрашиваем, верно ли.
+  // Дата рождения — один раз, как в настройках: три списка
+  // (partials/birthSelect.ejs), сначала спрашиваем, верно ли.
   function birth(form) {
-    const field = form.elements.birthDate;
-    if (!field) return Promise.resolve(true);
-    if (!field.value) { field.focus(); return Promise.resolve(false); }
-    const label = new Date(field.value + 'T00:00:00Z').toLocaleDateString(locale(), { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
+    const box = form.querySelector('[data-birth]');
+    if (!box) return Promise.resolve(true);
+    const part = (k) => box.querySelector('[data-birth-part="' + k + '"]').value;
+    if (!part('y') || !part('m') || !part('d')) { toast(t('birth.incomplete'), 'error'); return Promise.resolve(false); }
+    const value = part('y') + '-' + part('m') + '-' + part('d');
+    const label = new Date(value + 'T00:00:00Z').toLocaleDateString(locale(), { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
     return confirmDialog(t('settings.birthConfirm', { date: label }), { okText: t('common.save') }).then((yes) => {
       if (!yes) return false;
-      return TKNet.json('/settings/birthdate', { method: 'POST', body: { birthDate: field.value } }).then((r) => {
+      return TKNet.json('/settings/birthdate', { method: 'POST', body: { birthDate: value } }).then((r) => {
         // Младше 18: дальше нечего — блок пропадёт при обновлении.
         if (!r.adult) { toast(t('meet.adultOnly'), 'error'); refresh(); return false; }
         return true;
@@ -53,7 +58,6 @@
     if (!form) return;
     e.preventDefault();
     const day = form.elements.day;
-    if (!day.value) return day.focus();
     birth(form)
       .then((ok) => {
         if (!ok) return;
@@ -73,7 +77,8 @@
       const form = document.getElementById('meetForm');
       form.hidden = !form.hidden;
       add.setAttribute('aria-expanded', String(!form.hidden));
-      if (!form.hidden) form.querySelector('input').focus();
+      // Без фокуса: на телефоне фокус на списке сам открывал бы системный выбор.
+      if (!form.hidden) form.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       return;
     }
 

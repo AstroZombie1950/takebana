@@ -5,11 +5,15 @@
   (routes/meetups.js). Поведение — public/tk-meetups.js, вид — css/venue.css.
 
   Людей видит только совершеннолетний по дате рождения (utils/meetups.js,
-  forVenue). Гостю и тому, кто дату не указал, — число отметок и кнопка:
-  гостя она ведёт на вход, второму открывает форму с полем даты рождения.
+  forVenue). Гостю и тому, кто дату не указал, — дни, время и сколько
+  человек, без имён, и строка, как увидеть больше: гостю — войти, второму —
+  ссылка на дату рождения в настройках (форма «Хочу сюда» спросит её и сама).
   Младше 18 блока нет совсем.
 
-  venue, viewer ({ _id, birthDate } | null), meet ({ count, adult, items, bounds }).
+  День и время — списками (tk-listbox.js), не системным календарём:
+  на телефоне тот рисовался мимо оформления и вылезал за рамку.
+
+  venue, viewer ({ _id, birthDate } | null), meet ({ adult, items, preview, days, times }).
 %>
 <% var under = viewer && viewer.birthDate && !meet.adult; %>
 <% if (!under) { %>
@@ -26,19 +30,24 @@
   <% if (viewer) { %>
   <form class="tk-form tk-meet__form" id="meetForm" novalidate hidden>
     <% if (!viewer.birthDate) { %>
-    <label class="tk-meet__field tk-meet__field--wide">
+    <div class="tk-meet__field tk-meet__field--wide">
       <span class="tk-form__label" data-i18n="settings.birth"><%- t('settings.birth') %></span>
-      <input class="tk-field" type="date" name="birthDate" min="1900-01-01" max="<%= meet.bounds.min %>" required>
+      <%- include('birthSelect') %>
       <span class="tk-note" data-i18n="settings.birthOnce"><%- t('settings.birthOnce') %></span>
-    </label>
+    </div>
     <% } %>
     <label class="tk-meet__field">
       <span class="tk-form__label" data-i18n="meet.day"><%- t('meet.day') %></span>
-      <input class="tk-field" type="date" name="day" min="<%= meet.bounds.min %>" max="<%= meet.bounds.max %>" value="<%= meet.bounds.min %>" required>
+      <select class="tk-field tk-select" name="day" data-listbox-touch required>
+        <% meet.days.forEach(function (d) { %><option value="<%= d.day %>"<% if (d.rel) { %> data-i18n="<%= d.rel %>"<% } %>><%= d.rel ? t(d.rel) : d.label %></option><% }); %>
+      </select>
     </label>
     <label class="tk-meet__field">
       <span class="tk-form__label" data-i18n="meet.time"><%- t('meet.time') %></span>
-      <input class="tk-field" type="time" name="time">
+      <select class="tk-field tk-select" name="time" data-listbox-touch>
+        <option value="" data-i18n="meet.anyTime"><%- t('meet.anyTime') %></option>
+        <% meet.times.forEach(function (x) { %><option value="<%= x %>"><%= x %></option><% }); %>
+      </select>
     </label>
     <label class="tk-meet__field tk-meet__field--wide">
       <span class="tk-form__label" data-i18n="meet.note"><%- t('meet.note') %></span>
@@ -60,9 +69,11 @@
         </p>
         <% if (m.note) { %><p class="tk-meet__note" data-user-content><%= m.note %></p><% } %>
         <% if (m.going) { %>
+        <% var also = plural(m.going, 'meet.also'); %>
         <p class="tk-meet__faces">
           <% m.faces.forEach(function (p) { %><a href="<%= p.url %>" class="tk-meet__face"<% if (!p.avatarStyle.url) { %> data-bg="<%= p.avatarStyle.gradient %>"<% } %> title="<%= p.name %>" aria-label="<%= p.name %>"><% if (p.avatarStyle.url) { %><img src="<%= p.avatarStyle.url %>" alt="" loading="lazy" decoding="async"><% } else { %><%= p.avatarStyle.initial %><% } %></a><% }); %>
           <% if (m.more) { %><span class="tk-meet__more">+<%= m.more %></span><% } %>
+          <span class="tk-meet__also" data-i18n="<%= also.key %>"><%= also.text %></span>
         </p>
         <% } %>
       </div>
@@ -86,9 +97,21 @@
     </li>
     <% }); %>
   </ul>
-  <% } else if (!meet.adult && meet.count) { %>
-  <% var marks = plural(meet.count, 'meet.marks'); %>
-  <p class="tk-meet__sum"><%= num(meet.count) %> <span data-i18n="<%= marks.key %>"><%= marks.text %></span></p>
+  <% } else if (!meet.adult && meet.preview.length) { %>
+  <%# Без людей: день, время, сколько человек — и как увидеть больше. %>
+  <ul class="tk-meet__list">
+    <% meet.preview.forEach(function (m) { var pk = plural(m.people, 'meet.people'); %>
+    <li class="tk-meet__row tk-meet__row--plain">
+      <span class="tk-meet__when"><% if (m.today) { %><span data-i18n="meet.today"><%- t('meet.today') %></span><% } else { %><%= m.dayLabel %><% } %><% if (m.time) { %> · <%= m.time %><% } %></span>
+      <span class="tk-meet__count"><%= num(m.people) %> <span data-i18n="<%= pk.key %>"><%= pk.text %></span></span>
+    </li>
+    <% }); %>
+  </ul>
+  <% if (viewer) { %>
+  <p class="tk-meet__lock"><span data-i18n="meet.lockBirth"><%- t('meet.lockBirth') %></span> <a href="/settings#birth" data-i18n="meet.lockBirthLink"><%- t('meet.lockBirthLink') %></a></p>
+  <% } else { %>
+  <p class="tk-meet__lock"><span data-i18n="meet.lockGuest"><%- t('meet.lockGuest') %></span> <a href="/login?next=<%= encodeURIComponent('/venue/' + venue._id + '#meetups') %>" data-i18n="meet.lockGuestLink"><%- t('meet.lockGuestLink') %></a></p>
+  <% } %>
   <% } %>
 </section>
 <% } %>

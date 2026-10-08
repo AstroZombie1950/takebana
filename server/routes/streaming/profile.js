@@ -35,6 +35,7 @@ const profileLinks = require('../../utils/profileLinks');
 const privacy = require('../../utils/privacy');
 const avatarSmall = require('../../utils/avatarSmall');
 const age = require('../../utils/age');
+const mentions = require('../../utils/mentions');
 
 // Страница настроек: имя и ник, фото, пароль, почта, язык, удаление. Раньше — окно поверх
 // любой страницы кабинета, и его разметка со скриптом ехали с каждой из них.
@@ -75,10 +76,9 @@ router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
       // У входа через Google почту подтвердил Google.
       emailVerified: !!user.emailVerifiedAt || (user.provider || '') !== PASSWORD_PROVIDER,
       bio: user.bio || '',
-      // Дата рождения (utils/age.js): указана — строкой, нет — поле до сегодня.
+      // Дата рождения (utils/age.js): указана — строкой, нет — списки.
       birthDate: age.iso(user.birthDate),
       birthLabel: user.birthDate ? new Intl.DateTimeFormat(res.locals.lang === 'en' ? 'en-US' : 'ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' }).format(user.birthDate) : '',
-      birthMax: age.iso(new Date()),
       // Ссылки — как их показать в полях: kind → { display, url }.
       links: Object.fromEntries(profileLinks.list(user.links).map((l) => [l.kind, l])),
     },
@@ -174,7 +174,8 @@ router.post('/profile/gallery', requireAuth, async (req, res, next) => {
   const left = PHOTOS_MAX - await GalleryPhoto.countDocuments({ userId });
   if (left <= 0) return res.status(400).json({ success: false, message: 'Лимит 100 фото уже достигнут' });
   const files = (req.files || []).slice(0, left);
-  const captions = captionsOf(req.body.captions, files.length);
+  const captions = captionsOf(req.body.captions, files.length).map(mentions.clean);
+  if (captions.some((c) => c.foreign)) return res.status(400).json({ success: false, message: mentions.FOREIGN_MESSAGE });
 
   // Сжатие, знак и выгрузка в Bunny — utils/galleryPhotos.js.
   let saved;
@@ -189,7 +190,7 @@ router.post('/profile/gallery', requireAuth, async (req, res, next) => {
   // должна лечь в ленту (новые сверху, первое выбранное — самое новое).
   const now = Date.now();
   const photos = await GalleryPhoto.insertMany(saved.map((x, i) => ({
-    userId, url: x.url, width: x.width, height: x.height, caption: captions[i], createdAt: new Date(now + saved.length - i),
+    userId, url: x.url, width: x.width, height: x.height, caption: captions[i].text, createdAt: new Date(now + saved.length - i),
   })));
   const total = await GalleryPhoto.countDocuments({ userId });
   indexNow.ping(...photos.map((p) => '/photo/' + p._id));

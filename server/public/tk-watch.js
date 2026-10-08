@@ -164,7 +164,8 @@
         desc.className = 'tk-watch__desc' + (text ? '' : ' tk-watch__desc--empty');
         if (text) {
           desc.removeAttribute('data-i18n');
-          desc.textContent = text;
+          // Сервер отдаёт описание готовым HTML: @ники ссылками (utils/mentions.js).
+          desc.innerHTML = r.html;
         } else {
           tkText(desc, k + '.noDesc');
         }

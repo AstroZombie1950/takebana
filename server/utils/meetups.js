@@ -3,11 +3,11 @@
 // routes/meetups.js, разметка — views/partials/venueMeetups.ejs.
 //
 // Кто что видит. Людей в списке — только совершеннолетним по дате рождения
-// (utils/age.js): гость, человек без даты и младше 18 видят лишь, сколько
-// собирается, и кнопку. Так поисковик и случайный посетитель не получают
-// ни имён, ни планов, а несовершеннолетние — способа найти взрослых для
-// встречи. Между теми, кто ограничил друг друга (utils/restrict.js),
-// отметок не видно в обе стороны.
+// (utils/age.js). Гостю и человеку без даты — обезличенный список (день,
+// время, сколько человек) и подсказка, как увидеть больше; младше 18 блока
+// нет. Так поисковик и случайный посетитель не получают ни имён, ни планов,
+// а несовершеннолетние — способа найти взрослых для встречи. Между теми,
+// кто ограничил друг друга (utils/restrict.js), отметок не видно в обе стороны.
 
 const mongoose = require('mongoose');
 const Meetup = require('../models/Meetup');
@@ -76,15 +76,41 @@ const person = (u) => {
   return { _id: String(u._id), name, url: profileUrl(u), avatarStyle: userView.avatarStyle(u, name) };
 };
 
+// Дни для списка формы (07.10: системный календарь на телефоне рисовался
+// мимо оформления): от сегодня до +AHEAD_DAYS. rel — «Сегодня»/«Завтра»
+// словом из словаря, остальные — датой.
+function dayOptions(today, lang) {
+  const out = [];
+  for (let i = 0; i <= AHEAD_DAYS; i++) {
+    const day = addDays(today, i);
+    out.push({ day, label: dayLabel(day, lang), rel: i === 0 ? 'meet.today' : i === 1 ? 'meet.tomorrow' : '' });
+  }
+  return out;
+}
+
+// Время — шагом в полчаса; «любое» — пустое.
+const TIMES = Array.from({ length: 48 }, (x, i) => String(Math.floor(i / 2)).padStart(2, '0') + (i % 2 ? ':30' : ':00'));
+
+// Обезличенно: день, время и сколько человек — тому, кто людей не видит
+// (07.10: «одна отметка» без подробностей ничего не говорила). Без имён,
+// комментариев и лиц; забаненных нет и здесь.
+async function preview(where, today, lang) {
+  const list = await Meetup.find(where).select('user day time members').sort({ day: 1, time: 1, _id: 1 }).limit(100).lean();
+  const banned = list.length ? new Set((await User.find({ _id: { $in: list.map((m) => m.user) }, banned: true }).select('_id').lean()).map((u) => String(u._id))) : new Set();
+  return list.filter((m) => !banned.has(String(m.user))).map((m) => ({
+    _id: String(m._id), dayLabel: dayLabel(m.day, lang), today: m.day === today, time: m.time, people: 1 + m.members.length,
+  }));
+}
+
 // Блок отметок страницы заведения. viewer — { _id, birthDate } или null.
-// → { count, adult, items, bounds }: count — сколько отметок видно; items —
-// сами отметки, только совершеннолетнему; bounds — дни для поля даты.
+// → { adult, items, preview, days }: items — сами отметки, только
+// совершеннолетнему; preview — без людей, остальным; days и times — списки формы.
 async function forVenue(venue, viewer, lang, now = new Date()) {
   const today = todayIn(venue.tz, now);
-  const bounds = { min: today, max: addDays(today, AHEAD_DAYS) };
+  const days = dayOptions(today, lang);
   const adult = age.isAdult(viewer, now);
   const where = { venue: venue._id, day: { $gte: today } };
-  if (!adult) return { count: await Meetup.countDocuments(where), adult, items: [], bounds };
+  if (!adult) return { adult, items: [], preview: await preview(where, today, lang), days, times: TIMES };
 
   const me = new mongoose.Types.ObjectId(String(viewer._id));
   const [list, mine] = await Promise.all([
@@ -124,7 +150,7 @@ async function forVenue(venue, viewer, lang, now = new Date()) {
       full: m.members.length >= MAX_MEMBERS,
     });
   }
-  return { count: items.length, adult, items, bounds };
+  return { adult, items, preview: [], days, times: TIMES };
 }
 
 module.exports = { MAX_ACTIVE, MAX_MEMBERS, NOTE_MAX, AHEAD_DAYS, TIME, todayIn, addDays, expiresFor, dayOk, forVenue };

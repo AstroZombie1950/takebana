@@ -30,6 +30,7 @@ const { uploadGallery } = require('./uploads');
 const { audit } = require('../../utils/audit');
 const { ownApproved } = require('../../utils/venueOwner');
 const { venueAuthor } = require('../../utils/venueAuthor');
+const mentions = require('../../utils/mentions');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 const CHUNK = galleryVideo.CHUNK_MB * 1024 * 1024;
@@ -180,7 +181,9 @@ router.post('/upload/video/:id/edit', requireAuthApi, validate({
 }), async (req, res) => {
   const { start, end, mute, coverAt, publish } = req.body;
   const title = req.body.title || '';
-  const description = req.body.description || '';
+  const text = mentions.clean(req.body.description);
+  if (text.foreign) return res.status(400).json({ success: false, message: mentions.FOREIGN_MESSAGE });
+  const description = text.text;
   if (end && end - start < 1) return res.status(400).json({ success: false, message: 'Видео короче секунды' });
   const v = await GalleryVideo.findOneAndUpdate(
     { _id: OBJECT_ID.test(req.params.id) ? req.params.id : null, userId: req.session.userId, status: { $in: ['uploading', 'draft'] } },

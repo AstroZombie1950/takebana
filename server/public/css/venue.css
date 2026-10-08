@@ -403,7 +403,8 @@
 .tk-meet__form[hidden] { display: none; }
 .tk-meet__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .tk-meet__field--wide { grid-column: 1 / -1; max-width: 454px; }
-.tk-meet__field .tk-field { width: 100%; }
+.tk-meet__field .tk-field { width: 100%; padding: 12px 16px; }
+.tk-meet__field .tk-select { padding-right: 40px; background-position: right 14px center; }
 .tk-meet__field .tk-note { margin: 0; }
 .tk-meet__form > .tk-btn { grid-column: 1 / -1; justify-self: start; }
 
@@ -449,6 +450,15 @@
 .tk-meet__face { width: 26px; height: 26px; font-size: 11px; border: 2px solid var(--tk-bg); }
 .tk-meet__face + .tk-meet__face { margin-left: -8px; }
 .tk-meet__more { margin-left: 6px; font-size: 13px; color: var(--tk-muted); }
+/* «тоже идут» — подпись к лицам: кто нажал «Я тоже». */
+.tk-meet__also {
+  margin-left: 8px;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--tk-green-live);
+}
 
 .tk-meet__acts { flex: none; display: flex; align-items: center; gap: 4px; }
 
@@ -466,7 +476,15 @@
 }
 
 .tk-meet__icon:hover, .tk-meet__icon:focus-visible { color: var(--tk-fg); }
-.tk-meet__sum { margin: 0; font-size: 14px; color: var(--tk-fg-2); }
+
+/* Без людей — гостю и тому, кто не указал дату рождения: день и сколько
+ * человек, ниже строка «как увидеть больше» со ссылкой. */
+.tk-meet__row--plain { align-items: baseline; justify-content: space-between; padding: 12px 0; }
+.tk-meet__row--plain .tk-meet__when { font-size: 15px; color: var(--tk-fg); }
+.tk-meet__count { font-size: 14px; color: var(--tk-fg-2); white-space: nowrap; }
+.tk-meet__lock { margin: 0; font-size: 14px; line-height: 1.5; color: var(--tk-fg-2); }
+.tk-meet__lock a { color: var(--tk-link); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.tk-meet__lock a:hover { color: var(--tk-link-hover); }
 
 /* ── Правка: оформление ── */
 .tk-vp__look { display: flex; flex-direction: column; gap: 18px; }
@@ -524,11 +542,12 @@
   .tk-vp__acts .tk-btn { flex: 1; padding-top: 14px; padding-bottom: 14px; }
   .tk-vp__photos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* Встречи: действия строки — под текстом, во всю ширину; поля формы — столбиком. */
-  .tk-meet__row { flex-wrap: wrap; }
+  .tk-meet__row:not(.tk-meet__row--plain) { flex-wrap: wrap; }
   .tk-meet__acts { width: 100%; padding-left: 58px; }
   .tk-meet__acts .tk-btn { flex: 1; }
   .tk-meet__icon { width: 44px; height: 44px; }
-  .tk-meet__form { grid-template-columns: minmax(0, 1fr); }
+  /* День и время — по-прежнему рядом, остальное во всю ширину. */
+  .tk-meet__form { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); padding: 14px; }
   .tk-meet__field--wide { max-width: none; }
   .tk-meet__form > .tk-btn { justify-self: stretch; padding-top: 14px; padding-bottom: 14px; }
   .tk-menu__nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }

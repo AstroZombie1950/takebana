@@ -1,0 +1,23 @@
+<%#
+  Дата рождения тремя списками — день, месяц, год (07.10). Системное поле
+  даты на телефоне вылезало за рамку блока, а его календарь рисует система,
+  мимо оформления. Списки — свои (public/tk-listbox.js, data-listbox-touch),
+  и на телефоне тоже. Значение собирают скрипты: settings.js, tk-meetups.js
+  ([data-birth] → «ГГГГ-ММ-ДД»). Настройки и форма встречи.
+%>
+<% var bYear = new Date().getUTCFullYear();
+   var bMonths = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'ru-RU', { month: 'long', timeZone: 'UTC' }); %>
+<div class="tk-birth" data-birth role="group" aria-label="<%= ta('settings.birth') %>" data-i18n-aria="settings.birth">
+  <select class="tk-field tk-select" data-birth-part="d" data-listbox-touch aria-label="<%= ta('birth.day') %>" data-i18n-aria="birth.day">
+    <option value="" data-i18n="birth.day"><%- t('birth.day') %></option>
+    <% for (var bd = 1; bd <= 31; bd++) { %><option value="<%= String(bd).padStart(2, '0') %>"><%= bd %></option><% } %>
+  </select>
+  <select class="tk-field tk-select" data-birth-part="m" data-listbox-touch aria-label="<%= ta('birth.month') %>" data-i18n-aria="birth.month">
+    <option value="" data-i18n="birth.month"><%- t('birth.month') %></option>
+    <% for (var bm = 0; bm < 12; bm++) { %><option value="<%= String(bm + 1).padStart(2, '0') %>"><%= bMonths.format(Date.UTC(2000, bm, 1)) %></option><% } %>
+  </select>
+  <select class="tk-field tk-select" data-birth-part="y" data-listbox-touch aria-label="<%= ta('birth.year') %>" data-i18n-aria="birth.year">
+    <option value="" data-i18n="birth.year"><%- t('birth.year') %></option>
+    <% for (var by = bYear; by >= bYear - 100; by--) { %><option value="<%= by %>"><%= by %></option><% } %>
+  </select>
+</div>

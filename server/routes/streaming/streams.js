@@ -28,6 +28,7 @@ const liveSignal = require('../../utils/liveSignal');
 const liveNotify = require('../../utils/liveNotify');
 const { publicHost } = require('../../utils/site');
 const { ownApproved } = require('../../utils/venueOwner');
+const mentions = require('../../utils/mentions');
 
 router.get('/stream-status/:streamId', async (req, res) => {
   if (!/^[a-f\d]{24}$/i.test(req.params.streamId)) return res.status(404).json({ message: 'Стрим не найден' });
@@ -107,7 +108,11 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
   venue: { type: 'objectId', label: 'Заведение' },
 }), async (req, res) => {
   const userId = req.session.userId;
-  const { title, category, subcategory, city, description, isAdult, subscribersOnly, source, cover } = req.body;
+  const { title, category, subcategory, city, isAdult, subscribersOnly, source, cover } = req.body;
+  // Описание эфира станет описанием записи — правила те же (utils/mentions.js).
+  const text = mentions.clean(req.body.description);
+  if (text.foreign) return res.status(400).json({ message: mentions.FOREIGN_MESSAGE });
+  const description = text.text;
   const venue = req.body.venue ? await ownApproved(userId, req.body.venue) : null;
   if (req.body.venue && !venue) return res.status(403).json({ message: 'Вести эфир можно только от своего одобренного заведения' });
 

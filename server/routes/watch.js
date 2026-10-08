@@ -34,6 +34,8 @@ const { commonDataMiddleware } = require('./streaming/shared');
 const recording = require('../utils/recording');
 const galleryVideo = require('../utils/galleryVideo');
 const galleryPhotos = require('../utils/galleryPhotos');
+const mentions = require('../utils/mentions');
+const { meaningful } = require('../utils/snippet');
 const recommend = require('../utils/recommend');
 const userView = require('../utils/userView');
 const { VENUE_AUTHOR, venueAuthor } = require('../utils/venueAuthor');
@@ -66,6 +68,7 @@ const KINDS = {
     i18n: 'rec',
     view: 'watch',
     notFound: 'Запись не найдена',
+    text: 'description',
     edit: TEXT_EDIT(true), // у записи без названия не бывает: его даёт эфир
     back: (user) => profileUrl(user) + '#recordings',
     // Пока запись склеивается, удалять нечего: файлов ещё нет, а склейка
@@ -80,6 +83,7 @@ const KINDS = {
     i18n: 'video',
     view: 'watch',
     notFound: 'Видео не найдено',
+    text: 'description',
     edit: TEXT_EDIT(false),
     back: (user) => profileUrl(user) + '/videos',
     // Пока видео пережимается, удалить можно: обработка увидит, что записи
@@ -95,6 +99,7 @@ const KINDS = {
     view: 'photo',
     notFound: 'Фото не найдено',
     photo: true,
+    text: 'caption',
     edit: {
       schema: { caption: { type: 'string', max: galleryPhotos.CAPTION_MAX, allowEmpty: true, label: 'Подпись' } },
       set: (body) => ({ caption: body.caption || '' }),
@@ -105,6 +110,26 @@ const KINDS = {
     date: (doc) => doc.createdAt,
   },
 };
+
+// Номер среди одноимённых за день (07.10, вариант «В» Ивана): человек
+// выходит в эфир под одним названием по нескольку раз в день, и с автором
+// и датой в заголовке страницы всё равно совпадали — Вебмастер считал
+// дубли. Одноимённые — то же название или оба без названия; день — по
+// поясу сервера, как его видит робот. Номер — по порядку за день, 0 —
+// совпадений нет, номер не нужен.
+async function sameDayNo(K, item) {
+  const at = K.date(item);
+  const from = new Date(at); from.setHours(0, 0, 0, 0);
+  const to = new Date(from); to.setDate(to.getDate() + 1);
+  const key = (t) => (meaningful(t) ? t.trim() : '');
+  // createdAt записи — конец эфира, recordedAt — начало: окно шире на сутки.
+  const day = (await K.Model.find({ userId: item.userId._id, status: 'ready', createdAt: { $gte: from, $lt: new Date(+to + 864e5) } })
+    .select('title recordedAt createdAt').lean())
+    .filter((d) => key(d.title) === key(item.title) && K.date(d) >= from && K.date(d) < to);
+  if (day.length < 2) return 0;
+  day.sort((a, b) => K.date(a) - K.date(b) || String(a._id).localeCompare(String(b._id)));
+  return day.findIndex((d) => String(d._id) === String(item._id)) + 1;
+}
 
 // Фото всегда готово: обрабатывать его нечего.
 const isReady = (K, doc) => K.photo || doc.status === 'ready';
@@ -271,6 +296,9 @@ function mount(kind) {
       me && !isOwner ? privacy.decide('comments', item.userId._id, me) : { ok: me || commentsRule !== 'nobody' },
       K.photo ? neighbours(item) : null,
     ]);
+    const nth = K.photo ? 0 : await sameDayNo(K, item);
+    // Описание с @никами ссылками (utils/mentions.js).
+    const textHtml = await mentions.render(item[K.text]);
 
     const displayName = userView.displayName(item.userId);
     const ready = isReady(K, item);
@@ -283,6 +311,8 @@ function mount(kind) {
       base: `/${kind}/${item._id}`,
       back: venue ? venue.url + (kind === 'video' ? '/videos' : '/streams') : K.back(item.userId),
       rec: item,
+      nth,
+      textHtml,
       ready,
       src: ready && K.src ? K.src(item) : '',
       around,
@@ -358,9 +388,13 @@ function mount(kind) {
   // как у удаления).
   router.patch(path, requireAuth, checkId, requireOwner(K.Model, { field: 'userId' }), validate(K.edit.schema), async (req, res) => {
     const set = K.edit.set(req.body);
+    const text = mentions.clean(set[K.text]);
+    if (text.foreign) return res.status(400).json({ success: false, message: mentions.FOREIGN_MESSAGE });
+    set[K.text] = text.text;
     await K.Model.updateOne({ _id: req.resource._id }, { $set: set });
     audit(req, `${kind}.edit`, { targetType: kind, target: req.resource, meta: set.title !== undefined ? { title: set.title } : {} });
-    res.json({ success: true, ...set });
+    // html — описание, как его рисует страница: @ники ссылками.
+    res.json({ success: true, ...set, html: await mentions.render(set[K.text]) });
   });
 
   // Лента комментариев порциями: before — время последнего показанного.

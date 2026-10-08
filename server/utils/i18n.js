@@ -249,6 +249,7 @@ const EN = {
     'Если вы не регистрировались на Takebana, просто удалите письмо.': 'If you did not sign up for Takebana, just delete this email.',
     'Почта уже подтверждена': 'The email is already confirmed',
     'Фото не найдено': 'Photo not found',
+    'Ссылки в описании — только на людей Takebana: @ник': 'Links in a description can only point to people on Takebana: @nickname',
     'Письмо со ссылкой отправлено': 'A link has been sent',
     'В вашем аккаунте Takebana запросили смену почты на {email}. Почта сменится, только когда по ссылке из письма на новый адрес перейдут.': 'A change of your Takebana email to {email} was requested. It only takes effect once the link sent to the new address is opened.',
     'Если это не вы — смените пароль: {link}': 'If it was not you, change your password: {link}',

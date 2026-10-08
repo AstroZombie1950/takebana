@@ -21,6 +21,14 @@
     });
   }
 
+  // Дата рождения тремя списками (partials/birthSelect.ejs) → «ГГГГ-ММ-ДД»;
+  // не выбрано всё — пусто. Несуществующее число (31 февраля) отсеет сервер.
+  function birthValue(box) {
+    if (!box) return '';
+    var part = function (k) { return box.querySelector('[data-birth-part="' + k + '"]').value; };
+    return part('y') && part('m') && part('d') ? part('y') + '-' + part('m') + '-' + part('d') : '';
+  }
+
   function json(body) {
     return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
   }
@@ -79,7 +87,8 @@
     var v = nick.value.trim().toLowerCase();
     if (nick.value !== v) nick.value = v;
     clearTimeout(nickTimer);
-    if (v === nick.dataset.current) return nickSay(nick.dataset.next ? 'settings.nick.wait' : null, nick.dataset.next ? untilVars(nick.dataset.next) : null, '');
+    // Свой ник — одна строка: когда можно сменить, а если уже можно — правило.
+    if (v === nick.dataset.current) return nickSay(nick.dataset.next ? 'settings.nick.wait' : 'settings.nickHint', nick.dataset.next ? untilVars(nick.dataset.next) : null, '');
     if (!NICK_RULE.test(v)) return nickReason('format');
     nickSay('settings.nick.checking', null, '');
     var seq = ++nickSeq;
@@ -103,8 +112,12 @@
     var v = nick.value.trim().toLowerCase();
     if (!NICK_RULE.test(v)) { nickReason('format'); return nick.focus(); }
     var btn = e.target.querySelector('[type="submit"]');
-    var birth = $('profileBirth');
-    var day = birth ? birth.value : '';
+    var birth = e.target.querySelector('[data-birth]');
+    var day = birthValue(birth);
+    // Начали выбирать и не довыбрали — подсказать, а не молча пропустить.
+    if (!day && birth && [].some.call(birth.querySelectorAll('select'), function (x) { return x.value; })) {
+      return toast(t('birth.incomplete'), 'error');
+    }
     // Дата рождения — один раз (utils/age.js): сначала спрашиваем, верно ли,
     // и уходит она первой — не принял сервер, имя и ник ждут исправления.
     var asked = day

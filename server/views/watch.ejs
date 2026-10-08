@@ -27,9 +27,14 @@
   var title = kind === 'recording' ? mediaName : named(rec);
   // В <title> — ещё автор и дата (04.10): человек выходит в эфир под одним
   // названием много раз, и пять «Vvv — Takebana» в выдаче неразличимы.
-  var headTitle = meaningful(rec.title) ? ta(k + '.headTitle', { title: mediaName, name: author.displayName, date: when }) : mediaName;
+  // Одноимённые за день — ещё номер (nth, routes/watch.js): только когда
+  // совпадение есть, иначе заголовок чистый.
+  var no = nth ? ' ' + ta('rec.nth', { k: nth }) : '';
+  var headTitle = meaningful(rec.title) ? ta(k + '.headTitle', { title: mediaName + no, name: author.displayName, date: when }) : mediaName + no;
   // Описание есть всегда: своё, а короткое или пустое — с нашим (utils/snippet.js).
-  var headDescription = describe(rec.description, ta(kind === 'recording' ? 'seo.recordingDesc' : 'seo.videoDesc', { name: author.displayName, date: when }));
+  // Своё длинное у одноимённых часто одно и то же — номер впереди.
+  var headDescription = describe(rec.description, ta(kind === 'recording' ? 'seo.recordingDesc' : 'seo.videoDesc', { name: author.displayName, date: when + (nth ? ', ' + ta('rec.nth', { k: nth }) : '') }));
+  if (nth && headDescription.indexOf(ta('rec.nth', { k: nth })) === -1) headDescription = describe(ta('rec.nth', { k: nth }) + '. ' + headDescription, '');
   var jsonld = [
     ld.video({ path: base, title: mediaName, description: headDescription, thumb: rec.thumb && rec.thumb.url,
                src: src, seconds: rec.duration, date: at, views: rec.views,
@@ -120,7 +125,7 @@
             <% if (rec.isAdult) { %> · <span class="tk-watch__adult">18+</span><% } %>
           </p>
           <% if (rec.description) { %>
-          <p class="tk-watch__desc" id="recDesc"><%= rec.description %></p>
+          <p class="tk-watch__desc" id="recDesc"><%- textHtml %></p>
           <button type="button" class="tk-watch__more" id="descMore" hidden data-i18n="rec.more"><%- t('rec.more') %></button>
           <% } else if (isOwner) { %>
           <p class="tk-watch__desc tk-watch__desc--empty" id="recDesc" data-i18n="<%= k %>.noDesc"><%- t(k + '.noDesc') %></p>

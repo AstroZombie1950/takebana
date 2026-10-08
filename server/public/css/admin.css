@@ -680,6 +680,60 @@ body.tk-panel {
   margin-top: 8px;
 }
 
+/* Досье человека карточками (07.10): учётная запись, профиль и возраст,
+ * эфиры и файлы, сроки хранения, заведения — каждая в своей рамке. */
+.tk-dossier__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+  margin: 8px 0 24px;
+  align-items: start;
+}
+
+.tk-dcard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--tk-rule);
+  min-width: 0;
+}
+
+.tk-dcard__title {
+  margin: 0;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--tk-label);
+}
+
+.tk-dcard .tk-facts { grid-template-columns: 130px minmax(0, 1fr); row-gap: 10px; }
+.tk-dcard .tk-facts dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.tk-dcard__v { min-width: 0; }
+
+/* Сроки хранения — строками, как факты: подпись слева, список справа. */
+.tk-dcard__ret { display: flex; flex-direction: column; gap: 8px; }
+.tk-dcard__ret-row { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 10px; font-size: 13px; color: var(--tk-muted); }
+/* min-width общего .tk-ret (вкладка «Сроки хранения») здесь выдавливал
+ * второй список за рамку карточки. */
+.tk-dcard__ret-row .tk-ret { width: 100%; min-width: 0; }
+.tk-dcard__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 4px; }
+
+/* «Заменить» прямо в строке: поле и кнопки под ним. */
+.tk-dcard__edit { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.tk-dcard__edit .tk-field { width: 100%; padding: 8px 10px; font-size: 13px; }
+.tk-dcard__edit-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.tk-dcard__edit-acts .tk-btn { white-space: nowrap; }
+
+@media (max-width: 520px) {
+  .tk-dossier__cards { grid-template-columns: minmax(0, 1fr); }
+  .tk-dcard .tk-facts { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .tk-dcard .tk-facts dd { margin-bottom: 8px; }
+  .tk-dcard__ret-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+
 .tk-facts {
   display: grid;
   grid-template-columns: minmax(120px, auto) 1fr;

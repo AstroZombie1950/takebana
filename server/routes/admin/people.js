@@ -270,21 +270,46 @@ router.post('/users/:id/sessions/kill', requireAdmin, async (req, res) => {
   res.json({ ok: true, sessions: deletedCount });
 });
 
-// ── Дата рождения: сбросить ─────────────────────────────────────────────────
+// ── Дата рождения и описание: заменить ──────────────────────────────────────
 //
-// Человек указывает её один раз (routes/userRoutes.js, /settings/birthdate).
-// Ошибся в годе — пишет в поддержку, администратор сбрасывает, и поле в
-// настройках снова открыто. Подтверждение 18+ остаётся как было.
-router.post('/users/:id/birthdate/reset', requireAdmin, async (req, res) => {
+// Дату рождения человек указывает один раз (routes/userRoutes.js). Ошибся —
+// не сбрасываем, чтобы он вписал заново что угодно (решение Ивана 07.10):
+// просим подтвердить документом и вписываем дату сами. Она же решает 18+,
+// как у человека. В журнал — и прежняя, и новая: замена — по документу.
+router.post('/users/:id/birthdate', requireAdmin, validate({
+  birthDate: { type: 'string', required: true, max: 10, label: 'Дата рождения' },
+}), async (req, res) => {
   if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Пользователь не найден' });
-  const user = await User.findByIdAndUpdate(req.params.id, { $set: { birthDate: null } }).select('nickname login email birthDate').lean();
+  const birthDate = age.parse(req.body.birthDate);
+  if (!birthDate) return res.status(400).json({ message: 'Дата рождения указана неверно' });
+  const adult = age.ageOf(birthDate) >= age.ADULT;
+  const user = await User.findByIdAndUpdate(req.params.id,
+    [{ $set: { birthDate, adultConfirmedAt: adult ? { $ifNull: ['$adultConfirmedAt', '$$NOW'] } : null } }],
+    { updatePipeline: true }).select('nickname login email birthDate').lean();
   if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
-  audit(req, 'admin.birthdate.reset', {
+  audit(req, 'admin.birthdate.set', {
     targetType: 'user', target: user,
     targetLabel: user.nickname || user.login || user.email || '',
-    meta: { had: !!user.birthDate },
+    meta: { was: age.iso(user.birthDate) || null, now: age.iso(birthDate), adult },
   });
-  res.json({ ok: true });
+  res.json({ ok: true, birthDate: age.iso(birthDate), age: age.ageOf(birthDate) });
+});
+
+// Описание профиля — модерация меняет его на своё (реклама, оскорбления),
+// а не только читает: пустое — убрать совсем. Те же правила, что у человека.
+router.post('/users/:id/bio', requireModerator, validate({
+  bio: { type: 'string', max: 300, allowEmpty: true, default: '', label: 'Описание' },
+}), async (req, res) => {
+  if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Пользователь не найден' });
+  const bio = req.body.bio.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  const user = await User.findByIdAndUpdate(req.params.id, { $set: { bio } }).select('nickname login email bio').lean();
+  if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
+  audit(req, 'admin.bio.set', {
+    targetType: 'user', target: user,
+    targetLabel: user.nickname || user.login || user.email || '',
+    meta: { was: (user.bio || '').slice(0, 300), now: bio },
+  });
+  res.json({ ok: true, bio });
 });
 
 // ── Ссылка на сайт для поисковиков ──────────────────────────────────────────

@@ -565,47 +565,59 @@ VIEWS.person = {
     html += tile('Эфиров погашено', num(d.streams.stoppedByModeration), 'модерацией');
     html += '</div>';
 
-    html += '<div class="tk-dossier__cols"><section><h2 class="tk-panel__h2">Учётная запись</h2><dl class="tk-facts">';
+    // Карточками по смыслу (07.10): прежде всё шло одним столбцом фактов,
+    // а сроки хранения и заведения стояли рядом без рамок — не понять,
+    // где что кончается.
     const fact = (k, v) => '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>';
-    html += fact('Идентификатор', '<code>' + esc(p.id) + '</code>');
-    if (a.email) html += fact('Почта', esc(a.email));
-    html += fact('Вход', esc(a.provider === 'google' ? 'через Google' : 'по паролю'));
-    html += fact('Заведён', esc(when(p.createdAt)));
-    html += fact('Был на связи', esc(p.isOnline ? 'сейчас' : ago(p.lastSeen)));
-    html += fact('Подтвердил 18+', a.adultConfirmedAt ? esc(when(a.adultConfirmedAt)) : 'нет');
-    html += fact('Дата рождения', a.birthDate ? esc(a.birthDate) + ' · ' + a.age + ' лет' +
-      (IS_ADMIN ? ' <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="birthdate-reset" data-id="' + esc(p.id) + '">Сбросить</button>' : '') : 'не указана');
-    if (a.bio) html += fact('Описание', '<span class="tk-facts__pre">' + esc(a.bio) + '</span>');
+    const card = (title, body, cls) => '<section class="tk-dcard' + (cls ? ' ' + cls : '') + '"><h2 class="tk-dcard__title">' + esc(title) + '</h2>' + body + '</section>';
+    // «Заменить» — правка прямо в строке (data-act="fact-edit" ниже).
+    const replace = (field, value) => ' <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="fact-edit" data-field="' + field + '" data-id="' + esc(p.id) + '" data-value="' + esc(value || '') + '">Заменить</button>';
+
+    let acc = fact('Идентификатор', '<code>' + esc(p.id) + '</code>');
+    if (a.email) acc += fact('Почта', esc(a.email));
+    acc += fact('Вход', esc(a.provider === 'google' ? 'через Google' : 'по паролю'));
+    acc += fact('Заведён', esc(when(p.createdAt)));
+    acc += fact('Был на связи', esc(p.isOnline ? 'сейчас' : ago(p.lastSeen)));
+    if (IS_ADMIN) acc += fact('Открытых сеансов', num(a.sessions) + (a.sessionUntil ? ' <span class="tk-panel__why">до ' + esc(when(a.sessionUntil)) + '</span>' : ''));
+
+    // Дату рождения меняет только администратор и только по документу.
+    let prof = fact('Дата рождения', '<span class="tk-dcard__v">' + (a.birthDate ? esc(a.birthDate) + ' · ' + a.age + ' лет' : 'не указана') + '</span>' +
+      (IS_ADMIN ? replace('birthDate', a.birthDate) : ''));
+    prof += fact('Подтвердил 18+', a.adultConfirmedAt ? esc(when(a.adultConfirmedAt)) : 'нет');
+    prof += fact('Описание', '<span class="tk-dcard__v tk-facts__pre">' + (a.bio ? esc(a.bio) : '—') + '</span>' + replace('bio', a.bio));
     if (a.links.length) {
-      html += fact('Ссылки', a.links.map((l) => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + esc(l.url) + '</a>').join('<br>'));
+      prof += fact('Ссылки', a.links.map((l) => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + esc(l.url) + '</a>').join('<br>'));
     }
     // Ссылка на сайт без nofollow — решает администратор (routes/admin/people.js).
     if (a.links.some((l) => l.kind === 'site')) {
-      html += fact('Сайт для поисковиков', (a.linksFollow ? 'индексируется' : 'nofollow, не индексируется') +
+      prof += fact('Сайт для поисковиков', (a.linksFollow ? 'индексируется' : 'nofollow, не индексируется') +
         (IS_ADMIN ? ' <button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="links-follow" data-id="' + esc(p.id) + '" data-on="' + (a.linksFollow ? '' : '1') + '">' +
           (a.linksFollow ? 'Закрыть от индексации' : 'Индексировать') + '</button>' : ''));
     }
-    html += fact('Ключ вещания', a.hasStreamKey ? 'есть' : 'нет');
-    html += fact('Фото в галерее', num(a.gallery));
-    if (IS_ADMIN) html += fact('Открытых сеансов', num(a.sessions) + (a.sessionUntil ? ' <span class="tk-panel__why">до ' + esc(when(a.sessionUntil)) + '</span>' : ''));
-    html += fact('Веб / OBS', num(d.streams.web) + ' / ' + num(d.streams.obs));
-    html += '</dl></section>';
+
+    let media = fact('Ключ вещания', a.hasStreamKey ? 'есть' : 'нет');
+    media += fact('Эфиры: веб / OBS', num(d.streams.web) + ' / ' + num(d.streams.obs));
+    media += fact('Фото в галерее', num(a.gallery));
+
+    html += '<div class="tk-dossier__cards">';
+    html += card('Учётная запись', '<dl class="tk-facts">' + acc + '</dl>');
+    html += card('Профиль и возраст', '<dl class="tk-facts">' + prof + '</dl>');
+    html += card('Эфиры и файлы', '<dl class="tk-facts">' + media + '</dl>');
 
     // Сроки хранения его файлов: пусто — как у всех (вкладка «Сроки хранения»).
     if (d.retention) {
-      html += '<section data-ret-box><h2 class="tk-panel__h2">Сроки хранения</h2><dl class="tk-facts">' +
-        RET_KINDS.map(([k, name]) => '<dt>' + esc(name) + '</dt><dd>' + retSelect(k, d.retention.own[k] ?? null, d.retention.all[k]) + '</dd>').join('') +
-        '</dl><p class="tk-panel__more"><button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="ret-user" data-id="' + esc(p.id) + '">Сохранить сроки</button></p>' +
-        '<p class="tk-panel__why">Пока не применяются: файлы хранятся бессрочно.</p></section>';
+      html += card('Сроки хранения', '<div data-ret-box><div class="tk-dcard__ret">' +
+        RET_KINDS.map(([k, name]) => '<label class="tk-dcard__ret-row"><span>' + esc(name) + '</span>' + retSelect(k, d.retention.own[k] ?? null, d.retention.all[k]) + '</label>').join('') +
+        '</div><div class="tk-dcard__foot"><button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="ret-user" data-id="' + esc(p.id) + '">Сохранить сроки</button>' +
+        '<span class="tk-panel__why">Пока не применяются: файлы хранятся бессрочно.</span></div></div>');
     }
 
-    html += '<section><h2 class="tk-panel__h2">Заведения</h2>';
-    html += d.venues.length
+    html += card('Заведения', d.venues.length
       ? '<ul class="tk-list">' + d.venues.map((v) => '<li>' + (v.online ? dot(true) : '') + esc(v.name || 'без названия') +
           ' <span class="tk-panel__why">' + esc(cityTitle(v.city) || v.cityOther || '') + ' · ' + esc(VENUE_TYPE.get(v.type) || v.typeOther || v.type || '') +
           (v.status ? '' : ' · не активно') + '</span></li>').join('') + '</ul>'
-      : note('Заведений нет');
-    html += '</section></div>';
+      : note('Заведений нет'));
+    html += '</div>';
 
     if (IS_ADMIN) {
       html += '<h2 class="tk-panel__h2">Последние действия</h2>';
@@ -2287,10 +2299,34 @@ view.addEventListener('click', async (e) => {
       return show();
     }
 
-    if (act === 'birthdate-reset') {
-      if (!await confirmDialog('Сбросить дату рождения? Человек сможет указать её заново в настройках.', { okText: 'Сбросить' })) return;
-      await send('POST', '/api/admin/users/' + id + '/birthdate/reset');
-      toast('Дата рождения сброшена', 'ok');
+    // «Заменить» в досье: дата рождения (по документу, только администратор)
+    // и описание профиля — поле прямо в строке, «Сохранить» / «Отмена».
+    if (act === 'fact-edit') {
+      const dd = el.closest('dd');
+      const birth = el.dataset.field === 'birthDate';
+      dd.innerHTML = '<div class="tk-dcard__edit">' +
+        (birth
+          ? '<input type="date" class="tk-field" data-fact-input min="1900-01-01" max="' + new Date().toISOString().slice(0, 10) + '" value="' + esc(el.dataset.value) + '">'
+          : '<textarea class="tk-field" data-fact-input maxlength="300" rows="4">' + esc(el.dataset.value) + '</textarea>') +
+        '<span class="tk-dcard__edit-acts"><button type="button" class="tk-btn tk-btn--primary tk-btn--xs" data-act="fact-save" data-field="' + esc(el.dataset.field) + '" data-id="' + esc(id) + '">Сохранить</button>' +
+        '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="fact-cancel">Отмена</button></span></div>';
+      dd.querySelector('[data-fact-input]').focus();
+      return;
+    }
+
+    if (act === 'fact-cancel') return show();
+
+    if (act === 'fact-save') {
+      const value = el.closest('dd').querySelector('[data-fact-input]').value;
+      if (el.dataset.field === 'birthDate') {
+        if (!value) return toast('Укажите дату', 'error');
+        if (!await confirmDialog('Заменить дату рождения на ' + value + '? Делайте это только по документу.', { okText: 'Заменить' })) return;
+        await send('POST', '/api/admin/users/' + id + '/birthdate', { birthDate: value });
+        toast('Дата рождения заменена', 'ok');
+      } else {
+        await send('POST', '/api/admin/users/' + id + '/bio', { bio: value });
+        toast(value.trim() ? 'Описание заменено' : 'Описание убрано', 'ok');
+      }
       return show();
     }
 

@@ -1110,6 +1110,17 @@ body.tk-app {
 
 /* Метка 18+ и подобные переключатели: подпись рядом с квадратом, а не над ним,
  * иначе строка читается как заголовок поля, которого нет. */
+/* Дата рождения тремя списками — день, месяц, год (partials/birthSelect.ejs):
+ * настройки и форма встречи. Свой список (tk-listbox.js) — display: contents,
+ * в сетку встаёт его кнопка. Поля плотнее обычных: три в ряд на 320px. */
+.tk-birth {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1.1fr);
+  gap: 8px;
+}
+
+.tk-birth .tk-field.tk-select { width: 100%; min-width: 0; padding: 12px 26px 12px 12px; background-position: right 8px center; }
+
 .tk-form__toggle {
   display: flex;
   align-items: center;

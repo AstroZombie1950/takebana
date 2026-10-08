@@ -63,21 +63,28 @@
               <span class="tk-set__at" aria-hidden="true">@</span>
               <input id="profileNick" class="tk-field" type="text" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false"
                      value="<%= profile.nickname %>" data-current="<%= profile.nickname %>"
-                     data-next="<%= profile.nickNext ? profile.nickNext.toISOString() : '' %>" aria-describedby="nickStatus nickHint">
+                     data-next="<%= profile.nickNext ? profile.nickNext.toISOString() : '' %>" aria-describedby="nickStatus">
             </div>
-            <p class="tk-set__status" id="nickStatus" aria-live="polite"></p>
-            <p class="tk-note" id="nickHint" data-i18n="settings.nickHint"><%- t('settings.nickHint') %></p>
+            <%# Под ником — одна строка (07.10): когда можно сменить, а пока
+                печатают — свободен ли. Прежде рядом стояло ещё «раз в 30 дней»:
+                два предложения об одном. %>
+            <% var nickKey = profile.nickNext ? 'settings.nick.wait' : 'settings.nickHint';
+               var nickVars = profile.nickNext ? { date: date(profile.nickNext, { day: 'numeric', month: 'long', year: 'numeric' }) } : null; %>
+            <p class="tk-set__status" id="nickStatus" aria-live="polite" data-i18n="<%= nickKey %>"<% if (nickVars) { %> data-i18n-vars='<%= JSON.stringify(nickVars) %>'<% } %>><%- t(nickKey, nickVars) %></p>
 
             <%# Дата рождения (07.10, utils/age.js) — один раз: указанная
                 становится строкой, сбросить её может только администратор.
                 Уходит той же кнопкой, что имя и ник (public/settings.js). %>
+            <%# id="birth" — ссылка «указать дату рождения» со страницы заведения. %>
             <% if (profile.birthDate) { %>
-            <p class="tk-form__label" data-i18n="settings.birth"><%- t('settings.birth') %></p>
-            <p class="tk-set__fixed"><%= profile.birthLabel %></p>
+            <div class="tk-set__fixed" id="birth">
+              <span class="tk-form__label" data-i18n="settings.birth"><%- t('settings.birth') %></span>
+              <span class="tk-set__fixed-v"><%= profile.birthLabel %></span>
+            </div>
             <% } else { %>
-            <label class="tk-form__label" for="profileBirth" data-i18n="settings.birth"><%- t('settings.birth') %></label>
-            <input id="profileBirth" class="tk-field" type="date" min="1900-01-01" max="<%= profile.birthMax %>" aria-describedby="birthHint">
-            <p class="tk-note" id="birthHint" data-i18n="settings.birthOnce"><%- t('settings.birthOnce') %></p>
+            <p class="tk-form__label" id="birth" data-i18n="settings.birth"><%- t('settings.birth') %></p>
+            <%- include('partials/birthSelect') %>
+            <p class="tk-note" data-i18n="settings.birthOnce"><%- t('settings.birthOnce') %></p>
             <% } %>
 
             <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>

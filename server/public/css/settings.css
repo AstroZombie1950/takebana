@@ -67,10 +67,14 @@
  * по своему тексту). */
 .tk-set__form .tk-btn { align-self: stretch; margin-top: auto; }
 .tk-set__form .tk-note { margin: -4px 0 0; }
-.tk-set__form .tk-form__label { margin-top: 4px; }
+/* margin целиком: подпись бывает и абзацем (дата рождения над списками) —
+ * его нижний отступ раздвигал подпись и поле. */
+.tk-set__form .tk-form__label { margin: 4px 0 0; }
 .tk-set__form .tk-form__label:first-child { margin-top: 0; }
-/* Указанная дата рождения — строкой вместо поля (её не меняют). */
-.tk-set__fixed { margin: 0; padding: 12px 0; font-size: 15px; color: var(--tk-fg); }
+/* Указанная дата рождения — строкой вместо поля (её не меняют): подпись
+ * и значение вплотную, как пара «название — значение». */
+.tk-set__fixed { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.tk-set__fixed-v { font-family: Oswald, 'Oswald Fallback', sans-serif; font-size: 16px; color: var(--tk-fg); }
 
 /* Сноска блока — к его низу, над кнопкой. Селектор с .tk-set__form: иначе
  * общее правило для .tk-note выше по весу и margin-top: auto не возьмётся. */

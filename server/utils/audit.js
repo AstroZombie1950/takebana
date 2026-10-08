@@ -108,6 +108,11 @@ const ACTIONS = {
 
   'report.create': 'Жалоба подана',
   'report.close': 'Жалоба разобрана',
+  // Встречи в заведениях и дата рождения (07.10, docs/MEETUPS.md).
+  'profile.birthdate': 'Дата рождения указана',
+  'meetup.create': 'Отметка о встрече',
+  'meetup.join': '«Я тоже» под отметкой',
+  'meetup.delete': 'Отметка о встрече удалена',
 
   'mod.ban': 'Ограничение аккаунта',
   'mod.unban': 'Снятие ограничения',
@@ -122,6 +127,8 @@ const ACTIONS = {
   'admin.session.kill': 'Сеанс завершён администратором',
   'admin.password.set': 'Пароль задан администратором',
   'admin.links.follow': 'Индексация ссылки на сайт',
+  'admin.birthdate.set': 'Дата рождения задана администратором',
+  'admin.bio.set': 'Описание заменено модерацией',
   'admin.error.resolve': 'Ошибка отмечена разобранной',
   'admin.error.bulk': 'Ошибки разобраны или удалены пачкой',
   'admin.retention': 'Сроки хранения файлов',
