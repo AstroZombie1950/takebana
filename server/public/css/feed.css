@@ -591,31 +591,8 @@ a.tk-post__media--text:hover .tk-post__big { color: var(--tk-fg-2); }
 .tk-watch--post #postTopic .tk-post__topic { display: inline-block; }
 .tk-watch--text { grid-template-columns: minmax(0, 760px); grid-template-areas: "main"; }
 
-/* Хлебные крошки страницы поста (09.10): автор, перед ним «Лента», если
- * пришли из неё; последнее звено — сам пост, в одну строку с многоточием. */
-.tk-crumbs { max-width: 1440px; padding: 16px 24px 0; }
-.tk-crumbs + .tk-watch { padding-top: 12px; }
-.tk-crumbs__list {
-  display: flex;
-  align-items: baseline;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-family: Oswald, 'Oswald Fallback', sans-serif;
-  font-size: 14px;
-  letter-spacing: .02em;
-  color: var(--tk-muted);
-}
-.tk-crumbs__item { flex: none; white-space: nowrap; }
-.tk-crumbs__item + .tk-crumbs__item::before { content: '/'; margin: 0 10px; color: var(--tk-dim); }
-.tk-crumbs__item--here { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.tk-crumbs__link { color: var(--tk-fg); }
-.tk-crumbs__link:hover { color: var(--tk-accent-text); }
 
 @media (max-width: 1023px) {
-  .tk-crumbs { padding: 12px calc(16px + var(--tk-safe-r)) 12px calc(16px + var(--tk-safe-l)); }
-  .tk-crumbs + .tk-watch { padding-top: 0; }
   .tk-post__stage .tk-post__track { height: auto; aspect-ratio: 4 / 5; max-height: 80dvh; }
 }
 

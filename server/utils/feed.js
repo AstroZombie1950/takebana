@@ -40,10 +40,13 @@ const AUTHOR = 'nickname login email avatar';
 const SOURCES = [
   { kind: 'recording', Model: Recording, href: '/recording/', venue: true, where: { status: 'ready', isAdult: { $ne: true } }, fields: 'title description duration thumb views likes comments createdAt recordedAt userId venue' },
   { kind: 'video', Model: GalleryVideo, href: '/video/', venue: true, where: { status: 'ready' }, fields: 'title description duration thumb views likes comments createdAt userId venue' },
-  { kind: 'photo', Model: GalleryPhoto, href: '/photo/', where: {}, fields: 'url caption likes comments createdAt userId' },
+  { kind: 'photo', Model: GalleryPhoto, href: '/photo/', where: {}, fields: 'url caption width height likes comments createdAt userId' },
   { kind: 'post', Model: Post, href: '/post/', where: { status: 'ready' }, fields: 'text topic media status likes comments createdAt userId' },
 ];
 const HOME = ['recording', 'video'];
+// Пачка фото — загруженные разом (routes/streaming/profile.js): время
+// с шагом в миллисекунду. Соседи одного автора ближе этого — одна пачка.
+const BATCH_MS = 50;
 const POSTS = ['post', 'photo', 'video'];
 
 // before — дата последней показанной карточки (курсор из прошлой страницы).
@@ -81,15 +84,48 @@ async function page({ before = null, viewer = null, limit = PAGE, kinds = HOME, 
       .then((rows) => rows.map((r) => ({ ...r, kind, href: href + r._id })))));
 
   const merged = lists.flat().sort((a, b) => b.createdAt - a.createdAt);
-  const items = merged.slice(0, limit).filter((r) => r.userId);
-  const next = merged.length > limit ? merged[limit - 1].createdAt : null;
-  const media = await mediaOf(items.filter((r) => r.kind === 'post'));
+  let rows = merged.slice(0, limit);
+  let next = merged.length > limit ? merged[limit - 1].createdAt : null;
+  // Пачку фото граница страницы не режет: хвост добирается сюда же,
+  // курсор встаёт за ним.
+  const last = rows[rows.length - 1];
+  if (next && last && last.kind === 'photo' && last.userId) {
+    const tail = await GalleryPhoto.find({ ...(withPosts ? { post: null } : {}), userId: last.userId._id,
+      createdAt: { $lt: last.createdAt, $gte: new Date(+last.createdAt - BATCH_MS * 40) } })
+      .sort({ createdAt: -1 }).select(SOURCES.find((x) => x.kind === 'photo').fields).populate('userId', AUTHOR).lean();
+    let prev = last;
+    for (const r of tail) {
+      if (prev.createdAt - r.createdAt > BATCH_MS) break;
+      rows.push(prev = { ...r, kind: 'photo', href: '/photo/' + r._id });
+    }
+    next = prev.createdAt;
+  }
+  rows = batches(rows.filter((r) => r.userId));
+  const media = await mediaOf(rows.filter((r) => r.kind === 'post'));
 
   // Автора удалили, а ролик ещё не убран — карточка без автора не нужна.
   return {
-    items: items.map((r) => card(r, media)),
+    items: rows.map((r) => card(r, media)),
     next: next ? next.toISOString() : null,
   };
+}
+
+// Пачка фото одной карточкой-каруселью (правки 09.10, вечер): в «Ленте»
+// загруженные разом фото шли отдельными карточками без стрелок — что их
+// несколько, было не понять. Карточка — первое фото пачки (его оценка
+// и разговор), set — все её фото по порядку, у каждого — своя страница.
+function batches(rows) {
+  const out = [];
+  for (const r of rows) {
+    const head = out[out.length - 1];
+    const tail = head && head.set ? head.set[head.set.length - 1] : head;
+    if (r.kind === 'photo' && head && head.kind === 'photo' && String(head.userId._id) === String(r.userId._id)
+        && tail.createdAt - r.createdAt <= BATCH_MS) {
+      if (!head.set) head.set = [head];
+      head.set.push(r);
+    } else out.push(r);
+  }
+  return out;
 }
 
 // Фото и видео постов страницы — двумя запросами на всю страницу.
@@ -119,7 +155,8 @@ function card(r, media) {
     text: (r.kind === 'photo' ? r.caption : r.kind === 'post' ? r.text : r.description) || '',
     // Пост: тема и медиа по порядку; в работе — ролики ещё пережимаются.
     topic: r.topic || '',
-    media: r.kind === 'post' ? r.media.map((m) => media.get(String(m.ref))).filter(Boolean) : [],
+    media: r.kind === 'post' ? r.media.map((m) => media.get(String(m.ref))).filter(Boolean)
+      : r.set ? r.set.map((p) => ({ kind: 'photo', href: p.href, url: p.url, w: p.width || 0, h: p.height || 0, text: p.caption || '' })) : [],
     processing: r.status === 'processing',
     duration: r.duration || 0,
     views: r.views || 0,

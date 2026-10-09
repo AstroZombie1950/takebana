@@ -65,6 +65,15 @@ const EN = {
     // Тема оформления (routes/userRoutes.js)
     'Тема': 'Theme',
     'Индексировать': 'Index',
+    // Посты (routes/posts.js, 09.10), выбор из библиотеки в переписке
+    // (routes/messages.js), тема эфира (routes/streams.js)
+    'Слишком много постов подряд — попробуйте через час': 'Too many posts in a row — try again in an hour',
+    'Видео': 'Video',
+    'Порядок': 'Order',
+    'Группа': 'Group',
+    'Вид': 'Type',
+    'Фото или видео не найдено — возможно, его удалили': 'Photo or video not found — it may have been deleted',
+    'Тема не относится к выбранному разделу': 'The topic does not belong to the selected section',
     // Группы (routes/groups.js)
     'Группа не найдена': 'Group not found',
     'Это могут только администраторы группы': 'Only group admins can do this',

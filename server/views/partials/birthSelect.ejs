@@ -14,7 +14,7 @@
   </select>
   <select class="tk-field tk-select" data-birth-part="m" data-listbox-touch aria-label="<%= ta('birth.month') %>" data-i18n-aria="birth.month">
     <option value="" data-i18n="birth.month"><%- t('birth.month') %></option>
-    <% for (var bm = 0; bm < 12; bm++) { %><option value="<%= String(bm + 1).padStart(2, '0') %>"><%= bMonths.format(Date.UTC(2000, bm, 1)) %></option><% } %>
+    <% for (var bm = 0; bm < 12; bm++) { %><option value="<%= String(bm + 1).padStart(2, '0') %>" data-i18n-month="<%= bm + 1 %>"><%= bMonths.format(Date.UTC(2000, bm, 1)) %></option><% } %>
   </select>
   <select class="tk-field tk-select" data-birth-part="y" data-listbox-touch aria-label="<%= ta('birth.year') %>" data-i18n-aria="birth.year">
     <option value="" data-i18n="birth.year"><%- t('birth.year') %></option>

@@ -1,6 +1,7 @@
 // Действия под постами «Ленты» (05.10.2026, views/partials/postCard.ejs):
 // «нравится» и комментарий прямо в ленте, без перехода на страницу
-// публикации; с 09.10 — и длинный текст разворачивается на месте. Те же маршруты, что у страницы (routes/watch.js): адрес поста —
+// публикации; с 09.10 — и длинный текст разворачивается на месте
+// (крошки страницы поста — в tk-watch.js, общие со страницами фото и видео). Те же маршруты, что у страницы (routes/watch.js): адрес поста —
 // data-post (/photo/<id>, /video/<id>, с 09.10 и /post/<id>). Обработчики — на документе: посты
 // следующих страниц приходят без перезагрузки (catalog.js).
 // С 06.10 — ответ на комментарий (ник в поле) и удаление своего, чужого
@@ -69,33 +70,6 @@
       .catch(function () { location.href = link.href; })
       .then(function () { link.removeAttribute('aria-busy'); });
   });
-
-  // ── Хлебные крошки страницы поста (09.10, views/post.ejs) ──
-  // Пришли из «Ленты» — она первым звеном, с тем же фильтром. Звено, откуда
-  // пришли, уводит назад по истории: лента или профиль встают на то же
-  // место, а не открываются сверху заново.
-  var crumbs = document.querySelector('[data-crumbs]');
-  var from = null;
-  try { from = document.referrer ? new URL(document.referrer) : null; } catch (err) { from = null; }
-  if (crumbs && from && from.origin === location.origin) {
-    if (from.pathname === '/feed') {
-      var li = document.createElement('li');
-      li.className = 'tk-crumbs__item';
-      var feed = document.createElement('a');
-      feed.className = 'tk-crumbs__link';
-      feed.href = from.pathname + from.search;
-      tkText(feed, 'feed.h1');
-      li.appendChild(feed);
-      crumbs.insertBefore(li, crumbs.firstChild);
-    }
-    crumbs.addEventListener('click', function (e) {
-      var a = e.target.closest('a');
-      if (!a || history.length < 2 || e.metaKey || e.ctrlKey || e.shiftKey) return;
-      if (a.pathname + a.search !== from.pathname + from.search) return;
-      e.preventDefault();
-      history.back();
-    });
-  }
 
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-like]');

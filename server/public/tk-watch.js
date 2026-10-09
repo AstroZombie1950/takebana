@@ -1,6 +1,7 @@
 /* Страница просмотра — запись эфира, видео или (с 25.09.2026) фото
- * галереи: плеер, просмотр, оценки, «Поделиться», правка и удаление
- * автором, комментарии, у фото — листание к соседним. Разметка —
+ * галереи, с 09.10 и пост: плеер, просмотр, оценки, «Поделиться», правка
+ * и удаление автором, комментарии, у фото — листание к соседним, хлебные
+ * крошки. Разметка —
  * views/watch.ejs и views/photo.ejs, маршруты — routes/watch.js. Адрес —
  * data-base, префикс строк, разных у видов, — data-k (rec, video, photo).
  */
@@ -14,6 +15,34 @@
   var $ = function (i) { return document.getElementById(i); };
 
   function num(n) { return Number(n || 0).toLocaleString(lang); }
+
+  // ── Хлебные крошки (09.10, partials/crumbs.ejs) ──
+  // Пришли из «Ленты» или с «Популярного» — оно первым звеном, с тем же
+  // фильтром. Звено, откуда пришли, уводит назад по истории: лента или
+  // профиль встают на то же место, а не открываются сверху заново.
+  var crumbs = document.querySelector('[data-crumbs]');
+  var from = null;
+  try { from = document.referrer ? new URL(document.referrer) : null; } catch (err) { from = null; }
+  if (crumbs && from && from.origin === location.origin) {
+    var section = from.pathname === '/feed' ? 'feed.h1' : from.pathname === '/' ? 'cat.popular' : '';
+    if (section) {
+      var li = document.createElement('li');
+      li.className = 'tk-crumbs__item';
+      var up = document.createElement('a');
+      up.className = 'tk-crumbs__link';
+      up.href = from.pathname + from.search;
+      tkText(up, section);
+      li.appendChild(up);
+      crumbs.insertBefore(li, crumbs.firstChild);
+    }
+    crumbs.addEventListener('click', function (e) {
+      var link = e.target.closest('a');
+      if (!link || history.length < 2 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (link.pathname + link.search !== from.pathname + from.search) return;
+      e.preventDefault();
+      history.back();
+    });
+  }
 
   // Форма слова по числу — как plural() в шаблонах (utils/i18n.js).
   function pluralKey(n, base) {

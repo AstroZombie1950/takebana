@@ -39,6 +39,7 @@
   <%- include('partials/leftBar') %>
 
   <main class="tk-app-main">
+    <%- include('partials/crumbs', { links: [[author.displayName, author.url], [ta('gallery.photos'), author.url + '/photos']], here: headTitle }) %>
     <div class="tk-watch tk-watch--photo" id="watch"
          data-base="<%= base %>"
          data-k="<%= k %>"

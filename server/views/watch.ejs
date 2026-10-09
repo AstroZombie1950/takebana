@@ -59,6 +59,7 @@
   <%- include('partials/leftBar') %>
 
   <main class="tk-app-main">
+    <%- include('partials/crumbs', { links: [[author.displayName, author.url]], here: mediaName }) %>
     <div class="tk-watch" id="watch"
          data-base="<%= base %>"
          data-k="<%= k %>"

@@ -39,16 +39,7 @@
   <%- include('partials/leftBar') %>
 
   <main class="tk-app-main">
-    <%# Хлебные крошки (09.10): автор → пост, те же звенья, что в разметке
-        BreadcrumbList выше. Пришли из «Ленты» — tk-posts.js ставит её
-        первым звеном; звено, откуда пришли, возвращает назад по истории —
-        на то же место страницы. %>
-    <nav class="tk-crumbs" aria-label="<%= ta('crumbs.aria') %>" data-i18n-aria="crumbs.aria">
-      <ol class="tk-crumbs__list" data-crumbs>
-        <li class="tk-crumbs__item"><a href="<%= author.url %>" class="tk-crumbs__link"><%= author.displayName %></a></li>
-        <li class="tk-crumbs__item tk-crumbs__item--here" aria-current="page"><%= headTitle %></li>
-      </ol>
-    </nav>
+    <%- include('partials/crumbs', { links: [[author.displayName, author.url]], here: headTitle }) %>
     <div class="tk-watch tk-watch--photo tk-watch--post<%= media.length ? '' : ' tk-watch--text' %>" id="watch"
          data-base="<%= base %>"
          data-k="<%= k %>"

@@ -24,7 +24,9 @@
    var when = date(item.at, { day: 'numeric', month: 'long', year: 'numeric' });
    var name = isPhoto || isPost ? '' : mediaTitle(item.title, 'video', item.author.displayName, item.at);
    var said = meaningful(item.text);
-   var media = isPost ? item.media : [];
+   // Медиа карусели: у поста — его фото и видео, у пачки фото (загружены
+   // разом, utils/feed.js) — её фото; одно фото — как раньше, без карусели.
+   var media = item.media || [];
    // Текст поста; длинный — началом, «Ещё» разворачивает его на месте
    // (tk-posts.js). Пост без медиа показывает больше.
    var limit = media.length ? 220 : 700;
@@ -55,12 +57,13 @@
   <div class="tk-post__media tk-post__media--text tk-post__media--long" data-more-box><p class="tk-post__big"><span data-user-content data-more-text><%= short %></span></p><a href="<%= item.href %>" class="tk-post__more" data-more data-i18n="rec.more"><%- t('rec.more') %></a></div>
   <% } else if (isPost && !media.length) { %>
   <a href="<%= item.href %>" class="tk-post__media tk-post__media--text"><p class="tk-post__big" data-user-content><%= full %></p></a>
-  <% } else if (isPost) { %>
+  <% } else if (isPost || media.length > 1) { %>
   <div class="tk-post__media tk-post__media--photo<%= media.length > 1 ? ' tk-post__media--set' : '' %>" data-slides>
     <div class="tk-post__track">
-      <% media.forEach(function (m, i) { var href = m.kind === 'photo' ? item.href : m.href; %>
+      <% media.forEach(function (m, i) { var href = isPost && m.kind === 'photo' ? item.href : m.href;
+         var mAlt = !isPost && meaningful(m.text) ? snippet(m.text, 125) : alt; %>
       <a href="<%= href %>" class="tk-post__slide tk-post__slide--<%= m.kind %>"<% if (media.length > 1) { %> aria-label="<%= ta('post.slide', { n: i + 1, total: media.length }) %>"<% } %>>
-        <% if (m.url) { %><img src="<%= m.url %>" alt="<%= m.kind === 'photo' ? alt : ta('alt.cover', { title: alt }) %>" decoding="async"<% if (m.w && m.h) { %> width="<%= m.w %>" height="<%= m.h %>"<% } %> <%- i ? 'loading="lazy"' : imgLoad() %>><% } %>
+        <% if (m.url) { %><img src="<%= m.url %>" alt="<%= m.kind === 'photo' ? mAlt : ta('alt.cover', { title: alt }) %>" decoding="async"<% if (m.w && m.h) { %> width="<%= m.w %>" height="<%= m.h %>"<% } %> <%- i ? 'loading="lazy"' : imgLoad() %>><% } %>
         <% if (m.kind === 'video') { %>
         <% if (m.ready) { %><span class="tk-post__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg></span>
         <% if (m.duration) { %><span class="tk-post__len"><%= clock(m.duration) %></span><% } %>

@@ -1,0 +1,14 @@
+<%#
+  Хлебные крошки страниц публикаций — поста, фото, видео, записи (09.10):
+  те же звенья, что в разметке BreadcrumbList страницы (ld.crumbs), без
+  «Takebana». Пришли из «Ленты» — tk-watch.js ставит её первым звеном;
+  звено, откуда пришли, возвращает назад по истории — на то же место.
+  Стили — css/watch.css. Параметры: links — [[текст, адрес], …], here —
+  сама страница.
+%>
+<nav class="tk-crumbs" aria-label="<%= ta('crumbs.aria') %>" data-i18n-aria="crumbs.aria">
+  <ol class="tk-crumbs__list" data-crumbs>
+    <% links.forEach(function (l) { %><li class="tk-crumbs__item"><a href="<%= l[1] %>" class="tk-crumbs__link"><%= l[0] %></a></li><% }); %>
+    <li class="tk-crumbs__item tk-crumbs__item--here" aria-current="page"><%= here %></li>
+  </ol>
+</nav>

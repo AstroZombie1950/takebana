@@ -23,6 +23,7 @@
 //   data-i18n-aria="ключ"         — подпись для читалки экрана
 //   data-i18n-label="ключ"        — подпись группы <optgroup> (атрибут label)
 //   data-i18n-region="RS"         — имя страны по коду ISO, из Intl (09.10)
+//   data-i18n-month="1"           — имя месяца по номеру, из Intl (09.10)
 //
 //   window.t('ключ' [, запасная строка | подстановки]) — строка на текущем
 //     языке для скриптов, которые собирают разметку сами:
@@ -122,6 +123,17 @@
     }
   }
 
+  // Месяцы — тоже из Intl, по номеру: дата рождения (partials/birthSelect.ejs)
+  // при смене языка без перезагрузки оставалась с русскими месяцами.
+  function months() {
+    var nodes = document.querySelectorAll('[data-i18n-month]');
+    if (!nodes.length) return;
+    var names = new Intl.DateTimeFormat(current === 'en' ? 'en-US' : 'ru-RU', { month: 'long', timeZone: 'UTC' });
+    for (var i = 0; i < nodes.length; i++) {
+      nodes[i].textContent = names.format(Date.UTC(2000, Number(nodes[i].getAttribute('data-i18n-month')) - 1, 1));
+    }
+  }
+
   // Текст, который ставит скрипт. Ключ переезжает на элемент, поэтому строка
   // переживает переключение языка; без этого статичный ключ в разметке
   // затирал бы то, что поставил скрипт, а поставленное скриптом — не
@@ -178,6 +190,7 @@
     fill('data-i18n-aria', function (el, v) { el.setAttribute('aria-label', strip(v)); });
     fill('data-i18n-label', function (el, v) { el.label = strip(v); });
     regions();
+    months();
 
     document.documentElement.setAttribute('lang', current);
 
