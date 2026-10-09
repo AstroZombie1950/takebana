@@ -24,7 +24,7 @@ router.get('/live', requireModerator, async (req, res) => {
       .sort({ viewers: -1, startedAt: 1 })
       .lean(),
     // Камера заведения — тоже вещание, и гасить её приходится тем же порядком.
-    Establishments.find({ online: true }).select('name city owner').lean(),
+    Establishments.find({ online: true }).select('name country owner').lean(),
   ]);
 
   const names = await namesFor([...streams.map((s) => s.userId), ...venues.map((v) => v.owner)]);
@@ -60,7 +60,7 @@ router.get('/live', requireModerator, async (req, res) => {
     venues: venues.map((v) => ({
       id: String(v._id),
       name: v.name || '',
-      city: v.city || '',
+      country: v.country || '',
       owner: names.get(String(v.owner)) || null,
     })),
   });

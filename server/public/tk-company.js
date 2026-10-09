@@ -31,15 +31,16 @@
       return el ? el.value.trim() : "";
     };
 
-    // Тип, страна и город — список или своё (public/tk-venue-place.js).
+    // Тип — список или своё (public/tk-venue-place.js).
     var place = window.TKPlace.attach(form.querySelector("[data-place]"));
 
     // Точка на карте: метка и поиск по адресу (public/tk-point.js). Без
     // координат заведение не попадает на карту вообще, поэтому метка здесь
-    // обязательна — а ставить её рукой можно и без поиска адреса.
+    // обязательна — а ставить её рукой можно и без поиска адреса. Страну
+    // приносит поиск адреса (09.10), владелец её не выбирает.
     var pointBox = form.querySelector("[data-point]");
     var point = pointBox && window.TKPoint
-      ? window.TKPoint.attach(pointBox, { address: form.elements.address, place: place })
+      ? window.TKPoint.attach(pointBox, { address: form.elements.address })
       : null;
 
     form.addEventListener("submit", function (e) {
@@ -82,6 +83,7 @@
       }
       establishment.lat = spot.lat;
       establishment.lng = spot.lng;
+      establishment.country = point.country().country;
 
       var button = form.querySelector('[type="submit"]');
       button.disabled = true;

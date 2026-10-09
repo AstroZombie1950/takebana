@@ -14,8 +14,8 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
-<%# Каждая страница листалки — canonical на себя. Пока всё помещается
-    в профиль, вкладка его повторяет — вне индекса (indexable). %>
+<%# Каждая страница листалки — canonical на себя; пустая — вне индекса
+    (indexable). %>
 <%- include('partials/tkHead', { titleKey: 'page.' + tab + (page > 1 ? '.titlePage' : '.title'), titleVars: { name: owner.displayName, n: page },
          description: ta('seo.' + tab + 'Desc', { name: owner.displayName }) + (page > 1 ? ' ' + ta('seo.page', { n: page }) : ''),
          seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow',

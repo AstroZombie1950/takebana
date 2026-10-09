@@ -58,7 +58,10 @@ const messageSchema = new Schema({
     height: Number,
     duration: Number,
     // Голосовое: 48 столбиков громкости 0–31 для волны в ленте.
-    wave: [Number]
+    wave: [Number],
+    // Из своей галереи (09.10, utils/library.js): файл принадлежит галерее,
+    // переписка его не стирает.
+    lib: Boolean
   }],
   // Ограничение (utils/messageLimit.js): просмотры, таймер после открытия или
   // скачивания. Пока не открыто — ни текста, ни адреса файла браузеру
@@ -83,7 +86,7 @@ const messageSchema = new Schema({
   // каждой выдаче ленты. Публикацию удалили — ссылка ведёт на «не найдено».
   share: {
     type: new Schema({
-      kind: { type: String, enum: ['photo', 'video', 'recording'], required: true },
+      kind: { type: String, enum: ['photo', 'video', 'recording', 'post'], required: true },
       ref: { type: Schema.Types.ObjectId, required: true },
       url: { type: String, required: true },   // путь на сайте: /photo/<id>
       title: String,

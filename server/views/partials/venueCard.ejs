@@ -24,7 +24,7 @@
     <div class="tk-vc__top">
       <span class="tk-vc__logo"><% if (v.avatar) { %><img src="<%= avaSmall(v.avatar) %>" alt="" loading="lazy"><% } else { %><%= letter %><% } %></span>
       <div class="tk-vc__id">
-        <p class="tk-vc__meta"><%- [placeHtml('type', v.type, v.typeOther), placeHtml('city', v.city, v.cityOther)].filter(Boolean).join(' · ') %></p>
+        <p class="tk-vc__meta"><%- [placeHtml('type', v.type, v.typeOther), placeHtml('country', v.country, v.countryOther)].filter(Boolean).join(' · ') %></p>
         <h2 class="tk-vc__name"><a href="/venue/<%= id %>" data-user-content><%= v.name %></a></h2>
       </div>
     </div>

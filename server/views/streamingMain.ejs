@@ -67,12 +67,8 @@
               <option value="<%= sub.code %>"<%= filters.subs.includes(sub.code) ? ' selected' : '' %> data-i18n="<%= sub.i18n %>"><%= ta(sub.i18n, sub.name) %></option>
               <% }); %>
             </select>
-            <select name="city" class="tk-field tk-select" aria-label="<%= ta('common.city') %>" data-i18n-aria="common.city">
-              <option value="" data-i18n="common.allCities"><%- t('common.allCities') %></option>
-              <% catalog.CITIES.forEach(function (city) { %>
-              <option value="<%= city.code %>"<%= filters.city === city.code ? ' selected' : '' %> data-i18n="<%= city.i18n %>"><%= ta(city.i18n, city.name) %></option>
-              <% }); %>
-            </select>
+            <%# Фильтра по городу нет с 09.10 (решение заказчика: список был только
+                сербский) — скрыт; старые ссылки ?city= сервер ещё понимает. %>
             <select name="sort" class="tk-field tk-select" aria-label="<%= ta('catalog.sort') %>" data-i18n-aria="catalog.sort">
               <option value="" data-i18n="catalog.sortViewers"><%- t('catalog.sortViewers') %></option>
               <option value="new"<%= filters.sort === 'new' ? ' selected' : '' %> data-i18n="catalog.sortNew"><%- t('catalog.sortNew') %></option>

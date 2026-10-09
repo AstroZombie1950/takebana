@@ -1,26 +1,29 @@
 <%#
-  «Лента» (/feed, 04.10.2026, решение Ивана) — фото и видео, которые
-  выкладывают люди, одной колонкой, новые сверху: листаешь, как в Инстаграме.
-  С 05.10 — на всю ширину, действия и разговор у каждого поста (postCard).
-  Записи эфиров сюда не идут — они в «Популярном». Маршрут —
-  routes/streaming/catalog.js, лента — utils/feed.js, пост —
-  partials/postCard.ejs, вид — css/feed.css. Дальше по ленте подгружает
-  catalog.js сам, когда кнопка «Показать ещё» подходит к экрану; без
-  скрипта кнопка — ссылка на /feed?before=….
+  «Лента» (/feed, 04.10.2026, решение Ивана) — то, что выкладывают люди,
+  одной колонкой, новые сверху: листаешь, как в Инстаграме. С 05.10 — на
+  всю ширину, действия и разговор у каждого поста (postCard). С 09.10 —
+  посты (текст, фото, видео) и «Новый пост» сверху (partials/composer.ejs);
+  вместо вкладок «Фото» и «Видео» — темы: разделы, а в выбранном — его темы
+  (только те, где есть посты). Записи эфиров сюда не идут — они
+  в «Популярном». Маршрут — routes/streaming/catalog.js, лента —
+  utils/feed.js, пост — partials/postCard.ejs, вид — css/feed.css. Дальше
+  по ленте подгружает catalog.js сам, когда кнопка «Показать ещё» подходит
+  к экрану; без скрипта кнопка — ссылка на /feed?before=….
 
   В индексе — первая страница без фильтра и когда есть что показать;
-  ?kind= и ?before= — noindex, follow (docs/seo/DECISIONS.md).
+  ?t= и ?before= — noindex, follow (docs/seo/DECISIONS.md; страницы тем —
+  когда дойдёт черёд до семантики).
 %>
 <%
-  var kindQs = kind ? '?kind=' + kind : '';
-  var nextHref = function (cursor) { return '/feed?' + (kind ? 'kind=' + kind + '&' : '') + 'before=' + encodeURIComponent(cursor); };
-  var tabs = [['', 'feed.tabAll'], ['photo', 'gallery.photos'], ['video', 'gallery.videos']];
+  var tQs = topic ? '?t=' + topic : '';
+  var nextHref = function (cursor) { return '/feed?' + (topic ? 't=' + topic + '&' : '') + 'before=' + encodeURIComponent(cursor); };
+  var open = sections.filter(function (c) { return c.code === section; })[0];
 %>
 <!DOCTYPE html>
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.feed.title', descriptionKey: 'page.feed.description',
-      seo: { path: '/feed', robots: kind || before || !items.length ? 'noindex, follow' : '',
+      seo: { path: '/feed', robots: topic || before || !items.length ? 'noindex, follow' : '',
              jsonld: [ld.page({ type: 'CollectionPage', path: '/feed', name: ta('page.feed.title'), description: ta('page.feed.description') }),
                       ld.crumbs([['Takebana', '/'], [ta('feed.h1'), '/feed']])] } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
@@ -43,11 +46,25 @@
         </div>
       </div>
 
+      <% if (currentUser) { %><%- include('partials/composer') %><% } %>
+
+      <%# Темы: «Все» и разделы, где есть посты; в выбранном разделе — второй
+          строкой его темы. Обычные ссылки — фильтр работает и без скрипта. %>
+      <% if (sections.length) { %>
       <nav class="tk-tabs tk-cat__tabs" aria-label="<%= ta('feed.tabsAria') %>" data-i18n-aria="feed.tabsAria">
-        <% tabs.forEach(function (tb) { var on = kind === tb[0]; %>
-        <a href="/feed<%= tb[0] ? '?kind=' + tb[0] : '' %>" class="tk-tabs__item<%= on ? ' tk-tabs__item--on' : '' %>"<%- on ? ' aria-current="page"' : '' %> data-i18n="<%= tb[1] %>"><%- t(tb[1]) %></a>
+        <a href="/feed" class="tk-tabs__item<%= topic ? '' : ' tk-tabs__item--on' %>"<%- topic ? '' : ' aria-current="page"' %> data-i18n="feed.tabAll"><%- t('feed.tabAll') %></a>
+        <% sections.forEach(function (c) { var on = section === c.code; %>
+        <a href="/feed?t=<%= c.code %>" class="tk-tabs__item<%= on ? ' tk-tabs__item--on' : '' %>"<%- on && topic === c.code ? ' aria-current="page"' : '' %> data-i18n="<%= c.i18n %>"><%- t(c.i18n) %></a>
         <% }); %>
       </nav>
+      <% if (open && open.subs.length) { %>
+      <nav class="tk-posts__topics" aria-label="<%= ta(open.i18n) %>" data-i18n-aria="<%= open.i18n %>">
+        <% open.subs.forEach(function (x) { var on = topic === x.code; %>
+        <a href="/feed?t=<%= on ? open.code : x.code %>" class="tk-posts__topic<%= on ? ' is-on' : '' %>"<%- on ? ' aria-current="page"' : '' %> data-i18n="<%= x.i18n %>"><%- t(x.i18n) %></a>
+        <% }); %>
+      </nav>
+      <% } %>
+      <% } %>
 
       <% if (items.length) { %>
       <div class="tk-posts__list" id="feed">
@@ -55,13 +72,12 @@
         <% items.forEach(function (item) { %><%- include('partials/postCard', { item: item, me: me }) %><% }); %>
       </div>
       <% if (next) { %>
-      <a href="<%= nextHref(next) %>" class="tk-btn tk-btn--outline tk-btn--sm tk-posts__more" id="feedMore" data-src="/feed/next<%= kindQs %>" data-next="<%= next %>" data-auto data-i18n="feed.more"><%- t('feed.more') %></a>
+      <a href="<%= nextHref(next) %>" class="tk-btn tk-btn--outline tk-btn--sm tk-posts__more" id="feedMore" data-src="/feed/next<%= tQs %>" data-next="<%= next %>" data-auto data-i18n="feed.more"><%- t('feed.more') %></a>
       <% } %>
       <% } else { %>
       <div class="tk-empty">
         <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="square" aria-hidden="true"><rect x="3" y="5" width="18" height="14"></rect><circle cx="9" cy="10" r="1.5"></circle><path d="M21 16l-5-5-8 8"></path></svg>
         <p class="tk-empty__h" data-i18n="feed.postsEmpty"><%- t('feed.postsEmpty') %></p>
-        <a href="/upload" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="feed.post"><%- t('feed.post') %></a>
       </div>
       <% } %>
 
@@ -71,6 +87,10 @@
 
 <script defer src="<%= asset('/catalog.js') %>"></script>
 <script defer src="<%= asset('/tk-posts.js') %>"></script>
+<% if (currentUser) { %>
+<script defer src="<%= asset('/tk-upload.js') %>"></script>
+<script defer src="<%= asset('/tk-composer.js') %>"></script>
+<% } %>
 <script defer src="<%= asset('/tk-share.js') %>"></script>
 </body>
 </html>

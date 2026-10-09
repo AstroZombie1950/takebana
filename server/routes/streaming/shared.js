@@ -54,8 +54,8 @@ const commonDataMiddleware = async (req, res, next) => {
         Notification.countDocuments({ recipient: currentUserId, isRead: false, type: { $ne: 'message' } }),
         callLog.missedCount(currentUserId),
         unreadTotal(currentUserId), // личные и в группах (utils/groups.js)
-        // «Мои заведения» в левой панели: есть ли они и одно ли (по индексу owner).
-        Establishments.find({ owner: me }).select('_id').limit(2).lean(),
+        // «Мои заведения» в левой панели: есть ли они (по индексу owner).
+        Establishments.find({ owner: me }).select('_id').limit(1).lean(),
       ]);
       // Пользователя уже нет: он удалил себя сам или его удалил администратор,
       // а вкладка осталась открытой. Это не ошибка сервера — гасим сеанс
@@ -111,9 +111,10 @@ const commonDataMiddleware = async (req, res, next) => {
           banReason: currentUser.banReason || '',
           // Администратору — пульт чужого заведения (routes/establishmentsRouter.js).
           isAdmin: currentUser.role === 'admin',
-          // «Мои заведения» (29.09): одно — сразу его страница, несколько —
-          // список /venues/mine, нет — пункта нет.
-          venuesHref: myVenues.length === 1 ? '/venue/' + myVenues[0]._id : myVenues.length ? '/venues/mine' : '',
+          // «Мои заведения» (29.09): список /venues/mine, нет — пункта нет.
+          // С 09.10 и при одном заведении — список, а не его страница: там
+          // «Добавить заведение», а со страницы заведения второе не найти.
+          venuesHref: myVenues.length ? '/venues/mine' : '',
       };
 
       res.locals.subscriptions = subscriptions;

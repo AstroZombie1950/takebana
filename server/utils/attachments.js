@@ -306,7 +306,7 @@ async function store(info, conversationId) {
 // из хранилища. Пересланная копия держит файл живым.
 async function release(list) {
   for (const a of list) {
-    if (!a || !a.key) continue;
+    if (!a || !a.key || a.lib) continue; // из галереи — файл её (utils/library.js)
     if (await Message.exists({ 'attachments.key': a.key })) continue;
     await Promise.all([a.key, a.previewKey].filter(Boolean).map((k) => storage.remove(k)))
       .catch((e) => errorLog.external(e, 'attachments.remove', { key: a.key }));

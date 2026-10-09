@@ -119,6 +119,8 @@ async function removeUser(user, io) {
     await recording.remove(r).catch((err) => errorLog.external(err, 'recording.remove', { recording: String(r._id) }));
   }
 
+  // Посты — до видео и фото: уходя, те ищут свой пост (utils/posts.js).
+  await require('./posts').removeAll(id);
   // Видео галереи — тоже в хранилище, по одному.
   const videos = await GalleryVideo.find({ userId: id }).lean();
   for (const v of videos) {

@@ -1,11 +1,12 @@
-// Оценки, комментарии и просмотры — общие у записи эфира, видео и (с 25.09)
-// фото галереи (routes/watch.js): одни коллекции, recordingId указывает
-// на любое из трёх.
+// Оценки, комментарии и просмотры — общие у записи эфира, видео, (с 25.09)
+// фото галереи и (с 09.10) поста (routes/watch.js): одни коллекции,
+// recordingId указывает на любое из них.
 // Здесь — уборка за ними, когда уходит предмет или человек.
 
 const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
 const GalleryPhoto = require('../models/GalleryPhoto');
+const Post = require('../models/Post');
 const RecordingReaction = require('../models/RecordingReaction');
 const RecordingComment = require('../models/RecordingComment');
 const RecordingView = require('../models/RecordingView');
@@ -13,7 +14,7 @@ const Report = require('../models/Report');
 
 // Запись, видео или фото удалены: оценки, комментарии, отметки просмотров
 // и жалобы на сам предмет и его комментарии — следом, у них нет предмета.
-// targetType — 'recording', 'video' или 'photo', как в models/Report.js.
+// targetType — 'recording', 'video', 'photo' или 'post', как в models/Report.js.
 async function forgetTarget(id, targetType) {
   const commentIds = await RecordingComment.distinct('_id', { recordingId: id });
   await Promise.all([
@@ -46,6 +47,7 @@ async function forgetUser(userId) {
     ops.length ? Recording.bulkWrite(ops, { ordered: false }) : null,
     ops.length ? GalleryVideo.bulkWrite(ops, { ordered: false }) : null,
     ops.length ? GalleryPhoto.bulkWrite(ops, { ordered: false }) : null,
+    ops.length ? Post.bulkWrite(ops, { ordered: false }) : null,
     RecordingReaction.deleteMany({ userId }),
     RecordingComment.deleteMany({ userId }),
     Report.deleteMany({ targetType: 'comment', targetId: { $in: commentIds } }),

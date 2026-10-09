@@ -264,13 +264,7 @@
       });
     }
 
-    // Своя камера выключена кнопкой в окне звонка — это не то же, что
-    // «Только голос»: там видео гаснет в обе стороны ради канала, здесь
-    // гаснет только своё. Флаг учитывается везде, где решается судьба
-    // камеры, иначе «Только голос» туда-обратно включал бы её заново.
-    var camOff = false;
-
-    function wantCamera() { return !!opts.video && !voiceOnly && !camOff; }
+    function wantCamera() { return !!opts.video && !voiceOnly; }
 
     function applyVoiceOnly(c) {
       if (opts.send) c.setLocalVideo(wantCamera());
@@ -403,9 +397,9 @@
       sound: function () { return heard; },
       mic: mic,
       setMic: function (on) { if (call) call.setLocalAudio(!!on); },
-      setCamera: function (on) {
-        camOff = !on;
-        if (call && call.meetingState() === 'joined-meeting') call.setLocalVideo(wantCamera());
+      // Другая камера (09.10): у телефона — передняя ↔ основная.
+      flipCamera: function () {
+        if (call && call.meetingState() === 'joined-meeting') call.cycleCamera({ preferDifferentFacingMode: true }).catch(noop);
       },
       // Видео в звонке. Выключено — только голос: своя камера гаснет, чужое
       // видео не принимается, на слабой сети это освобождает почти весь канал

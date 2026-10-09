@@ -1069,19 +1069,14 @@ body.tk-app {
   color: var(--tk-muted);
 }
 
-/* Тип, страна и город заведения — заявка и настройки (partials/venuePlace.ejs,
- * 30.09). Под списком — поле для своего («Другое — ввести самому»). */
+/* Тип заведения — заявка и настройки (partials/venuePlace.ejs, 30.09).
+ * Под списком — поле для своего («Другое — ввести самому»). */
 .tk-place { display: flex; flex-direction: column; gap: 14px; }
 .tk-place [hidden] { display: none !important; }
-.tk-place__pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
 .tk-place__one { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 /* Кроме родного <select> под своим списком (tk-listbox): он спрятан в 1px,
  * а во всю ширину расталкивал страницу вбок. */
 .tk-place__one .tk-field:not(.tk-lb__native) { width: 100%; }
-
-@media (max-width: 767px) {
-  .tk-place__pair { grid-template-columns: minmax(0, 1fr); }
-}
 
 /* Полоса ограниченного аккаунта: под шапкой, на всю ширину, киноварью по краю.
  * Не всплывашка — она должна висеть, пока ограничение действует. */
@@ -1541,7 +1536,7 @@ body.tk-app {
 .tk-call__stage { margin: 14px 0; }
 .tk-call__stage:not(.hidden) { flex: 1; min-height: 0; }
 
-/* Кнопки разговора: микрофон, своя камера, динамик, переписка (23.09).
+/* Кнопки разговора: микрофон, смена камеры (09.10), динамик, переписка (23.09).
  * Значками в ряд — подписями семь действий в окно не помещались. */
 .tk-call__tools {
   margin-top: auto;
@@ -1592,7 +1587,7 @@ body.tk-app {
 
 .tk-call__count[hidden] { display: none; }
 
-/* Нажато — значит выключено (микрофон, камера) или открыто (переписка,
+/* Нажато — значит выключено (микрофон) или открыто (переписка,
  * громкая связь): и то и другое состояние, о котором стоит помнить. */
 .tk-call__tool[aria-pressed="true"] {
   color: var(--tk-fg);
@@ -1600,8 +1595,23 @@ body.tk-app {
   background: rgba(227, 66, 52, .22);
 }
 
-/* Ряд кнопок забрал отступ сверху себе — «Завершить» встаёт сразу под ним. */
-.tk-call__tools:not([hidden]) + .tk-call__actions { margin-top: 0; padding-top: 12px; }
+/* Ряд кнопок забрал отступ сверху себе — «Завершить» встаёт сразу под ним
+ * (между ними может стоять просьба о видео). */
+.tk-call__tools:not([hidden]) ~ .tk-call__actions { margin-top: 0; padding-top: 12px; }
+
+/* Собеседник просит видео (09.10): строка с двумя кнопками над «Завершить». */
+.tk-call__ask {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--tk-accent);
+  background: rgb(var(--tk-bg-rgb) / .86);
+}
+.tk-call__ask[hidden] { display: none; }
+.tk-call__ask-text { flex: 1 1 160px; font-size: 14px; color: var(--tk-fg); }
 
 .tk-call__actions {
   margin-top: auto;

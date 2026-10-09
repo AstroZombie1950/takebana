@@ -1,0 +1,170 @@
+<%#
+  Страница поста (/post/:id, 09.10.2026) — как фото (views/photo.ejs): автор,
+  «нравится», текст, тема, комментарии; сверху — фото и видео поста лентой
+  (листается пальцем и стрелками, tk-posts.js). Видео играет на своей
+  странице — кадр ведёт туда. Маршрут — общий с записью, видео и фото
+  (routes/watch.js, вид post), поведение — /tk-watch.js, вид —
+  css/watch.css, css/photo.css и css/feed.css.
+
+  Автор правит текст и тему и удаляет пост — вместе с его фото и видео
+  (utils/posts.js). Пока ролики пережимаются, пост видит только он.
+%>
+<%
+  var nextUrl = encodeURIComponent(base);
+  var when = date(rec.createdAt, { day: 'numeric', month: 'long', year: 'numeric' });
+  var said = meaningful(rec.text);
+  var headTitle = said ? snippet(rec.text, 70) : ta('post.titleBy', { name: author.displayName, date: when });
+  var alt = said ? snippet(rec.text, 125) : headTitle;
+  var commentsN = plural(rec.comments || 0, 'rec.comments');
+  var liked = myReaction === 1;
+  var first = media.filter(function (m) { return m.kind === 'photo'; })[0];
+  var cover = first ? first.url : (media[0] && media[0].thumb && media[0].thumb.url) || '';
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
+<head>
+<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: describe(rec.text, ta('seo.postDesc', { name: author.displayName, date: when })), seo: { path: base, type: 'article', image: cover || undefined, imageAlt: alt, robots: rec.userId.banned || !ready ? 'noindex, follow' : '',
+         jsonld: ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [headTitle, base]]) } }) %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/watch.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/photo.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/feed.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-watch tk-watch--photo tk-watch--post<%= media.length ? '' : ' tk-watch--text' %>" id="watch"
+         data-base="<%= base %>"
+         data-k="<%= k %>"
+         data-owner="<%= isOwner ? '1' : '' %>"
+         data-user="<%= currentUser ? currentUser._id : '' %>"
+         data-back="<%= back %>">
+
+      <h1 class="tk-vh"><%= headTitle %></h1>
+      <% if (media.length) { %>
+      <div class="tk-watch__stage tk-photo__stage tk-dark tk-post__stage" data-slides>
+        <div class="tk-post__track">
+          <% media.forEach(function (m, i) { %>
+          <% if (m.kind === 'photo') { %>
+          <a href="/photo/<%= m._id %>" class="tk-post__slide tk-post__slide--photo">
+            <img class="tk-photo__img" src="<%= m.url %>" alt="<%= alt %>"<% if (m.width && m.height) { %> width="<%= m.width %>" height="<%= m.height %>"<% } %> <%- i ? 'loading="lazy"' : imgLoad() %> decoding="async">
+          </a>
+          <% } else { %>
+          <a href="/video/<%= m._id %>" class="tk-post__slide tk-post__slide--video">
+            <% if (m.thumb && m.thumb.url) { %><img src="<%= m.thumb.url %>" alt="<%= ta('alt.cover', { title: alt }) %>" loading="lazy" decoding="async"><% } %>
+            <% if (m.status === 'ready') { %>
+            <span class="tk-post__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg></span>
+            <% if (m.duration) { %><span class="tk-post__len"><%= clock(m.duration) %></span><% } %>
+            <% } else { %><span class="tk-post__wait" data-i18n="post.processing"><%- t('post.processing') %></span><% } %>
+          </a>
+          <% } %>
+          <% }); %>
+        </div>
+        <% if (media.length > 1) { %>
+        <button type="button" class="tk-post__nav tk-post__nav--prev" data-slide="-1" aria-label="<%= ta('user.photoPrev') %>" data-i18n-aria="user.photoPrev" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>
+        <button type="button" class="tk-post__nav tk-post__nav--next" data-slide="1" aria-label="<%= ta('user.photoNext') %>" data-i18n-aria="user.photoNext"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></button>
+        <span class="tk-post__count" data-slide-n>1 / <%= media.length %></span>
+        <% } %>
+      </div>
+      <% } %>
+
+      <div class="tk-watch__main tk-photo__main">
+        <div class="tk-watch__bar tk-photo__head">
+          <div class="tk-live__author tk-watch__author">
+            <a href="<%= author.url %>" class="tk-live__avatar" tabindex="-1" aria-hidden="true"<% if (!author.avatarStyle.url) { %> data-bg="<%= author.avatarStyle.gradient %>"<% } %>>
+              <% if (author.avatarStyle.url) { %><img src="<%= author.avatarStyle.url %>" alt=""><% } else { %><%= author.avatarStyle.initial %><% } %>
+            </a>
+            <div class="tk-live__author-body">
+              <a href="<%= author.url %>" class="tk-live__author-name"><%= author.displayName %><% if (author.official) { %><%- include('partials/official') %><% } %></a>
+              <time class="tk-watch__all" datetime="<%= new Date(rec.createdAt).toISOString() %>"><%= when %></time>
+            </div>
+          </div>
+        </div>
+
+        <div class="tk-watch__acts tk-photo__acts">
+          <<%- currentUser ? 'button type="button"' : 'a' %> class="tk-watch__pill tk-photo__like"<% if (currentUser) { %> data-rate="1" aria-pressed="<%= liked %>"<% } else { %> href="/login?next=<%= nextUrl %>"<% } %> aria-label="<%= ta(currentUser ? 'photo.like' : 'rec.loginToRate') %>" data-i18n-aria="<%= currentUser ? 'photo.like' : 'rec.loginToRate' %>">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5l-1.4-1.3C5.4 14.5 2 11.4 2 7.6 2 4.5 4.4 2 7.5 2c1.7 0 3.4.8 4.5 2.1C13.1 2.8 14.8 2 16.5 2 19.6 2 22 4.5 22 7.6c0 3.8-3.4 6.9-8.6 11.6z"/></svg>
+            <span class="tk-watch__count" id="likes"><%= num(rec.likes) %></span>
+          </<%- currentUser ? 'button' : 'a' %>>
+
+          <a class="tk-watch__pill" href="#comments" aria-label="<%= ta('rec.commentPh') %>" data-i18n-aria="rec.commentPh">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 4.5h17v12h-11l-6 4z"/></svg>
+            <span class="tk-watch__count" data-comments-count><%= num(rec.comments) %></span>
+          </a>
+
+          <%- include('partials/shareReport', { cls: 'tk-watch__pill', report: currentUser && !isOwner,
+                s: { kind: 'post', id: rec._id, title: said ? snippet(rec.text, 140) : '', image: cover, author: author.displayName, reportName: author.displayName } }) %>
+        </div>
+
+        <div class="tk-watch__about" id="about">
+          <% if (!ready) { %><p class="tk-post__note" data-i18n="post.processingNote"><%- t('post.processingNote') %></p><% } %>
+          <% if (rec.text) { %>
+          <p class="tk-watch__desc tk-post__desc" id="recDesc"><%- textHtml %></p>
+          <button type="button" class="tk-watch__more" id="descMore" hidden data-i18n="rec.more"><%- t('rec.more') %></button>
+          <% } %>
+          <p class="tk-watch__meta" id="postTopic"<% if (!topic) { %> hidden<% } %>><% if (topic) { %><a href="/feed?t=<%= topic.code %>" class="tk-post__topic" data-i18n="<%= topic.i18n %>"><%- t(topic.i18n) %></a><% } %></p>
+
+          <% if (isOwner) { %>
+          <div class="tk-watch__owner">
+            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="editRecording" data-i18n="post.edit"><%- t('post.edit') %></button>
+            <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="deleteRecording" data-i18n="post.delete"><%- t('post.delete') %></button>
+          </div>
+
+          <form class="tk-watch__edit" id="editForm" hidden>
+            <label class="tk-form__label" for="editDesc" data-i18n="post.text"><%- t('post.text') %></label>
+            <textarea id="editDesc" name="text" class="tk-field" rows="6" maxlength="5000"><%= rec.text %></textarea>
+            <label class="tk-form__label" for="editTopic" data-i18n="post.topic"><%- t('post.topic') %></label>
+            <select id="editTopic" name="topic" class="tk-field tk-select">
+              <option value="" data-i18n="post.noTopic"><%- t('post.noTopic') %></option>
+              <% Object.keys(catalog.CATEGORIES).forEach(function (code) { var c = catalog.CATEGORIES[code]; %>
+              <optgroup label="<%= ta(c.i18n) %>" data-i18n-label="<%= c.i18n %>">
+                <% c.subs.forEach(function (sub) { %><option value="<%= sub.code %>"<%= rec.topic === sub.code ? ' selected' : '' %> data-i18n="<%= sub.i18n %>"><%= ta(sub.i18n, sub.name) %></option><% }); %>
+                <option value="<%= code %>"<%= rec.topic === code ? ' selected' : '' %> data-i18n="post.topicOther"><%- t('post.topicOther') %></option>
+              </optgroup>
+              <% }); %>
+            </select>
+            <div class="tk-watch__edit-acts">
+              <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="common.save"><%- t('common.save') %></button>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="editCancel" data-i18n="common.cancel"><%- t('common.cancel') %></button>
+            </div>
+          </form>
+          <% } %>
+        </div>
+
+        <section class="tk-watch__comments" id="comments" aria-labelledby="commentsTitle">
+          <h2 class="tk-watch__h2" id="commentsTitle" data-count="<%= rec.comments || 0 %>" data-i18n="<%= commentsN.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(rec.comments) }) %>'><%= commentsN.text %></h2>
+
+          <% if (commentsClosed) { %>
+          <p class="tk-note" data-i18n="rec.commentsClosed.<%= commentsClosed %>"><%- t('rec.commentsClosed.' + commentsClosed) %></p>
+          <% } else if (currentUser) { %>
+          <form class="tk-watch__form" id="commentForm">
+            <textarea id="commentText" class="tk-field" rows="1" maxlength="<%= limits.comment %>" placeholder="<%= ta('rec.commentPh') %>" data-i18n-placeholder="rec.commentPh" aria-label="<%= ta('rec.commentPh') %>" data-i18n-aria="rec.commentPh"></textarea>
+            <div class="tk-watch__form-acts" hidden>
+              <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" id="commentCancel" data-i18n="common.cancel"><%- t('common.cancel') %></button>
+              <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="rec.commentSend"><%- t('rec.commentSend') %></button>
+            </div>
+          </form>
+          <% } else { %>
+          <a class="tk-btn tk-btn--outline tk-btn--sm tk-watch__login" href="/login?next=<%= nextUrl %>" data-i18n="rec.commentLogin"><%- t('rec.commentLogin') %></a>
+          <% } %>
+
+          <p class="tk-note" id="commentsEmpty"<% if (comments.length || commentsClosed) { %> hidden<% } %><% if (commentsClosed) { %> data-closed="1"<% } %> data-i18n="rec.commentsEmpty"><%- t('rec.commentsEmpty') %></p>
+          <ol class="tk-watch__list" id="commentList"><% comments.forEach(function (c) { %><%- include('partials/comment', { c: c }) %><% }); %></ol>
+          <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-watch__load" id="commentsMore"<% if (!moreComments) { %> hidden<% } %> data-i18n="rec.commentsMore"><%- t('rec.commentsMore') %></button>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script defer src="<%= asset('/tk-watch.js') %>"></script>
+<script defer src="<%= asset('/tk-posts.js') %>"></script>
+<script defer src="<%= asset('/tk-share.js') %>"></script>
+</body>
+</html>

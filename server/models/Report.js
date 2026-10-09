@@ -14,9 +14,10 @@ const ReportSchema = new mongoose.Schema({
   targetType: {
     type: String,
     // recording — запись эфира, video и photo — видео и фото галереи,
-    // comment — комментарий к записи, видео или фото, meetup — отметка
-    // «хочу сюда» на странице заведения (models/Meetup.js)
-    enum: ['stream', 'user', 'message', 'recording', 'video', 'photo', 'comment', 'meetup'],
+    // post — пост (09.10, models/Post.js), comment — комментарий к записи,
+    // видео, фото или посту, meetup — отметка «хочу сюда» на странице
+    // заведения (models/Meetup.js)
+    enum: ['stream', 'user', 'message', 'recording', 'video', 'photo', 'post', 'comment', 'meetup'],
     required: true
   },
   // Ссылка без ref: цель живёт в разных коллекциях, и populate тут всё равно

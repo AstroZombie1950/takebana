@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function () {
           results.classList.toggle('is-still', !!quiet);
           results.replaceChildren(box.content);
           if (!quiet) history.replaceState(null, '', pageUrl);
-          if (topReset) topReset.hidden = !(params.has('sub') || params.has('city'));
+          if (topReset) topReset.hidden = !params.has('sub');
 
           // Градиент аватара ставится на загрузке страницы, подгруженной
           // сетке его никто больше не поставит. Подписи сервер отдаёт уже
@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', function () {
       load();
     });
 
-    // Сброс снимает город и подкатегории, сортировку оставляет. Ссылок две —
+    // Сброс снимает подкатегории, сортировку оставляет. Ссылок две —
     // над сеткой и в пустом состоянии, вторая приходит вместе с сеткой.
     form.addEventListener('click', function (e) {
       if (!e.target.closest('[data-reset]')) return;
@@ -171,7 +171,6 @@ document.addEventListener('DOMContentLoaded', function () {
       form.querySelectorAll('input[name="sub"]').forEach(function (box) {
         if (box.type === 'hidden') box.remove(); else box.checked = false;
       });
-      form.elements.city.value = '';
       load();
     });
   }

@@ -108,9 +108,10 @@
     startPreview();
   });
 
-  // ── Подкатегории ──────────────────────────────────────────────────────
+  // ── Темы раздела ──────────────────────────────────────────────────────
   // Список — из config/catalog.js атрибутом data-subs: [[код, подпись], …].
   // Подпись из атрибута русская; на английском её отдаёт словарь sub.<код>.
+  // Первый пункт раздела — «Другое» (пусто, 09.10): тема не обязательна.
   var category = $('streamCategory');
   var sub = $('streamSubcategory');
   var subs = JSON.parse(sub.dataset.subs || '{}');
@@ -180,7 +181,7 @@
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var f = form.elements;
-    if (!f.title.value.trim() || !f.category.value || !f.subcategory.value) {
+    if (!f.title.value.trim() || !f.category.value) {
       toast(t('studio.fields'), 'error');
       return;
     }
@@ -192,7 +193,6 @@
         title: f.title.value.trim(),
         category: f.category.value,
         subcategory: f.subcategory.value,
-        city: f.city.value,
         description: f.description.value.trim(),
         isAdult: f.isAdult.checked,
         subscribersOnly: f.subscribersOnly.checked,

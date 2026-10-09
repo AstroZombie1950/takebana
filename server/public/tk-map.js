@@ -7,6 +7,10 @@
 // Страница подключает /vendor/pmtiles-4.5.0.js и этот файл; MapLibre (ES-модуль,
 // ~290 КБ сжатого) грузится здесь же при создании карты.
 //
+// Без center карта открывается миром (09.10, решение заказчика: прежде —
+// Белградом). Плитки за пределами вырезанного региона пустые — какой регион
+// лежит на сервере, решает ops/basemap/fetch.sh (docs/POSTS.md, «Карта мира»).
+//
 // TKMap.mount(container, { center: [lng, lat], zoom, cooperative }) → Promise<карта>:
 //   карта.setPoints([{ id, lng, lat, name, photo, online }])
 //   карта.on('hover', fn(id, { x, y }) — наведение на заведение; fn(null) — ушли)
@@ -17,10 +21,12 @@
 //   карта.fit([{ lng, lat }]) — показать все точки разом
 //   карта.mark(id, 'hot' | 'sel') — подсветить метку (наведение на карточку
 //     списка, выбранная); mark(null, …) — снять
+//   карта.world() — весь мир
 //
 // TKMap.pick(container, { center, zoom, point }) → Promise<выбор точки>:
 //   выбор.on('pick', fn({ lng, lat })) — метку перетащили или поставили щелчком
-//   выбор.setLngLat(lng, lat, zoom), выбор.getLngLat(), выбор.has(), выбор.clear()
+//   выбор.setLngLat(lng, lat, zoom), выбор.getLngLat(), выбор.has(), выбор.clear(),
+//   выбор.world()
 //   выбор.resize() — после показа окна, иначе карта считает себя нулевой
 //
 // TKMap.setLang('ru' | 'en') — подписи всех карт страницы на другом языке;
@@ -29,7 +35,8 @@
 // событием `tk:theme` (public/tk-theme.js)
 (function () {
   var LIB = '/vendor/maplibre-gl-6.9.0/maplibre-gl.mjs';
-  var BELGRADE = [20.4612, 44.8125];
+  // Мир без Антарктиды и крайнего севера: так материки занимают окно.
+  var WORLD = [[-170, -56], [180, 75]];
   var protocolReady = false;
 
   function lang() {
@@ -123,8 +130,9 @@
       var map = new lib.Map({
         container: container,
         style: res[1],
-        center: opts.center || BELGRADE,
-        zoom: opts.zoom || 11,
+        center: opts.center || undefined,
+        zoom: opts.center ? opts.zoom || 11 : undefined,
+        bounds: opts.center ? undefined : WORLD,
         attributionControl: { compact: true },
         // Карта посреди длинной страницы (главная) не перехватывает прокрутку:
         // масштаб — с Ctrl или ⌘, сдвиг на телефоне — двумя пальцами.
@@ -156,7 +164,7 @@
   // меткой в центре города не следует.
   function pick(container, opts) {
     opts = opts || {};
-    return createMap(container, { center: opts.point || opts.center, zoom: opts.zoom || 16 }).then(function (r) {
+    return createMap(container, { center: opts.point, zoom: opts.zoom || 16 }).then(function (r) {
       var lib = r.lib, map = r.map;
 
       var el = document.createElement('span');
@@ -212,7 +220,7 @@
           place(lng, lat);
           map.easeTo({ center: [lng, lat], zoom: zoom || Math.max(map.getZoom(), 16) });
         },
-        center: function (lng, lat, zoom) { map.jumpTo({ center: [lng, lat], zoom: zoom || map.getZoom() }); },
+        world: function () { map.fitBounds(WORLD, { animate: false }); },
         resize: function () { map.resize(); },
       };
     });
@@ -355,6 +363,7 @@
       panTo: function (lng, lat) {
         map.easeTo({ center: [lng, lat] });
       },
+      world: function () { map.fitBounds(WORLD); },
       // Одна точка — к ней на уровень улицы: рамка вокруг одной точки
       // увела бы в предельное приближение.
       fit: function (list) {

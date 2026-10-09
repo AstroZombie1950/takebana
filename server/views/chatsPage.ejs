@@ -258,7 +258,7 @@
             </button>
           </div>
           <form id="composeForm">
-            <button type="button" class="tk-chat__tool tk-chat__clip" id="attachBtn" aria-label="<%= ta('chats.attach') %>" data-i18n-aria="chats.attach" title="<%= ta('chats.attach') %>" data-i18n-title="chats.attach">
+            <button type="button" class="tk-chat__tool tk-chat__clip" id="attachBtn" aria-haspopup="menu" aria-expanded="false" aria-label="<%= ta('chats.attach') %>" data-i18n-aria="chats.attach" title="<%= ta('chats.attach') %>" data-i18n-title="chats.attach">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M20 11.5l-8.2 8.2a5 5 0 01-7.1-7.1l8.5-8.5a3.3 3.3 0 014.7 4.7l-8.4 8.4a1.7 1.7 0 01-2.4-2.4l7.7-7.7"></path></svg>
             </button>
             <input type="file" id="attachInput" multiple hidden>
@@ -381,6 +381,36 @@
     Внутри разделов не строки, а клетки (23.09): столбцом меню занимало
     пол-экрана телефона. Просмотров три — ставим в ряд, времени четыре —
     сеткой 2×2 (css/chats.css). %>
+<%# Скрепка (09.10): с устройства — как прежде, или из своих фото и видео —
+    без новой загрузки (utils/library.js). %>
+<div class="tk-msgmenu" id="attachMenu" role="menu" hidden>
+  <button type="button" role="menuitem" data-attach="device" data-i18n="chats.attachDevice"><%- t('chats.attachDevice') %></button>
+  <button type="button" role="menuitem" data-attach="library" data-i18n="chats.attachLibrary"><%- t('chats.attachLibrary') %></button>
+</div>
+
+<%# Свои фото и видео: сетка с отметками, «Отправить» — выбранное
+    вложениями в открытый диалог или группу (public/chats.js). %>
+<div class="tk-modal hidden" id="libraryModal">
+  <div class="tk-modal__card tk-lib">
+    <div class="tk-modal__head">
+      <h3 class="tk-modal__title" data-i18n="chats.attachLibrary"><%- t('chats.attachLibrary') %></h3>
+      <button type="button" class="tk-modal__close" id="libraryClose" aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+      </button>
+    </div>
+    <div class="tk-modal__body">
+      <div class="tk-lib__grid" id="libraryGrid"></div>
+      <p class="tk-note tk-note--center" id="libraryEmpty" hidden data-i18n="chats.libraryEmpty"><%- t('chats.libraryEmpty') %></p>
+      <button type="button" class="tk-btn tk-btn--outline tk-btn--sm tk-lib__more" id="libraryMore" hidden data-i18n="feed.more"><%- t('feed.more') %></button>
+    </div>
+    <div class="tk-modal__foot">
+      <button type="button" class="tk-btn tk-btn--primary tk-btn--sm tk-btn--block" id="librarySend" disabled>
+        <span data-i18n="chats.forwardSend"><%- t('chats.forwardSend') %></span><span id="libraryCount"></span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="tk-msgmenu tk-limitmenu" id="limitMenu" role="menu" hidden>
   <p class="tk-limitmenu__title" data-i18n="chats.limit.title"><%- t('chats.limit.title') %></p>
   <button type="button" role="menuitemradio" aria-checked="true" data-limit="" data-i18n="chats.limit.none"><%- t('chats.limit.none') %></button>

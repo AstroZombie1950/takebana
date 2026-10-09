@@ -12,7 +12,9 @@ const Stream = require('../../models/Stream');
 const Subscription = require('../../models/Subscription');
 const Contact = require('../../models/Contact');
 const Conversation = require('../../models/Conversation');
-const { SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
+const { CATEGORIES, SUB_CATEGORY, CITY_NAME } = require('../../config/catalog');
+const Post = require('../../models/Post');
+const topics = require('../../utils/topics');
 const { commonDataMiddleware, byNick } = require('./shared');
 const { notFound } = require('../../middleware/errors');
 const { fragmentOnly } = require('../../middleware/fragment');
@@ -28,13 +30,11 @@ const profileLinks = require('../../utils/profileLinks');
 const ogImage = require('../../utils/ogImage');
 const feed = require('../../utils/feed');
 
-// Вкладки каталога. popular — все категории разом, остальные совпадают
-// с кодами категорий в config/catalog.js.
+// Вкладки каталога. popular — все разделы разом, остальные — разделы
+// config/catalog.js (с 09.10 их девять, список строится из справочника).
 const PAGES = {
-  popular:       { i18n: 'cat.popularTitle' },
-  business:      { i18n: 'cat.businessTitle' },
-  entertainment: { i18n: 'cat.entertainmentTitle' },
-  fashion:       { i18n: 'cat.fashionTitle' },
+  popular: { i18n: 'cat.popularTitle' },
+  ...Object.fromEntries(Object.keys(CATEGORIES).map((code) => [code, { i18n: `cat.${code}Title` }])),
 };
 
 // Прежде роут отдавал не больше четырёх эфиров — с фильтрами это значило бы
@@ -167,25 +167,40 @@ router.get('/home/next', fragmentOnly(() => '/'), async (req, res) => {
   res.render('partials/feedPage', { items: page.items });
 });
 
-// Раздел «Лента» (04.10, решение Ивана): фото и видео, которые выкладывают
-// люди, одной колонкой, новые сверху — как в Инстаграме. Записи эфиров —
-// в «Популярном». ?kind=photo|video — только фото или только видео,
+// Раздел «Лента» (04.10, решение Ивана): то, что выкладывают люди, одной
+// колонкой, новые сверху — как в Инстаграме. С 09.10 — посты (текст, фото,
+// видео) и прежние фото и видео; записи эфиров — в «Популярном».
+// ?t=<раздел или тема> — только посты на эту тему (utils/topics.js),
 // ?before= — дальше по ленте (так листает «Показать ещё» без скрипта).
-// В индексе — первая страница без фильтра; остальное — noindex, follow:
-// сами фото и видео в индексе своими страницами и в карте сайта.
-const POST_KINDS = { photo: ['photo'], video: ['video'] };
-const postKinds = (q) => (POST_KINDS[q] ? q : '');
+// Прежний фильтр ?kind=photo|video (04.10) уступил темам — 301 на «Ленту».
+// В индексе — первая страница без фильтра и страницы тем; ?before= —
+// noindex, follow: сами посты в индексе своими страницами и в карте сайта.
+const topicOf = (q) => (topics.valid(q.t) ? q.t : '');
+
+// Разделы и темы, в которых есть посты, — для полосы фильтра: пустой пункт
+// вёл бы в пустую ленту. Отсчёт по темам — distinct по индексу topic.
+async function usedTopics() {
+  const used = new Set(await Post.distinct('topic', { status: 'ready', topic: { $gt: '' } }));
+  return Object.entries(CATEGORIES)
+    .map(([code, c]) => ({ code, i18n: c.i18n, subs: c.subs.filter((x) => used.has(x.code)).map((x) => ({ code: x.code, i18n: x.i18n })), has: used.has(code) }))
+    .filter((c) => c.has || c.subs.length);
+}
+
 router.get('/feed', commonDataMiddleware, async (req, res) => {
-  const kind = postKinds(req.query.kind);
+  if (req.query.kind !== undefined) return res.redirect(301, '/feed');
+  const topic = topicOf(req.query);
   const before = feed.cursor(req.query.before);
-  const page = await feed.page({ before, viewer: req.session.userId, kinds: POST_KINDS[kind] || ['photo', 'video'] });
-  res.render('feed', { kind, before: !!before, items: await feed.withTalk(page.items, req.session.userId), next: page.next });
+  const viewer = req.session.userId;
+  const [page, sections] = await Promise.all([
+    feed.page({ before, viewer, kinds: feed.POSTS, topic }),
+    usedTopics(),
+  ]);
+  res.render('feed', { topic, section: topics.sectionOf(topic), sections, before: !!before, items: await feed.withTalk(page.items, viewer), next: page.next });
 });
 
 // Следующая страница «Ленты» для catalog.js — как /home/next.
 router.get('/feed/next', fragmentOnly(() => '/feed'), async (req, res) => {
-  const kind = postKinds(req.query.kind);
-  const page = await feed.page({ before: feed.cursor(req.query.before), viewer: req.session.userId, kinds: POST_KINDS[kind] || ['photo', 'video'] });
+  const page = await feed.page({ before: feed.cursor(req.query.before), viewer: req.session.userId, kinds: feed.POSTS, topic: topicOf(req.query) });
   res.set('X-Feed-Next', page.next || '');
   res.render('partials/postPage', { items: await feed.withTalk(page.items, req.session.userId), me: req.session.userId ? String(req.session.userId) : '' });
 });
@@ -233,7 +248,7 @@ router.get('/streaming/:category/grid', fragmentOnly((req) => baseUrl(req.params
 // Старые адреса профиля, галереи и подписчиков. /gallery — общая лента
 // до 25.09.2026, теперь её место заняла вкладка «Фото». Подписчики
 // и подписки — на /@ник с 04.10 (docs/seo, задача 26).
-router.get(['/userPage/:id', '/userPage/:id/:tab(gallery|photos|videos|followers|following)'], commonDataMiddleware, async (req, res) => {
+router.get(['/userPage/:id', '/userPage/:id/:tab(gallery|photos|videos|recordings|followers|following)'], commonDataMiddleware, async (req, res) => {
   const user = /^[a-f\d]{24}$/i.test(req.params.id) ? await User.findById(req.params.id).select('nickname').lean() : null;
   // Без ника — «не найдено», а не 301 на самого себя.
   if (!user || !user.nickname) return notFound(req, res);
@@ -296,37 +311,38 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
       currentUserId ? privacy.messageGate(conversation, currentUserId, userId).then((g) => g.ok) : true,
       currentUserId ? privacy.decide('calls', userId, currentUserId).then((g) => g.ok) : true,
     ]);
-  // Записи — начало ленты, целиком — на /@ник/recordings.
-  const [recordings, recordingsTotal] = restricted
-    ? [[], 0]
-    : await Promise.all([gallery.recordings(userId, isSelf), gallery.recordingsCount(userId, isSelf)]);
-  // Галерея — вкладками «Фото» и «Видео» (utils/gallery.js): в профиле —
-  // начало каждой, целиком — на /@ник/photos и /@ник/videos. Владельцу
-  // видны и ролики в работе.
-  const [photos, videos, counts] = restricted
-    ? [[], [], { photos: 0, videos: 0, videosListed: 0 }]
-    : await Promise.all([gallery.photos(userId), gallery.videos(userId, isSelf), gallery.counts(userId, isSelf)]);
+  // С 09.10 (решение заказчика) в профиле нет блоков записей, фото и видео:
+  // их числа — ссылками на свои страницы (/@ник/recordings, /photos,
+  // /videos), а ниже «Стрима» — лента автора: посты, фото и видео, как
+  // в «Ленте» (utils/feed.js). Владельцу видны и посты в работе.
+  const [recordingsTotal, counts, posts] = restricted
+    ? [0, { photos: 0, videos: 0, videosListed: 0 }, { items: [], next: null }]
+    : await Promise.all([
+      gallery.recordingsCount(userId, isSelf),
+      gallery.counts(userId, isSelf),
+      feed.page({ viewer: currentUserId, kinds: feed.POSTS, author: user._id }),
+    ]);
+  const items = await feed.withTalk(posts.items, currentUserId);
 
   res.locals.pageOwner = { id: String(userId), scope: 'profile', access: restricted ? 'them' : iRestricted ? 'me' : '' };
 
-  // В поиск — только профиль, где есть что смотреть: запись, фото, видео
-  // или идущий эфир. Пустых («зарегистрировался и ушёл») тысячи одинаковых,
+  // В поиск — только профиль, где есть что смотреть: запись, пост, фото,
+  // видео или идущий эфир. Пустых («зарегистрировался и ушёл») тысячи одинаковых,
   // забаненный из выдачи выпадает (docs/seo/DECISIONS.md). «Показывать
   // меня в поиске» касается только поиска по сайту и подборок — не
   // поисковиков (решение Ивана 25.09.2026: убрать из Google можно руками).
   const indexable = !user.banned
-    && (!!activeStream || counts.photos + counts.videos > 0 || recordings.some((r) => r.status === 'ready'));
+    && (!!activeStream || counts.photos + counts.videos > 0 || recordingsTotal > 0 || items.some((i) => !i.processing));
 
   // Передача данных в шаблон
   res.render('userPage', {
     indexable,
     // Карточка для мессенджеров с CDN или null — общая обложка (utils/ogImage.js).
     ogImage: ogImage.forProfile(user),
-    recordings,
     recordingsTotal,
-    photos,
-    videos,
     counts,
+    items,
+    next: posts.next,
     restricted,
     iRestricted,
     inContacts,
@@ -363,6 +379,16 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
     }
   });
 });
+// Следующая страница ленты автора для catalog.js — как /feed/next.
+router.get('/@:nick/feed', fragmentOnly((req) => '/@' + req.params.nick), async (req, res) => {
+  const user = await User.findOne({ nickname: String(req.params.nick) }).select('_id').lean();
+  const me = req.session.userId;
+  const closed = !user || (!!me && String(user._id) !== String(me) && await restriction.isRestricted(user._id, me));
+  const page = closed ? { items: [], next: null } : await feed.page({ before: feed.cursor(req.query.before), viewer: me, kinds: feed.POSTS, author: user._id });
+  res.set('X-Feed-Next', page.next || '');
+  res.render('partials/postPage', { items: await feed.withTalk(page.items, me), me: me ? String(me) : '' });
+});
+
 // Прежняя общая лента — на вкладку «Фото», с тем же номером страницы.
 router.get('/@:nick/gallery', (req, res) => {
   const qs = req.originalUrl.indexOf('?');
@@ -396,8 +422,8 @@ router.get('/@:nick/recordings', commonDataMiddleware, async (req, res) => {
     owner: { _id: user._id, displayName: userView.displayName(user), url: profileUrl(user) },
     isSelf,
     restricted,
-    // Пока все записи помещаются в профиль, страница его повторяет — вне индекса.
-    indexable: !user.banned && total > gallery.PREVIEW.recordings,
+    // С 09.10 профиль записей не показывает — страница в индексе, когда они есть.
+    indexable: !user.banned && total > 0,
     items,
     total,
     page: pg.page,
@@ -438,8 +464,8 @@ router.get('/@:nick/:tab(photos|videos)', commonDataMiddleware, async (req, res)
     owner: { _id: user._id, displayName: userView.displayName(user), url: profileUrl(user) },
     isSelf,
     restricted,
-    // Не больше того, что уже есть в профиле, — страница-дубль, вне индекса.
-    indexable: !user.banned && total > gallery.PREVIEW[tab],
+    // С 09.10 профиль не показывает начало вкладок — в индексе, когда есть что.
+    indexable: !user.banned && total > 0,
     items,
     counts,
     page: pg.page,

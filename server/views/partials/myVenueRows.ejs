@@ -1,7 +1,7 @@
 <%#
   Свои заведения строками — ссылками на их страницы (камера, правка,
   настройки — там): «Мои заведения» /venues/mine и настройки профиля (29.09).
-  Ждёт venues с полями name type city avatar online status reviewedAt
+  Ждёт venues с полями name type country avatar online status reviewedAt
   pending.at и state — [класс, ключ подписи] из utils/venueOwner.js (stateOf).
   Вид — app.css, «Свои заведения».
 %>
@@ -12,7 +12,7 @@
       <span class="tk-myv__ava" data-user-content><% if (v.avatar) { %><img src="<%= avaSmall(v.avatar) %>" alt=""><% } else { %><%= (String(v.name || '').match(/[\p{L}\p{N}]/u) || ['•'])[0].toUpperCase() %><% } %></span>
       <span class="tk-myv__body">
         <span class="tk-myv__name" data-user-content><%= v.name %></span>
-        <% var vmeta = [placeHtml('type', v.type, v.typeOther), placeHtml('city', v.city, v.cityOther)].filter(Boolean).join(' · '); %>
+        <% var vmeta = [placeHtml('type', v.type, v.typeOther), placeHtml('country', v.country, v.countryOther)].filter(Boolean).join(' · '); %>
         <% if (vmeta) { %><span class="tk-myv__meta"><%- vmeta %></span><% } %>
       </span>
       <span class="tk-myv__state <%= v.state[0] %>" data-i18n="<%= v.state[1] %>"><%- t(v.state[1]) %></span>

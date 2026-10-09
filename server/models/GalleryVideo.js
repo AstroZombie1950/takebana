@@ -50,6 +50,9 @@ const galleryVideoSchema = new Schema({
   thumb: { type: fileSchema, default: () => ({}) },
   // Счётчики — как у записи (models/Recording.js): источники те же
   // RecordingView, RecordingReaction, RecordingComment.
+  // Из поста (09.10, models/Post.js): в «Ленте» отдельной карточкой
+  // не идёт — его показывает пост; в «Видео» автора — как все.
+  post: { type: Schema.Types.ObjectId, ref: 'Post', default: null },
   views: { type: Number, default: 0 },
   likes: { type: Number, default: 0 },
   dislikes: { type: Number, default: 0 },
@@ -59,6 +62,8 @@ const galleryVideoSchema = new Schema({
 
 // Галерея человека — новые сверху.
 galleryVideoSchema.index({ userId: 1, createdAt: -1 });
+// «Лента»: видео не из постов (utils/feed.js).
+galleryVideoSchema.index({ status: 1, post: 1, createdAt: -1 });
 // Вкладка «Видео» заведения.
 galleryVideoSchema.index({ venue: 1, createdAt: -1 }, { partialFilterExpression: { venue: { $type: 'objectId' } } });
 // Уборка брошенных загрузок (utils/galleryVideo.js, sweepDrafts).

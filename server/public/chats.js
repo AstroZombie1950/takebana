@@ -337,12 +337,12 @@
   // Публикация, которой поделились (05.10, utils/share.js): карточка
   // с картинкой, видом и автором — ведёт на страницу публикации.
   // Названия нет — подпись видом: «Фото», «Видео», «Запись эфира».
-  var SHARE_KIND = { photo: 'chats.att.image', video: 'chats.att.video', recording: 'feed.recording' };
+  var SHARE_KIND = { photo: 'chats.att.image', video: 'chats.att.video', recording: 'feed.recording', post: 'post.kind' };
   function shareHtml(s) {
     var kind = SHARE_KIND[s.kind] || 'chats.att.share';
     return '<a class="tk-share tk-share--' + escapeHtml(s.kind) + '" href="' + escapeHtml(s.url) + '">' +
       '<span class="tk-share__pic">' + (s.image ? '<img src="' + escapeHtml(src(s.image)) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' : '') +
-        (s.kind === 'photo' ? '' : '<span class="tk-share__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22">' + PLAY + '</svg></span>') + '</span>' +
+        (s.kind === 'photo' || s.kind === 'post' ? '' : '<span class="tk-share__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22">' + PLAY + '</svg></span>') + '</span>' +
       '<span class="tk-share__body"><span class="tk-share__kind">' + i18nSpan(kind) + '</span>' +
         (s.title ? '<span class="tk-share__title">' + escapeHtml(s.title) + '</span>' : '') +
         '<span class="tk-share__author">' + escapeHtml(s.author) + '</span></span></a>';
@@ -1259,6 +1259,16 @@
     // вместо списка.
     $('chat').classList.add('has-peer', 'is-open');
     openHistory();
+    useDraft();
+  }
+
+  // Текст из системного «Поделиться» (09.10, /share → ?text=): ждёт, пока
+  // выберут, кому отправить, и ложится в поле первого открытого диалога.
+  var draft = new URLSearchParams(location.search).get('text') || '';
+  function useDraft() {
+    if (!draft) return;
+    if (!input.value) { input.value = draft; fitInput(); }
+    draft = '';
   }
 
   // fromHistory — уже вернулись к списку «Назад»: историю не трогать.
@@ -1316,6 +1326,7 @@
     dialogUrl('/chatsPage?group=' + encodeURIComponent(g.id));
     $('chat').classList.add('has-peer', 'is-open');
     openHistory();
+    useDraft();
   }
 
   function paintGroupHead() {
@@ -1697,7 +1708,124 @@
   });
 
   var fileInput = $('attachInput');
-  $('attachBtn').addEventListener('click', function () { fileInput.click(); });
+
+  // ── Скрепка: с устройства или из своих фото и видео (09.10) ──
+  // Меню над кнопкой, как у выбора ограничения. «Мои фото и видео» —
+  // окно с галереей (/api/library), выбранное уходит вложениями без новой
+  // загрузки (routes/streaming/messages.js, /messages/library).
+  var attachBtn = $('attachBtn');
+  var attachMenu = $('attachMenu');
+  function closeAttachMenu() {
+    if (attachMenu.hidden) return;
+    attachMenu.hidden = true;
+    attachBtn.setAttribute('aria-expanded', 'false');
+  }
+  attachBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (!attachMenu.hidden) return closeAttachMenu();
+    attachMenu.hidden = false;
+    attachBtn.setAttribute('aria-expanded', 'true');
+    var r = attachBtn.getBoundingClientRect();
+    attachMenu.style.left = Math.max(8 + safe('l'), Math.min(r.left, innerWidth - safe('r') - attachMenu.offsetWidth - 8)) + 'px';
+    attachMenu.style.top = Math.max(8 + safe('t'), r.top - attachMenu.offsetHeight - 8) + 'px';
+    attachMenu.querySelector('[data-attach]').focus();
+  });
+  attachMenu.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-attach]');
+    if (!b) return;
+    closeAttachMenu();
+    if (b.getAttribute('data-attach') === 'device') fileInput.click();
+    else openLibrary();
+  });
+  document.addEventListener('click', function (e) { if (!attachMenu.contains(e.target)) closeAttachMenu(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAttachMenu(); });
+
+  var lib = $('libraryModal');
+  var libGrid = $('libraryGrid');
+  var libMore = $('libraryMore');
+  var libSend = $('librarySend');
+  var libPicked = [];       // [{ kind, id }] — в порядке отметок
+  var libNext = null;
+  var LIB_MAX = 10;         // utils/library.js, SEND_MAX
+
+  function libPaint() {
+    libGrid.querySelectorAll('[data-lib]').forEach(function (el) {
+      var i = libPicked.findIndex(function (x) { return x.id === el.getAttribute('data-lib'); });
+      el.setAttribute('aria-pressed', String(i !== -1));
+      el.querySelector('.tk-lib__n').textContent = i === -1 ? '' : String(i + 1);
+    });
+    libSend.disabled = !libPicked.length;
+    $('libraryCount').textContent = libPicked.length ? ' (' + libPicked.length + ')' : '';
+  }
+
+  function libLoad() {
+    libMore.disabled = true;
+    return TKNet.json('/api/library' + (libNext ? '?before=' + encodeURIComponent(libNext) : '')).then(function (d) {
+      d.items.forEach(function (it) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'tk-lib__item';
+        b.setAttribute('data-lib', it.id);
+        b.setAttribute('data-kind', it.kind);
+        b.setAttribute('aria-pressed', 'false');
+        b.setAttribute('aria-label', t(it.kind === 'photo' ? 'chats.att.image' : 'chats.att.video'));
+        b.innerHTML = (it.thumb ? '<img src="' + escapeHtml(src(it.thumb)) + '" alt="" loading="lazy" decoding="async">' : '') +
+          (it.kind === 'video' ? '<span class="tk-lib__len">' + escapeHtml(clock(it.duration || 0)) + '</span>' : '') +
+          '<span class="tk-lib__n"></span>';
+        libGrid.appendChild(b);
+      });
+      libNext = d.next;
+      libMore.hidden = !libNext;
+      $('libraryEmpty').hidden = !!libGrid.children.length;
+      libPaint();
+    }).catch(TKNet.say).then(function () { libMore.disabled = false; });
+  }
+
+  function openLibrary() {
+    if (!chatKey()) return;
+    // Исчезающее стирает свои файлы — файл из галереи так не отдаём.
+    if (limitOpt) return toast(t('chats.libraryNoLimit'));
+    libPicked = [];
+    libNext = null;
+    libGrid.innerHTML = '';
+    lib.classList.remove('hidden');
+    libLoad();
+  }
+  function closeLibrary() { lib.classList.add('hidden'); }
+
+  libGrid.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-lib]');
+    if (!b) return;
+    var id = b.getAttribute('data-lib');
+    var i = libPicked.findIndex(function (x) { return x.id === id; });
+    if (i !== -1) libPicked.splice(i, 1);
+    else if (libPicked.length >= LIB_MAX) return toast(t('chats.libraryLimit', { n: LIB_MAX }));
+    else libPicked.push({ kind: b.getAttribute('data-kind'), id: id });
+    libPaint();
+  });
+  libMore.addEventListener('click', libLoad);
+  $('libraryClose').addEventListener('click', closeLibrary);
+  lib.addEventListener('click', function (e) { if (e.target === lib) closeLibrary(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !lib.classList.contains('hidden')) closeLibrary(); });
+
+  libSend.addEventListener('click', function () {
+    if (!libPicked.length || !chatKey()) return;
+    var to = { peerId: peer ? peer.id : '', groupId: group ? group.id : '', chat: chatKey() };
+    var body = { items: libPicked, content: input.value.trim() };
+    if (to.groupId) body.groupId = to.groupId; else body.recipientId = to.peerId;
+    var reply = takeReply();
+    if (reply) body.replyTo = reply;
+    libSend.disabled = true;
+    TKNet.json('/messages/library', { method: 'POST', body: body }).then(function (d) {
+      input.value = '';
+      fitInput();
+      closeLibrary();
+      d.messages.forEach(function (m) { delivered(m, to); });
+    }).catch(function (err) {
+      libSend.disabled = false;
+      toast(err.message, 'error');
+    });
+  });
   fileInput.addEventListener('change', function () {
     queueFiles(Array.prototype.slice.call(fileInput.files));
     fileInput.value = '';
@@ -3917,6 +4045,7 @@
     tkFetch('/api/groups/' + encodeURIComponent(groupId)).then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { if (d) window.TKChats.openGroup(d.group); });
   } else if (groupId) target = groupEl(groupId);
+  if (draft && !target && !peerId && !groupId) toast(t('share.pickChat'));
   var onContactsTab = params.get('tab') === 'contacts';
   // Контакты нужны не только своей вкладке: по ним меню человека решает,
   // предлагать «В контакты» или «Убрать из контактов».

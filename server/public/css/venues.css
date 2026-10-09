@@ -324,6 +324,7 @@
   flex-wrap: wrap;
 }
 
+.tk-venues__acts { display: flex; flex: none; gap: 8px; }
 .tk-venues__mine { flex: none; white-space: nowrap; }
 
 .tk-venues__count {
@@ -710,14 +711,15 @@
 }
 
 @media (max-width: 639px) {
-  /* Фильтры — сеткой два на два, без прокрутки вбок (30.09: ленту, которая
-   * листается пальцем, не все находили). Страна и город, потом «Фильтры»
-   * (тип, «в эфире», «открыто») и сортировка. */
+  /* Фильтры — сеткой, без прокрутки вбок (30.09: ленту, которая
+   * листается пальцем, не все находили). Страна во всю ширину, под ней
+   * «Фильтры» (тип, «в эфире», «открыто») и сортировка. */
   .tk-venues__filters {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 8px;
   }
+  .tk-venues__filters > .tk-venues__ctl:first-child { grid-column: 1 / -1; }
 
   .tk-venues__ctl { min-width: 0; }
   .tk-venues__ddbtn { max-width: none; }
@@ -728,8 +730,9 @@
   .tk-venues__ddpanel { right: 0; width: auto; max-width: none; }
   .tk-venues__reset { grid-column: 1 / -1; justify-self: end; }
 
-  /* «Зарегистрировать заведение» — во всю ширину, под палец. */
-  .tk-venues__mine { flex: 1 1 100%; padding-top: 14px; padding-bottom: 14px; }
+  /* «Зарегистрировать заведение» и «Мои заведения» — во всю ширину, под палец. */
+  .tk-venues__acts { flex: 1 1 100%; }
+  .tk-venues__mine { flex: 1 1 0; padding-top: 14px; padding-bottom: 14px; }
 
   .tk-venues__cards { grid-template-columns: minmax(0, 1fr); }
   .tk-venues__list { padding-bottom: calc(88px + var(--tk-safe-b)); }

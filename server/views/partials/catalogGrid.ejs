@@ -42,11 +42,11 @@
       <div class="tk-card__text">
         <h3 class="tk-card__title"><%= stream.title %></h3>
         <p class="tk-card__who"><%= stream.user.displayName %></p>
-        <% var cat = catalog.CATEGORIES[stream.category], city = catalog.CITY_NAME[stream.city]; %>
-        <% if (cat || city) { %>
+        <%# Город эфира не показываем с 09.10 — выбор города скрыт. %>
+        <% var cat = catalog.CATEGORIES[stream.category]; %>
+        <% if (cat) { %>
         <div class="tk-card__tags">
-          <% if (cat) { %><span class="tk-card__cat" data-i18n="<%= cat.i18n %>"><%= ta(cat.i18n, cat.name) %></span><% } %>
-          <% if (city) { %><span class="tk-card__cat" data-i18n="city.<%= stream.city %>"><%= ta('city.' + stream.city, city) %></span><% } %>
+          <span class="tk-card__cat" data-i18n="<%= cat.i18n %>"><%= ta(cat.i18n, cat.name) %></span>
         </div>
         <% } %>
       </div>

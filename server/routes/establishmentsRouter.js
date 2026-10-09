@@ -66,7 +66,7 @@ const { pageVenue, tabsFor, indexableVenue } = require('../utils/venuePage');
 const { fragmentOnly } = require('../middleware/fragment');
 
 // Что нужно карточке выдачи /venues. Почты, телефона и владельца в ней нет.
-const CARD_FIELDS = 'name type typeOther city cityOther address about weekdayHours weekendHours tz location photos avatar cover online ratingAvg ratingCount';
+const CARD_FIELDS = 'name type typeOther country countryOther address about weekdayHours weekendHours tz location photos avatar cover online ratingAvg ratingCount';
 
 
 
@@ -92,9 +92,7 @@ const SORT = {
 
 async function listVenues(f) {
     const where = f.q ? venuesWhere(new RegExp(escapeRegex(f.q), 'i')) : { status: true };
-    // Код города однозначен сам по себе — страна при нём ничего не сужает.
-    if (f.city) where.city = f.city;
-    else if (f.country) where.country = f.country;
+    if (f.country) where.country = f.country;
     if (f.types.length) where.type = { $in: f.types };
     if (f.live) where.online = true;
     const venues = await Establishments.find(where).select(CARD_FIELDS).sort(SORT[f.sort]).limit(LIST_LIMIT).lean();
@@ -106,19 +104,12 @@ async function listVenues(f) {
 
 // Каркас кабинета, поэтому commonDataMiddleware: шапке и левой панели нужны
 // профиль, подписки и уведомления. Открыт и гостю.
-// Страны и города в фильтре — только те, где есть одобренные заведения:
-// пустой пункт ведёт в пустую выдачу. Своё владельцев («Другое») в фильтр
-// не попадает, пока панель не возьмёт его в список (utils/places.js).
+// Страны в фильтре — только те, где есть одобренные заведения: пустой
+// пункт ведёт в пустую выдачу. Своё владельцев (до 09.10) в фильтр не
+// попадает, пока панель не возьмёт его в список (utils/places.js).
 async function filterPlaces(lang) {
-    const [countries, cities] = await Promise.all([
-        Establishments.distinct('country', { status: true }),
-        Establishments.distinct('city', { status: true }),
-    ]);
-    const has = (list) => (x) => list.includes(x.code);
-    return {
-        countries: places.options('country', lang).filter(has(countries)),
-        cities: places.options('city', lang).filter(has(cities)),
-    };
+    const countries = await Establishments.distinct('country', { status: true });
+    return { countries: places.options('country', lang).filter((x) => countries.includes(x.code)) };
 }
 
 router.get('/venues', commonDataMiddleware, wrap(async (req, res) => {
@@ -139,7 +130,7 @@ router.get('/venues/cards', fragmentOnly(() => '/venues'), wrap(async (req, res)
 router.get('/venues/mine', requireAuth, commonDataMiddleware, wrap(async (req, res) => {
     const [venues, apply] = await Promise.all([
         Establishments.find({ owner: req.session.userId })
-            .select('name type typeOther city cityOther status reviewedAt online avatar pending.at').sort({ _id: 1 }).lean(),
+            .select('name type typeOther country countryOther status reviewedAt online avatar pending.at').sort({ _id: 1 }).lean(),
         applyState(req.session.userId),
     ]);
     res.render('myVenues', { venues: venues.map((v) => ({ ...v, state: stateOf(v) })), apply });
@@ -196,7 +187,7 @@ router.post('/register-establishment', requireAuth, validate({
     });
 
     const savedEstablishment = await establishment.save();
-    audit(req, 'venue.apply', { targetType: 'venue', target: savedEstablishment, meta: { country: savedEstablishment.country || savedEstablishment.countryOther, city: savedEstablishment.city || savedEstablishment.cityOther, type: savedEstablishment.type || savedEstablishment.typeOther } });
+    audit(req, 'venue.apply', { targetType: 'venue', target: savedEstablishment, meta: { country: savedEstablishment.country, type: savedEstablishment.type || savedEstablishment.typeOther } });
     res.json({ message: 'Заявка отправлена', establishment: savedEstablishment });
 }));
 
@@ -216,14 +207,13 @@ router.get('/establishmentsLocation', wrap(async (req, res) => {
         'location.lng': { $gte: west, $lte: east },
         status: true, // заведение прошло проверку
     };
-    if (filters.city) where.city = filters.city;
     if (filters.types.length) where.type = { $in: filters.types };
     if (filters.live) where.online = true;
 
     // Потолок — на случай, когда карта отдалена на всю Европу: список
     // в панели всё равно показывает только видимое.
     const establishments = await Establishments.find(where)
-        .select('name type city location online photos avatar')
+        .select('name type location online photos avatar')
         .limit(500)
         .lean();
 
@@ -272,7 +262,7 @@ router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments)
     const { name, address, about, weekdayHours, weekendHours, location } = req.body;
     const { lat, lng } = location || {};
 
-    // Тип, страна и город приходят тройкой — форма шлёт их всегда. Нет ни
+    // Тип и страна приходят парой — форма шлёт их всегда. Нет ни
     // одного — не трогаем.
     let place = {};
     if (places.KINDS.some((k) => req.body[k] !== undefined || req.body[k + 'Other'] !== undefined)) {
@@ -356,7 +346,7 @@ router.delete('/establishment/:id', requireAuth, requireOwner(Establishments), w
 
     // Камера, оценки и фото уходят вместе с ним: utils/userDelete.js.
     await removeVenue(venue);
-    audit(req, 'venue.delete', { targetType: 'venue', target: venue, meta: { city: venue.city, byOwner: true } });
+    audit(req, 'venue.delete', { targetType: 'venue', target: venue, meta: { country: venue.country, byOwner: true } });
     res.json({ ok: true });
 }));
 

@@ -29,8 +29,8 @@
   var here = typeof path !== 'undefined' ? path : '';
   var guest = !currentUser;
   var myPage = guest ? '' : currentUser.url;
-  // «Мои заведения» (29.09) — только у того, у кого они есть: одно — ссылка
-  // на его страницу, несколько — на список (routes/streaming/shared.js).
+  // «Мои заведения» (29.09) — только у того, у кого они есть: ссылка
+  // на их список с «Добавить заведение» (routes/streaming/shared.js).
   var mine = !guest && currentUser.venuesHref
     ? { href: currentUser.venuesHref, i18n: 'venues.mine', noteI18n: 'side.mineNote', icon: '<path d="M4 20V9l8-5 8 5v11"></path><path d="M9 20v-6h6v6"></path>' }
     : null;
@@ -42,9 +42,8 @@
     { href: '/about', i18n: 'nav.whatIs', noteI18n: 'side.aboutNote', icon: '<circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5v.01"></path>' }
   ].filter(Boolean);
   // Чей пункт подсвечивать, если у страницы своего нет: категория и «Авторы» —
-  // «Популярное», заявка заведения — «Заведения», список своих — «Мои заведения».
+  // «Популярное», заявка заведения — «Заведения».
   var parentOf = { '/authors': '/', '/company-register': '/venues' };
-  if (mine) parentOf['/venues/mine'] = mine.href;
   var active = cat ? '/' : (parentOf[here] || here);
   var online = (subscriptions || []).filter(function (x) { return x.status === 'online'; }).length;
   // Вкладка переписки, открытая сейчас: подсвечивает свой пункт. Дальше

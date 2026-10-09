@@ -9,18 +9,17 @@
   вёрстка — css/venues.css, карта — public/tk-map.js (грузится, только когда
   её показывают: на телефоне в списке она не нужна).
 
-  Фильтры (30.09): страна, потом город; тип — одной выпадашкой с галочками;
+  Фильтры (30.09): страна (города с 09.10 нет); тип — одной выпадашкой с галочками;
   «В эфире» и «Открыто сейчас» — метками рядом, а на телефоне скрипт кладёт
   их в ту же выпадашку («Фильтры»): всё помещается без прокрутки вбок.
-  У порядка — постоянная подпись «Сортировка». where — страны и города,
+  У порядка — постоянная подпись «Сортировка». where — страны,
   где есть заведения (routes/establishmentsRouter.js, filterPlaces).
 %>
-<% var anyFilter = filters.q || filters.country || filters.city || filters.types.length || filters.live || filters.open || filters.sort !== 'live';
+<% var anyFilter = filters.q || filters.country || filters.types.length || filters.live || filters.open || filters.sort !== 'live';
    var count = plural(venues.length, 'venues.count');
    var scope = filters.q ? ta('venues.scopeQuery', { q: filters.q })
-             : filters.city ? placeLabel('city', filters.city)
              : filters.country ? placeLabel('country', filters.country)
-             : ta('common.allCities');
+             : ta('common.allCountries');
    // Подпись выпадашки типов: «Все», одно-два имени или «Выбрано: N».
    var typeNames = filters.types.map(function (c) { return placeLabel('type', c); });
    var typeVal = !typeNames.length ? ta('venues.anyType') : typeNames.length <= 2 ? typeNames.join(', ') : ta('venues.picked', { n: typeNames.length });
@@ -96,18 +95,7 @@
           <select name="country" class="tk-select tk-venues__sel" id="venueCountry" data-listbox-touch>
             <option value="" data-i18n="common.allCountries"><%- t('common.allCountries') %></option>
             <% where.countries.forEach(function (c) { %>
-            <option value="<%= c.code %>"<%= filters.country === c.code ? ' selected' : '' %><% if (c.i18n) { %> data-i18n="<%= c.i18n %>"<% } else { %> data-user-content<% } %>><%= c.text %></option>
-            <% }); %>
-          </select>
-        </label>
-        <%# Город — после страны: без неё заперт. Пункты всех стран здесь,
-            скрипт оставляет города выбранной (data-country). %>
-        <label class="tk-venues__ctl">
-          <span class="tk-venues__cap" data-i18n="venues.city"><%- t('venues.city') %></span>
-          <select name="city" class="tk-select tk-venues__sel" id="venueCity" data-listbox-touch<%= filters.country ? '' : ' disabled' %>>
-            <option value="" data-i18n="common.allCities"><%- t('common.allCities') %></option>
-            <% where.cities.forEach(function (c) { %>
-            <option value="<%= c.code %>" data-country="<%= c.country %>"<%= filters.city === c.code ? ' selected' : '' %><% if (c.i18n) { %> data-i18n="<%= c.i18n %>"<% } else { %> data-user-content<% } %>><%= c.text %></option>
+            <option value="<%= c.code %>"<%= filters.country === c.code ? ' selected' : '' %><% if (c.region) { %> data-i18n-region="<%= c.region %>"<% } else { %> data-user-content<% } %>><%= c.text %></option>
             <% }); %>
           </select>
         </label>
@@ -146,15 +134,18 @@
       <section class="tk-venues__list" aria-label="<%= ta('venues.aria') %>" data-i18n-aria="venues.aria">
         <div class="tk-venues__head">
           <p class="tk-venues__count" id="venueCount"><b data-i18n="<%= count.key %>" data-i18n-vars='<%= JSON.stringify({ n: venues.length }) %>'><%= count.text %></b> <span><%= scope %></span></p>
-          <%# Владельцу — его заведения (тот же адрес, что у пункта левой панели),
-              остальным — заявка. %>
-          <%# Заявка — заметной красной кнопкой (30.09): ссылкой мелким шрифтом
-              её не находили. %>
-          <% if (currentUser && currentUser.venuesHref) { %>
-          <a href="<%= currentUser.venuesHref %>" class="tk-btn tk-btn--outline tk-btn--sm tk-venues__mine" data-i18n="venues.mine"><%- t('venues.mine') %></a>
-          <% } else { %>
-          <a href="/company-register" class="tk-btn tk-btn--primary tk-btn--sm tk-venues__mine" data-i18n="venues.register"><%- t('venues.register') %></a>
-          <% } %>
+          <%# Владельцу — его заведения (тот же адрес, что у пункта левой панели)
+              и заявка на следующее (09.10: с одним заведением второе было
+              не добавить — кнопки не было), остальным — заявка. Заявка —
+              заметной красной кнопкой (30.09): ссылкой мелким шрифтом её
+              не находили. Предел и «заявка на проверке» объясняет её страница. %>
+          <span class="tk-venues__acts">
+            <% if (currentUser && currentUser.venuesHref) { %>
+            <a href="<%= currentUser.venuesHref %>" class="tk-btn tk-btn--outline tk-btn--sm tk-venues__mine" data-i18n="venues.mine"><%- t('venues.mine') %></a>
+            <% } %>
+            <% var regKey = currentUser && currentUser.venuesHref ? 'venues.add' : 'venues.register'; %>
+            <a href="/company-register" class="tk-btn tk-btn--primary tk-btn--sm tk-venues__mine" data-i18n="<%= regKey %>"><%- t(regKey) %></a>
+          </span>
         </div>
         <div class="tk-venues__cards" id="venueCards"><%- include('partials/venueCards') %></div>
         <div class="tk-venues__empty" id="venueEmpty"<%= venues.length ? ' hidden' : '' %>>

@@ -21,6 +21,7 @@ asyncify(router); // ошибки async-обработчиков уходят в
 const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
 const GalleryPhoto = require('../models/GalleryPhoto');
+const Post = require('../models/Post');
 const RecordingReaction = require('../models/RecordingReaction');
 const RecordingComment = require('../models/RecordingComment');
 const RecordingView = require('../models/RecordingView');
@@ -34,6 +35,8 @@ const { commonDataMiddleware } = require('./streaming/shared');
 const recording = require('../utils/recording');
 const galleryVideo = require('../utils/galleryVideo');
 const galleryPhotos = require('../utils/galleryPhotos');
+const posts = require('../utils/posts');
+const topics = require('../utils/topics');
 const mentions = require('../utils/mentions');
 const { meaningful } = require('../utils/snippet');
 const recommend = require('../utils/recommend');
@@ -49,11 +52,15 @@ const { TITLE_MAX, DESCRIPTION_MAX } = galleryVideo;
 const COMMENT_MAX = 2000;
 
 // kind — имя в жалобах (models/Report.js), подборке и журнале; i18n —
-// префикс строк страницы (rec.*, video.* или photo.*); back — куда уйти
-// после удаления; view — шаблон страницы; edit — что правит автор.
+// префикс строк страницы (rec.*, video.*, photo.* или post.*); back — куда
+// уйти после удаления; view — шаблон страницы; edit — что правит автор.
+// Ролики (запись и видео) — с плеером, просмотрами, дизлайком, подборкой
+// «Смотрите также» и «от имени заведения» (clip).
 //
 // У фото (25.09) нет статуса обработки, просмотров, дизлайка и подборки:
-// лента фото — как в Инстаграме, сердечко и комментарии.
+// лента фото — как в Инстаграме, сердечко и комментарии. У поста (09.10) —
+// так же, но статус есть: пока его ролики пережимаются, его видит только
+// автор (utils/posts.js).
 const TEXT_EDIT = (titleRequired) => ({
   schema: {
     title: { type: 'string', required: titleRequired, allowEmpty: !titleRequired, max: TITLE_MAX, label: 'Название' },
@@ -65,12 +72,13 @@ const TEXT_EDIT = (titleRequired) => ({
 const KINDS = {
   recording: {
     Model: Recording,
+    clip: true,
     i18n: 'rec',
     view: 'watch',
     notFound: 'Запись не найдена',
     text: 'description',
     edit: TEXT_EDIT(true), // у записи без названия не бывает: его даёт эфир
-    back: (user) => profileUrl(user) + '#recordings',
+    back: (user) => profileUrl(user) + '/recordings',
     // Пока запись склеивается, удалять нечего: файлов ещё нет, а склейка
     // допишет документ.
     busy: (doc) => (doc.status === 'processing' ? 'Запись ещё сохраняется, удалить можно после' : ''),
@@ -80,6 +88,7 @@ const KINDS = {
   },
   video: {
     Model: GalleryVideo,
+    clip: true,
     i18n: 'video',
     view: 'watch',
     notFound: 'Видео не найдено',
@@ -109,6 +118,24 @@ const KINDS = {
     remove: (doc) => galleryPhotos.remove(doc),
     date: (doc) => doc.createdAt,
   },
+  post: {
+    Model: Post,
+    i18n: 'post',
+    view: 'post',
+    notFound: 'Пост не найден',
+    text: 'text',
+    edit: {
+      schema: {
+        text: { type: 'string', max: posts.TEXT_MAX, allowEmpty: true, label: 'Текст' },
+        topic: { type: 'string', max: 40, allowEmpty: true, label: 'Тема' },
+      },
+      set: (body) => ({ text: body.text || '', topic: topics.valid(body.topic) ? body.topic : '' }),
+    },
+    back: (user) => profileUrl(user),
+    busy: () => '',
+    remove: (doc) => posts.remove(doc),
+    date: (doc) => doc.createdAt,
+  },
 };
 
 // Номер среди одноимённых за день (07.10, вариант «В» Ивана): человек
@@ -133,6 +160,17 @@ async function sameDayNo(K, item) {
 
 // Фото всегда готово: обрабатывать его нечего.
 const isReady = (K, doc) => K.photo || doc.status === 'ready';
+
+// Фото и видео поста по порядку — для его страницы.
+async function postMedia(post) {
+  const ids = (kind) => post.media.filter((m) => m.kind === kind).map((m) => m.ref);
+  const [photos, videos] = await Promise.all([
+    GalleryPhoto.find({ _id: { $in: ids('photo') } }).select('url width height').lean(),
+    GalleryVideo.find({ _id: { $in: ids('video') } }).select('thumb video duration status').lean(),
+  ]);
+  const by = new Map([...photos.map((p) => [String(p._id), { kind: 'photo', ...p }]), ...videos.map((v) => [String(v._id), { kind: 'video', ...v }])]);
+  return post.media.map((m) => by.get(String(m.ref))).filter(Boolean);
+}
 
 // Соседи фото в ленте человека (новые сверху): «назад» — новее, «вперёд» —
 // старше. Листание на странице фото, стрелками и пальцем.
@@ -263,11 +301,11 @@ function mount(kind) {
   // Страница. Чужому — только готовое; метка 18+ — через тот же гейт, что
   // у эфира: подтверждение возраста хранится в аккаунте, гостя гейт зовёт войти.
   router.get(path, commonDataMiddleware, async (req, res) => {
-    // У фото галереи заведения нет — populate поля, которого нет в схеме, Mongoose отвергает.
+    // У фото и поста заведения нет — populate поля, которого нет в схеме, Mongoose отвергает.
     const query = OBJECT_ID.test(req.params.id)
       ? K.Model.findById(req.params.id).populate('userId', 'nickname login email avatar banned role privacy')
       : null;
-    const item = query ? await (K.photo ? query : query.populate('venue', VENUE_AUTHOR)).lean() : null;
+    const item = query ? await (K.clip ? query.populate('venue', VENUE_AUTHOR) : query).lean() : null;
     const me = req.session.userId;
     const isOwner = !!item && !!item.userId && String(item.userId._id) === String(me);
     if (!item || !item.userId || (!isReady(K, item) && !isOwner)) {
@@ -292,11 +330,11 @@ function mount(kind) {
       isModerator(req),
       me ? RecordingReaction.findOne({ recordingId: item._id, userId: me }).select('value').lean() : null,
       commentsPage(item._id),
-      K.photo ? [] : recommend.forItem(item, kind, { adultOk: !!(current && current.adultConfirmedAt) }),
+      K.clip ? recommend.forItem(item, kind, { adultOk: !!(current && current.adultConfirmedAt) }) : [],
       me && !isOwner ? privacy.decide('comments', item.userId._id, me) : { ok: me || commentsRule !== 'nobody' },
-      K.photo ? neighbours(item) : null,
+      K.photo ? neighbours(item) : kind === 'post' ? postMedia(item) : null,
     ]);
-    const nth = K.photo ? 0 : await sameDayNo(K, item);
+    const nth = K.clip ? await sameDayNo(K, item) : 0;
     // Описание с @никами ссылками (utils/mentions.js).
     const textHtml = await mentions.render(item[K.text]);
 
@@ -315,7 +353,10 @@ function mount(kind) {
       textHtml,
       ready,
       src: ready && K.src ? K.src(item) : '',
-      around,
+      around: K.photo ? around : null,
+      // Пост: его фото и видео по порядку, тема — подписью и ссылкой на «Ленту».
+      media: kind === 'post' ? around : null,
+      topic: kind === 'post' && item.topic ? { code: item.topic, i18n: topics.i18nOf(item.topic) } : null,
       at: K.date(item),
       isOwner,
       myReaction: mine ? mine.value : 0,
@@ -332,7 +373,7 @@ function mount(kind) {
   // Просмотр: плеер шлёт его, когда ролик действительно смотрят (tk-watch.js).
   // Раз в сутки на зрителя; свои просмотры автор не накручивает. Гость —
   // хеш адреса и браузера: сам адрес в базе не хранится.
-  if (!K.photo) router.post(`${path}/view`, checkId, async (req, res) => {
+  if (K.clip) router.post(`${path}/view`, checkId, async (req, res) => {
     const item = await readyItem(req, res);
     if (!item) return;
     const me = req.session.userId;
@@ -354,7 +395,7 @@ function mount(kind) {
   // с клиента приходит как 0 (кнопка отжимается). Дизлайки в ответе — только
   // автору. У фото дизлайка нет.
   router.post(`${path}/reaction`, requireAuthApi, requireNotBanned, checkId, validate({
-    value: { type: 'int', required: true, values: K.photo ? [1, 0] : [1, -1, 0], label: 'Оценка' },
+    value: { type: 'int', required: true, values: K.clip ? [1, -1, 0] : [1, 0], label: 'Оценка' },
   }), async (req, res) => {
     const item = await readyItem(req, res);
     if (!item) return;
@@ -384,8 +425,8 @@ function mount(kind) {
     });
   });
 
-  // Название и описание (у фото — подпись) — правит автор (и администратор,
-  // как у удаления).
+  // Название и описание (у фото — подпись, у поста — текст и тема) — правит
+  // автор (и администратор, как у удаления).
   router.patch(path, requireAuth, checkId, requireOwner(K.Model, { field: 'userId' }), validate(K.edit.schema), async (req, res) => {
     const set = K.edit.set(req.body);
     const text = mentions.clean(set[K.text]);

@@ -50,6 +50,8 @@ const PRESENCE_GRACE_MS = 60000;
 // Сигналы своего пути (SDP, кандидаты) — объект от браузера. SDP звонка —
 // единицы килобайт; больше — не сигнал.
 const SIGNAL_MAX = 32000;
+// Видео по согласию в разговоре на двоих (call:video).
+const VIDEO_ACTS = new Set(['off', 'ask', 'yes', 'no']);
 
 // Потолок группового звонка (решение заказчика 23.09.2026). Разговор идёт
 // сеткой: каждый держит соединение с каждым, и на четверых это три
@@ -826,6 +828,17 @@ function registerSockets(io) {
       }
       if (!target || !call.members.has(target)) return;
       io.to(`user:${target}`).emit('call:signal', { callId, from: userId, data });
+    });
+
+    // Видео в разговоре на двоих (09.10, решение заказчика): «Только звук»
+    // переводит в голос обоих (off), «Включить камеру» — просьба собеседнику
+    // (ask), его ответ — yes или no. Сервер только пересылает второму
+    // участнику того же звонка; что делать, решает окно звонка (tk-app.js).
+    onCall('call:video', ({ callId, act }) => {
+      const call = activeCalls.get(callId);
+      const userId = socket.data.userId;
+      if (!isParty(call, userId) || !call.members || call.members.size !== 2 || !VIDEO_ACTS.has(act)) return;
+      for (const id of call.members.keys()) if (id !== userId) io.to(`user:${id}`).emit('call:video', { callId, act });
     });
   });
 

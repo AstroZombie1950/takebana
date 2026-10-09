@@ -183,6 +183,8 @@ app.locals.vapidPublic = require('./utils/push').publicKey;
 app.locals.clock = require('./utils/recording').clock;
 // Категории и города: форма эфира живёт в шапке каждой страницы кабинета.
 app.locals.catalog = require('./config/catalog');
+// Принимает ли сайт видео (есть хранилище) — форме «Новый пост» (partials/composer.ejs).
+app.locals.videoEnabled = require('./utils/storage').enabled;
 // Почта, телеграм поддержки, соцсети — подвал (config/contacts.js).
 app.locals.contacts = require('./config/contacts');
 // Полный адрес страницы и картинки — canonical и OG в partials/tkHead.ejs.
@@ -213,19 +215,21 @@ app.use(require('./utils/theme').pageLocals);
 // Адрес страницы — шапке и панели: что подсветить и куда вернуть после входа.
 // Нужен всем страницам, а commonDataMiddleware стоит не на всех.
 const places = require('./utils/places');
+const topics = require('./utils/topics');
 app.use((req, res, next) => {
   res.locals.path = req.path;
   res.locals.url = req.originalUrl;
-  // Тип, страна, город заведения — подписью на языке страницы: код
-  // справочника или своё владельца (utils/places.js).
-  //   placeHtml('city', v.city, v.cityOther)  — разметкой, выводить `<%-`
-  //   placeLabel('type', v.type, v.typeOther) — текстом
+  // Тип и страна заведения — подписью на языке страницы: код справочника
+  // или своё владельца (utils/places.js).
+  //   placeHtml('country', v.country, v.countryOther) — разметкой, выводить `<%-`
+  //   placeLabel('type', v.type, v.typeOther)         — текстом
   res.locals.placeHtml = (kind, code, other) => places.html(kind, code, other, res.locals.lang);
   res.locals.placeLabel = (kind, code, other) => places.label(kind, code, other, res.locals.lang);
-  // Пункты выпадашек заявки и настроек (partials/venuePlace.ejs) и центры
-  // для выбора точки (public/tk-point.js).
-  res.locals.placeOptions = (kind, country) => places.options(kind, res.locals.lang, country);
-  res.locals.placeCenters = places.centers;
+  // Пункты выпадашек: тип в заявке и настройках (partials/venuePlace.ejs),
+  // страны и типы в панели.
+  res.locals.placeOptions = (kind) => places.options(kind, res.locals.lang);
+  // Подпись темы поста (utils/topics.js): ключ словаря раздела или темы.
+  res.locals.topicI18n = topics.i18nOf;
   next();
 });
 // У кого не открывается CDN — тому адреса медиа подменяются на наши
@@ -280,6 +284,8 @@ require('./jobs/streamCleanup').startStreamCleanup();
 require('./utils/recording').sweep();
 // Видео галереи, чьё пережатие оборвал перезапуск, — в «не вышло».
 require('./utils/galleryVideo').sweep();
+// Посты, чьи ролики так и не доехали, — довести (utils/posts.js).
+require('./utils/posts').start();
 // Ролики видео-меню, чьё пережатие оборвал перезапуск, — в «не вышло».
 require('./utils/venueMenu').sweep();
 // Фото галереи из строк User.gallery — в документы (25.09.2026), один раз.
@@ -302,6 +308,8 @@ require('./utils/venueRating').backfill();
 // до 30.09 — из строки в код (utils/places.js). Их часовой пояс — по точке.
 places.start();
 require('./utils/venueHours').backfill();
+// Эфиры и записи с подтемой, переехавшей 09.10 в другой раздел, — туда.
+topics.start();
 // Маленькие копии аватаров: досоздать для старых, убрать осиротевшие.
 require('./utils/avatarSmall').start().catch((e) => require('./utils/errorLog').server(e, 'avatarSmall.start'));
 // Рассылки поддержки, оборванные перезапуском, — в «прервана».
@@ -316,6 +324,10 @@ app.use(require('./routes/calls'));
 app.use(require('./routes/contacts'));
 app.use(require('./routes/groups'));
 app.use(require('./routes/watch'));
+// Публикация постов (09.10); страница поста — в routes/watch.js.
+app.use(require('./routes/posts'));
+// Системное «Поделиться» телефона → Takebana (share_target, Android).
+app.use(require('./routes/shareIn'));
 app.use(require('./routes/pages'));
 // robots.txt и карта сайта (docs/seo/).
 app.use(require('./routes/seo'));

@@ -11,17 +11,29 @@
   Подписи и alt — по правилу «текст что-то говорит» (utils/snippet.js,
   docs/seo DECISIONS 04.10). Первые снимки экрана грузятся сразу и первыми —
   imgLoad (utils/i18n.js).
+  С 09.10 — и пост (models/Post.js): текст, фото и видео. Одно медиа — как
+  фото или видео; несколько — карусель, листается пальцем и стрелками
+  (tk-posts.js), со счётчиком; без медиа — сам текст на месте снимка.
+  Тема — ссылкой на «Ленту» по ней. Пост в работе (ролики пережимаются)
+  видит только автор — с пометкой.
   Параметры: item — из utils/feed.js (card + withTalk); me — id смотрящего
   или пусто.
 %>
-<% var isPhoto = item.kind === 'photo';
+<% var isPhoto = item.kind === 'photo', isPost = item.kind === 'post';
    var when = date(item.at, { day: 'numeric', month: 'long', year: 'numeric' });
-   var name = isPhoto ? '' : mediaTitle(item.title, 'video', item.author.displayName, item.at);
-   var alt = isPhoto ? (meaningful(item.text) ? snippet(item.text, 125) : ta('alt.photoBy', { name: item.author.displayName, date: when }))
+   var name = isPhoto || isPost ? '' : mediaTitle(item.title, 'video', item.author.displayName, item.at);
+   var said = meaningful(item.text);
+   var alt = isPhoto || isPost ? (said ? snippet(item.text, 125) : ta('alt.photoBy', { name: item.author.displayName, date: when }))
                      : ta('alt.cover', { title: name });
-   var login = '/login?next=' + encodeURIComponent('/feed');
-   var likeKey = me ? 'photo.like' : 'rec.loginToRate'; %>
-<article class="tk-post" data-post="<%= item.href %>">
+   // Вход — с возвратом туда, где пост увидели: «Лента» или профиль.
+   var login = '/login?next=' + encodeURIComponent(url);
+   var likeKey = me ? 'photo.like' : 'rec.loginToRate';
+   var media = isPost ? item.media : [];
+   var topicKey = isPost && item.topic ? topicI18n(item.topic) : '';
+   // Название для «Поделиться» и жалобы: у поста — начало текста.
+   var shareTitle = isPhoto || isPost ? (said ? snippet(item.text, 140) : '') : name;
+   var shareImage = isPost ? (media[0] ? media[0].url : '') : item.thumb; %>
+<article class="tk-post<%= isPost && !media.length ? ' tk-post--text' : '' %>" data-post="<%= item.href %>">
   <a href="<%= item.author.url %>" class="tk-post__head">
     <span class="tk-post__ava"<% if (!item.author.avatarStyle.url) { %> data-bg="<%= item.author.avatarStyle.gradient %>"<% } %>>
       <% if (item.author.avatarStyle.url) { %><img src="<%= item.author.avatarStyle.url %>" alt="" width="36" height="36" loading="lazy" decoding="async"><% } else { %><%= item.author.avatarStyle.initial %><% } %>
@@ -30,6 +42,30 @@
     <time class="tk-post__when" datetime="<%= new Date(item.at).toISOString() %>"><%= when %></time>
   </a>
 
+  <% if (isPost && !media.length) { %>
+  <%# Пост без фото и видео — текст на месте снимка, крупно. %>
+  <a href="<%= item.href %>" class="tk-post__media tk-post__media--text"><p class="tk-post__big" data-user-content><%= snippet(item.text, 700) %></p></a>
+  <% } else if (isPost) { %>
+  <div class="tk-post__media tk-post__media--photo<%= media.length > 1 ? ' tk-post__media--set' : '' %>" data-slides>
+    <div class="tk-post__track">
+      <% media.forEach(function (m, i) { var href = m.kind === 'photo' ? item.href : m.href; %>
+      <a href="<%= href %>" class="tk-post__slide tk-post__slide--<%= m.kind %>"<% if (media.length > 1) { %> aria-label="<%= ta('post.slide', { n: i + 1, total: media.length }) %>"<% } %>>
+        <% if (m.url) { %><img src="<%= m.url %>" alt="<%= m.kind === 'photo' ? alt : ta('alt.cover', { title: alt }) %>" decoding="async"<% if (m.w && m.h) { %> width="<%= m.w %>" height="<%= m.h %>"<% } %> <%- i ? 'loading="lazy"' : imgLoad() %>><% } %>
+        <% if (m.kind === 'video') { %>
+        <% if (m.ready) { %><span class="tk-post__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg></span>
+        <% if (m.duration) { %><span class="tk-post__len"><%= clock(m.duration) %></span><% } %>
+        <% } else { %><span class="tk-post__wait" data-i18n="post.processing"><%- t('post.processing') %></span><% } %>
+        <% } %>
+      </a>
+      <% }); %>
+    </div>
+    <% if (media.length > 1) { %>
+    <button type="button" class="tk-post__nav tk-post__nav--prev" data-slide="-1" aria-label="<%= ta('user.photoPrev') %>" data-i18n-aria="user.photoPrev" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>
+    <button type="button" class="tk-post__nav tk-post__nav--next" data-slide="1" aria-label="<%= ta('user.photoNext') %>" data-i18n-aria="user.photoNext"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></button>
+    <span class="tk-post__count" data-slide-n>1 / <%= media.length %></span>
+    <% } %>
+  </div>
+  <% } else { %>
   <a href="<%= item.href %>" class="tk-post__media tk-post__media--<%= isPhoto ? 'photo' : 'video' %>">
     <% if (item.thumb) { %><img src="<%= item.thumb %>" alt="<%= alt %>" decoding="async" <%- imgLoad() %>><% } %>
     <% if (!isPhoto) { %>
@@ -37,12 +73,15 @@
     <% if (item.duration) { %><span class="tk-post__len"><%= clock(item.duration) %></span><% } %>
     <% } %>
   </a>
+  <% } %>
 
   <div class="tk-post__side">
-    <% if (!isPhoto || meaningful(item.text)) { %>
+    <% if (isPost ? (topicKey || item.processing || (said && media.length)) : (!isPhoto || said)) { %>
     <div class="tk-post__body">
-      <% if (!isPhoto) { %><h2 class="tk-post__title"><a href="<%= item.href %>"><%= name %></a></h2><% } %>
-      <% if (meaningful(item.text)) { %><p class="tk-post__text"><%= snippet(item.text, 220) %></p><% } %>
+      <% if (!isPhoto && !isPost) { %><h2 class="tk-post__title"><a href="<%= item.href %>"><%= name %></a></h2><% } %>
+      <% if (item.processing) { %><p class="tk-post__note" data-i18n="post.processingNote"><%- t('post.processingNote') %></p><% } %>
+      <% if (said && !(isPost && !media.length)) { %><p class="tk-post__text" data-user-content><%= snippet(item.text, 220) %><% if (isPost && item.text.length > 220) { %> <a href="<%= item.href %>" class="tk-post__more" data-i18n="rec.more"><%- t('rec.more') %></a><% } %></p><% } %>
+      <% if (topicKey) { %><a href="/feed?t=<%= item.topic %>" class="tk-post__topic" data-i18n="<%= topicKey %>"><%- t(topicKey) %></a><% } %>
     </div>
     <% } %>
 
@@ -57,8 +96,8 @@
         <span class="tk-post__num" data-comments><%= num(item.comments) %></span>
       </a>
       <%- include('shareReport', { cls: 'tk-post__act', report: !!me && me !== item.ownerId,
-            s: { kind: item.kind, id: item._id, title: isPhoto ? (meaningful(item.text) ? snippet(item.text, 140) : '') : name, image: item.thumb, author: item.author.displayName, reportName: isPhoto ? item.author.displayName : name } }) %>
-      <% if (!isPhoto) { var vv = plural(item.views, 'rec.views'); %>
+            s: { kind: item.kind, id: item._id, title: shareTitle, image: shareImage, author: item.author.displayName, reportName: isPhoto || isPost ? item.author.displayName : name } }) %>
+      <% if (!isPhoto && !isPost) { var vv = plural(item.views, 'rec.views'); %>
       <span class="tk-post__views" data-i18n="<%= vv.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(item.views) }) %>'><%= vv.text %></span>
       <% } %>
     </div>

@@ -8,11 +8,16 @@
 // Карта поднимается не при загрузке страницы, а когда блок впервые показан:
 // MapLibre — около 290 КБ, и до заявки доходят не все, кто открыл страницу.
 //
-// TKPoint.attach(root, { address, place }) → {
-//   place — блок «тип, страна, город» (TKPlace, tk-venue-place.js): с его
-//   города или страны открывается карта, им же подсказывается поиск адреса
+// Страна заведения (09.10) — отсюда же: её приносит ответ поиска и адрес
+// под меткой, она ложится в скрытое поле country и показывается строкой
+// «Страна». Владелец её не выбирает; города нет вовсе — он в адресе.
+// Карта без точки открывается миром (решение заказчика 09.10: прежде —
+// Белградом, а владелец мог о Сербии и не слышать).
+//
+// TKPoint.attach(root, { address }) → {
 //   open(lat, lng) — блок показан: поднять карту, поставить метку, если есть
 //   value() — { lat, lng } или null
+//   country() — { country, countryOther } для запроса
 // }
 (function () {
   'use strict';
@@ -20,8 +25,6 @@
   // Подписи — из общего словаря (public/tk-i18n.js).
   var t = function (key, arg) { return window.t ? window.t(key, arg) : ''; };
 
-  var DEFAULT = [20.4612, 44.8125]; // Белград — если город ещё не выбран
-  var CITY_VIEW = 12;   // масштаб «весь город»: точку ещё не поставили
   var POINT_VIEW = 16;  // масштаб «видно дом»: точка известна
 
   function attach(root, opts) {
@@ -35,7 +38,10 @@
     var applyBtn = root.querySelector('[data-point-apply]');
     var findBtn = root.querySelector('[data-point-find]');
     var addressField = opts.address || null;
-    var place = opts.place || null;
+    var ccField = root.querySelector('[data-point-cc]');
+    var ccOther = root.querySelector('[data-point-cc-other]');
+    var ccLine = root.querySelector('[data-point-country]');
+    var ccName = root.querySelector('[data-point-cc-name]');
 
     var idle = note.textContent;
     var picker = null;
@@ -44,10 +50,18 @@
 
     function say(text) { note.textContent = text || idle; }
 
-    // Центр выбранного города, без него — столица выбранной страны.
-    function cityCenter() {
-      var centers = window.TKPlaceCenter || {};
-      return (place && ((centers.city || {})[place.city.value] || (centers.country || {})[place.country.value])) || DEFAULT;
+    // Страна из ответа поиска: пустой код — страну не узнали, прежнюю
+    // не трогаем (поиск лежит, а метку двигали рукой).
+    function setCountry(code) {
+      if (!code) return;
+      ccField.value = code;
+      ccOther.value = '';
+      ccName.innerHTML = '';
+      var span = document.createElement('span');
+      span.setAttribute('data-i18n-region', code.toUpperCase());
+      span.textContent = window.tkRegion ? window.tkRegion(code) : code.toUpperCase();
+      ccName.appendChild(span);
+      ccLine.hidden = false;
     }
 
     function setFields(lng, lat) {
@@ -90,6 +104,7 @@
         .then(read)
         .then(function (data) {
           say(t('point.placed'));
+          setCountry(data.country);
           showFound(data.address);
         })
         .catch(function (err) { say(t('point.placedNoAddress', { error: err.message })); });
@@ -107,8 +122,7 @@
       if (picker) return Promise.resolve(picker);
       if (!mounting) {
         mounting = window.TKMap.pick(mapBox, {
-          center: cityCenter(),
-          zoom: point ? POINT_VIEW : CITY_VIEW,
+          zoom: point ? POINT_VIEW : null,
           point: point || null,
         }).then(function (p) {
           picker = p;
@@ -132,12 +146,7 @@
       findBtn.disabled = true;
       say(t('point.searching'));
 
-      // Город и страна из списка — кодами (сервер допишет их имена), свои —
-      // к адресу текстом.
-      var own = place ? place.ownText() : '';
-      var url = '/api/geocode?q=' + encodeURIComponent(own ? q + ', ' + own : q) +
-                (place ? '&city=' + encodeURIComponent(place.city.value) + '&country=' + encodeURIComponent(place.country.value) : '');
-      tkFetch(url, { credentials: 'same-origin' })
+      tkFetch('/api/geocode?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
         .then(read)
         .then(function (data) {
           return ensure([data.lng, data.lat]).then(function (p) {
@@ -145,6 +154,7 @@
             p.setLngLat(data.lng, data.lat, POINT_VIEW);
             setFields(data.lng, data.lat);
             say(t('point.foundAddress'));
+            setCountry(data.country);
             showFound(data.address);
           });
         })
@@ -168,16 +178,6 @@
         if (e.key !== 'Enter') return;
         e.preventDefault();
         find();
-      });
-    }
-
-    if (place) {
-      [place.country, place.city].forEach(function (field) {
-        field.addEventListener('change', function () {
-          if (!picker || picker.has()) return; // метку уже поставили — не дёргаем
-          var c = cityCenter();
-          picker.center(c[0], c[1], CITY_VIEW);
-        });
       });
     }
 
@@ -209,8 +209,7 @@
           }
           // У этого заведения точки нет — метка предыдущего не должна остаться.
           p.clear();
-          var c = cityCenter();
-          p.center(c[0], c[1], CITY_VIEW);
+          p.world();
         }).catch(function () {});
       },
       value: function () {
@@ -219,6 +218,7 @@
         if (!latField.value || !lngField.value || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
         return { lat: lat, lng: lng };
       },
+      country: function () { return { country: ccField.value, countryOther: ccOther.value }; },
     };
   }
 

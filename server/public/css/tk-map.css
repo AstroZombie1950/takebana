@@ -130,6 +130,16 @@
   color: var(--tk-muted);
 }
 
+/* Страна (09.10) — по адресу, только чтение: подпись и имя в строку. */
+.tk-pick__country {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+}
+.tk-pick__country[hidden] { display: none; }
+
 .tk-pick__found {
   display: flex;
   align-items: center;

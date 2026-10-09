@@ -92,7 +92,8 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
   // Коды из закрытых списков config/catalog.js. Любая другая строка давала
   // эфир, который каталог не показывает ни на одной вкладке и ни в одном фильтре.
   category: { type: 'string', required: true, values: Object.keys(CATEGORIES), label: 'Категория' },
-  subcategory: { type: 'string', required: true, values: Object.keys(SUB_CATEGORY), label: 'Подкатегория' },
+  // Тема в разделе — по желанию (09.10): пусто — «Другое».
+  subcategory: { type: 'string', values: Object.keys(SUB_CATEGORY), default: '', label: 'Тема' },
   city: { type: 'string', values: Object.keys(CITY_NAME), label: 'Город' },
   description: { type: 'string', max: 5000, label: 'Описание' },
   // Метку 18+ ставит сам вещатель при создании эфира. Снять её может только
@@ -116,8 +117,8 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
   const venue = req.body.venue ? await ownApproved(userId, req.body.venue) : null;
   if (req.body.venue && !venue) return res.status(403).json({ message: 'Вести эфир можно только от своего одобренного заведения' });
 
-  if (SUB_CATEGORY[subcategory] !== category) {
-    return res.status(400).json({ message: 'Подкатегория не относится к выбранной категории' });
+  if (subcategory && SUB_CATEGORY[subcategory] !== category) {
+    return res.status(400).json({ message: 'Тема не относится к выбранному разделу' });
   }
 
   const user = await User.findById(userId);

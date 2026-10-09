@@ -1,0 +1,32 @@
+<%#
+  Системное «Поделиться» телефона → Takebana (/share, 09.10.2026):
+  что пришло и куда отправить — постом или в переписку. Маршрут —
+  routes/shareIn.js, приём — share_target в manifest.webmanifest (Android).
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
+<head>
+<%- include('partials/tkHead', { titleKey: 'page.share.title' }) %>
+<link rel="stylesheet" href="<%= asset('/css/app.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/feed.css') %>">
+</head>
+<body class="tk-app">
+
+<%- include('partials/header') %>
+
+<div>
+  <%- include('partials/leftBar') %>
+
+  <main class="tk-app-main">
+    <div class="tk-page tk-sharein">
+      <h1 class="tk-page__h1" data-i18n="sharein.h1"><%- t('sharein.h1') %></h1>
+      <% if (text) { %><p class="tk-sharein__text" data-user-content><%= text %></p><% } %>
+      <div class="tk-sharein__acts">
+        <a href="<%= postHref %>" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="post.new"><%- t('post.new') %></a>
+        <a href="<%= chatHref %>" class="tk-btn tk-btn--outline tk-btn--sm" data-i18n="sharein.chat"><%- t('sharein.chat') %></a>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

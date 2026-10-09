@@ -1,10 +1,10 @@
 // robots.txt и карта сайта (docs/seo/DECISIONS.md).
 //
 // В карте — ровно то, что открыто для индекса на самих страницах, по тем же
-// правилам: профиль не забаненного, где есть запись, фото, видео или идущий
-// эфир (routes/streaming/catalog.js, indexable); вкладки галереи «Фото»
-// и «Видео» — если в них больше, чем влезает в профиль (gallery.PREVIEW);
-// страницы фото, готовые видео и записи, записи без 18+; из
+// правилам: профиль не забаненного, где есть запись, пост, фото, видео или
+// идущий эфир (routes/streaming/catalog.js, indexable); его «Фото», «Видео»
+// и «Записи» — если там что-то есть (с 09.10 профиль их не повторяет);
+// страницы постов, фото, готовые видео и записи, записи без 18+; из
 // разовых страниц — главная, разделы, «О нас», «Авторы», если там хоть
 // кто-то есть (views/authors.ejs), и карта, если есть хоть одно одобренное
 // заведение (views/map.ejs). Меняется правило у страницы — меняется и здесь.
@@ -20,6 +20,7 @@ const User = require('../models/User');
 const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
 const GalleryPhoto = require('../models/GalleryPhoto');
+const Post = require('../models/Post');
 const Stream = require('../models/Stream');
 const Establishments = require('../models/Establishments');
 const MenuItem = require('../models/MenuItem');
@@ -63,6 +64,7 @@ Disallow: /logout
 Disallow: /settings
 Disallow: /studio
 Disallow: /upload
+Disallow: /share
 Disallow: /chatsPage
 Disallow: /calls
 Disallow: /company-register
@@ -148,10 +150,11 @@ function videoEntry(path, v, kind, name, date) {
 }
 
 async function collect() {
-  const [recordings, videos, photos, live, groups, venues, menus, authorTotal] = await Promise.all([
+  const [recordings, videos, photos, posts, live, groups, venues, menus, authorTotal] = await Promise.all([
     Recording.find({ status: 'ready' }).select('userId venue category title description isAdult thumb video hls.url duration recordedAt createdAt').lean(),
     GalleryVideo.find({ status: 'ready' }).sort({ createdAt: -1 }).select('userId venue title description thumb video duration createdAt').lean(),
     GalleryPhoto.find({}).sort({ createdAt: -1 }).select('userId url createdAt').lean(),
+    Post.find({ status: 'ready' }).sort({ createdAt: -1 }).select('userId media createdAt').lean(),
     Stream.distinct('userId', { isActive: true }),
     authors.groups(),
     Establishments.find({ status: true }).select('_id status features about cover photos reviewedAt').lean(),
@@ -159,7 +162,7 @@ async function collect() {
     authors.allCount(),
   ]);
 
-  const withContent = new Set([...recordings, ...videos, ...photos].map((x) => String(x.userId)).concat(live.map(String)));
+  const withContent = new Set([...recordings, ...videos, ...photos, ...posts].map((x) => String(x.userId)).concat(live.map(String)));
   const users = await User.find({ banned: { $ne: true }, _id: { $in: [...withContent] } })
     .select('nickname login email').lean();
   const names = new Map(users.map((u) => [String(u._id), userView.displayName(u)]));
@@ -172,18 +175,19 @@ async function collect() {
   const recsOf = byUser(recordings);
   const videosOf = byUser(videos);
   const photosOf = byUser(photos);
+  const postsOf = byUser(posts);
 
   // lastmod страниц-подборок (04.10, docs/seo, задача 38) — когда в них
   // появилось новое: последняя запись, фото или видео (раздела — его запись).
   // «О нас» — без даты: она меняется с выкладкой, а не с содержимым.
   const shown = recordings.filter((r) => !r.isAdult);
   const latest = newest([...shown, ...videos, ...photos].map((x) => x.createdAt));
-  const latestMedia = newest([...videos, ...photos].map((x) => x.createdAt));
+  const latestMedia = newest([...videos, ...photos, ...posts].map((x) => x.createdAt));
   const pages = [{ loc: '/', lastmod: latest },
     ...Object.keys(CATEGORIES).map((c) => ({ loc: '/streaming/' + c, lastmod: newest(shown.filter((r) => r.category === c).map((r) => r.createdAt)) })),
     { loc: '/about' }];
-  // «Лента» (04.10) — если есть хоть одно фото или видео: иначе она noindex.
-  if (photos.length || videos.length) pages.push({ loc: '/feed', lastmod: latestMedia });
+  // «Лента» (04.10) — если есть хоть один пост, фото или видео: иначе она noindex.
+  if (posts.length || photos.length || videos.length) pages.push({ loc: '/feed', lastmod: latestMedia });
   if (Object.values(groups).some((g) => g.length)) pages.push({ loc: '/authors', lastmod: latest });
   // Все авторы (04.10) — каждая страница листалки, без фильтров: они noindex.
   const authorPages = Math.ceil(authorTotal / authors.ALL_PAGE);
@@ -214,16 +218,18 @@ async function collect() {
     const id = String(u._id);
     const pics = photosOf.get(id) || [];
     const vids = videosOf.get(id) || [];
+    const mine = postsOf.get(id) || [];
     const lastmod = newest([
       pics.length ? pics[0].createdAt : null,
       vids.length ? vids[0].createdAt : null,
+      mine.length ? mine[0].createdAt : null,
       ...(recsOf.get(id) || []).map((r) => r.createdAt),
     ]);
     const url = profileUrl(u);
     const urlsOf = (list) => list.map((p) => p.url);
-    people.push({ loc: url, lastmod, images: urlsOf(pics.slice(0, gallery.PREVIEW.photos)) });
-    // Вкладка — в карте, только если в профиль влезло не всё.
-    if (pics.length > gallery.PREVIEW.photos) {
+    people.push({ loc: url, lastmod, images: urlsOf(pics.slice(0, gallery.PAGE)) });
+    // Вкладки — если в них что-то есть: с 09.10 профиль их не повторяет.
+    if (pics.length) {
       const { pages: total } = gallery.page(pics.length, 1);
       for (let n = 1; n <= total; n++) {
         const { skip } = gallery.page(pics.length, n);
@@ -233,21 +239,24 @@ async function collect() {
     // Листалка вкладок человека — по его личному: снятое от имени заведения
     // живёт на странице заведения (utils/gallery.js).
     const own = vids.filter((v) => !v.venue);
-    if (own.length > gallery.PREVIEW.videos) {
+    if (own.length) {
       const { pages: total } = gallery.page(own.length, 1);
       for (let n = 1; n <= total; n++) people.push({ loc: `${url}/videos` + (n > 1 ? `?page=${n}` : ''), lastmod });
     }
-    // Все записи (/@ник/recordings, 29.09) — так же: когда в профиль влезло не всё.
+    // Все записи (/@ник/recordings, 29.09) — так же.
     const recs = (recsOf.get(id) || []).filter((r) => !r.venue);
-    if (recs.length > gallery.PREVIEW.recordings) {
+    if (recs.length) {
       const { pages: total } = gallery.page(recs.length, 1);
       for (let n = 1; n <= total; n++) people.push({ loc: `${url}/recordings` + (n > 1 ? `?page=${n}` : ''), lastmod });
     }
   }
 
-  // Страницы фото — со снимком.
+  // Страницы фото — со снимком; посты (09.10) — со снимками своих фото.
   const photoPages = [...photosOf.values()].flat()
     .map((p) => ({ loc: `/photo/${p._id}`, lastmod: p.createdAt, images: [p.url] }));
+  const photoUrl = new Map(photos.map((p) => [String(p._id), p.url]));
+  const postPages = [...postsOf.values()].flat().map((p) => ({ loc: `/post/${p._id}`, lastmod: p.createdAt,
+    images: p.media.filter((m) => m.kind === 'photo').map((m) => photoUrl.get(String(m.ref))).filter(Boolean) }));
 
   const watch = [
     ...[...recsOf.values()].flat().filter((r) => !r.isAdult)
@@ -256,7 +265,7 @@ async function collect() {
       .map((v) => videoEntry(`/video/${v._id}`, v, 'video', names.get(String(v.userId)), v.createdAt)),
   ];
 
-  return { pages, users: people, photos: photoPages, video: watch };
+  return { pages, users: people, photos: photoPages.concat(postPages), video: watch };
 }
 
 function urlset(entries) {

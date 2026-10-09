@@ -2297,3 +2297,42 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 @media (max-height: 500px) and (orientation: landscape) {
   .tk-chat__compose { --tk-input-max: calc(var(--tk-input-line) * 2 + 24px + 2px); }
 }
+
+/* Свои фото и видео во вложения (09.10, views/chatsPage.ejs, libraryModal):
+ * сетка квадратов, отмеченное — рамкой киновари и номером по порядку. */
+.tk-lib { width: min(640px, calc(100vw - 32px)); }
+.tk-lib__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
+.tk-lib__item {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.tk-lib__item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tk-lib__item[aria-pressed="true"] { border-color: var(--tk-accent); }
+.tk-lib__n {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  background: var(--tk-accent);
+  font: 500 12px/22px Oswald, 'Oswald Fallback', sans-serif;
+  color: var(--tk-ink);
+}
+.tk-lib__item:not([aria-pressed="true"]) .tk-lib__n { display: none; }
+.tk-lib__len {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 1px 6px;
+  background: rgba(10, 10, 10, .8);
+  font: 400 11px/1.5 Oswald, 'Oswald Fallback', sans-serif;
+  color: var(--tk-paper);
+}
+.tk-lib__more { display: flex; margin: 14px auto 0; }
+.tk-lib__more[hidden] { display: none; }

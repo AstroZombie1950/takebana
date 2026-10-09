@@ -100,7 +100,7 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const WEEKEND = ['Saturday', 'Sunday'];
 
-function venue({ v, description, city, country }) {
+function venue({ v, description, country }) {
   const hours = [[v.weekdayHours, WEEKDAYS], [v.weekendHours, WEEKEND]]
     .filter(([h]) => h && HHMM.test(h.open) && HHMM.test(h.close))
     .map(([h, days]) => ({ '@type': 'OpeningHoursSpecification', dayOfWeek: days, opens: h.open, closes: h.close }));
@@ -116,8 +116,8 @@ function venue({ v, description, city, country }) {
     ...(v.avatar ? { logo: siteUrl(v.avatar) } : {}),
     address: {
       '@type': 'PostalAddress',
+      // Город — в самом адресе: отдельного поля с 09.10 нет.
       ...(v.address ? { streetAddress: v.address } : {}),
-      ...(city ? { addressLocality: city } : {}),
       // Страна из справочника — кодом ISO, своя — как вписал владелец.
       ...(v.country ? { addressCountry: v.country.toUpperCase() } : country ? { addressCountry: country } : {}),
     },

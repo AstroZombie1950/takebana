@@ -916,6 +916,10 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     // ── Групповой разговор ──
     // Вошёл третий или четвёртый: сцена переходит на сетку плиток, а сетка
     // соединений (tk-peer.js, room) получает ещё одно соединение.
+    // Видео по согласию (09.10): off, ask, yes, no — startCallMedia, callVideo.
+    socket.on('call:video', ({ callId, act }) => {
+      if (callId === window.currentCallId && window.callVideo) window.callVideo(act);
+    });
     socket.on('call:peer:join', (data) => {
       if (data.callId === window.currentCallId && window.callGroupJoin) window.callGroupJoin(data);
     });
@@ -1033,7 +1037,8 @@ document.addEventListener('DOMContentLoaded', function(){
       card: stage.closest('.tk-modal__card'),
       tools: $(prefix + 'Tools'),
       micBtn: $(prefix + 'MicBtn'),
-      camBtn: $(prefix + 'CamBtn'),
+      flipBtn: $(prefix + 'FlipBtn'),
+      ask: $(prefix + 'Ask'),
       spkBtn: $(prefix + 'SpeakerBtn'),
       chatBtn: $(prefix + 'ChatBtn'),
       chatCount: $(prefix + 'ChatBtn').querySelector('.tk-call__count'),
@@ -1081,12 +1086,13 @@ document.addEventListener('DOMContentLoaded', function(){
     s.video = false;
     s.remoteOn = false;
     // Кнопки разговора: до соединения их нет, и каждый звонок начинается
-    // с включённого микрофона, включённой камеры и громкой связи.
+    // с включённого микрофона и громкой связи.
     s.tools.hidden = true;
     s.chatBtn.hidden = false;
     s.micOn = true;
-    s.camOn = true;
     s.loud = true;
+    s.asking = false;
+    s.ask.hidden = true;
     s.chatLoaded = false;
     s.chatBusy = false;
     s.chatUnread = 0;
@@ -1095,17 +1101,29 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   // Видео в разговоре: своя камера (s.video) и картинка собеседника. Сцена
-  // видна, если есть хоть одна из них: в аудиозвонке собеседник включил
-  // камеру — его видно и без своей. Кнопка рядом с «Завершить» переключает
-  // свою: «Только голос» ↔ «Включить видео».
+  // видна, если есть хоть одна из них. Кнопка рядом с «Завершить» —
+  // «Только звук» ↔ «Включить камеру» (startCallMedia, callVoice), пока
+  // собеседник не ответил на просьбу — «Ждём ответа…» и заперта.
   function paintVideo(s) {
     // В групповом разговоре сцена нужна всегда: плитки показывают, кто в нём,
     // даже когда камеры у всех выключены.
     s.stage.classList.toggle('hidden', !(s.group || s.video || s.remoteOn));
-    tkText(s.voice, s.video ? 'call.voiceOnly' : 'call.videoOn');
-    // Своя камера выключается кнопкой только тогда, когда она вообще идёт:
-    // в голосовом разговоре выключать нечего.
-    s.camBtn.hidden = !s.video;
+    tkText(s.voice, s.asking ? 'call.videoWaiting' : s.video ? 'call.voiceOnly' : 'call.videoOn');
+    s.voice.disabled = !!s.asking;
+    // Сменить камеру — когда она идёт и есть на что: у телефона передняя
+    // и основная, у компьютера — если их несколько (09.10, вместо кнопки
+    // «выключить камеру»: выключают её «Только звук»).
+    s.flipBtn.hidden = !s.video || !(s.cams > 1);
+  }
+
+  // Сколько камер у устройства — для кнопки «Сменить камеру». Имена камер
+  // без разрешения пусты, но счёт верный.
+  function countCams(s) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    navigator.mediaDevices.enumerateDevices().then((list) => {
+      s.cams = list.filter((d) => d.kind === 'videoinput').length;
+      paintVideo(s);
+    }).catch(() => {});
   }
 
   // Окно переходит в разговор: «Отменить» и «Принять» становятся «Завершить»,
@@ -1119,14 +1137,14 @@ document.addEventListener('DOMContentLoaded', function(){
     s.add.classList.remove('hidden');
     s.actions.classList.remove('tk-call__actions--pair');
     s.actions.classList.add('tk-call__actions--live');
-    // Ряд кнопок разговора: микрофон всегда, камера — при видео (paintVideo),
-    // динамик — только там, где браузер даёт им управлять.
+    // Ряд кнопок разговора: микрофон всегда, смена камеры — при видео
+    // (paintVideo), динамик — только там, где браузер даёт им управлять.
     s.tools.hidden = false;
     s.spkBtn.hidden = !canRoute(s);
     paintTool(s.micBtn, !s.micOn, 'call.micOn', 'call.micOff');
-    paintTool(s.camBtn, !s.camOn, 'call.camOn', 'call.camOff');
     paintTool(s.spkBtn, s.loud, 'call.speakerOff', 'call.speakerOn');
     paintVideo(s);
+    countCams(s);
     if (s === OUT) {
       tkText(outCancel, 'call.end');
       outCancel.classList.remove('tk-btn--danger');
@@ -1540,23 +1558,115 @@ document.addEventListener('DOMContentLoaded', function(){
       paintVideo(s);
       if (access.remember) window.rememberOwnCallPath();
       window._call = viaOwn(access);
-      // Выключенные кнопкой микрофон и камера остаются выключенными (правки
-      // 29.09): новое соединение начинало с обоими включёнными, а кнопки
-      // по-прежнему показывали «выключено» — собеседник вдруг слышал того,
-      // кто считал себя без звука.
+      // Выключенный кнопкой микрофон остаётся выключенным (правки 29.09):
+      // новое соединение начинало с включённым, а кнопка по-прежнему
+      // показывала «выключено» — собеседник вдруг слышал того, кто считал
+      // себя без звука.
       if (!s.micOn) window._call.setMic(false);
-      if (!s.camOn) window._call.setCamera(false);
+    };
+
+    // ── Видео по согласию (09.10, решение заказчика) ──
+    // Вдвоём разговор один на обоих: «Только звук» переводит в голос
+    // и собеседника, «Включить камеру» — просьба ему (call:video ask, сервер
+    // только пересылает). Согласился — видео у обоих; отказался или молчит
+    // VIDEO_ASK_MS — остаёмся в голосе, и об этом говорим словами. В группе
+    // спрашивать одного некого — кнопка про свою камеру, как прежде.
+    const VIDEO_ASK_MS = 30000;
+    let askTimer = null;
+    let askedTimer = null;
+    const peerName = () => (s === OUT ? outName : inName).textContent;
+    const sendVideo = (act) => window.callSocket && window.callSocket.emit('call:video', { callId, act });
+    function setVideo(on) {
+      s.video = on;
+      window._call.setVideo(on);
+      // Только звук — чужое видео тоже не принимается (tk-daily.js).
+      if (!on) s.remoteOn = false;
+      paintVideo(s);
+      if (on) countCams(s);
+    }
+    function stopAsking() {
+      clearTimeout(askTimer);
+      s.asking = false;
+      paintVideo(s);
+    }
+    function hideAsk() {
+      clearTimeout(askedTimer);
+      s.ask.hidden = true;
+    }
+
+    window.callVoice = () => {
+      if (!window._call || s.asking) return;
+      if (group) return setVideo(!s.video);
+      if (s.video) {
+        setVideo(false);
+        sendVideo('off');
+        if (tr) tr.step('video_off');
+        return;
+      }
+      // Своя камера поднимается сразу — собеседнику она не уходит, пока он
+      // в голосе (tk-peer.js, remote.wants; у Daily — подписка).
+      s.asking = true;
+      setVideo(true);
+      sendVideo('ask');
+      if (tr) tr.step('video_ask');
+      askTimer = setTimeout(() => {
+        stopAsking();
+        setVideo(false);
+        sendVideo('off'); // у собеседника просьба гаснет
+        toast(t('call.videoNoAnswer'));
+        if (tr) tr.step('video_timeout');
+      }, VIDEO_ASK_MS);
+    };
+
+    window.callVideo = (act) => {
+      if (group || !window._call) return;
+      if (act === 'ask') {
+        // Попросили оба разом — у меня камера уже идёт: просто «да».
+        if (s.video) return sendVideo('yes');
+        tkText(s.ask.querySelector('.tk-call__ask-text'), 'call.videoAsk', { name: peerName() });
+        s.ask.hidden = false;
+        clearTimeout(askedTimer);
+        askedTimer = setTimeout(hideAsk, VIDEO_ASK_MS);
+        if (tr) tr.step('video_asked');
+        return;
+      }
+      if (act === 'yes') {
+        if (!s.asking) return;
+        stopAsking();
+        if (tr) tr.step('video_yes');
+        return;
+      }
+      // off — собеседник перешёл на голос (или снял свою просьбу), no — отказал.
+      hideAsk();
+      if (act === 'no' && !s.asking) return;
+      const was = s.video;
+      if (s.asking) stopAsking();
+      if (was) setVideo(false);
+      if (act === 'no') toast(t('call.videoDeclined'));
+      else if (was) toast(t('call.peerVoice'));
+      if (tr) tr.step(act === 'no' ? 'video_no' : 'peer_video_off');
+    };
+
+    window.callVideoAnswer = (yes) => {
+      hideAsk();
+      if (!window._call) return;
+      if (yes) setVideo(true);
+      sendVideo(yes ? 'yes' : 'no');
+      if (tr) tr.step(yes ? 'video_accept' : 'video_decline');
+    };
+
+    window.callVideoStop = () => {
+      clearTimeout(askTimer);
+      hideAsk();
+      window.callVoice = window.callVideo = window.callVideoAnswer = window.callVideoStop = null;
     };
   };
 
-  [OUT, IN].forEach((s) => s.voice.addEventListener('click', () => {
-    if (!window._call) return;
-    s.video = !s.video;
-    window._call.setVideo(s.video);
-    // Только голос — чужое видео тоже не принимается (tk-daily.js).
-    if (!s.video) s.remoteOn = false;
-    paintVideo(s);
-  }));
+  [OUT, IN].forEach((s) => {
+    s.voice.addEventListener('click', () => { if (window.callVoice) window.callVoice(); });
+    s.ask.querySelector('[data-ask-yes]').addEventListener('click', () => { if (window.callVideoAnswer) window.callVideoAnswer(true); });
+    s.ask.querySelector('[data-ask-no]').addEventListener('click', () => { if (window.callVideoAnswer) window.callVideoAnswer(false); });
+  });
 
   // Своя картинка в углу: пальцем или мышью двигается, двумя пальцами или
   // колесом мыши меняет размер (пропорции те же). Не выходит за сцену и не
@@ -1639,6 +1749,7 @@ document.addEventListener('DOMContentLoaded', function(){
     // Отчёт снимается до закрытия соединения: после него статистики не будет.
     if (window.tkCallReport) { window.tkCallReport('в конце разговора'); window.tkCallReport = null; }
     if (window.tkCallEnd) window.tkCallEnd();
+    if (window.callVideoStop) window.callVideoStop();
     closeInvite();
     window.tkCallSize = null;
     if (window._call) { window._call.leave(); window._call = null; }
@@ -1657,9 +1768,9 @@ document.addEventListener('DOMContentLoaded', function(){
 
   // ── Кнопки разговора и переписка в окне ───────────────────────────────
   //
-  // Микрофон и своя камера гаснут, не разрывая соединения. Это не «Только
-  // голос» рядом: та кнопка гасит видео в обе стороны ради канала, эти —
-  // только своё. Динамик — про айфон: разговор там идёт громкой связью,
+  // Микрофон гаснет, не разрывая соединения. Камеру с 09.10 не гасят —
+  // её меняют: передняя ↔ основная (выключает видео «Только звук» рядом,
+  // решение заказчика: кнопок и так много). Динамик — про айфон: разговор там идёт громкой связью,
   // и переключить его на разговорный динамик у уха было нечем (жалоба
   // заказчика, 23.09). Переписка — та же, что на /chatsPage, но текстом:
   // скрепка, голосовые и кружки остаются на странице переписки.
@@ -1831,10 +1942,8 @@ document.addEventListener('DOMContentLoaded', function(){
       if (window._call && window._call.setMic) window._call.setMic(s.micOn);
       paintTool(s.micBtn, !s.micOn, 'call.micOn', 'call.micOff');
     });
-    s.camBtn.addEventListener('click', () => {
-      s.camOn = !s.camOn;
-      if (window._call && window._call.setCamera) window._call.setCamera(s.camOn);
-      paintTool(s.camBtn, !s.camOn, 'call.camOn', 'call.camOff');
+    s.flipBtn.addEventListener('click', () => {
+      if (window._call && window._call.flipCamera) window._call.flipCamera();
     });
     s.spkBtn.addEventListener('click', () => {
       s.loud = !s.loud;

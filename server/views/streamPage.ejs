@@ -135,7 +135,8 @@
             </select>
           </div>
 
-          <%# Подкатегории — из config/catalog.js, как и теги каталога. %>
+          <%# Темы раздела — из config/catalog.js, как и теги каталога; первым
+              пунктом «Другое» (tk-studio.js). %>
           <div class="tk-form__row">
             <label class="tk-form__label" for="streamSubcategory" data-i18n="studio.subcategory"><%- t('studio.subcategory') %></label>
             <select id="streamSubcategory" name="subcategory" class="tk-field tk-select" data-subs="<%= catalog.SUBS_JSON %>" data-value="<%= defaults.subcategory || '' %>" disabled>
@@ -144,15 +145,8 @@
           </div>
         </div>
 
-        <div class="tk-form__row">
-          <label class="tk-form__label" for="streamCity"><span data-i18n="studio.city"><%- t('studio.city') %></span> <span class="tk-form__hint" data-i18n="common.optional"><%- t('common.optional') %></span></label>
-          <select id="streamCity" name="city" class="tk-field tk-select">
-            <option value="" data-i18n="common.notSet"><%- t('common.notSet') %></option>
-            <% catalog.CITIES.forEach(function (city) { %>
-            <option value="<%= city.code %>" data-i18n="<%= city.i18n %>"<%= defaults.city === city.code ? ' selected' : '' %>><%= ta(city.i18n, city.name) %></option>
-            <% }); %>
-          </select>
-        </div>
+        <%# Город эфира (выбор) скрыт с 09.10 — решение заказчика: список был
+            только сербский, фильтр почти не работал. Поле в Stream осталось. %>
 
         <div class="tk-form__row">
           <label class="tk-form__label" for="streamDescription"><span data-i18n="studio.description"><%- t('studio.description') %></span> <span class="tk-form__hint" data-i18n="common.optional"><%- t('common.optional') %></span></label>

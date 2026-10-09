@@ -18,9 +18,9 @@ const memberSchema = new Schema({
 const meetupSchema = new Schema({
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   venue: { type: Schema.Types.ObjectId, ref: 'Establishments', required: true },
-  // Коды справочника (utils/places.js) — копия с заведения на момент отметки.
+  // Код страны (utils/places.js) — копия с заведения на момент отметки.
+  // Город писался до 09.10, у заведений его больше нет.
   country: { type: String, default: '' },
-  city: { type: String, default: '' },
   // День по местному календарю заведения, «2026-10-17»: строкой, а не Date —
   // у дня нет пояса, и сравнение строк даёт тот же порядок.
   day: { type: String, required: true },

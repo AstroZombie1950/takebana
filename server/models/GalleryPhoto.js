@@ -26,11 +26,16 @@ const galleryPhotoSchema = new Schema({
   likes: { type: Number, default: 0 },
   dislikes: { type: Number, default: 0 },
   comments: { type: Number, default: 0 },
+  // Из поста (09.10, models/Post.js): в «Ленте» отдельной карточкой
+  // не идёт — его показывает пост; в «Фото» автора — как все.
+  post: { type: Schema.Types.ObjectId, ref: 'Post', default: null },
   createdAt: { type: Date, default: Date.now },
 });
 
 // Лента человека — новые сверху; соседи на странице фото — тот же индекс.
 galleryPhotoSchema.index({ userId: 1, createdAt: -1 });
+// «Лента»: фото не из постов (utils/feed.js).
+galleryPhotoSchema.index({ post: 1, createdAt: -1 });
 // Перенос из User.gallery идёт повторно после сбоя — дубль адреса не пройдёт.
 galleryPhotoSchema.index({ url: 1 }, { unique: true });
 

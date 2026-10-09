@@ -1,7 +1,7 @@
 // Действия под постами «Ленты» (05.10.2026, views/partials/postCard.ejs):
 // «нравится» и комментарий прямо в ленте, без перехода на страницу
 // публикации. Те же маршруты, что у страницы (routes/watch.js): адрес поста —
-// data-post (/photo/<id>, /video/<id>). Обработчики — на документе: посты
+// data-post (/photo/<id>, /video/<id>, с 09.10 и /post/<id>). Обработчики — на документе: посты
 // следующих страниц приходят без перезагрузки (catalog.js).
 // С 06.10 — ответ на комментарий (ник в поле) и удаление своего, чужого
 // под своим постом и любого модератором — как на странице публикации.
@@ -11,6 +11,33 @@
   var TRASH = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
 
   function postOf(el) { return el.closest('[data-post]'); }
+
+  // ── Несколько фото и видео в посте (09.10) ──
+  // Лента кадров листается пальцем сама (scroll-snap); стрелки — на шаг,
+  // счётчик и видимость стрелок — по прокрутке. Прокрутка не всплывает —
+  // слушаем её на документе с перехватом: посты приходят и без перезагрузки.
+  function slideAt(track) { return Math.round(track.scrollLeft / Math.max(1, track.clientWidth)); }
+  function paintSlides(box) {
+    var track = box.querySelector('.tk-post__track');
+    var n = track.children.length;
+    var i = slideAt(track);
+    var label = box.querySelector('[data-slide-n]');
+    if (label) label.textContent = (i + 1) + ' / ' + n;
+    box.querySelector('[data-slide="-1"]').hidden = i <= 0;
+    box.querySelector('[data-slide="1"]').hidden = i >= n - 1;
+  }
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-slide]');
+    if (!btn) return;
+    var track = btn.closest('[data-slides]').querySelector('.tk-post__track');
+    track.scrollTo({ left: (slideAt(track) + Number(btn.dataset.slide)) * track.clientWidth, behavior: 'smooth' });
+  });
+  document.addEventListener('scroll', function (e) {
+    var track = e.target;
+    if (!track.classList || !track.classList.contains('tk-post__track')) return;
+    var box = track.closest('[data-slides]');
+    if (box.querySelector('[data-slide-n]')) paintSlides(box);
+  }, true);
 
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-like]');

@@ -1,17 +1,15 @@
 // Галерея человека — две вкладки (решение заказчика 25.09.2026): «Фото»
 // (models/GalleryPhoto.js) и «Видео» (models/GalleryVideo.js), новые сверху.
-// До 25.09 это была одна лента вперемешку. Нужны профилю (начало каждой
-// вкладки) и страницам /@ник/photos и /@ник/videos (routes/streaming/catalog.js),
-// а ещё карте сайта (routes/seo.js).
+// До 25.09 это была одна лента вперемешку. Нужны страницам /@ник/photos,
+// /@ник/videos и /@ник/recordings (routes/streaming/catalog.js), вкладкам
+// заведения, числам профиля и карте сайта (routes/seo.js). С 09.10 профиль
+// начала вкладок не показывает — у него лента автора (utils/feed.js).
 
 const GalleryPhoto = require('../models/GalleryPhoto');
 const GalleryVideo = require('../models/GalleryVideo');
 const Recording = require('../models/Recording');
 
-// В профиле — сетка фото 3×4, шесть видео и шесть записей эфиров; на
-// странице вкладки — по PAGE. Записи до 29.09 шли в профиль все разом,
-// без потолка и без своей страницы.
-const PREVIEW = { photos: 12, videos: 6, recordings: 6 };
+// На странице вкладки — по PAGE.
 const PAGE = 24;
 
 const PHOTO_FIELDS = 'url caption likes comments createdAt';
@@ -30,7 +28,7 @@ function page(total, n) {
 }
 
 // Фото: skip/limit — срез ленты.
-function photos(userId, { skip = 0, limit = PREVIEW.photos } = {}) {
+function photos(userId, { skip = 0, limit = PAGE } = {}) {
   return GalleryPhoto.find({ userId }).sort({ createdAt: -1 }).skip(skip).limit(limit).select(PHOTO_FIELDS).lean();
 }
 
@@ -40,7 +38,7 @@ function videoFilter(owner, self) {
   return { ...whose(owner), ...(self ? {} : { status: 'ready' }) };
 }
 
-function videos(owner, self, { skip = 0, limit = PREVIEW.videos } = {}) {
+function videos(owner, self, { skip = 0, limit = PAGE } = {}) {
   return GalleryVideo.find(videoFilter(owner, self)).sort({ createdAt: -1 }).skip(skip).limit(limit).select(VIDEO_FIELDS).lean();
 }
 
@@ -49,7 +47,7 @@ function videos(owner, self, { skip = 0, limit = PREVIEW.videos } = {}) {
 const REC_FIELDS = 'title status duration thumb isAdult createdAt views';
 const recFilter = (owner, self) => ({ ...whose(owner), ...(self ? {} : { status: 'ready' }) });
 
-function recordings(owner, self, { skip = 0, limit = PREVIEW.recordings } = {}) {
+function recordings(owner, self, { skip = 0, limit = PAGE } = {}) {
   return Recording.find(recFilter(owner, self)).sort({ createdAt: -1 }).skip(skip).limit(limit).select(REC_FIELDS).lean();
 }
 
@@ -67,4 +65,4 @@ async function counts(owner, self) {
   return { photos: photosN, videos: videosN, videosListed: listed === null ? videosN : listed };
 }
 
-module.exports = { PREVIEW, PAGE, page, photos, videos, counts, recordings, recordingsCount };
+module.exports = { PAGE, page, photos, videos, counts, recordings, recordingsCount };

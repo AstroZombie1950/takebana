@@ -38,6 +38,7 @@ const privacy = require('../../utils/privacy');
 const groups = require('../../utils/groups');
 const { tr, langOf } = require('../../utils/i18n');
 const share = require('../../utils/share');
+const library = require('../../utils/library');
 const Contact = require('../../models/Contact');
 
 // Ограничение доступа закрывает и переписку (utils/restrict.js): 403
@@ -691,6 +692,58 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
       if (socket) socket.to(`user:${me}`).emit('message:failed', { ref, message: tr(langOf(req), text) });
     }
   );
+});
+
+
+// ── Из своих фото и видео (09.10, utils/library.js) ──
+// Скрепка → «Мои фото и видео»: галерея листается страницами, выбранное
+// уходит вложениями — по сообщению на файл, как с устройства; подпись
+// и ответ — у первого. Файл не грузится заново: вложение ссылается на него.
+router.get('/api/library', requireAuthApi, async (req, res) => {
+  const before = req.query.before ? new Date(String(req.query.before)) : null;
+  if (before && isNaN(before)) return res.status(400).json({ message: 'Неверный запрос' });
+  res.json(await library.list(req.session.userId, before));
+});
+
+router.post('/messages/library', requireAuthApi, requireNotBanned, sendLimiter, validate({
+  recipientId: { type: 'objectId', label: 'Собеседник' },
+  groupId: { type: 'objectId', label: 'Группа' },
+  items: { type: 'array', required: true, max: library.SEND_MAX, label: 'Что', of: { type: 'object', schema: {
+    kind: { type: 'string', required: true, values: ['photo', 'video'], label: 'Вид' },
+    id: { type: 'objectId', required: true, label: 'Что' },
+  } } },
+  content: { type: 'string', max: 5000, default: '', label: 'Подпись' },
+  replyTo: { type: 'objectId', label: 'Ответ' },
+}), async (req, res) => {
+  const { recipientId, groupId, items } = req.body;
+  const me = req.session.userId;
+  if (!!recipientId === !!groupId || !items.length) return res.status(400).json({ message: 'Неверный запрос' });
+  if (!groupId && await refuseRestricted(res, me, recipientId)) return;
+
+  const [conversation, sender, recipient] = await Promise.all([
+    groupId ? groups.forMember(groupId, me) : findConversation(me, recipientId),
+    User.findById(me).select('nickname login email avatar role').lean(),
+    groupId ? null : User.findById(recipientId).select('nickname login email avatar role').lean(),
+  ]);
+  if (!conversation || !sender || (!groupId && !recipient)) {
+    return res.status(404).json({ message: groupId ? 'Группа не найдена' : 'Диалог не найден' });
+  }
+  if (!groupId && !(await gate(res, conversation, me, recipientId))) return;
+
+  const files = await Promise.all(items.map((it) => library.attachment(me, it)));
+  if (files.some((f) => !f)) return res.status(404).json({ message: 'Фото или видео не найдено — возможно, его удалили' });
+  const reply = await replyOf(conversation, req.body.replyTo);
+  const content = req.body.content.trim();
+  const post = (fields) => (groupId
+    ? groups.deliver(req, conversation, sender, fields)
+    : deliver(req, { conversation, sender, recipient, ...fields }));
+
+  const out = [];
+  for (const [i, file] of files.entries()) {
+    out.push(await post({ content: i ? '' : content, attachments: [file], reply: i ? null : reply, silent: i < files.length - 1 }));
+  }
+  audit(req, 'msg.library', { targetType: groupId ? 'group' : 'user', targetId: groupId || recipientId, meta: { n: files.length } });
+  res.json({ messages: out });
 });
 
 

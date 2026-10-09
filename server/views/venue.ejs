@@ -8,7 +8,7 @@
   Своё заведение владелец не оценивает (30.09) — звёзд у него нет.
   Действия пульта — public/tk-venue-edit.js, вид — css/venue.css.
 %>
-<% var meta = [placeLabel('type', venue.type, venue.typeOther), placeLabel('city', venue.city, venue.cityOther)].filter(Boolean).join(' · ');
+<% var meta = [placeLabel('type', venue.type, venue.typeOther), placeLabel('country', venue.country, venue.countryOther)].filter(Boolean).join(' · ');
    var photos = venue.photos || [];
    // Картинка эфира: обложка камеры, без неё первое фото.
    var shot = venue.cover || photos[0];
@@ -23,22 +23,22 @@
     него страница — название и адрес, поиску в ней нечего взять. Фото, видео
     и эфиры в условие не входят нарочно: они появляются и пропадают, и
     страница выпадала бы из индекса при каждом удалении. %>
-<%# Описание для поиска (04.10): «Бар · Белград: {описание заведения}»;
-    без описания страница вне индекса, там хватает типа, города и адреса. %>
-<%# Title (04.10, задача 31): «{название} — Бар, Белград — Takebana» — тип
-    и город в выдаче отвечают на запрос «бар в Белграде». Разметка —
-    заведение по его типу и крошки (utils/jsonld.js, venue). %>
+<%# Описание для поиска (04.10): «Бар · Сербия: {описание заведения}»;
+    без описания страница вне индекса, там хватает типа, страны и адреса. %>
+<%# Title (04.10, задача 31): «{название} — Бар, Сербия — Takebana». До 09.10
+    вместо страны был город; город теперь — только в адресе (решение
+    заказчика). Разметка — заведение по его типу и крошки (utils/jsonld.js, venue). %>
 <% var described = meaningful(venue.about); // то же правило, что utils/venuePage.js, indexableVenue
-   var city = placeLabel('city', venue.city, venue.cityOther);
+   var country = placeLabel('country', venue.country, venue.countryOther);
    var kind = placeLabel('type', venue.type, venue.typeOther);
    // «Бар «Тэкэбана»» — тип уже в названии, второй раз его не пишем.
    if (kind && String(venue.name).toLowerCase().indexOf(kind.toLowerCase()) !== -1) kind = '';
-   var typeCity = [kind, city].filter(Boolean).join(', ');
+   var typeWhere = [kind, country].filter(Boolean).join(', ');
    var pageDesc = described ? snippet((meta ? meta + ': ' : '') + venue.about) : [meta, venue.address].filter(Boolean).join(' · '); %>
-<%- include('partials/tkHead', { title: venue.name + (typeCity ? ' — ' + typeCity : '') + ' — Takebana',
+<%- include('partials/tkHead', { title: venue.name + (typeWhere ? ' — ' + typeWhere : '') + ' — Takebana',
       description: pageDesc,
       seo: { path: '/venue/' + venue._id, robots: !approved ? 'noindex, nofollow' : described ? '' : 'noindex, follow', image: venue.cover || photos[0] || venue.avatar, imageAlt: venue.name,
-             jsonld: [ld.venue({ v: venue, description: pageDesc, city: city, country: venue.countryOther }),
+             jsonld: [ld.venue({ v: venue, description: pageDesc, country: venue.countryOther }),
                       ld.crumbs([['Takebana', '/'], [ta('app.venues'), '/venues'], [venue.name, '/venue/' + venue._id]])] } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/venue.css') %>">

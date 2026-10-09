@@ -76,13 +76,18 @@ async function removeFile(userId, url) {
 }
 
 // Фото удалено: файл, документ, а следом оценки, комментарии и жалобы.
+// Файл, отправленный в переписку из библиотеки, остаётся ей (utils/library.js).
 async function remove(doc) {
-  await removeFile(String(doc.userId), doc.url)
-    .catch((e) => errorLog.external(e, 'gallery.photo.remove', { url: doc.url }));
+  if (!(await require('./library').handOver(doc.url))) {
+    await removeFile(String(doc.userId), doc.url)
+      .catch((e) => errorLog.external(e, 'gallery.photo.remove', { url: doc.url }));
+  }
   await Promise.all([
     GalleryPhoto.deleteOne({ _id: doc._id }),
     engagement.forgetTarget(doc._id, 'photo'),
   ]);
+  // Фото из поста — и из поста (utils/posts.js).
+  if (doc.post) await require('./posts').mediaGone(doc.post, doc._id);
 }
 
 // Удаление аккаунта: каждое фото со всем, что под ним, и папка на сервере.

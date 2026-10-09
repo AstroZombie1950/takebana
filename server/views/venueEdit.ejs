@@ -98,7 +98,7 @@
           <textarea class="tk-field" name="about" rows="5" maxlength="<%= aboutMax %>" placeholder="<%= ta('venue.page.aboutPh') %>" data-i18n-placeholder="venue.page.aboutPh"><%= form.about || '' %></textarea>
         </label>
 
-        <%- include('partials/venuePoint') %>
+        <%- include('partials/venuePoint', { country: form.country, countryOther: form.countryOther }) %>
 
         <div class="tk-vp__hours">
           <span class="tk-form__label" data-i18n="venues.weekdayHours"><%- t('venues.weekdayHours') %></span>
@@ -138,8 +138,6 @@
   </main>
 </div>
 
-<%# Центры городов и стран — чтобы выбор точки открывался на нужном месте (tk-point.js). %>
-<script>window.TKPlaceCenter = <%- JSON.stringify(placeCenters()) %>;</script>
 <script defer src="<%= asset('/vendor/pmtiles-4.5.0.js') %>"></script>
 <script defer src="<%= asset('/tk-map.js') %>"></script>
 <script defer src="<%= asset('/tk-point.js') %>"></script>

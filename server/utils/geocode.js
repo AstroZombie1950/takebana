@@ -58,12 +58,12 @@ function queued(fn) {
     return run;
 }
 
-async function ask(path, params) {
+async function ask(path, lang, params) {
     const url = new URL(BASE + path);
     url.search = new URLSearchParams({
         format: 'jsonv2',
         addressdetails: '1',
-        'accept-language': 'ru',
+        'accept-language': lang === 'en' ? 'en' : 'ru',
         ...params,
     }).toString();
 
@@ -85,7 +85,8 @@ async function ask(path, params) {
 }
 
 // Короткая строка вместо display_name: тот отдаёт и округ, и почтовый индекс,
-// и страну — в поле «Адрес заведения» это лишнее.
+// и страну — в поле «Адрес заведения» это лишнее. Город в адресе остаётся:
+// отдельного поля города у заведения с 09.10 нет.
 function shortAddress(a, fallback) {
     if (!a) return fallback || '';
     const street = [a.road, a.house_number].filter(Boolean).join(' ');
@@ -93,32 +94,36 @@ function shortAddress(a, fallback) {
     return [street, place].filter(Boolean).join(', ') || fallback || '';
 }
 
-// Адрес → точка. Город из закрытого списка приходит подсказкой: «Кнеза
-// Милоша 5» без города находится в другой стране с той же вероятностью.
-async function search(query, hint) {
-    const q = [query, hint].filter(Boolean).join(', ');
-    const key = 's:' + q.toLowerCase();
+// Страна точки — код ISO строчными (`rs`): её заведение получает само,
+// владелец её не выбирает (utils/places.js).
+const countryOf = (a) => (a && /^[a-z]{2}$/.test(a.country_code || '') ? a.country_code : '');
+
+// Адрес → точка со страной. Город пишут в самом адресе: «Кнеза Милоша 5»
+// без города находится в другой стране с той же вероятностью. lang — язык
+// подписей в ответе: адрес ложится в поле на языке владельца.
+async function search(q, lang) {
+    const key = `s:${lang}:${q.toLowerCase()}`;
     const known = cached(key);
     if (known !== undefined) return known;
 
-    const list = await queued(() => ask('/search', { q, limit: '1' }));
+    const list = await queued(() => ask('/search', lang, { q, limit: '1' }));
     const hit = Array.isArray(list) ? list[0] : null;
     const point = hit
-        ? { lat: Number(hit.lat), lng: Number(hit.lon), address: shortAddress(hit.address, hit.display_name) }
+        ? { lat: Number(hit.lat), lng: Number(hit.lon), address: shortAddress(hit.address, hit.display_name), country: countryOf(hit.address) }
         : null;
     remember(key, point);
     return point;
 }
 
-// Точка → адрес. Округление до пяти знаков — это метр на местности: точнее
+// Точка → адрес и страна. Округление до пяти знаков — это метр на местности: точнее
 // метку всё равно не поставить мышью, зато кэш попадает.
-async function reverse(lat, lng) {
-    const key = `r:${lat.toFixed(5)},${lng.toFixed(5)}`;
+async function reverse(lat, lng, lang) {
+    const key = `r:${lang}:${lat.toFixed(5)},${lng.toFixed(5)}`;
     const known = cached(key);
     if (known !== undefined) return known;
 
-    const data = await queued(() => ask('/reverse', { lat: String(lat), lon: String(lng), zoom: '18' }));
-    const found = data && !data.error ? { address: shortAddress(data.address, data.display_name) } : null;
+    const data = await queued(() => ask('/reverse', lang, { lat: String(lat), lon: String(lng), zoom: '18' }));
+    const found = data && !data.error ? { address: shortAddress(data.address, data.display_name), country: countryOf(data.address) } : null;
     remember(key, found);
     return found;
 }

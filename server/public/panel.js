@@ -21,11 +21,12 @@ const IS_ADMIN = !!BOOT.isAdmin;
 const ACTIONS = BOOT.actions || {};
 const CATALOG = BOOT.catalog || { cities: [], types: [], categories: {} };
 
+// Города — только эфиров (config/catalog.js); у заведений с 09.10 города нет,
+// страна — любая ISO (utils/places.js).
 const CITY = new Map((CATALOG.cities || []).map((c) => [c.code, c.name]));
 const COUNTRY = new Map((CATALOG.countries || []).map((c) => [c.code, c.name]));
 const VENUE_TYPE = new Map((CATALOG.types || []).map((t) => [t.code, t.name]));
-// Город в списке заведения — со страной: «Нови-Сад · Сербия».
-const VENUE_CITY = new Map((CATALOG.cities || []).map((c) => [c.code, c.name + (COUNTRY.get(c.country) ? ' · ' + COUNTRY.get(c.country) : '')]));
+const countryTitle = (v) => COUNTRY.get(v.country) || v.countryOther || '';
 const CATEGORY = new Map(Object.entries(CATALOG.categories || {}).map(([code, c]) => [code, c.name]));
 
 const nav = document.getElementById('nav');
@@ -419,9 +420,9 @@ VIEWS.live = {
 
     if (d.venues.length) {
       html += '<h2 class="tk-panel__h2">Камеры заведений</h2>';
-      html += table([{ title: 'Заведение' }, { title: 'Город' }, { title: 'Владелец' }], d.venues.map((v) =>
+      html += table([{ title: 'Заведение' }, { title: 'Страна' }, { title: 'Владелец' }], d.venues.map((v) =>
         '<tr><td>' + dot(true) + esc(v.name || 'без названия') + '</td>' +
-        '<td>' + esc(cityTitle(v.city)) + '</td>' +
+        '<td>' + esc(countryTitle(v)) + '</td>' +
         '<td>' + person(v.owner) + '</td></tr>'));
     }
 
@@ -614,7 +615,7 @@ VIEWS.person = {
 
     html += card('Заведения', d.venues.length
       ? '<ul class="tk-list">' + d.venues.map((v) => '<li>' + (v.online ? dot(true) : '') + esc(v.name || 'без названия') +
-          ' <span class="tk-panel__why">' + esc(cityTitle(v.city) || v.cityOther || '') + ' · ' + esc(VENUE_TYPE.get(v.type) || v.typeOther || v.type || '') +
+          ' <span class="tk-panel__why">' + esc(countryTitle(v)) + ' · ' + esc(VENUE_TYPE.get(v.type) || v.typeOther || v.type || '') +
           (v.status ? '' : ' · не активно') + '</span></li>').join('') + '</ul>'
       : note('Заведений нет'));
     html += '</div>';
@@ -640,7 +641,7 @@ const REASONS = {
   spam: 'спам', abuse: 'оскорбления', adult: 'контент 18+',
   violence: 'насилие', copyright: 'права на контент', other: 'другое',
 };
-const TARGETS = { stream: 'эфир', user: 'пользователь', message: 'сообщение чата', recording: 'запись эфира', video: 'видео галереи', photo: 'фото галереи', comment: 'комментарий', meetup: 'отметка в заведении' };
+const TARGETS = { stream: 'эфир', user: 'пользователь', message: 'сообщение чата', recording: 'запись эфира', video: 'видео галереи', photo: 'фото галереи', post: 'пост', comment: 'комментарий', meetup: 'отметка в заведении' };
 
 VIEWS.reports = {
   title: 'Жалобы',
@@ -690,6 +691,10 @@ VIEWS.reports = {
           acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/photo/' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
                   '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="photo-delete" data-id="' + esc(r.targetId) + '">Удалить фото</button>';
         }
+        if (r.targetType === 'post' && t) {
+          acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="/post/' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
+                  '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="post-delete" data-id="' + esc(r.targetId) + '">Удалить пост</button>';
+        }
         if (r.targetType === 'comment' && t) {
           acts += '<a class="tk-btn tk-btn--outline tk-btn--xs" href="' + esc(t.href) + '#c-' + esc(r.targetId) + '" target="_blank" rel="noopener">Открыть</a>' +
                   '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="comment-delete" data-id="' + esc(r.targetId) + '" data-href="' + esc(t.href) + '">Удалить комментарий</button>';
@@ -724,14 +729,14 @@ VIEWS.reports = {
 };
 
 // ── Заведения ────────────────────────────────────────────────────────────────
-// Тип, страна и город — пункт справочника или своё текстом (utils/places.js,
+// Тип и страна — пункт справочника или своё текстом (utils/places.js,
 // 30.09): поле своего под списком, оно в ходу, когда в списке «Своё».
+// Своя страна — только у заведений до 09.10; города с 09.10 нет.
 const OTHER = '__other';
 const VENUE_FIELDS = [
   { key: 'name', label: 'Название', wide: true },
   { key: 'type', label: 'Тип', list: VENUE_TYPE, own: true },
   { key: 'country', label: 'Страна', list: COUNTRY, own: true },
-  { key: 'city', label: 'Город', list: VENUE_CITY, own: true },
   { key: 'address', label: 'Адрес', wide: true },
   { key: 'email', label: 'Почта', type: 'email' },
   { key: 'phone', label: 'Телефон', type: 'tel' },
@@ -741,8 +746,8 @@ const VENUE_FIELDS = [
 
 // Правка владельца одобренного заведения ждёт решения (29.09): что
 // меняется — было и стало, новые фото картинками. Поля ниже — одобренное.
-const DRAFT_LABELS = { name: 'Название', type: 'Тип', country: 'Страна', city: 'Город', address: 'Адрес', about: 'Описание',
-  typeOther: 'Тип (своё)', countryOther: 'Страна (своё)', cityOther: 'Город (своё)',
+const DRAFT_LABELS = { name: 'Название', type: 'Тип', country: 'Страна', address: 'Адрес', about: 'Описание',
+  typeOther: 'Тип (своё)', countryOther: 'Страна (своё)',
   weekdayHours: 'Часы по будням', weekendHours: 'Часы по выходным', location: 'Точка', photos: 'Фото' };
 const draftValue = (k, x) => {
   if (x == null || x === '') return '—';
@@ -750,7 +755,6 @@ const draftValue = (k, x) => {
   if (k === 'location') return x.lat != null ? Number(x.lat).toFixed(5) + ', ' + Number(x.lng).toFixed(5) : '—';
   if (k === 'type') return VENUE_TYPE.get(x) || x;
   if (k === 'country') return COUNTRY.get(x) || x;
-  if (k === 'city') return VENUE_CITY.get(x) || x;
   return String(x);
 };
 
@@ -771,24 +775,21 @@ function venueDraft(v) {
     '</div></div>';
 }
 
-// Своё владельца — тип, страна, город, которых нет в справочнике (30.09).
+// Своё владельца — тип или страна (до 09.10), которых нет в справочнике (30.09).
 // Взять в общий список: имя по-русски и по-английски, то же своё у других
-// заведений станет этим пунктом разом (routes/admin/venues.js). Город — после
-// страны: без неё его не к чему привязать.
-const OWN_KINDS = [['type', 'Тип'], ['country', 'Страна'], ['city', 'Город']];
+// заведений станет этим пунктом разом (routes/admin/venues.js). Страну
+// с именем из ISO («Сербия») сервер узнаёт и ставит её код.
+const OWN_KINDS = [['type', 'Тип'], ['country', 'Страна']];
 function venueOwn(v) {
-  const rows = OWN_KINDS.filter(([k]) => !v[k] && v[k + 'Other']).map(([k, title]) => {
-    const blocked = k === 'city' && !COUNTRY.has(v.country);
-    return '<div class="tk-own" data-own="' + k + '">' +
+  const rows = OWN_KINDS.filter(([k]) => !v[k] && v[k + 'Other']).map(([k, title]) =>
+    '<div class="tk-own" data-own="' + k + '">' +
       '<p class="tk-own__what"><b>' + esc(title) + ':</b> «' + esc(v[k + 'Other']) + '» — вписано владельцем, в списке нет</p>' +
-      (blocked ? '<p class="tk-panel__why">Сначала добавьте в список страну — город привязывается к ней.</p>'
-        : '<div class="tk-own__line">' +
-          '<input type="text" class="tk-field" data-own-ru value="' + esc(v[k + 'Other']) + '" placeholder="По-русски" maxlength="60">' +
-          '<input type="text" class="tk-field" data-own-en value="' + esc(v[k + 'Other']) + '" placeholder="По-английски" maxlength="60">' +
-          '<button type="button" class="tk-btn tk-btn--ok tk-btn--xs" data-act="venue-place" data-id="' + esc(v.id) + '" data-kind="' + k + '">Добавить в общий список</button>' +
-        '</div>') +
-    '</div>';
-  }).join('');
+      '<div class="tk-own__line">' +
+        '<input type="text" class="tk-field" data-own-ru value="' + esc(v[k + 'Other']) + '" placeholder="По-русски" maxlength="60">' +
+        '<input type="text" class="tk-field" data-own-en value="' + esc(v[k + 'Other']) + '" placeholder="По-английски" maxlength="60">' +
+        '<button type="button" class="tk-btn tk-btn--ok tk-btn--xs" data-act="venue-place" data-id="' + esc(v.id) + '" data-kind="' + k + '">Добавить в общий список</button>' +
+      '</div>' +
+    '</div>').join('');
   return rows ? '<div class="tk-owns">' + rows + '</div>' : '';
 }
 
@@ -801,7 +802,6 @@ VIEWS.venues = {
     { name: 'q', type: 'search', placeholder: 'Название или адрес' },
     { name: 'status', options: [{ value: '', title: 'Все' }, { value: 'active', title: 'Активные' }, { value: 'inactive', title: 'Неактивные' }, { value: 'pending', title: 'Правки на проверке' }] },
     { name: 'country', options: () => [{ value: '', title: 'Любая страна' }].concat((CATALOG.countries || []).map((c) => ({ value: c.code, title: c.name }))) },
-    { name: 'city', options: () => [{ value: '', title: 'Любой город' }].concat([...VENUE_CITY].map(([code, title]) => ({ value: code, title }))) },
     { name: 'type', options: () => [{ value: '', title: 'Любой тип' }].concat((CATALOG.types || []).map((t) => ({ value: t.code, title: t.name }))) },
     { name: 'online', options: [{ value: '', title: 'Камера: всё равно' }, { value: '1', title: 'Камера включена' }] },
   ],
@@ -1117,6 +1117,9 @@ const STEP_TITLE = {
   notice_no_route: 'сказали «видео не доходит»',
   peer: 'собеседник в разговоре', stuck: 'Daily застрял', switch_own: 'перешли на свой путь', media_denied: 'камера/микрофон запрещены',
   notice_silent: 'сказали «не слышно собеседника»', notice_mic: 'сказали «вас не слышно»', mic_retry: 'микрофон захвачен заново',
+  video_off: '«Только звук»', peer_video_off: 'собеседник перешёл на звук', video_ask: 'попросил видео', video_asked: 'попросили видео',
+  video_yes: 'на видео согласились', video_no: 'от видео отказались', video_timeout: 'на видео не ответили',
+  video_accept: 'согласился на видео', video_decline: 'отказался от видео',
   draft: 'черновик заведён', first_chunk: 'первый кусок дошёл', uploaded: 'файл доехал', retry: 'повтор',
   offline: 'ждали сеть', resumed: 'продолжено на другой странице', sent: 'файл ушёл', processing: 'обрабатывается на сервере',
 };
@@ -2386,6 +2389,13 @@ view.addEventListener('click', async (e) => {
       return show();
     }
 
+    if (act === 'post-delete') {
+      if (!await confirmDialog('Удалить пост? Его фото и видео уйдут вместе с ним.', { okText: 'Удалить' })) return;
+      await send('DELETE', '/post/' + id);
+      toast('Пост удалён', 'ok');
+      return show();
+    }
+
     if (act === 'meetup-delete') {
       if (!await confirmDialog('Удалить отметку?', { okText: 'Удалить' })) return;
       await send('DELETE', '/meetups/' + id);
@@ -2407,8 +2417,8 @@ view.addEventListener('click', async (e) => {
         const value = f.value.trim();
         if (value) body[f.dataset.field] = value;
       });
-      // Тип, страна, город — всегда шестёркой: пустое своё стирает прежнее.
-      ['type', 'country', 'city'].forEach((k) => {
+      // Тип и страна — всегда четвёркой: пустое своё стирает прежнее.
+      ['type', 'country'].forEach((k) => {
         body[k] = body[k] || '';
         body[k + 'Other'] = body[k] === OTHER || !body[k] ? body[k + 'Other'] || '' : '';
       });

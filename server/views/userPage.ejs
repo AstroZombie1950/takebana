@@ -1,8 +1,7 @@
 <% var isSelf = !!currentUser && user._id.toString() === currentUser._id.toString(); %>
 <%# Последнее, что появилось на странице, — для dateModified разметки: списки
     идут новыми сверху, берём первое из каждого. %>
-<% var lastAt = [recordings[0], photos[0], videos[0]].filter(Boolean).map(function (x) { return new Date(x.createdAt); })
-     .sort(function (a, b) { return b - a; })[0]; %>
+<% var lastAt = items[0] ? new Date(items[0].at) : null; %>
 <!DOCTYPE html>
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
@@ -13,7 +12,7 @@
            description: user.bio, sameAs: user.links.map(function (l) { return l.url; }) }) } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/profile.css') %>">
-<link rel="stylesheet" href="<%= asset('/css/gallery.css') %>">
+<link rel="stylesheet" href="<%= asset('/css/feed.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/lightbox.css') %>">
 </head>
 <body class="tk-app">
@@ -129,11 +128,12 @@
         </div>
 
         <div class="tk-prof__bar">
-          <%# Счётчики — ссылки: на списки (routes/streaming/subscriptions.js),
-              к записям ниже и на всю галерею. Подпись — именем списка, а не
+          <%# Счётчики — ссылки: на списки (routes/streaming/subscriptions.js)
+              и (с 09.10) на страницы записей, фото и видео — прежде якорями
+              к блокам ниже, блоков больше нет. Подпись — именем списка, а не
               формой по числу: число живое (profileSignal), подпись — нет.
-              При ограниченном доступе записей и галереи на странице нет —
-              нет и их счётчиков. %>
+              При ограниченном доступе записей и галереи нет — нет и их
+              счётчиков. %>
           <div class="tk-prof__stats">
             <a href="<%= user.url %>/followers" class="tk-prof__stat">
               <span class="tk-prof__num" id="followersCount" data-count-followers="<%= user._id %>"><%= user.followersCount %></span>
@@ -144,15 +144,15 @@
               <span class="tk-prof__lbl" data-i18n="user.followingTab"><%- t('user.followingTab') %></span>
             </a>
             <% if (!restricted) { %>
-            <a href="#recordings" class="tk-prof__stat">
+            <a href="<%= user.url %>/recordings" class="tk-prof__stat">
               <span class="tk-prof__num"><%= recordingsTotal %></span>
               <span class="tk-prof__lbl" data-i18n="user.recordingsStat"><%- t('user.recordingsStat') %></span>
             </a>
-            <a href="#photos" class="tk-prof__stat">
+            <a href="<%= user.url %>/photos" class="tk-prof__stat">
               <span class="tk-prof__num"><%= counts.photos %></span>
               <span class="tk-prof__lbl" data-i18n="gallery.photos"><%- t('gallery.photos') %></span>
             </a>
-            <a href="#videos" class="tk-prof__stat">
+            <a href="<%= user.url %>/videos" class="tk-prof__stat">
               <span class="tk-prof__num"><%= counts.videos %></span>
               <span class="tk-prof__lbl" data-i18n="gallery.videos"><%- t('gallery.videos') %></span>
             </a>
@@ -252,71 +252,24 @@
         <% } %>
       </section>
 
-      <!-- Записи эфиров: автор видит и те, что ещё сохраняются -->
-      <section class="tk-prof__gal" id="recordings">
-        <div class="tk-prof__gal-head">
-          <h2 class="tk-kicker tk-prof__gal-title" data-i18n="rec.title"><%- t('rec.title') %></h2>
-          <span class="tk-note"><%= recordingsTotal %></span>
+      <%# Лента автора (09.10, решение заказчика): всё, что он выкладывает, —
+          посты, фото и видео, тем же постом, что в «Ленте» (partials/postCard.ejs,
+          utils/feed.js): содержимое слева, «нравится», разговор, «Поделиться»
+          и жалоба справа. Своя страница — с «Новым постом» сверху. Дальше —
+          «Показать ещё» (catalog.js, /@ник/feed). %>
+      <section class="tk-posts tk-prof__feed" aria-labelledby="feedTitle">
+        <h2 class="tk-kicker" id="feedTitle" data-i18n="user.feed"><%- t('user.feed') %></h2>
+        <% if (isSelf) { %><%- include('partials/composer') %><% } %>
+        <% if (items.length) { %>
+        <div class="tk-posts__list" id="feed">
+          <% var me = currentUser ? String(currentUser._id) : ''; %>
+          <% items.forEach(function (item) { %><%- include('partials/postCard', { item: item, me: me }) %><% }); %>
         </div>
-
-        <% if (recordings.length) { %>
-        <div class="tk-recs">
-          <% recordings.forEach(function (r) { %>
-          <%- include('partials/recordingCard', { r: r, who: user.displayName }) %>
-          <% }); %>
-        </div>
-        <%# Вся лента — своей страницей, кнопкой всегда, когда есть что
-            смотреть (правки 29.09: прежде в профиле были все записи разом,
-            а перейти было некуда). %>
-        <div class="tk-prof__gal-add">
-          <a href="<%= user.url %>/recordings" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="rec.all" data-i18n-vars='<%= JSON.stringify({ n: recordingsTotal }) %>'><%- t('rec.all', { n: recordingsTotal }) %></a>
-        </div>
-        <% } else { %>
-        <p class="tk-note tk-note--center" data-i18n="rec.empty"><%- t('rec.empty') %></p>
-        <% } %>
-      </section>
-
-      <%# Фото и видео — двумя секциями, как записи (04.10, решение Ивана: до
-          того одна «Галерея» с вкладками-кнопками). Начало каждой — здесь,
-          целиком — /@ник/photos и /@ник/videos; общая лента всех людей —
-          раздел «Лента» (/feed). Фото — partials/galleryPhoto.ejs, видео —
-          partials/galleryVideo.ejs; ролики владельца в работе — public/gallery.js
-          (по data-own). «Добавить» у владельца ведёт на /upload — там и то, и то. %>
-      <section class="tk-prof__gal" id="photos">
-        <div class="tk-prof__gal-head">
-          <h2 class="tk-kicker tk-prof__gal-title" data-i18n="gallery.photos"><%- t('gallery.photos') %></h2>
-          <span class="tk-note"><%= counts.photos %></span>
-          <% if (isSelf) { %><a href="/upload" class="tk-btn tk-btn--outline tk-btn--xs tk-prof__gal-new" data-i18n="user.add"><%- t('user.add') %></a><% } %>
-        </div>
-        <% if (photos.length) { %>
-        <div class="tk-pics">
-          <% photos.forEach(function (p, i) { %><%- include('partials/galleryPhoto', { p: p, n: i + 1, owner: user.displayName }) %><% }); %>
-        </div>
-        <div class="tk-prof__gal-add">
-          <a href="<%= user.url %>/photos" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.allPhotos" data-i18n-vars='<%= JSON.stringify({ n: counts.photos }) %>'><%- t('gallery.allPhotos', { n: counts.photos }) %></a>
-        </div>
-        <% } else { %>
-        <p class="tk-note tk-note--center" data-i18n="gallery.photosEmpty"><%- t('gallery.photosEmpty') %></p>
-        <% } %>
-      </section>
-
-      <section class="tk-prof__gal" id="videos"<% if (isSelf) { %> data-own<% } %>>
-        <div class="tk-prof__gal-head">
-          <h2 class="tk-kicker tk-prof__gal-title" data-i18n="gallery.videos"><%- t('gallery.videos') %></h2>
-          <span class="tk-note"><%= counts.videos %></span>
-          <% if (isSelf) { %><a href="/upload" class="tk-btn tk-btn--outline tk-btn--xs tk-prof__gal-new" data-i18n="user.add"><%- t('user.add') %></a><% } %>
-        </div>
-        <% if (videos.length) { %>
-        <div class="tk-recs">
-          <% videos.forEach(function (v) { %><%- include('partials/galleryVideo', { v: v, who: user.displayName }) %><% }); %>
-        </div>
-        <% if (counts.videosListed > 0) { %>
-        <div class="tk-prof__gal-add">
-          <a href="<%= user.url %>/videos" class="tk-btn tk-btn--outline tk-btn--xs" data-i18n="gallery.allVideos" data-i18n-vars='<%= JSON.stringify({ n: counts.videos }) %>'><%- t('gallery.allVideos', { n: counts.videos }) %></a>
-        </div>
+        <% if (next) { %>
+        <a href="<%= user.url %>" class="tk-btn tk-btn--outline tk-btn--sm tk-posts__more" id="feedMore" data-src="<%= user.url %>/feed" data-next="<%= next %>" data-auto data-i18n="feed.more"><%- t('feed.more') %></a>
         <% } %>
         <% } else { %>
-        <p class="tk-note tk-note--center" data-i18n="gallery.videosEmpty"><%- t('gallery.videosEmpty') %></p>
+        <p class="tk-note tk-note--center" data-i18n="user.feedEmpty"><%- t('user.feedEmpty') %></p>
         <% } %>
       </section>
       <% } %>
@@ -335,7 +288,15 @@
     avatarUrl: <%- JSON.stringify(user.avatarStyle.url || '').replace(/</g, '\\u003c') %>
   };
 </script>
+<%# gallery.js — окно просмотра аватара (partials/lightbox.ejs). %>
 <script defer src="<%= asset('/gallery.js') %>"></script>
 <script defer src="<%= asset('/profile.js') %>"></script>
+<script defer src="<%= asset('/catalog.js') %>"></script>
+<script defer src="<%= asset('/tk-posts.js') %>"></script>
+<script defer src="<%= asset('/tk-share.js') %>"></script>
+<% if (isSelf) { %>
+<script defer src="<%= asset('/tk-upload.js') %>"></script>
+<script defer src="<%= asset('/tk-composer.js') %>"></script>
+<% } %>
 </body>
 </html>

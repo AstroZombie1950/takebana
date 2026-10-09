@@ -137,7 +137,7 @@ router.get('/users/:id', requireModerator, async (req, res) => {
         failed: { $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] } },
       } },
     ]),
-    Establishments.find({ owner: id }).select('name city cityOther type typeOther status online').lean(),
+    Establishments.find({ owner: id }).select('name country countryOther type typeOther status online').lean(),
     Report.aggregate([
       { $match: { targetType: 'user', targetId: id } },
       { $group: { _id: '$status', n: { $sum: 1 } } },
@@ -225,7 +225,7 @@ router.get('/users/:id', requireModerator, async (req, res) => {
       ready: r.ready || 0,
       failed: r.failed || 0,
     },
-    venues: venues.map((v) => ({ id: String(v._id), name: v.name || '', city: v.city || '', type: v.type || '', status: !!v.status, online: !!v.online })),
+    venues: venues.map((v) => ({ id: String(v._id), name: v.name || '', country: v.country || '', countryOther: v.countryOther || '', type: v.type || '', status: !!v.status, online: !!v.online })),
     reports: {
       on: reportsOn.reduce((acc, row) => ({ ...acc, [row._id]: row.n }), {}),
       by: reportsBy,

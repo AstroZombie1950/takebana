@@ -92,7 +92,7 @@
           if (b.recordingId) {
             // Тост переход бы унёс — его покажет профиль (tk-app.js, tkNoticeNext).
             window.tkNoticeNext('stream.saving', 'ok');
-            location.href = '/userPage/' + data.userId + '#recordings';
+            location.href = '/userPage/' + data.userId + '/recordings';
           } else {
             location.href = '/';
           }

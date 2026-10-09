@@ -114,12 +114,11 @@
               <div class="tk-card__text">
                 <h3 class="tk-card__title"><%= stream.title %></h3>
                 <p class="tk-card__who"><%= stream.author.displayName %></p>
-                <% var cat = catalog.CATEGORIES[stream.category], city = catalog.CITY_NAME[stream.city]; %>
-                <% if (cat || city || stream.isAdult) { %>
+                <% var cat = catalog.CATEGORIES[stream.category]; %>
+                <% if (cat || stream.isAdult) { %>
                 <div class="tk-card__tags">
                   <% if (stream.isAdult) { %><span class="tk-card__cat">18+</span><% } %>
                   <% if (cat) { %><span class="tk-card__cat" data-i18n="<%= cat.i18n %>"><%= ta(cat.i18n, cat.name) %></span><% } %>
-                  <% if (city) { %><span class="tk-card__cat" data-i18n="city.<%= stream.city %>"><%= ta('city.' + stream.city, city) %></span><% } %>
                 </div>
                 <% } %>
               </div>
@@ -146,7 +145,7 @@
             <span class="tk-place__body">
               <span class="tk-place__name"><%= venue.name %></span>
               <span class="tk-place__meta">
-                <%- [placeHtml('type', venue.type, venue.typeOther), placeHtml('city', venue.city, venue.cityOther)].filter(Boolean).join(' · ') %>
+                <%- [placeHtml('type', venue.type, venue.typeOther), placeHtml('country', venue.country)].filter(Boolean).join(' · ') %>
               </span>
               <% if (venue.address) { %><span class="tk-place__meta"><%= venue.address %></span><% } %>
             </span>

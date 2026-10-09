@@ -120,12 +120,13 @@
     });
   });
 
-  // Тип, страна и город — список или своё (public/tk-venue-place.js).
+  // Тип — список или своё (public/tk-venue-place.js).
   var place = window.TKPlace.attach(form.querySelector('[data-place]'));
 
-  // Точка на карте: метка и поиск по адресу (public/tk-point.js).
+  // Точка на карте: метка и поиск по адресу (public/tk-point.js); страну
+  // приносит поиск (09.10).
   var pointBox = form.querySelector('[data-point]');
-  var point = pointBox && window.TKPoint ? window.TKPoint.attach(pointBox, { address: f.address, place: place }) : null;
+  var point = pointBox && window.TKPoint ? window.TKPoint.attach(pointBox, { address: f.address }) : null;
   var lat = parseFloat(form.getAttribute('data-lat'));
   var lng = parseFloat(form.getAttribute('data-lng'));
   if (point) point.open(Number.isFinite(lat) ? lat : undefined, Number.isFinite(lng) ? lng : undefined);
@@ -186,6 +187,7 @@
     if (!where) { toast(t('company.fillAll')); return; }
     var data = new FormData();
     ['name', 'address', 'about'].forEach(function (k) { data.append(k, f[k].value); });
+    if (point) { var cc = point.country(); where.country = cc.country; where.countryOther = cc.countryOther; }
     Object.keys(where).forEach(function (k) { data.append(k, where[k]); });
     data.append('weekdayHours', JSON.stringify({ open: f.weekdayOpen.value, close: f.weekdayClose.value }));
     data.append('weekendHours', JSON.stringify({ open: f.weekendOpen.value, close: f.weekendClose.value }));

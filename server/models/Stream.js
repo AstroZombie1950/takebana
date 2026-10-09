@@ -23,9 +23,10 @@ const StreamSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Тема в разделе (config/catalog.js); пусто — «Другое» (с 09.10).
   subcategory: {
     type: String,
-    required: true
+    default: ''
   },
   // Код из config/catalog.js, пустая строка — город не указан. Такой эфир
   // виден в каталоге только без фильтра по городу.

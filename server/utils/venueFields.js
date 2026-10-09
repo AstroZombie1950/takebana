@@ -28,11 +28,12 @@ const LOCATION = { type: 'object', json: true, label: 'Координаты', sc
     lng: { type: 'number', min: -180, max: 180 },
 } };
 
-// Тип, страна и город — код справочника или своё текстом (utils/places.js):
+// Тип и страна — код справочника или своё текстом (utils/places.js):
 // сверяет их places.pick уже в маршруте, здесь — только строки. Пустая
-// строка — «не это»: выбрали из списка — «своё» стирается.
+// строка — «не это»: выбрали из списка — «своё» стирается. Города
+// с 09.10 нет (решение заказчика).
 const PLACE = Object.fromEntries([
-  ['type', 'Тип заведения'], ['country', 'Страна'], ['city', 'Город'],
+  ['type', 'Тип заведения'], ['country', 'Страна'],
 ].flatMap(([k, label]) => [
   [k, { type: 'string', max: 60, allowEmpty: true, label }],
   [k + 'Other', { type: 'string', max: places.OTHER_MAX, allowEmpty: true, label }],
@@ -43,7 +44,7 @@ const ABOUT_MAX = 1000;
 
 // ── Черновик правки одобренного заведения (Establishments.pending, 29.09) ──
 // Поля черновика — те же, что правит владелец; фото — полный новый список.
-const DRAFT_FIELDS = ['name', 'type', 'typeOther', 'country', 'countryOther', 'city', 'cityOther', 'address', 'about', 'weekdayHours', 'weekendHours', 'location', 'photos'];
+const DRAFT_FIELDS = ['name', 'type', 'typeOther', 'country', 'countryOther', 'address', 'about', 'weekdayHours', 'weekendHours', 'location', 'photos'];
 
 // Лениво: utils/userDelete тянет за собой камеры и эфиры, а эти схемы
 // нужны и формам, которым всё это ни к чему.

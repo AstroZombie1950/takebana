@@ -31,24 +31,8 @@
   const wide = matchMedia('(min-width: 1024px)');
   const phone = matchMedia('(max-width: 639px)');
 
-  // ── Страна, потом город (30.09) ──
-  // В списке городов — только города выбранной страны; без страны он заперт.
-  // Пункты всех стран сервер кладёт разом, здесь они переставляются.
+  // Страна (с 09.10 — без города: у заведений его нет).
   const country = $('venueCountry');
-  const city = $('venueCity');
-  const cityOpts = Array.from(city.options).filter((o) => o.dataset.country);
-
-  function fillCities() {
-    const c = country.value;
-    const keep = city.value;
-    cityOpts.forEach((o) => o.remove());
-    const mine = cityOpts.filter((o) => o.dataset.country === c);
-    mine.forEach((o) => city.append(o));
-    if (!mine.some((o) => o.value === keep)) city.value = '';
-    city.disabled = !c || !mine.length;
-  }
-  country.addEventListener('change', fillCities);
-  fillCities();
 
   // ── Выпадашка с галочками ──
   // Тип заведения; на телефоне в неё же ложатся «В эфире» и «Открыто сейчас»
@@ -185,12 +169,13 @@
         tip.style.top = at.y + 'px';
       });
       // Выбранное (?venue= или «На карте» до загрузки) карта покажет сама;
-      // иначе — все найденные разом, чтобы список не начинался с пустоты.
+      // с фильтром — все найденные разом; без него — мир (09.10, решение
+      // заказчика: прежде все заведения, то есть Сербия).
       if (sel) {
         const c = cardOf(sel);
         m.mark(sel, 'sel');
         if (c && c.has) m.flyTo(c.lng, c.lat, FOCUS_ZOOM);
-      } else {
+      } else if (params()) {
         fitAll();
       }
       return m;
@@ -236,15 +221,17 @@
     const q = query.value.trim();
     tkText(countEl.firstElementChild, plural(n, 'venues.count'), { n });
     const scope = countEl.lastElementChild;
-    // Город или страна — подписью пункта: у добавленных панелью ключа
-    // словаря нет, текст уже на языке страницы.
-    const where = city.value ? city : country.value ? country : null;
-    const opt = where && where.options[where.selectedIndex];
+    // Страна — подписью пункта: имя из Intl с кодом (data-i18n-region,
+    // переводит tk-i18n.js), у добавленных панелью — текст на языке страницы.
+    const opt = country.value ? country.options[country.selectedIndex] : null;
+    scope.removeAttribute('data-i18n-region');
     if (only) tkText(scope, 'venues.scopeView');
     else if (q) tkText(scope, 'venues.scopeQuery', { q });
-    else if (opt && opt.dataset.i18n) tkText(scope, opt.dataset.i18n);
-    else if (opt) { scope.removeAttribute('data-i18n'); scope.textContent = opt.textContent; }
-    else tkText(scope, 'common.allCities');
+    else if (opt) {
+      tkText(scope, null);
+      if (opt.dataset.i18nRegion) scope.setAttribute('data-i18n-region', opt.dataset.i18nRegion);
+      scope.textContent = opt.textContent;
+    } else tkText(scope, 'common.allCountries');
 
     empty.hidden = n > 0;
     const offscreen = only && cards.length > 0;
@@ -360,7 +347,7 @@
     return p.toString();
   }
 
-  // refit — показать на карте всех найденных: после запроса и смены города.
+  // refit — показать на карте всех найденных: после запроса и смены страны.
   function apply(refit) {
     const qs = params();
     history.replaceState(null, '', '/venues' + (qs ? '?' + qs : ''));
@@ -389,7 +376,7 @@
   form.addEventListener('change', (e) => {
     if (e.target === query) return;
     if (morePanel.contains(e.target)) paintMore();
-    apply(e.target.name === 'city' || e.target.name === 'country');
+    apply(e.target.name === 'country');
   });
   form.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -416,7 +403,6 @@
     e.preventDefault();
     query.value = '';
     country.value = '';
-    fillCities();
     form.elements.sort.value = 'live';
     form.querySelectorAll('input[type="checkbox"]').forEach((box) => { box.checked = false; });
     paintMore();

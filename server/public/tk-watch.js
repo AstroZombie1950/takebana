@@ -155,7 +155,17 @@
           $('recTitle').textContent = shown;
           document.title = shown + ' — Takebana';
         }
-        var text = r.description !== undefined ? r.description : r.caption;
+        // Описание у записи и видео, подпись у фото, текст у поста.
+        var text = r.description !== undefined ? r.description : r.caption !== undefined ? r.caption : r.text;
+        // Тема поста (09.10) — подписью-ссылкой на «Ленту» по ней.
+        var topic = $('postTopic');
+        if (topic && r.topic !== undefined) {
+          var pick = form.querySelector('[name="topic"]');
+          var opt = pick.options[pick.selectedIndex];
+          topic.hidden = !r.topic;
+          topic.innerHTML = r.topic ? '<a class="tk-post__topic" href="/feed?t=' + encodeURIComponent(r.topic) + '"></a>' : '';
+          if (r.topic) tkText(topic.firstChild, opt.getAttribute('data-i18n') === 'post.topicOther' ? opt.parentNode.getAttribute('data-i18n-label') : opt.getAttribute('data-i18n'));
+        }
         if (!desc) {
           desc = document.createElement('p');
           desc.id = 'recDesc';

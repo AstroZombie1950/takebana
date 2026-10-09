@@ -303,7 +303,7 @@ router.delete('/api/venues/:id/avatar', requireAuth, ownVenue, async (req, res) 
 router.get('/venue/:venueId/live', commonDataMiddleware, async (req, res, next) => {
   if (!OBJECT_ID.test(req.params.venueId)) return next();
   const venue = await Establishments.findById(req.params.venueId)
-    .select('name type city address weekdayHours weekendHours photos cover online status owner').lean();
+    .select('name type typeOther country countryOther address weekdayHours weekendHours photos cover online status owner').lean();
   const userId = req.session.userId;
   const mine = !!venue && !!userId && String(venue.owner) === String(userId);
   // Заведение на проверке видно только владельцу — как и на карте.

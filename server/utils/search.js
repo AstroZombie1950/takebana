@@ -57,9 +57,10 @@ const streamsWhere = (rx) => ({ isActive: true, $or: [{ title: rx }, { descripti
 const recordingsWhere = (rx) => ({ status: 'ready', $or: [{ title: rx }, { description: rx }] });
 const videosWhere = (rx) => ({ status: 'ready', $or: [{ title: rx }, { description: rx }] });
 
-// Тип, страна и город заведения лежат кодами справочника (utils/places.js),
-// а ищут их словом на любом из двух языков: «кафе» и «cafe» находят
-// code: 'cafe'. Вписанное владельцем («Другое») — своим текстом.
+// Тип и страна заведения лежат кодами справочника (utils/places.js), а ищут
+// их словом на любом из двух языков: «кафе» и «cafe» находят code: 'cafe',
+// «Сербия» и «Serbia» — rs. Вписанное владельцем («Другое») — своим текстом.
+// Город — в адресе (отдельного поля с 09.10 нет).
 const named = (kind, rx) => places.options(kind, 'ru')
   .filter((x) => rx.test(x.text) || rx.test(places.name(kind, x.code, 'en')))
   .map((x) => x.code);
@@ -67,7 +68,7 @@ const named = (kind, rx) => places.options(kind, 'ru')
 // По описанию — с 29.09: «гриль» или «терраса» находят заведение, у которого
 // это написано в «О заведении». Тем же условием ищет и раздел /venues.
 function venuesWhere(rx) {
-  const or = [{ name: rx }, { address: rx }, { about: rx }, { typeOther: rx }, { countryOther: rx }, { cityOther: rx }];
+  const or = [{ name: rx }, { address: rx }, { about: rx }, { typeOther: rx }, { countryOther: rx }];
   for (const kind of places.KINDS) {
     const codes = named(kind, rx);
     if (codes.length) or.push({ [kind]: { $in: codes } });
@@ -243,13 +244,13 @@ function recordingCards(recordings) {
 async function findVenues(rx, limit) {
   const venues = await Establishments.find(venuesWhere(rx))
     .limit(limit)
-    .select('name type typeOther city cityOther address online photos')
+    .select('name type typeOther country address online photos')
     .lean();
   return venues.map((v) => ({
     _id: v._id,
     name: v.name,
     type: v.type || '',
-    city: v.city || '',
+    country: v.country || '',
     address: v.address || '',
     online: !!v.online,
     photo: (v.photos || [])[0] || null,

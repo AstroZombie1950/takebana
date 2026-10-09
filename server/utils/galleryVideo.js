@@ -81,11 +81,14 @@ async function convert(doc, src, queuedAt = Date.now()) {
     if (!saved) await Promise.all(uploaded.map((k) => storage.remove(k).catch(() => {})));
     else indexNow.ping('/video/' + doc._id);
     uploadTrace.done('upload', doc._id, { ...t, storeMs: Date.now() - at, kb: Math.round((out.bytes || 0) / 1024), outcome: 'ok' });
+    if (doc.post) await require('./posts').videoDone(doc.post);
   } catch (e) {
     await Promise.all(uploaded.map((k) => storage.remove(k).catch(() => {})));
     uploadTrace.done('upload', doc._id, { ...t, outcome: 'fail', reason: e.reason || (t.encodeMs == null ? 'encode' : 'store') });
     if (!e.reason) errorLog.media(e, 'gallery.video', { video: String(doc._id) });
     await GalleryVideo.updateOne({ _id: doc._id }, { $set: { status: 'failed', error: e.reason || 'convert' } }).catch(() => {});
+    // Ролик поста не вышел — пост выходит без него (utils/posts.js).
+    if (doc.post) await require('./posts').videoDone(doc.post).catch((err) => errorLog.server(err, 'posts.videoDone'));
   } finally {
     await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
     await fs.promises.rm(src, { force: true }).catch(() => {});
@@ -127,12 +130,16 @@ async function publishIfReady(id) {
 
 // Вместе с видео — его оценки, комментарии, просмотры и жалобы
 // (utils/engagement.js).
+// Ролик, отправленный в переписку из библиотеки, остаётся ей (utils/library.js).
 async function remove(doc) {
-  await Promise.all([doc.video && doc.video.key, doc.thumb && doc.thumb.key].filter(Boolean).map((k) => storage.remove(k)));
+  const kept = doc.video && await require('./library').handOver(doc.video.url);
+  if (!kept) await Promise.all([doc.video && doc.video.key, doc.thumb && doc.thumb.key].filter(Boolean).map((k) => storage.remove(k)));
   await Promise.all([
     GalleryVideo.deleteOne({ _id: doc._id }),
     engagement.forgetTarget(doc._id, 'video'),
   ]);
+  // Видео из поста — и из поста (utils/posts.js).
+  if (doc.post) await require('./posts').mediaGone(doc.post, doc._id);
   // Недокачанное и неопубликованное лежит у нас на диске.
   if (doc.status === 'uploading' || doc.status === 'draft') {
     await Promise.all([partPath(doc._id), coverPath(doc._id)].map((f) => fs.promises.rm(f, { force: true }).catch(() => {})));

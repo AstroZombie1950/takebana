@@ -7,7 +7,12 @@
   не показывали вовсе: заведение оставалось без точки и на карту не попадало.
   Широта с долготой в форме — не вариант, их никто не знает; поэтому метка
   и поиск по адресу, который написан в поле выше.
+
+  Страна (09.10, решение заказчика) — не поле: её приносит поиск адреса или
+  метка, владелец её видит, но не правит. Города нет вовсе — он в адресе.
+  Ждёт country и countryOther — что у заведения сейчас (у заявки пусто).
 %>
+<% var cc = locals.country || '', ccOther = locals.countryOther || ''; %>
 <div class="tk-pick" data-point>
   <div class="tk-pick__head">
     <span class="tk-form__label" data-i18n="venue.point.label"><%- t('venue.point.label') %></span>
@@ -30,6 +35,11 @@
 
   <div class="tk-pick__map" data-point-map></div>
 
+  <p class="tk-pick__country" data-point-country<%= cc || ccOther ? '' : ' hidden' %>>
+    <span class="tk-form__label" data-i18n="venues.country"><%- t('venues.country') %></span>
+    <span data-point-cc-name><% if (cc) { %><%- placeHtml('country', cc) %><% } else { %><span data-user-content><%= ccOther %></span><% } %></span>
+  </p>
+
   <p class="tk-pick__note" data-point-note data-i18n="venue.point.hint"><%- t('venue.point.hint') %></p>
 
   <div class="tk-pick__found" data-point-found hidden>
@@ -39,6 +49,8 @@
 
   <%# Скрытые поля, а не отдельная переменная в скрипте: обе формы собирают
       тело запроса из своих полей, и точка попадает туда сама. %>
+  <input type="hidden" name="country" value="<%= cc %>" data-point-cc>
+  <input type="hidden" name="countryOther" value="<%= ccOther %>" data-point-cc-other>
   <input type="hidden" name="lat" data-point-lat>
   <input type="hidden" name="lng" data-point-lng>
 </div>

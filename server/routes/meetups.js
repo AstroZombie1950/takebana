@@ -28,7 +28,7 @@ const { audit } = require('../utils/audit');
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 router.param('id', (req, res, next, id) => (OBJECT_ID.test(id) ? next() : res.status(404).json({ message: 'Отметка не найдена' })));
 
-const approved = (id) => (OBJECT_ID.test(id) ? Establishments.findOne({ _id: id, status: true }).select('name tz country city').lean() : null);
+const approved = (id) => (OBJECT_ID.test(id) ? Establishments.findOne({ _id: id, status: true }).select('name tz country').lean() : null);
 
 // Встречи — только совершеннолетним по дате рождения. Нет даты — reason
 // подсказывает странице показать поле для неё.
@@ -68,7 +68,6 @@ router.post('/venue/:venueId/meetups', requireAuthApi, requireNotBanned, validat
       user: req.session.userId,
       venue: venue._id,
       country: venue.country || '',
-      city: venue.city || '',
       day,
       time,
       note: req.body.note.replace(/\s+/g, ' ').trim(),

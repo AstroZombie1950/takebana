@@ -22,6 +22,7 @@
 //   data-i18n-title="ключ"        — всплывающая подсказка
 //   data-i18n-aria="ключ"         — подпись для читалки экрана
 //   data-i18n-label="ключ"        — подпись группы <optgroup> (атрибут label)
+//   data-i18n-region="RS"         — имя страны по коду ISO, из Intl (09.10)
 //
 //   window.t('ключ' [, запасная строка | подстановки]) — строка на текущем
 //     языке для скриптов, которые собирают разметку сами:
@@ -110,6 +111,17 @@
     }
   }
 
+  // Страны — не строки словаря: их имена знает сам браузер (Intl), в разметке
+  // только код — data-i18n-region="RS" (utils/places.js, заведения).
+  function regions() {
+    var nodes = document.querySelectorAll('[data-i18n-region]');
+    if (!nodes.length || !window.Intl || !Intl.DisplayNames) return;
+    var names = new Intl.DisplayNames([current], { type: 'region' });
+    for (var i = 0; i < nodes.length; i++) {
+      try { nodes[i].textContent = names.of(nodes[i].getAttribute('data-i18n-region')); } catch (e) {}
+    }
+  }
+
   // Текст, который ставит скрипт. Ключ переезжает на элемент, поэтому строка
   // переживает переключение языка; без этого статичный ключ в разметке
   // затирал бы то, что поставил скрипт, а поставленное скриптом — не
@@ -165,6 +177,7 @@
     fill('data-i18n-title', function (el, v) { el.title = strip(v); });
     fill('data-i18n-aria', function (el, v) { el.setAttribute('aria-label', strip(v)); });
     fill('data-i18n-label', function (el, v) { el.label = strip(v); });
+    regions();
 
     document.documentElement.setAttribute('lang', current);
 
@@ -189,6 +202,10 @@
 
   window.t = t;
   window.tkText = setText;
+  // Имя страны по коду ISO на текущем языке: 'rs' → «Сербия».
+  window.tkRegion = function (code) {
+    try { return new Intl.DisplayNames([current], { type: 'region' }).of(String(code).toUpperCase()); } catch (e) { return ''; }
+  };
   window.tkDate = date;
   window.applyLang = apply;
   window.tkLang = function () { return current; };

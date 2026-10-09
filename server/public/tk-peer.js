@@ -32,15 +32,15 @@
       return function () { subs = subs.filter(function (x) { return x !== fn; }); };
     };
 
-    // Микрофон и камеру можно выключить кнопкой в окне звонка, не разрывая
-    // соединения: дорожка остаётся, но молчит (mic) или шлёт чёрный кадр
-    // (camera). Выбор запоминается: камера могла ещё не подняться к моменту
-    // нажатия, и тогда он применится к ней при захвате.
-    self.off = { mic: false, camera: false };
-    self.setEnabled = function (kind, on) {
-      self.off[kind] = !on;
-      var track = kind === 'mic' ? self.mic : self.camera;
-      if (track) track.enabled = !!on;
+    // Микрофон можно выключить кнопкой в окне звонка, не разрывая
+    // соединения: дорожка остаётся, но молчит. Выбор запоминается: микрофон
+    // мог ещё не подняться к моменту нажатия, тогда он применится при захвате.
+    // Камеру кнопкой не гасят с 09.10 — вместо этого «Только звук»
+    // (решение заказчика: кнопок в окне и так много).
+    self.micOff = false;
+    self.setMic = function (on) {
+      self.micOff = !on;
+      if (self.mic) self.mic.enabled = !!on;
     };
 
     self.startMic = function (onError) {
@@ -49,7 +49,7 @@
       navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
         if (self.closed) { s.getTracks().forEach(function (t) { t.stop(); }); return; }
         self.mic = s.getAudioTracks()[0];
-        self.mic.enabled = !self.off.mic;
+        self.mic.enabled = !self.micOff;
         tell();
       }).catch(function (e) { if (onError) onError(e); });
     };
@@ -75,11 +75,45 @@
         var track = s.getVideoTracks()[0];
         if (self.closed || self.voiceOnly) { track.stop(); return; }
         self.camera = track;
-        self.camera.enabled = !self.off.camera;
         tell();
       }).catch(function (e) {
         starting = false;
         if (onError) onError(e);
+      });
+    };
+
+    // Другая камера (09.10, заказчик): у телефона — передняя ↔ основная
+    // (facingMode), у компьютера с несколькими — следующая по списку.
+    // Айфон не держит две камеры разом, поэтому старая гаснет до захвата
+    // новой; не вышло — снова та, что по умолчанию, чтобы собеседник
+    // не остался с чёрным кадром.
+    self.flip = function (onError) {
+      if (!self.camera || starting) return;
+      var was = self.camera.getSettings ? self.camera.getSettings() : {};
+      var old = self.camera;
+      starting = true;
+      var want = was.facingMode
+        ? Promise.resolve({ facingMode: { exact: was.facingMode === 'user' ? 'environment' : 'user' } })
+        : navigator.mediaDevices.enumerateDevices().then(function (list) {
+          var cams = list.filter(function (d) { return d.kind === 'videoinput'; });
+          var i = cams.findIndex(function (d) { return d.deviceId === was.deviceId; });
+          return { deviceId: { exact: cams[(i + 1) % cams.length].deviceId } };
+        });
+      want.then(function (pick) {
+        old.stop();
+        return navigator.mediaDevices.getUserMedia({ video: Object.assign({ width: { ideal: 1280 }, height: { ideal: 720 } }, pick) });
+      }).then(function (s) {
+        starting = false;
+        var track = s.getVideoTracks()[0];
+        if (self.closed || self.voiceOnly) { track.stop(); return; }
+        self.camera = track;
+        tell();
+      }).catch(function () {
+        starting = false;
+        if (self.camera !== old) return;
+        self.camera = null;
+        tell();
+        if (!self.closed && !self.voiceOnly) self.startCamera(onError);
       });
     };
 
@@ -542,11 +576,9 @@
       voice: function () { return voice; },
       mic: function () { return own.mic; },
       restartMic: function () { own.restartMic(onMediaError); },
-      // Свой микрофон и своя камера — кнопками в окне звонка. Это не то же,
-      // что «Только голос» ниже: там гаснет видео в обе стороны ради канала,
-      // здесь — только своё, собеседника по-прежнему видно и слышно.
-      setMic: function (on) { own.setEnabled('mic', on); },
-      setCamera: function (on) { own.setEnabled('camera', on); },
+      // Свой микрофон и другая камера — кнопками в окне звонка.
+      setMic: function (on) { own.setMic(on); },
+      flipCamera: function () { own.flip(onMediaError); },
       // Как у Daily: выключено — только голос, своя камера гаснет и чужое
       // видео не принимается (собеседник перестаёт его слать).
       setVideo: function (on) {
@@ -670,8 +702,8 @@
       },
       mic: function () { return own.mic; },
       restartMic: function () { own.restartMic(onMediaError); },
-      setMic: function (on) { own.setEnabled('mic', on); },
-      setCamera: function (on) { own.setEnabled('camera', on); },
+      setMic: function (on) { own.setMic(on); },
+      flipCamera: function () { own.flip(onMediaError); },
       // Сигнал от участника — его же соединению.
       signal: function (from, data) { if (links[from]) links[from].signal(data); },
       setVideo: function (on) {

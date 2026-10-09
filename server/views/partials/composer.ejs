@@ -1,0 +1,37 @@
+<%#
+  «Новый пост» (09.10.2026, решение заказчика) — в своём профиле и в «Ленте».
+  Свёрнутым — строка с аватаром и «Новый пост»; нажали — текст, фото и видео
+  (скрепкой или перетаскиванием), тема и «Опубликовать». Видео начинает
+  ехать сразу, как выбрано, — фоновой загрузкой кусками (tk-upload.js);
+  фото уходят вместе с постом. Поведение — public/tk-composer.js, вид —
+  css/feed.css (.tk-compose), сервер — routes/posts.js.
+  Тема — по желанию: раздел целиком («Другое» в нём) или тема в разделе.
+%>
+<% var av = currentUser.avatarStyle; %>
+<form class="tk-compose" id="composer" data-video="<%= videoEnabled ? '1' : '' %>" novalidate>
+  <span class="tk-compose__ava"<% if (!av.url) { %> data-bg="<%= av.gradient %>"<% } %> aria-hidden="true"><% if (av.url) { %><img src="<%= av.url %>" alt=""><% } else { %><%= av.initial %><% } %></span>
+  <button type="button" class="tk-compose__open" data-compose-open data-i18n="post.new"><%- t('post.new') %></button>
+
+  <div class="tk-compose__body" hidden>
+    <textarea name="text" class="tk-field tk-compose__text" rows="3" maxlength="5000" aria-label="<%= ta('post.new') %>" data-i18n-aria="post.new"></textarea>
+    <div class="tk-compose__media" data-compose-media hidden></div>
+    <div class="tk-compose__bar">
+      <label class="tk-compose__tool" title="<%= ta('post.addMedia') %>" data-i18n-title="post.addMedia">
+        <input type="file" data-compose-file accept="image/png,image/jpeg,image/webp<%= videoEnabled ? ',video/*' : '' %>" multiple hidden>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true"><rect x="3" y="5" width="18" height="14"></rect><circle cx="9" cy="10" r="1.6"></circle><path d="M21 16l-5-5-8 8"></path></svg>
+        <span class="tk-vh" data-i18n="post.addMedia"><%- t('post.addMedia') %></span>
+      </label>
+      <select name="topic" class="tk-field tk-select tk-compose__topic" aria-label="<%= ta('post.topic') %>" data-i18n-aria="post.topic">
+        <option value="" data-i18n="post.noTopic"><%- t('post.noTopic') %></option>
+        <% Object.keys(catalog.CATEGORIES).forEach(function (code) { var c = catalog.CATEGORIES[code]; %>
+        <optgroup label="<%= ta(c.i18n) %>" data-i18n-label="<%= c.i18n %>">
+          <% c.subs.forEach(function (sub) { %><option value="<%= sub.code %>" data-i18n="<%= sub.i18n %>"><%= ta(sub.i18n, sub.name) %></option><% }); %>
+          <option value="<%= code %>" data-i18n="post.topicOther"><%- t('post.topicOther') %></option>
+        </optgroup>
+        <% }); %>
+      </select>
+      <button type="button" class="tk-btn tk-btn--outline tk-btn--sm" data-compose-cancel data-i18n="common.cancel"><%- t('common.cancel') %></button>
+      <button type="submit" class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="post.publish"><%- t('post.publish') %></button>
+    </div>
+  </div>
+</form>

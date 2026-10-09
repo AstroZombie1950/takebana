@@ -1,4 +1,4 @@
-// Поиск адреса для формы заведения.
+// Поиск адреса для формы заведения: точка, короткий адрес и страна (ISO).
 //
 // Страница спрашивает наш сервер, наружу ходит только utils/geocode.js:
 // в клиентском коде чужих хостов нет. Маршруты закрыты входом — адрес ищет
@@ -11,7 +11,6 @@ asyncify(router); // ошибки async-обработчиков уходят в
 
 const { requireAuthApi } = require('../middleware/auth');
 const { geocodeLimiter } = require('../middleware/rateLimit');
-const places = require('../utils/places');
 const geocode = require('../utils/geocode');
 const errorLog = require('../utils/errorLog');
 
@@ -31,13 +30,9 @@ router.get('/api/geocode', requireAuthApi, geocodeLimiter, async (req, res) => {
         return res.status(400).json({ message: 'Адрес короче трёх символов' });
     }
 
-    // Подсказка — только коды города и страны из справочника (utils/places.js):
-    // свободную строку из запроса в чужой сервис не передаём.
-    const hint = [places.name('city', req.query.city, 'ru'), places.name('country', req.query.country, 'ru')].filter(Boolean).join(', ');
-
     let point;
     try {
-        point = await geocode.search(q, hint);
+        point = await geocode.search(q, res.locals.lang);
     } catch (err) {
         return fail(res, err);
     }
@@ -55,7 +50,7 @@ router.get('/api/geocode/reverse', requireAuthApi, geocodeLimiter, async (req, r
 
     let found;
     try {
-        found = await geocode.reverse(lat, lng);
+        found = await geocode.reverse(lat, lng, res.locals.lang);
     } catch (err) {
         return fail(res, err);
     }
