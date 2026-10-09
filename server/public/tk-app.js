@@ -920,6 +920,9 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     socket.on('call:video', ({ callId, act }) => {
       if (callId === window.currentCallId && window.callVideo) window.callVideo(act);
     });
+    socket.on('call:mic', ({ callId, on }) => {
+      if (callId === window.currentCallId && window.callPeerMic) window.callPeerMic(!!on);
+    });
     socket.on('call:peer:join', (data) => {
       if (data.callId === window.currentCallId && window.callGroupJoin) window.callGroupJoin(data);
     });
@@ -1050,6 +1053,10 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   const OUT = side('outgoing', 'out');
   const IN = side('incoming', 'in');
+  // Камеры считаются заново, когда пошла своя картинка: до разрешения на
+  // камеру браузер (Safari) называет не больше одной, и в первых звонках
+  // кнопки «Сменить камеру» не было (правки 09.10).
+  [OUT, IN].forEach((s) => s.localVideo.addEventListener('loadedmetadata', () => countCams(s)));
 
   function renderAvatar(el, url, name){
     if (!el) return;
@@ -1071,13 +1078,14 @@ document.addEventListener('DOMContentLoaded', function(){
 
   function resetSide(s) {
     setBeacon(s, s === OUT);
+    delete s.status.parentElement.dataset.tone;
     s.timer.textContent = '00:00';
     s.timer.classList.add('hidden');
     s.net.classList.add('hidden');
     s.level.classList.add('hidden');
     s.stage.classList.add('hidden');
     s.voice.classList.add('hidden');
-    s.add.classList.add('hidden');
+    s.add.hidden = true;
     // Сетка — только у группового разговора: к новому звонку её нет.
     s.grid.hidden = true;
     s.grid.innerHTML = '';
@@ -1134,7 +1142,7 @@ document.addEventListener('DOMContentLoaded', function(){
     s.voice.classList.remove('hidden');
     // Позвать третьего можно из любого идущего разговора — и из видео,
     // и из голосового.
-    s.add.classList.remove('hidden');
+    s.add.hidden = false;
     s.actions.classList.remove('tk-call__actions--pair');
     s.actions.classList.add('tk-call__actions--live');
     // Ряд кнопок разговора: микрофон всегда, смена камеры — при видео
@@ -1146,18 +1154,33 @@ document.addEventListener('DOMContentLoaded', function(){
     paintVideo(s);
     countCams(s);
     if (s === OUT) {
-      tkText(outCancel, 'call.end');
-      outCancel.classList.remove('tk-btn--danger');
-      outCancel.classList.add('tk-btn--mute');
+      endLook(outCancel, true);
     } else {
       inAccept.disabled = false;
-      tkText(inAccept, 'call.end');
+      endLook(inAccept, true);
       inAccept.classList.remove('tk-btn--ok');
-      inAccept.classList.add('tk-btn--mute');
+      inAccept.classList.add('tk-btn--danger');
       inAccept.onclick = endCallLocal;
       inDecline.classList.add('hidden');
       inClose.classList.add('hidden');
     }
+  }
+
+  // «Завершить» в разговоре — красной кнопкой с трубкой (правки 09.10):
+  // её узнают без слов. До ответа та же кнопка — словом («Отменить»,
+  // «Принять»): endLook(btn, false, ключ) возвращает подпись.
+  const END_ICON = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.96.96 0 01-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.3 11.3 0 00-2.67-1.85.99.99 0 01-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>';
+  function endLook(btn, on, key) {
+    btn.classList.toggle('tk-call__end', on);
+    if (on) {
+      btn.removeAttribute('data-i18n');
+      btn.innerHTML = END_ICON;
+      paintTool(btn, false, 'call.end', 'call.end');
+      btn.removeAttribute('aria-pressed');
+      return;
+    }
+    ['data-i18n-aria', 'data-i18n-title', 'aria-label', 'title'].forEach((a) => btn.removeAttribute(a));
+    tkText(btn, key);
   }
 
   function startTimer(s) {
@@ -1243,6 +1266,10 @@ document.addEventListener('DOMContentLoaded', function(){
     let micQuietSince = 0;
     let micDead = false;
     let micRetried = false;
+    // Собеседник выключил микрофон кнопкой (call:mic, 09.10): это не сбой —
+    // так и пишем, без «не слышно собеседника».
+    let peerMicOff = false;
+    const sendMic = (on) => window.callSocket && window.callSocket.emit('call:mic', { callId, on });
 
     // Телеметрия разговора (docs/TELEMETRY.md, kind call), у каждой стороны
     // своя: путь, собеседник появился, соединились, переподключения, уход
@@ -1296,7 +1323,7 @@ document.addEventListener('DOMContentLoaded', function(){
         if (bag.video) show(userId, bag.video, true);
         if (bag.audio) show(userId, bag.audio, true);
       });
-      s.add.classList.remove('hidden');
+      s.add.hidden = false;
       // Переписки на несколько человек в проекте нет: в групповом разговоре
       // кнопки чата не показываем, открытую ленту закрываем.
       s.chatBtn.hidden = true;
@@ -1325,13 +1352,22 @@ document.addEventListener('DOMContentLoaded', function(){
       if (window._call.drop) window._call.drop(String(userId));
     };
 
+    // Строка состояния и её цвет (правки 09.10: серым на картинке её не
+    // было видно): ok — всё в порядке, wait — ждём, warn — возможно, что-то
+    // не так, bad — сбой.
     function paint() {
       setBeacon(s, state !== 'reconnecting');
-      if (switching && state !== 'live') tkText(s.status, 'call.otherPath');
-      else if (state === 'reconnecting') tkText(s.status, 'call.reconnecting');
-      else if (state === 'connecting') tkText(s.status, 'call.connectingShort');
-      else if (peers) tkText(s.status, micDead ? 'call.micDead' : silent ? 'call.peerSilent' : 'call.connected');
-      else tkText(s.status, hadPeer ? 'call.peerReconnecting' : 'call.waitingPeer');
+      let key, tone;
+      if (switching && state !== 'live') [key, tone] = ['call.otherPath', 'warn'];
+      else if (state === 'reconnecting') [key, tone] = ['call.reconnecting', 'warn'];
+      else if (state === 'connecting') [key, tone] = ['call.connectingShort', 'wait'];
+      else if (peers && micDead) [key, tone] = ['call.micDead', 'bad'];
+      else if (peers && peerMicOff) [key, tone] = ['call.peerMicOff', 'wait'];
+      else if (peers && silent) [key, tone] = ['call.peerSilent', 'warn'];
+      else if (peers) [key, tone] = ['call.connected', 'ok'];
+      else [key, tone] = hadPeer ? ['call.peerReconnecting', 'warn'] : ['call.waitingPeer', 'wait'];
+      tkText(s.status, key);
+      s.status.parentElement.dataset.tone = tone;
     }
 
     // Сколько нас в разговоре — окну приглашения: вдвоём свободных мест два,
@@ -1410,6 +1446,8 @@ document.addEventListener('DOMContentLoaded', function(){
         else if (!p.local) TKDaily.attach(s.remoteAudio, on && track);
       },
       onPeers: (n) => {
+        // Пришёл (или вернулся) собеседник, а мой микрофон выключен — пусть знает.
+        if (n > peers && !s.micOn) sendMic(false);
         peers = n;
         if (n) hadPeer = true;
         if (n && tr) { tr.step('peer'); if (n + 1 > size) tr.set('size', size = n + 1); }
@@ -1453,7 +1491,7 @@ document.addEventListener('DOMContentLoaded', function(){
         s.level.dataset.sound = grew > 0.0001 ? 'yes' : 'no';
         // Тишина от собеседника: только вдвоём — в группе молчат по очереди.
         const now = Date.now();
-        if (grew > QUIET || group || state !== 'live' || !peers) quietSince = 0;
+        if (grew > QUIET || peerMicOff || group || state !== 'live' || !peers) quietSince = 0;
         else if (!quietSince) quietSince = now;
         const quiet = !!quietSince && now - quietSince >= SILENT_MS;
         if (quiet !== silent) {
@@ -1655,10 +1693,21 @@ document.addEventListener('DOMContentLoaded', function(){
       if (tr) tr.step(yes ? 'video_accept' : 'video_decline');
     };
 
+    // Микрофон: свой — собеседнику, его — в строку состояния (call:mic).
+    window.callMic = sendMic;
+    window.callPeerMic = (on) => {
+      if (group) return;
+      peerMicOff = !on;
+      if (peerMicOff) { quietSince = 0; silent = false; }
+      if (tr) tr.step(on ? 'peer_mic_on' : 'peer_mic_off');
+      paint();
+    };
+
     window.callVideoStop = () => {
       clearTimeout(askTimer);
       hideAsk();
       window.callVoice = window.callVideo = window.callVideoAnswer = window.callVideoStop = null;
+      window.callMic = window.callPeerMic = null;
     };
   };
 
@@ -1940,6 +1989,7 @@ document.addEventListener('DOMContentLoaded', function(){
     s.micBtn.addEventListener('click', () => {
       s.micOn = !s.micOn;
       if (window._call && window._call.setMic) window._call.setMic(s.micOn);
+      if (window.callMic) window.callMic(s.micOn);
       paintTool(s.micBtn, !s.micOn, 'call.micOn', 'call.micOff');
     });
     s.flipBtn.addEventListener('click', () => {
@@ -1982,9 +2032,7 @@ document.addEventListener('DOMContentLoaded', function(){
     // Звонок группе: собеседник не один, переписки на двоих нет.
     OUT.chatBtn.hidden = !OUT.peerId;
     OUT.actions.classList.remove('tk-call__actions--pair', 'tk-call__actions--live');
-    tkText(outCancel, 'call.cancel');
-    outCancel.classList.remove('tk-btn--mute');
-    outCancel.classList.add('tk-btn--danger');
+    endLook(outCancel, false, 'call.cancel');
     outgoing.classList.remove('hidden');
   };
   window.updateOutgoingCallStatus = function(key){ tkText(OUT.status, key); };
@@ -2022,8 +2070,8 @@ document.addEventListener('DOMContentLoaded', function(){
     IN.actions.classList.remove('tk-call__actions--live');
     IN.actions.classList.add('tk-call__actions--pair');
     inAccept.disabled = false;
-    tkText(inAccept, 'call.accept');
-    inAccept.classList.remove('tk-btn--mute');
+    endLook(inAccept, false, 'call.accept');
+    inAccept.classList.remove('tk-btn--danger');
     inAccept.classList.add('tk-btn--ok');
     inDecline.disabled = false;
     inDecline.classList.remove('hidden');

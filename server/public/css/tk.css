@@ -148,6 +148,7 @@
   --tk-link-hover: #F5F1EA;
   --tk-green: #679267;        /* второстепенный акцент: рубрики, «доставлено» */
   --tk-green-live: #5FD068;   /* «в сети», «готово»: заметнее на тёмном */
+  --tk-warn: #F0A030;         /* «возможно, что-то не так»: переподключение, тишина (09.10) */
   --tk-layer: #0A0A0A;        /* всплывающее: окна, меню, выпадающие списки */
   --tk-raise: #121110;        /* карточка, приподнятая над фоном */
   --tk-shot: #141414;         /* место под картинку, пока её нет */
@@ -175,6 +176,7 @@
   --tk-link-hover: #0A0A0A;
   --tk-green: #467346;
   --tk-green-live: #1F7533;
+  --tk-warn: #9A5A00;
   --tk-layer: #FFFDF9;
   --tk-raise: #FFFDF9;
   --tk-shot: #E9E3D9;
@@ -381,18 +383,6 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   color:var(--tk-paper);
 }
 
-/* Нейтральное состояние: разговор уже идёт, кнопка просто завершает. */
-.tk-btn--mute {
-  background:#4A4640;
-  border-color:#4A4640;
-  color:var(--tk-paper);
-}
-
-.tk-btn--mute:hover, .tk-btn--mute:focus-visible {
-  background:#3A3733;
-  border-color:#3A3733;
-}
-
 .tk-btn:disabled {
   opacity:.45;
   cursor:not-allowed;
@@ -564,6 +554,12 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 }
 
 .tk-field[rows] { resize:vertical; }
+
+/* Растягивание поля — уголком или текстом — с потолком (09.10): без него
+ * поле «Новый пост» тянулось до бесконечности и ломало вёрстку вокруг.
+ * Дальше потолка текст прокручивается внутри. Свои потолки (переписка,
+ * комментарий) ниже этого и действуют как прежде. */
+textarea { max-height: min(480px, 60vh); }
 
 /* Поле пароля: кнопка показа лежит поверх правого края. */
 .tk-field-wrap {

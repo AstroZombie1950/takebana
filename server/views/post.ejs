@@ -39,6 +39,16 @@
   <%- include('partials/leftBar') %>
 
   <main class="tk-app-main">
+    <%# Хлебные крошки (09.10): автор → пост, те же звенья, что в разметке
+        BreadcrumbList выше. Пришли из «Ленты» — tk-posts.js ставит её
+        первым звеном; звено, откуда пришли, возвращает назад по истории —
+        на то же место страницы. %>
+    <nav class="tk-crumbs" aria-label="<%= ta('crumbs.aria') %>" data-i18n-aria="crumbs.aria">
+      <ol class="tk-crumbs__list" data-crumbs>
+        <li class="tk-crumbs__item"><a href="<%= author.url %>" class="tk-crumbs__link"><%= author.displayName %></a></li>
+        <li class="tk-crumbs__item tk-crumbs__item--here" aria-current="page"><%= headTitle %></li>
+      </ol>
+    </nav>
     <div class="tk-watch tk-watch--photo tk-watch--post<%= media.length ? '' : ' tk-watch--text' %>" id="watch"
          data-base="<%= base %>"
          data-k="<%= k %>"
@@ -70,6 +80,7 @@
         <button type="button" class="tk-post__nav tk-post__nav--prev" data-slide="-1" aria-label="<%= ta('user.photoPrev') %>" data-i18n-aria="user.photoPrev" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>
         <button type="button" class="tk-post__nav tk-post__nav--next" data-slide="1" aria-label="<%= ta('user.photoNext') %>" data-i18n-aria="user.photoNext"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></button>
         <span class="tk-post__count" data-slide-n>1 / <%= media.length %></span>
+        <span class="tk-post__dots" aria-hidden="true"><% media.forEach(function (m, i) { %><i<%- i ? '' : ' class="is-on"' %>></i><% }); %></span>
         <% } %>
       </div>
       <% } %>

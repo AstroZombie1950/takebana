@@ -134,15 +134,13 @@
       <section class="tk-venues__list" aria-label="<%= ta('venues.aria') %>" data-i18n-aria="venues.aria">
         <div class="tk-venues__head">
           <p class="tk-venues__count" id="venueCount"><b data-i18n="<%= count.key %>" data-i18n-vars='<%= JSON.stringify({ n: venues.length }) %>'><%= count.text %></b> <span><%= scope %></span></p>
-          <%# Владельцу — его заведения (тот же адрес, что у пункта левой панели)
-              и заявка на следующее (09.10: с одним заведением второе было
-              не добавить — кнопки не было), остальным — заявка. Заявка —
-              заметной красной кнопкой (30.09): ссылкой мелким шрифтом её
-              не находили. Предел и «заявка на проверке» объясняет её страница. %>
+          <%# Заявка — заметной красной кнопкой (30.09): ссылкой мелким шрифтом
+              её не находили. У владельца — «Добавить заведение» (09.10: со
+              вторым было не добавить). «Мои заведения» здесь нет (правки
+              09.10): этот пункт уже в левой панели, а вторая кнопка на
+              телефоне уводила строку вбок. Предел и «заявка на проверке»
+              объясняет страница заявки. %>
           <span class="tk-venues__acts">
-            <% if (currentUser && currentUser.venuesHref) { %>
-            <a href="<%= currentUser.venuesHref %>" class="tk-btn tk-btn--outline tk-btn--sm tk-venues__mine" data-i18n="venues.mine"><%- t('venues.mine') %></a>
-            <% } %>
             <% var regKey = currentUser && currentUser.venuesHref ? 'venues.add' : 'venues.register'; %>
             <a href="/company-register" class="tk-btn tk-btn--primary tk-btn--sm tk-venues__mine" data-i18n="<%= regKey %>"><%- t(regKey) %></a>
           </span>

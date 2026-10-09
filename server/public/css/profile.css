@@ -410,6 +410,10 @@
  * четыре равные клетки, действия — строками во всю ширину. */
 @media (max-width: 767px) {
   .tk-prof { padding: 24px 16px 40px; }
+  /* Посты — от края до края: поле профиля 16px, а не 20px «Ленты»
+   * (feed.css) — иначе страница уезжала вбок на 4px (09.10). */
+  .tk-prof__feed .tk-posts__list,
+  .tk-prof__feed .tk-compose { margin-inline: -16px; }
 
   .tk-prof__top {
     display: grid;

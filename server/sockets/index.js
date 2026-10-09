@@ -840,6 +840,15 @@ function registerSockets(io) {
       if (!isParty(call, userId) || !call.members || call.members.size !== 2 || !VIDEO_ACTS.has(act)) return;
       for (const id of call.members.keys()) if (id !== userId) io.to(`user:${id}`).emit('call:video', { callId, act });
     });
+
+    // Микрофон выключен кнопкой (09.10): собеседнику — строка «выключил
+    // микрофон» вместо предупреждения «не слышно». Только пересылка.
+    onCall('call:mic', ({ callId, on }) => {
+      const call = activeCalls.get(callId);
+      const userId = socket.data.userId;
+      if (!isParty(call, userId) || !call.members) return;
+      for (const id of call.members.keys()) if (id !== userId) io.to(`user:${id}`).emit('call:mic', { callId, on: on === true });
+    });
   });
 
   // ── Сэмплер зрителей ───────────────────────────────────────────────────────

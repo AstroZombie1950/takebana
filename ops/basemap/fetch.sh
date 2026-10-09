@@ -3,7 +3,8 @@
 # значки. Всё ложится в server/media/basemap — в git не идёт, deploy.sh её
 # не трогает, nginx отдаёт как /basemap/ (ops/nginx/takebana.conf).
 #
-#   bash ops/basemap/fetch.sh                             # Европа до масштаба 14, ~24 ГБ
+#   bash ops/basemap/fetch.sh                             # весь мир до масштаба 14, ~69 ГБ
+#   BBOX=-25,34,45,72 bash ops/basemap/fetch.sh           # Европа, ~24 ГБ (до 09.10.2026)
 #   BBOX=18.8,41.8,23.1,46.2 bash ops/basemap/fetch.sh    # Сербия, ~350 МБ — для разработки
 #
 # На сервере — из сессии takebana. Плитки вырезаются из свежей сборки
@@ -16,7 +17,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DEST="$ROOT/server/media/basemap"
-BBOX="${BBOX:--25,34,45,72}"   # Европа: запад, юг, восток, север
+# Весь мир (решение Ивана 09.10.2026: заведение может быть где угодно,
+# карты открываются миром): запад, юг, восток, север.
+BBOX="${BBOX:--180,-85,180,85}"
 MAXZOOM="${MAXZOOM:-14}"       # дальше MapLibre растягивает сам; 15 — вдвое больше, ~48 ГБ
 PMTILES_VERSION=1.31.2
 ASSETS=https://raw.githubusercontent.com/protomaps/basemaps-assets/main

@@ -48,14 +48,16 @@
   align-items: center;
   justify-content: center;
   transform: translateY(-50%);
-  background: rgba(10, 10, 10, .6);
-  border: 1px solid var(--tk-rule);
-  color: var(--tk-beige);
-  transition: color .15s ease, border-color .15s ease;
+  /* Киноварью, как у карусели поста (feed.css, 09.10): заметно, что листается. */
+  background: var(--tk-accent);
+  border: 0;
+  color: var(--tk-paper);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .45);
+  transition: background-color .15s ease;
 }
 
 .tk-photo__nav:hover,
-.tk-photo__nav:focus-visible { color: var(--tk-paper); border-color: var(--tk-accent); }
+.tk-photo__nav:focus-visible { background: #C4321F; }
 .tk-photo__nav--prev { left: 12px; }
 .tk-photo__nav--next { right: 12px; }
 

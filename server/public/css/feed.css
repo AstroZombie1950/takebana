@@ -120,7 +120,9 @@
 }
 
 /* Пост (09.10): несколько фото и видео — лентой со щелчком по кадру,
- * пальцем и стрелками (tk-posts.js); счётчик — в углу. */
+ * пальцем и стрелками (tk-posts.js); счётчик — в углу, точки — под кадром.
+ * Стрелки киноварью и на телефоне тоже (правки 09.10): тёмные и скрытые
+ * под пальцем, они не говорили, что кадров несколько. */
 .tk-post__media--set { overflow: hidden; }
 .tk-post__track {
   display: flex;
@@ -150,16 +152,37 @@
   justify-content: center;
   padding: 0;
   transform: translateY(-50%);
-  background: rgba(10, 10, 10, .6);
-  border: 1px solid rgba(245, 241, 234, .3);
+  background: var(--tk-accent);
+  border: 0;
   color: var(--tk-paper);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .45);
   cursor: pointer;
+  transition: background-color .18s ease;
 }
 .tk-post__nav--prev { left: 10px; }
 .tk-post__nav--next { right: 10px; }
 .tk-post__nav[hidden] { display: none; }
-.tk-post__nav:hover { background: var(--tk-accent); border-color: var(--tk-accent); }
-@media (hover: none) { .tk-post__nav { display: none; } }
+.tk-post__nav:hover { background: #C4321F; }
+@media (hover: none) { .tk-post__nav { width: 32px; height: 32px; } }
+
+.tk-post__dots {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.tk-post__dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(245, 241, 234, .55);
+  box-shadow: 0 0 3px rgba(0, 0, 0, .6);
+  transition: background-color .18s ease, transform .18s ease;
+}
+.tk-post__dots i.is-on { background: var(--tk-accent); transform: scale(1.25); }
 
 /* Слева: справа сверху на кадре — водяной знак (utils/watermark.js). */
 .tk-post__count {
@@ -201,11 +224,21 @@
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
-.tk-post__media--text:hover .tk-post__big { color: var(--tk-fg-2); }
+a.tk-post__media--text:hover .tk-post__big { color: var(--tk-fg-2); }
 
 .tk-post__note { margin: 0; font-size: 13px; color: var(--tk-muted); }
 .tk-post__more { color: var(--tk-muted); }
 .tk-post__more:hover { color: var(--tk-fg); }
+.tk-post__more[aria-busy] { opacity: .5; pointer-events: none; }
+/* Текст поста с абзацами; развёрнутый «Ещё» — целиком, на месте (09.10). */
+.tk-post [data-more-text] { white-space: pre-line; }
+.tk-post__media--long { flex-direction: column; align-items: flex-start; justify-content: center; gap: 12px; }
+.tk-post__media--long .tk-post__more {
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 14px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
 
 /* Тема поста — ссылкой на «Ленту» по ней. */
 .tk-post__topic {
@@ -551,9 +584,38 @@
 .tk-post__stage .tk-post__slide { display: flex; align-items: center; justify-content: center; background: #000; }
 .tk-post__stage .tk-post__slide img { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
 .tk-post__desc { white-space: pre-line; }
+/* Тема под текстом — своей строкой: строчная плашка с полями налезала
+ * на «Ещё» над ней (09.10). */
+.tk-watch--post .tk-watch__more { display: block; }
+.tk-watch--post #postTopic { margin-top: 12px; }
+.tk-watch--post #postTopic .tk-post__topic { display: inline-block; }
 .tk-watch--text { grid-template-columns: minmax(0, 760px); grid-template-areas: "main"; }
 
+/* Хлебные крошки страницы поста (09.10): автор, перед ним «Лента», если
+ * пришли из неё; последнее звено — сам пост, в одну строку с многоточием. */
+.tk-crumbs { max-width: 1440px; padding: 16px 24px 0; }
+.tk-crumbs + .tk-watch { padding-top: 12px; }
+.tk-crumbs__list {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 14px;
+  letter-spacing: .02em;
+  color: var(--tk-muted);
+}
+.tk-crumbs__item { flex: none; white-space: nowrap; }
+.tk-crumbs__item + .tk-crumbs__item::before { content: '/'; margin: 0 10px; color: var(--tk-dim); }
+.tk-crumbs__item--here { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tk-crumbs__link { color: var(--tk-fg); }
+.tk-crumbs__link:hover { color: var(--tk-accent-text); }
+
 @media (max-width: 1023px) {
+  .tk-crumbs { padding: 12px calc(16px + var(--tk-safe-r)) 12px calc(16px + var(--tk-safe-l)); }
+  .tk-crumbs + .tk-watch { padding-top: 0; }
   .tk-post__stage .tk-post__track { height: auto; aspect-ratio: 4 / 5; max-height: 80dvh; }
 }
 

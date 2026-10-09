@@ -272,8 +272,9 @@ function mount(kind) {
 
   // Готовое, что этот человек вправе смотреть: для оценок, комментариев
   // и просмотров. Чужое незаконченное — «нет такого».
-  async function readyItem(req, res) {
-    const item = await K.Model.findById(req.params.id).select('userId status isAdult title').lean();
+  // extra — ещё поля к выборке (текст для «Ещё» в ленте).
+  async function readyItem(req, res, extra = '') {
+    const item = await K.Model.findById(req.params.id).select('userId status isAdult title ' + extra).lean();
     if (!item || !isReady(K, item)) {
       res.status(404).json({ message: K.notFound });
       return null;
@@ -449,6 +450,14 @@ function mount(kind) {
       items: list.slice(0, COMMENTS_PAGE).map((c) => commentView(c, req.session.userId, item.userId, moderator)),
       more: list.length > COMMENTS_PAGE,
     });
+  });
+
+  // Текст целиком, как его рисует страница (@ники ссылками): «Ещё» в ленте
+  // и профиле разворачивает длинный пост на месте (09.10, tk-posts.js).
+  router.get(`${path}/text`, checkId, async (req, res) => {
+    const item = await readyItem(req, res, K.text);
+    if (!item) return;
+    res.json({ html: await mentions.render(item[K.text]) });
   });
 
   router.post(`${path}/comments`, requireAuthApi, requireNotBanned, checkId, commentLimiter, validate({

@@ -1,6 +1,6 @@
 // Действия под постами «Ленты» (05.10.2026, views/partials/postCard.ejs):
 // «нравится» и комментарий прямо в ленте, без перехода на страницу
-// публикации. Те же маршруты, что у страницы (routes/watch.js): адрес поста —
+// публикации; с 09.10 — и длинный текст разворачивается на месте. Те же маршруты, что у страницы (routes/watch.js): адрес поста —
 // data-post (/photo/<id>, /video/<id>, с 09.10 и /post/<id>). Обработчики — на документе: посты
 // следующих страниц приходят без перезагрузки (catalog.js).
 // С 06.10 — ответ на комментарий (ник в поле) и удаление своего, чужого
@@ -23,6 +23,8 @@
     var i = slideAt(track);
     var label = box.querySelector('[data-slide-n]');
     if (label) label.textContent = (i + 1) + ' / ' + n;
+    var dots = box.querySelectorAll('.tk-post__dots i');
+    for (var d = 0; d < dots.length; d++) dots[d].classList.toggle('is-on', d === i);
     box.querySelector('[data-slide="-1"]').hidden = i <= 0;
     box.querySelector('[data-slide="1"]').hidden = i >= n - 1;
   }
@@ -38,6 +40,62 @@
     var box = track.closest('[data-slides]');
     if (box.querySelector('[data-slide-n]')) paintSlides(box);
   }, true);
+
+  // ── Длинный текст поста — разворачивается на месте (09.10) ──
+  // В ленте и профиле видно начало, «Ещё» приносит текст целиком
+  // (/post/<id>/text, routes/watch.js) — уходить на страницу поста не нужно.
+  // «Свернуть» возвращает начало. Не вышло — ссылка ведёт на страницу поста,
+  // как без скрипта.
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest('[data-more]');
+    if (!link || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    var box = link.closest('[data-more-box]');
+    var text = box.querySelector('[data-more-text]');
+    if (box.dataset.short) {
+      text.innerHTML = box.dataset.short;
+      delete box.dataset.short;
+      tkText(link, 'rec.more');
+      return;
+    }
+    if (link.getAttribute('aria-busy')) return;
+    link.setAttribute('aria-busy', 'true');
+    TKNet.json(postOf(link).dataset.post + '/text')
+      .then(function (r) {
+        box.dataset.short = text.innerHTML;
+        text.innerHTML = r.html;
+        tkText(link, 'rec.less');
+      })
+      .catch(function () { location.href = link.href; })
+      .then(function () { link.removeAttribute('aria-busy'); });
+  });
+
+  // ── Хлебные крошки страницы поста (09.10, views/post.ejs) ──
+  // Пришли из «Ленты» — она первым звеном, с тем же фильтром. Звено, откуда
+  // пришли, уводит назад по истории: лента или профиль встают на то же
+  // место, а не открываются сверху заново.
+  var crumbs = document.querySelector('[data-crumbs]');
+  var from = null;
+  try { from = document.referrer ? new URL(document.referrer) : null; } catch (err) { from = null; }
+  if (crumbs && from && from.origin === location.origin) {
+    if (from.pathname === '/feed') {
+      var li = document.createElement('li');
+      li.className = 'tk-crumbs__item';
+      var feed = document.createElement('a');
+      feed.className = 'tk-crumbs__link';
+      feed.href = from.pathname + from.search;
+      tkText(feed, 'feed.h1');
+      li.appendChild(feed);
+      crumbs.insertBefore(li, crumbs.firstChild);
+    }
+    crumbs.addEventListener('click', function (e) {
+      var a = e.target.closest('a');
+      if (!a || history.length < 2 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (a.pathname + a.search !== from.pathname + from.search) return;
+      e.preventDefault();
+      history.back();
+    });
+  }
 
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-like]');

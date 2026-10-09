@@ -14,7 +14,8 @@
   С 09.10 — и пост (models/Post.js): текст, фото и видео. Одно медиа — как
   фото или видео; несколько — карусель, листается пальцем и стрелками
   (tk-posts.js), со счётчиком; без медиа — сам текст на месте снимка.
-  Тема — ссылкой на «Ленту» по ней. Пост в работе (ролики пережимаются)
+  Тема — ссылкой на «Ленту» по ней. С 09.10 длинный текст разворачивается
+  на месте («Ещё», tk-posts.js), у карусели — точки под кадром. Пост в работе (ролики пережимаются)
   видит только автор — с пометкой.
   Параметры: item — из utils/feed.js (card + withTalk); me — id смотрящего
   или пусто.
@@ -23,12 +24,18 @@
    var when = date(item.at, { day: 'numeric', month: 'long', year: 'numeric' });
    var name = isPhoto || isPost ? '' : mediaTitle(item.title, 'video', item.author.displayName, item.at);
    var said = meaningful(item.text);
+   var media = isPost ? item.media : [];
+   // Текст поста; длинный — началом, «Ещё» разворачивает его на месте
+   // (tk-posts.js). Пост без медиа показывает больше.
+   var limit = media.length ? 220 : 700;
+   var full = isPost && said ? item.text.trim() : '';
+   var cut = full.length > limit;
+   var short = cut ? snippet(full, limit) : full;
    var alt = isPhoto || isPost ? (said ? snippet(item.text, 125) : ta('alt.photoBy', { name: item.author.displayName, date: when }))
                      : ta('alt.cover', { title: name });
    // Вход — с возвратом туда, где пост увидели: «Лента» или профиль.
    var login = '/login?next=' + encodeURIComponent(url);
    var likeKey = me ? 'photo.like' : 'rec.loginToRate';
-   var media = isPost ? item.media : [];
    var topicKey = isPost && item.topic ? topicI18n(item.topic) : '';
    // Название для «Поделиться» и жалобы: у поста — начало текста.
    var shareTitle = isPhoto || isPost ? (said ? snippet(item.text, 140) : '') : name;
@@ -42,9 +49,12 @@
     <time class="tk-post__when" datetime="<%= new Date(item.at).toISOString() %>"><%= when %></time>
   </a>
 
-  <% if (isPost && !media.length) { %>
-  <%# Пост без фото и видео — текст на месте снимка, крупно. %>
-  <a href="<%= item.href %>" class="tk-post__media tk-post__media--text"><p class="tk-post__big" data-user-content><%= snippet(item.text, 700) %></p></a>
+  <% if (isPost && !media.length && cut) { %>
+  <%# Пост без фото и видео — текст на месте снимка, крупно; длинный —
+      с «Ещё», которое разворачивает его здесь же. %>
+  <div class="tk-post__media tk-post__media--text tk-post__media--long" data-more-box><p class="tk-post__big"><span data-user-content data-more-text><%= short %></span></p><a href="<%= item.href %>" class="tk-post__more" data-more data-i18n="rec.more"><%- t('rec.more') %></a></div>
+  <% } else if (isPost && !media.length) { %>
+  <a href="<%= item.href %>" class="tk-post__media tk-post__media--text"><p class="tk-post__big" data-user-content><%= full %></p></a>
   <% } else if (isPost) { %>
   <div class="tk-post__media tk-post__media--photo<%= media.length > 1 ? ' tk-post__media--set' : '' %>" data-slides>
     <div class="tk-post__track">
@@ -63,6 +73,7 @@
     <button type="button" class="tk-post__nav tk-post__nav--prev" data-slide="-1" aria-label="<%= ta('user.photoPrev') %>" data-i18n-aria="user.photoPrev" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>
     <button type="button" class="tk-post__nav tk-post__nav--next" data-slide="1" aria-label="<%= ta('user.photoNext') %>" data-i18n-aria="user.photoNext"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></button>
     <span class="tk-post__count" data-slide-n>1 / <%= media.length %></span>
+    <span class="tk-post__dots" aria-hidden="true"><% media.forEach(function (m, i) { %><i<%- i ? '' : ' class="is-on"' %>></i><% }); %></span>
     <% } %>
   </div>
   <% } else { %>
@@ -80,7 +91,8 @@
     <div class="tk-post__body">
       <% if (!isPhoto && !isPost) { %><h2 class="tk-post__title"><a href="<%= item.href %>"><%= name %></a></h2><% } %>
       <% if (item.processing) { %><p class="tk-post__note" data-i18n="post.processingNote"><%- t('post.processingNote') %></p><% } %>
-      <% if (said && !(isPost && !media.length)) { %><p class="tk-post__text" data-user-content><%= snippet(item.text, 220) %><% if (isPost && item.text.length > 220) { %> <a href="<%= item.href %>" class="tk-post__more" data-i18n="rec.more"><%- t('rec.more') %></a><% } %></p><% } %>
+      <% if (isPost && said && media.length) { %><p class="tk-post__text" data-more-box><span data-user-content data-more-text><%= short %></span><% if (cut) { %> <a href="<%= item.href %>" class="tk-post__more" data-more data-i18n="rec.more"><%- t('rec.more') %></a><% } %></p>
+      <% } else if (said && !isPost) { %><p class="tk-post__text" data-user-content><%= snippet(item.text, 220) %></p><% } %>
       <% if (topicKey) { %><a href="/feed?t=<%= item.topic %>" class="tk-post__topic" data-i18n="<%= topicKey %>"><%- t(topicKey) %></a><% } %>
     </div>
     <% } %>
