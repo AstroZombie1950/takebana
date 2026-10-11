@@ -739,12 +739,15 @@ textarea { max-height: min(480px, 60vh); }
 }
 
 .tk-footer__tagline {
+  margin: 0;
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 15px;
   line-height: 1.5;
   color: var(--tk-label);
   max-width: 300px;
 }
+
+.tk-footer__tagline > span { display: block; }
 
 .tk-footer__title {
   font-family: 'Golos Text', 'Golos Text Fallback', sans-serif;

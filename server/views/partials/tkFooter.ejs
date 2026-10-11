@@ -13,7 +13,8 @@
     <a href="/" class="tk-footer__home" aria-label="Takebana">
       <%- include('logo', { cls: 'tk-footer__logo', w: 93, h: 48 }) %>
     </a>
-    <span class="tk-footer__tagline" data-i18n="foot.tagline"><%- t('foot.tagline') %></span>
+    <%# Слоган (11.10) — двумя строками, те же ключи, что в блоке на «О нас». %>
+    <p class="tk-footer__tagline"><span data-i18n="slogan.1"><%- t('slogan.1') %></span> <span data-i18n="slogan.2"><%- t('slogan.2') %></span></p>
   </div>
 
   <div class="tk-footer__col">

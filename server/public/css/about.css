@@ -501,6 +501,20 @@
   color: var(--tk-label);
 }
 
+/* ── Слоган: две строки, вторая — киноварью ────────────────────────────── */
+.tk-about__motto-text {
+  margin: 0;
+  font-size: 72px;
+  line-height: 1.1;
+  letter-spacing: -.01em;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.tk-about__motto-text > span { display: block; }
+.tk-about__motto-hl { color: var(--tk-accent-text); }
+
 /* ── Призыв: киноварная полоса во всю ширину окна (data-bleed, tk.css) ── */
 .tk-about__cta {
   --tk-bleed: #E34234;
@@ -543,6 +557,7 @@
   .tk-about__h2 { font-size: 46px; }
   .tk-about__h2s { font-size: 40px; }
   .tk-about__cta-h { font-size: 68px; }
+  .tk-about__motto-text { font-size: 58px; }
   .tk-about__step-num { font-size: 108px; }
   .tk-about__quote { font-size: 26px; }
   .tk-about__stat-num { font-size: 68px; }
@@ -562,6 +577,7 @@
   .tk-about__h2 { font-size: 40px; }
   .tk-about__h2s { font-size: 34px; }
   .tk-about__cta-h { font-size: 54px; max-width: none; }
+  .tk-about__motto-text { font-size: 46px; }
   .tk-about__head { flex-wrap: wrap; gap: 14px; }
   .tk-about__feats { grid-template-columns: 1fr 1fr; gap: 28px 32px; }
   .tk-about__feat {
@@ -589,6 +605,7 @@
   .tk-about__h2 { font-size: 32px; }
   .tk-about__h2s { font-size: 28px; }
   .tk-about__cta-h { font-size: 38px; }
+  .tk-about__motto-text { font-size: 32px; }
   .tk-about__lede { font-size: 16px; }
   .tk-about__btns { flex-direction: column; align-items: stretch; }
   .tk-about__btns > * { text-align: center; }
@@ -608,6 +625,7 @@
   .tk-about__h2 { font-size: 26px; }
   .tk-about__h2s { font-size: 24px; }
   .tk-about__cta-h { font-size: 30px; }
+  .tk-about__motto-text { font-size: 26px; }
   .tk-about__stat-num { font-size: 44px; }
   .tk-about__step-num { font-size: 68px; }
 }
