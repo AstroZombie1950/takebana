@@ -1,8 +1,9 @@
 <%#
   Страница фото галереи (/photo/:id, решение заказчика 25.09.2026) — как
   пост в Инстаграме: снимок, автор, «нравится», подпись, комментарии.
-  Стрелки (и пальцем, и с клавиатуры) — к соседним фото того же человека,
-  новые сверху. Маршрут — общий с записью и видео (routes/watch.js, вид
+  Стрелки (и пальцем, и с клавиатуры) — только внутри пачки, загруженной
+  разом (12.10: стрелки листают кадры поста, а не посты); фото поста
+  открывается постом (301 на /post/:id). Маршрут — общий с записью и видео (routes/watch.js, вид
   photo), поведение — /tk-watch.js, вид — css/watch.css и css/photo.css.
 
   Просмотров и дизлайка у фото нет. Автор правит подпись и удаляет фото;
@@ -16,7 +17,7 @@
   // заголовки (04.10). Подпись из одних знаков — то же, что никакой.
   var captioned = meaningful(rec.caption);
   var headTitle = captioned ? snippet(rec.caption, 70)
-    : ta('photo.titleByN', { name: author.displayName, k: around.total - around.n + 1, date: when });
+    : ta('photo.titleByN', { name: author.displayName, k: around.k, date: when });
   var alt = captioned ? snippet(rec.caption, 125) : headTitle;
   var commentsN = plural(rec.comments || 0, 'rec.comments');
   var liked = myReaction === 1;
@@ -24,7 +25,7 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
-<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: describe(rec.caption, ta('seo.photoDesc', { name: author.displayName, k: around.total - around.n + 1, date: when })), seo: { path: base, type: 'article', image: rec.url, imageAlt: alt, robots: rec.userId.banned ? 'noindex, follow' : '',
+<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: describe(rec.caption, ta('seo.photoDesc', { name: author.displayName, k: around.k, date: when })), seo: { path: base, type: 'article', image: rec.url, imageAlt: alt, robots: rec.userId.banned ? 'noindex, follow' : '',
          jsonld: ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [ta('gallery.photos'), author.url + '/photos'], [headTitle, base]]) } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">

@@ -77,8 +77,10 @@
   border-block: 1px solid var(--tk-rule);
 }
 
-.tk-post__media--photo { aspect-ratio: 4 / 5; }
-.tk-post__media--video { aspect-ratio: 16 / 9; }
+/* Пропорции — по первому кадру, от 4:5 до 1,91:1 (--ar, partials/postCard.ejs);
+ * высокий кадр на телефоне — не выше экрана. */
+.tk-post__media--photo,
+.tk-post__media--video { aspect-ratio: var(--ar, 16 / 9); max-height: 80svh; }
 
 .tk-post__media img {
   width: 100%;
@@ -197,6 +199,29 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Ролик на месте (12.10, tk-posts.js): обложка — во весь кадр, по нажатию
+ * её закрывает плеер (один на страницу, partials/feedPlayer.ejs). Значок
+ * страницы — слева сверху: справа сверху в кадре знак, снизу — полоса
+ * плеера; в карусели — под счётчиком. */
+.tk-post__cover { position: absolute; inset: 0; display: block; }
+.is-playing > .tk-post__cover { visibility: hidden; }
+.tk-post__open {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 10, .7);
+  color: var(--tk-paper);
+  transition: background-color .18s ease;
+}
+.tk-post__open:hover { background: var(--tk-accent); }
+.tk-post__media--set .tk-post__open { top: 42px; }
+
 /* Ролик поста ещё пережимается — видно только автору. */
 .tk-post__wait {
   position: absolute;
@@ -208,12 +233,13 @@
 }
 
 /* Пост без фото и видео: текст на месте снимка — крупно, до семисот знаков,
- * дальше — на странице поста. */
+ * дальше — на странице поста. Начинается сверху слева, как письмо, а не
+ * посередине пустого поля (12.10). */
 .tk-post__media--text {
   display: flex;
-  align-items: center;
-  min-height: 200px;
-  padding: 28px 24px;
+  align-items: flex-start;
+  min-height: 160px;
+  padding: 24px;
   background: var(--tk-bg);
 }
 .tk-post__big {
@@ -232,7 +258,7 @@ a.tk-post__media--text:hover .tk-post__big { color: var(--tk-fg-2); }
 .tk-post__more[aria-busy] { opacity: .5; pointer-events: none; }
 /* Текст поста с абзацами; развёрнутый «Ещё» — целиком, на месте (09.10). */
 .tk-post [data-more-text] { white-space: pre-line; }
-.tk-post__media--long { flex-direction: column; align-items: flex-start; justify-content: center; gap: 12px; }
+.tk-post__media--long { flex-direction: column; gap: 12px; }
 .tk-post__media--long .tk-post__more {
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 14px;
@@ -427,22 +453,27 @@ a.tk-post__media--text:hover .tk-post__big { color: var(--tk-fg-2); }
 .tk-post__say[data-busy] .tk-post__send { opacity: .5; pointer-events: none; }
 
 /* Широкий экран: снимок слева, автор и всё остальное — колонкой справа.
- * Высота снимка — по экрану, а не 4:5 от ширины: иначе фото в полстраницы
- * шириной вырастало бы выше экрана. */
+ * Высота поста (12.10, Иван) — по пропорциям кадра, но между полом
+ * и потолком: пол — чтобы колонке справа хватало места на шапку, действия
+ * и поле, потолок — чтобы один пост не занимал весь экран. Кадр, что
+ * не влез, — целиком, с полями по бокам. Текст без медиа — с пола,
+ * дальше растёт сам. */
 @media (min-width: 1100px) {
   .tk-posts__list { max-width: none; }
   .tk-post {
+    --post-min: 360px;
+    --post-max: min(70vh, 600px);
     display: grid;
     grid-template-columns: minmax(0, 1fr) 360px;
     grid-template-rows: auto 1fr;
     grid-template-areas: "media head" "media side";
   }
   .tk-post__head { grid-area: head; border-left: 1px solid var(--tk-rule); border-bottom: 1px solid var(--tk-rule); }
-  .tk-post__media { grid-area: media; border-block: 0; }
-  .tk-post__media--photo { aspect-ratio: auto; height: min(78vh, 720px); }
-  .tk-post__media--video { aspect-ratio: auto; height: 100%; min-height: min(56vh, 480px); }
+  .tk-post__media { grid-area: media; align-self: start; width: 100%; border-block: 0; }
+  .tk-post__media--photo,
+  .tk-post__media--video { min-height: var(--post-min); max-height: var(--post-max); }
   .tk-post__media--video img { object-fit: contain; }
-  .tk-post__media--text { min-height: 320px; padding: 40px; }
+  .tk-post__media--text { align-self: stretch; min-height: var(--post-min); padding: 32px; }
   .tk-post__big { font-size: 22px; }
   /* Колонка не растягивает пост: высоту задаёт снимок, а комментарии
    * прокручиваются внутри (contain: size — содержимое не влияет на размер
@@ -596,14 +627,3 @@ a.tk-post__media--text:hover .tk-post__big { color: var(--tk-fg-2); }
   .tk-post__stage .tk-post__track { height: auto; aspect-ratio: 4 / 5; max-height: 80dvh; }
 }
 
-/* Системное «Поделиться» → Takebana (/share, views/shareIn.ejs). */
-.tk-sharein__text {
-  max-width: 680px;
-  margin: 0 0 20px;
-  padding: 14px 16px;
-  border: 1px solid var(--tk-rule);
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-  color: var(--tk-fg-2);
-}
-.tk-sharein__acts { display: flex; flex-wrap: wrap; gap: 10px; }

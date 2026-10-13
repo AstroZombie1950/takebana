@@ -10,6 +10,8 @@
     src      адрес MP4 или плейлиста .m3u8 (у эфира источник ставит tk-viewer.js).
     poster   обложка, необязательно.
     theater  показывать кнопку широкого режима (страница записи).
+    keys     'focus' — клавиши только при фокусе в плеере (лента: плеер
+             не один на странице с прокруткой, partials/feedPlayer.ejs).
     mark     водяной знак поверх картинки: эфир, у которого его нет в кадре
              (utils/streamWatermark.js). У записи он всегда в кадре
              (utils/recording.js). Встаёт по углу самой картинки, а не
@@ -24,9 +26,10 @@
   var pPoster = typeof poster !== 'undefined' ? poster : '';
   var pTheater = typeof theater !== 'undefined' && theater;
   var pMark = typeof mark !== 'undefined' && mark;
+  var pKeys = typeof keys !== 'undefined' ? keys : '';
   var ico = 'viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"';
 %>
-<div class="tk-player tk-dark" data-mode="<%= pMode %>"<% if (pSrc) { %> data-src="<%= pSrc %>"<% } %> tabindex="-1">
+<div class="tk-player tk-dark" data-mode="<%= pMode %>"<% if (pSrc) { %> data-src="<%= pSrc %>"<% } %><% if (pKeys) { %> data-keys="<%= pKeys %>"<% } %> tabindex="-1">
   <video class="tk-player__video" id="video" playsinline preload="metadata"<% if (pPoster) { %> poster="<%= pPoster %>"<% } %>
          controlslist="nodownload noremoteplayback noplaybackrate" disableremoteplayback></video>
   <% if (pMark) { %><span class="tk-player__wm" aria-hidden="true" hidden></span><% } %>

@@ -37,18 +37,6 @@
 
   openBtn.addEventListener('click', function () { open(true); });
 
-  // Из системного «Поделиться» (/share → ?compose=1&text=): форма открыта
-  // и текст уже в ней; из адреса параметры убираем — перезагрузка после
-  // публикации не должна открыть её снова.
-  var q = new URLSearchParams(location.search);
-  if (q.get('compose') === '1') {
-    text.value = q.get('text') || '';
-    open(true);
-    q.delete('compose');
-    q.delete('text');
-    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
-  }
-
   // Отмена — всё прочь: и фото, и уже начатые ролики (черновик на сервере
   // тоже, иначе он висел бы до уборки через три дня).
   form.querySelector('[data-compose-cancel]').addEventListener('click', function () {

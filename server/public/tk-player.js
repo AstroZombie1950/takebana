@@ -543,6 +543,9 @@
       if (e.ctrlKey || e.metaKey || e.altKey || typing(e.target)) return;
       // Плеер в закрытом окне (видео галереи профиля) клавиш не слушает.
       if (!root.getClientRects().length) return;
+      // В ленте (data-keys="focus") — только с фокусом в плеере: пробел
+      // и стрелки там листают страницу.
+      if (root.dataset.keys === 'focus' && !root.contains(document.activeElement)) return;
       if (e.target.closest && e.target.closest('button, a, [role="slider"]') && (e.key === ' ' || e.key === 'Enter')) return;
       var k = e.key.toLowerCase();
       var handled = true;

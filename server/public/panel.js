@@ -2311,7 +2311,7 @@ view.addEventListener('click', async (e) => {
       const birth = el.dataset.field === 'birthDate';
       dd.innerHTML = '<div class="tk-dcard__edit">' +
         (birth
-          ? '<input type="date" class="tk-field" data-fact-input min="1900-01-01" max="' + new Date().toISOString().slice(0, 10) + '" value="' + esc(el.dataset.value) + '">'
+          ? '<input type="date" class="tk-field" data-fact-input value="' + esc(el.dataset.value) + '">'
           : '<textarea class="tk-field" data-fact-input maxlength="300" rows="4">' + esc(el.dataset.value) + '</textarea>') +
         '<span class="tk-dcard__edit-acts"><button type="button" class="tk-btn tk-btn--primary tk-btn--xs" data-act="fact-save" data-field="' + esc(el.dataset.field) + '" data-id="' + esc(id) + '">Сохранить</button>' +
         '<button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="fact-cancel">Отмена</button></span></div>';

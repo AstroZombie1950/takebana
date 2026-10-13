@@ -17,6 +17,11 @@
   Тема — ссылкой на «Ленту» по ней. С 09.10 длинный текст разворачивается
   на месте («Ещё», tk-posts.js), у карусели — точки под кадром. Пост в работе (ролики пережимаются)
   видит только автор — с пометкой.
+  С 12.10 (Иван) — пропорции по первому кадру, как в Инстаграме: от 4:5 до
+  1,91:1 (--ar), а высота карточки на широком экране — между потолком и
+  полом (css/feed.css): ни пост на весь экран, ни сплющенная колонка справа.
+  И ролики играют прямо здесь (data-play, tk-posts.js): обложка — ссылка на
+  страницу (без скрипта ведёт туда), значок в углу — на страницу всегда.
   Параметры: item — из utils/feed.js (card + withTalk); me — id смотрящего
   или пусто.
 %>
@@ -41,7 +46,11 @@
    var topicKey = isPost && item.topic ? topicI18n(item.topic) : '';
    // Название для «Поделиться» и жалобы: у поста — начало текста.
    var shareTitle = isPhoto || isPost ? (said ? snippet(item.text, 140) : '') : name;
-   var shareImage = isPost ? (media[0] ? media[0].url : '') : item.thumb; %>
+   var shareImage = isPost ? (media[0] ? media[0].url : '') : item.thumb;
+   // Пропорции кадра: у фото — по снимку, у роликов — 16:9 (обложки такие).
+   var first = media[0] || item;
+   var ar = first.w && first.h ? Math.min(1.91, Math.max(0.8, first.w / first.h)).toFixed(3)
+     : (media[0] ? media[0].kind : item.kind) === 'photo' ? '0.8' : '1.778'; %>
 <article class="tk-post<%= isPost && !media.length ? ' tk-post--text' : '' %>" data-post="<%= item.href %>">
   <a href="<%= item.author.url %>" class="tk-post__head">
     <span class="tk-post__ava"<% if (!item.author.avatarStyle.url) { %> data-bg="<%= item.author.avatarStyle.gradient %>"<% } %>>
@@ -58,11 +67,14 @@
   <% } else if (isPost && !media.length) { %>
   <a href="<%= item.href %>" class="tk-post__media tk-post__media--text"><p class="tk-post__big" data-user-content><%= full %></p></a>
   <% } else if (isPost || media.length > 1) { %>
-  <div class="tk-post__media tk-post__media--photo<%= media.length > 1 ? ' tk-post__media--set' : '' %>" data-slides>
+  <div class="tk-post__media tk-post__media--photo<%= media.length > 1 ? ' tk-post__media--set' : '' %>" style="--ar: <%= ar %>" data-slides>
     <div class="tk-post__track">
       <% media.forEach(function (m, i) { var href = isPost && m.kind === 'photo' ? item.href : m.href;
-         var mAlt = !isPost && meaningful(m.text) ? snippet(m.text, 125) : alt; %>
-      <a href="<%= href %>" class="tk-post__slide tk-post__slide--<%= m.kind %>"<% if (media.length > 1) { %> aria-label="<%= ta('post.slide', { n: i + 1, total: media.length }) %>"<% } %>>
+         var mAlt = !isPost && meaningful(m.text) ? snippet(m.text, 125) : alt;
+         var label = media.length > 1 ? ' aria-label="' + ta('post.slide', { n: i + 1, total: media.length }) + '"' : '';
+         var plays = m.kind === 'video' && m.ready && m.src; %>
+      <% if (plays) { %><div class="tk-post__slide tk-post__slide--video" data-play="<%= m.src %>" data-view="<%= m.href %>/view" data-poster="<%= m.url %>"><% } %>
+      <a href="<%= href %>" class="<%= plays ? 'tk-post__cover' : 'tk-post__slide tk-post__slide--' + m.kind %>"<%- label %>>
         <% if (m.url) { %><img src="<%= m.url %>" alt="<%= m.kind === 'photo' ? mAlt : ta('alt.cover', { title: alt }) %>" decoding="async"<% if (m.w && m.h) { %> width="<%= m.w %>" height="<%= m.h %>"<% } %> <%- i ? 'loading="lazy"' : imgLoad() %>><% } %>
         <% if (m.kind === 'video') { %>
         <% if (m.ready) { %><span class="tk-post__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg></span>
@@ -70,6 +82,7 @@
         <% } else { %><span class="tk-post__wait" data-i18n="post.processing"><%- t('post.processing') %></span><% } %>
         <% } %>
       </a>
+      <% if (plays) { %><%- include('postOpen', { href: m.href }) %></div><% } %>
       <% }); %>
     </div>
     <% if (media.length > 1) { %>
@@ -79,14 +92,20 @@
     <span class="tk-post__dots" aria-hidden="true"><% media.forEach(function (m, i) { %><i<%- i ? '' : ' class="is-on"' %>></i><% }); %></span>
     <% } %>
   </div>
-  <% } else { %>
-  <a href="<%= item.href %>" class="tk-post__media tk-post__media--<%= isPhoto ? 'photo' : 'video' %>">
+  <% } else if (isPhoto || !item.src) { %>
+  <a href="<%= item.href %>" class="tk-post__media tk-post__media--<%= isPhoto ? 'photo' : 'video' %>" style="--ar: <%= ar %>">
     <% if (item.thumb) { %><img src="<%= item.thumb %>" alt="<%= alt %>" decoding="async" <%- imgLoad() %>><% } %>
-    <% if (!isPhoto) { %>
-    <span class="tk-post__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg></span>
-    <% if (item.duration) { %><span class="tk-post__len"><%= clock(item.duration) %></span><% } %>
-    <% } %>
+    <% if (!isPhoto) { %><span class="tk-post__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg></span><% } %>
   </a>
+  <% } else { %>
+  <div class="tk-post__media tk-post__media--video" style="--ar: <%= ar %>" data-play="<%= item.src %>" data-view="<%= item.href %>/view" data-poster="<%= item.thumb || '' %>">
+    <a href="<%= item.href %>" class="tk-post__cover">
+      <% if (item.thumb) { %><img src="<%= item.thumb %>" alt="<%= alt %>" decoding="async" <%- imgLoad() %>><% } %>
+      <span class="tk-post__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg></span>
+      <% if (item.duration) { %><span class="tk-post__len"><%= clock(item.duration) %></span><% } %>
+    </a>
+    <%- include('postOpen', { href: item.href }) %>
+  </div>
   <% } %>
 
   <div class="tk-post__side">

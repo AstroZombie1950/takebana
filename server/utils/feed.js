@@ -38,15 +38,15 @@ const AUTHOR = 'nickname login email avatar';
 // where — что из коллекции показывать вообще: у фото нет статуса обработки.
 // venue — у вида есть «от имени заведения».
 const SOURCES = [
-  { kind: 'recording', Model: Recording, href: '/recording/', venue: true, where: { status: 'ready', isAdult: { $ne: true } }, fields: 'title description duration thumb views likes comments createdAt recordedAt userId venue' },
-  { kind: 'video', Model: GalleryVideo, href: '/video/', venue: true, where: { status: 'ready' }, fields: 'title description duration thumb views likes comments createdAt userId venue' },
+  { kind: 'recording', Model: Recording, href: '/recording/', venue: true, where: { status: 'ready', isAdult: { $ne: true } }, fields: 'title description duration thumb hls.url video.url views likes comments createdAt recordedAt userId venue' },
+  { kind: 'video', Model: GalleryVideo, href: '/video/', venue: true, where: { status: 'ready' }, fields: 'title description duration thumb video.url views likes comments createdAt userId venue' },
   { kind: 'photo', Model: GalleryPhoto, href: '/photo/', where: {}, fields: 'url caption width height likes comments createdAt userId' },
   { kind: 'post', Model: Post, href: '/post/', where: { status: 'ready' }, fields: 'text topic media status likes comments createdAt userId' },
 ];
 const HOME = ['recording', 'video'];
 // Пачка фото — загруженные разом (routes/streaming/profile.js): время
 // с шагом в миллисекунду. Соседи одного автора ближе этого — одна пачка.
-const BATCH_MS = 50;
+const { BATCH_MS } = require('./gallery');
 const POSTS = ['post', 'photo', 'video'];
 
 // before — дата последней показанной карточки (курсор из прошлой страницы).
@@ -129,16 +129,16 @@ function batches(rows) {
 }
 
 // Фото и видео постов страницы — двумя запросами на всю страницу.
-// → Map id → { kind, href, url (снимок или обложка), w, h, duration, ready }.
+// → Map id → { kind, href, url (снимок или обложка), src (ролик), w, h, duration, ready }.
 async function mediaOf(posts) {
   const ids = (kind) => posts.flatMap((p) => p.media.filter((m) => m.kind === kind).map((m) => m.ref));
   const [photos, videos] = await Promise.all([
     GalleryPhoto.find({ _id: { $in: ids('photo') } }).select('url width height').lean(),
-    GalleryVideo.find({ _id: { $in: ids('video') } }).select('thumb duration status').lean(),
+    GalleryVideo.find({ _id: { $in: ids('video') } }).select('thumb video.url duration status').lean(),
   ]);
   return new Map([
     ...photos.map((p) => [String(p._id), { kind: 'photo', href: '/photo/' + p._id, url: p.url, w: p.width || 0, h: p.height || 0 }]),
-    ...videos.map((v) => [String(v._id), { kind: 'video', href: '/video/' + v._id, url: (v.thumb && v.thumb.url) || '', duration: v.duration || 0, ready: v.status === 'ready' }]),
+    ...videos.map((v) => [String(v._id), { kind: 'video', href: '/video/' + v._id, url: (v.thumb && v.thumb.url) || '', src: (v.video && v.video.url) || '', duration: v.duration || 0, ready: v.status === 'ready' }]),
   ]);
 }
 
@@ -152,6 +152,12 @@ function card(r, media) {
     title: r.title || '',
     // Фото — сам снимок, у роликов — обложка, у поста — первое его медиа.
     thumb: r.kind === 'photo' ? r.url : r.kind === 'post' ? null : (r.thumb && r.thumb.url) || null,
+    // Что играть прямо в ленте (12.10, tk-posts.js): то же, что на странице
+    // записи и видео (routes/watch.js, src) — знак у них в кадре.
+    src: (r.hls && r.hls.url) || (r.video && r.video.url) || '',
+    // Размер снимка — для пропорций карточки (partials/postCard.ejs, --ar).
+    w: r.width || 0,
+    h: r.height || 0,
     text: (r.kind === 'photo' ? r.caption : r.kind === 'post' ? r.text : r.description) || '',
     // Пост: тема и медиа по порядку; в работе — ролики ещё пережимаются.
     topic: r.topic || '',

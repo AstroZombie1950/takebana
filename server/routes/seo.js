@@ -64,7 +64,6 @@ Disallow: /logout
 Disallow: /settings
 Disallow: /studio
 Disallow: /upload
-Disallow: /share
 Disallow: /chatsPage
 Disallow: /calls
 Disallow: /company-register
@@ -153,7 +152,7 @@ async function collect() {
   const [recordings, videos, photos, posts, live, groups, venues, menus, authorTotal] = await Promise.all([
     Recording.find({ status: 'ready' }).select('userId venue category title description isAdult thumb video hls.url duration recordedAt createdAt').lean(),
     GalleryVideo.find({ status: 'ready' }).sort({ createdAt: -1 }).select('userId venue title description thumb video duration createdAt').lean(),
-    GalleryPhoto.find({}).sort({ createdAt: -1 }).select('userId url createdAt').lean(),
+    GalleryPhoto.find({}).sort({ createdAt: -1 }).select('userId url createdAt post').lean(),
     Post.find({ status: 'ready' }).sort({ createdAt: -1 }).select('userId media createdAt').lean(),
     Stream.distinct('userId', { isActive: true }),
     authors.groups(),
@@ -252,7 +251,8 @@ async function collect() {
   }
 
   // Страницы фото — со снимком; посты (09.10) — со снимками своих фото.
-  const photoPages = [...photosOf.values()].flat()
+  // Фото поста — не своя страница: 301 на пост (12.10), в карте — пост.
+  const photoPages = [...photosOf.values()].flat().filter((p) => !p.post)
     .map((p) => ({ loc: `/photo/${p._id}`, lastmod: p.createdAt, images: [p.url] }));
   const photoUrl = new Map(photos.map((p) => [String(p._id), p.url]));
   const postPages = [...postsOf.values()].flat().map((p) => ({ loc: `/post/${p._id}`, lastmod: p.createdAt,

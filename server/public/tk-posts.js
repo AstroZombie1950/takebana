@@ -6,6 +6,7 @@
 // следующих страниц приходят без перезагрузки (catalog.js).
 // С 06.10 — ответ на комментарий (ник в поле) и удаление своего, чужого
 // под своим постом и любого модератором — как на странице публикации.
+// С 12.10 — ролики играют прямо в ленте (ниже, «Видео на месте»).
 (function () {
   'use strict';
 
@@ -150,6 +151,108 @@
     li.appendChild(p);
     if (c.canDelete) li.insertAdjacentHTML('beforeend', '<button type="button" class="tk-post__c-btn" data-cdel aria-label="' + escapeHtml(t('common.delete')) + '" title="' + escapeHtml(t('common.delete')) + '">' + TRASH + '</button>');
     return li;
+  }
+
+  // ── Видео на месте (12.10, Иван: «как в Инстаграме») ──
+  // Обложка с data-play — нажали, и ролик играет здесь же. Плеер один на
+  // страницу (partials/feedPlayer.ejs): переезжает в нажатый ролик, прежний
+  // снова показывает обложку. Его скрипты и стили — при первом намерении
+  // (навели, коснулись, нажали). Ушёл с экрана или пролистан в карусели —
+  // пауза. Просмотр — по тому же правилу, что на странице записи
+  // (tk-watch.js): 10 секунд воспроизведения, у короткого — половина.
+  var tpl = document.getElementById('feedPlayer');
+  var root = null, player = null, box = null, loading = null;
+  var watched = 0, last = null;
+
+  function asset(tag, attrs) {
+    return new Promise(function (ok, no) {
+      var el = document.createElement(tag);
+      Object.keys(attrs).forEach(function (k) { el[k] = attrs[k]; });
+      el.onload = ok;
+      el.onerror = function () { no(new Error(t('player.error'))); };
+      document.head.appendChild(el);
+    });
+  }
+  function need() {
+    if (!loading) {
+      loading = Promise.all([
+        asset('link', { rel: 'stylesheet', href: tpl.dataset.css }),
+        asset('script', { src: tpl.dataset.hls }),
+        asset('script', { src: tpl.dataset.js })
+      ]).catch(function (e) { loading = null; throw e; });
+    }
+    return loading;
+  }
+  ['pointerover', 'touchstart', 'focusin'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      if (tpl && !loading && e.target.closest && e.target.closest('[data-play]')) need().catch(function () {});
+    }, { passive: true });
+  });
+
+  var seen = 'IntersectionObserver' in window ? new IntersectionObserver(function (list) {
+    list.forEach(function (en) {
+      if (en.target === box && en.intersectionRatio < 0.25 && player) player.video.pause();
+    });
+  }, { threshold: [0, 0.25] }) : null;
+
+  function play(target) {
+    if (!root) {
+      root = tpl.content.firstElementChild.cloneNode(true);
+      root.querySelector('video').removeAttribute('id');
+    }
+    if (box && box !== target) {
+      if (player) player.stop();
+      box.classList.remove('is-playing');
+      if (seen) seen.unobserve(box);
+    }
+    box = target;
+    watched = 0;
+    last = null;
+    box.classList.add('is-playing');
+    box.appendChild(root);
+    if (seen) seen.observe(box);
+    // Запуск — прямо в нажатии: скрипт плеера может прийти позже, а Safari
+    // пускает звук, только если воспроизведение началось с жеста.
+    var p = root.querySelector('video').play();
+    if (p && p.catch) p.catch(function () {});
+    need().then(function () {
+      if (box !== target) return;
+      if (!player) {
+        player = TKPlayer.mount(root);
+        player.video.addEventListener('timeupdate', countView);
+      }
+      player.load(target.dataset.play, target.dataset.poster);
+      root.focus({ preventScroll: true });
+    }).catch(function () { location.href = target.querySelector('.tk-post__cover').href; });
+  }
+
+  document.addEventListener('click', function (e) {
+    var cover = tpl && e.target.closest('[data-play] > .tk-post__cover');
+    if (!cover || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    play(cover.parentNode);
+  });
+
+  function countView() {
+    var v = player.video;
+    if (!box || box.dataset.viewed || v.paused || v.seeking) { last = null; return; }
+    var now = v.currentTime;
+    if (last !== null && now > last && now - last < 1.5) watched += now - last;
+    last = now;
+    if (watched < Math.min(10, (v.duration || 20) / 2)) return;
+    var at = box;
+    at.dataset.viewed = '1';
+    TKNet.json(at.dataset.view, { method: 'POST', body: {}, button: null }).then(function (r) {
+      var line = r && r.counted && postOf(at).querySelector('.tk-post__views');
+      if (!line) return;
+      var n = (Number(JSON.parse(line.getAttribute('data-i18n-vars') || '{}').n.replace(/\D/g, '')) || 0) + 1;
+      var d10 = n % 10, d100 = n % 100;
+      var key = 'rec.views' + (d10 === 1 && d100 !== 11 ? 'One' : d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14) ? 'Few' : 'Many');
+      var vars = { n: num(n) };
+      line.setAttribute('data-i18n', key);
+      line.setAttribute('data-i18n-vars', JSON.stringify(vars));
+      line.textContent = t(key, vars);
+    }).catch(function () {});
   }
 
   function count(post, d) {

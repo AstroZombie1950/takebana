@@ -280,7 +280,7 @@ router.post('/users/:id/birthdate', requireAdmin, validate({
   birthDate: { type: 'string', required: true, max: 10, label: 'Дата рождения' },
 }), async (req, res) => {
   if (!OBJECT_ID.test(req.params.id)) return res.status(404).json({ message: 'Пользователь не найден' });
-  const birthDate = age.parse(req.body.birthDate);
+  const birthDate = age.day(req.body.birthDate);
   if (!birthDate) return res.status(400).json({ message: 'Дата рождения указана неверно' });
   const adult = age.ageOf(birthDate) >= age.ADULT;
   const user = await User.findByIdAndUpdate(req.params.id,

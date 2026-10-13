@@ -326,8 +326,6 @@ app.use(require('./routes/groups'));
 app.use(require('./routes/watch'));
 // Публикация постов (09.10); страница поста — в routes/watch.js.
 app.use(require('./routes/posts'));
-// Системное «Поделиться» телефона → Takebana (share_target, Android).
-app.use(require('./routes/shareIn'));
 app.use(require('./routes/pages'));
 // robots.txt и карта сайта (docs/seo/).
 app.use(require('./routes/seo'));

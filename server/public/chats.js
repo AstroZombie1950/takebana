@@ -1259,16 +1259,6 @@
     // вместо списка.
     $('chat').classList.add('has-peer', 'is-open');
     openHistory();
-    useDraft();
-  }
-
-  // Текст из системного «Поделиться» (09.10, /share → ?text=): ждёт, пока
-  // выберут, кому отправить, и ложится в поле первого открытого диалога.
-  var draft = new URLSearchParams(location.search).get('text') || '';
-  function useDraft() {
-    if (!draft) return;
-    if (!input.value) { input.value = draft; fitInput(); }
-    draft = '';
   }
 
   // fromHistory — уже вернулись к списку «Назад»: историю не трогать.
@@ -1326,7 +1316,6 @@
     dialogUrl('/chatsPage?group=' + encodeURIComponent(g.id));
     $('chat').classList.add('has-peer', 'is-open');
     openHistory();
-    useDraft();
   }
 
   function paintGroupHead() {
@@ -2646,14 +2635,80 @@
   // Камера и микрофон, квадрат из середины кадра, до минуты — на минуте
   // отправляется сама. Сервер пережимает в 480×480 со знаком.
   //
-  // Три кнопки: отмена, пауза, отправить. С паузой хронометраж считается
-  // не «сколько прошло с начала», а суммой записанных отрезков: ms — что
-  // записано до нынешнего, at — когда он начался.
+  // Кнопки: отмена, другая камера, пауза, отправить. С паузой хронометраж
+  // считается не «сколько прошло с начала», а суммой записанных отрезков:
+  // ms — что записано до нынешнего, at — когда он начался.
+  //
+  // Пишется не камера, а холст (12.10, другая камера посреди записи):
+  // MediaRecorder обрывает запись, если в потоке сменилась дорожка, а на
+  // холст рисуется квадрат из середины кадра той камеры, что сейчас в
+  // превью, — её можно менять сколько угодно.
   var ROUND_MAX = 60;
+  var ROUND_SIDE = 640;
   var roundRec = $('roundRec');
   var roundPreview = $('roundPreview');
   var roundPauseBtn = $('roundPause');
-  var rrec = null;          // { recorder, stream, chunks, at, ms, timer, send, chat }
+  var roundFlipBtn = $('roundFlip');
+  var rrec = null;          // { recorder, stream, cam, ctx, chunks, at, ms, timer, send, chat }
+
+  var ROUND_CAM = { width: { ideal: 640 }, height: { ideal: 640 } };
+
+  // Кадр камеры → квадрат на холсте. Свежий кадр — по requestVideoFrameCallback,
+  // где его нет — по кадрам страницы.
+  function roundDraw(r) {
+    if (r.done) return;
+    var v = roundPreview, w = v.videoWidth, h = v.videoHeight;
+    if (w && h) {
+      var s = Math.min(w, h);
+      r.ctx.drawImage(v, (w - s) / 2, (h - s) / 2, s, s, 0, 0, ROUND_SIDE, ROUND_SIDE);
+    }
+    if (v.requestVideoFrameCallback && !v.paused) v.requestVideoFrameCallback(function () { roundDraw(r); });
+    else requestAnimationFrame(function () { roundDraw(r); });
+  }
+
+  // Превью зеркалом только у передней (и у камеры компьютера, где сторона
+  // неизвестна); основную — как есть, иначе надписи в кадре задом наперёд.
+  function roundCam(r, track) {
+    r.cam = track;
+    var facing = track.getSettings ? track.getSettings().facingMode : '';
+    roundRec.classList.toggle('is-rear', facing === 'environment');
+    roundPreview.srcObject = new MediaStream([track]);
+    if (!roundRec.classList.contains('is-paused')) roundPreview.play().catch(function () {});
+  }
+
+  // Другая камера: у телефона — передняя ↔ основная, у компьютера — следующая
+  // по списку. Айфон двух камер разом не держит: старая гаснет до захвата
+  // новой; не вышло — снова прежняя сторона, запись идёт дальше.
+  function flipRound() {
+    var r = rrec;
+    if (!r || r.stopping || r.flipping) return;
+    var was = r.cam.getSettings ? r.cam.getSettings() : {};
+    r.flipping = true;
+    var pick = was.facingMode
+      ? Promise.resolve({ facingMode: { exact: was.facingMode === 'user' ? 'environment' : 'user' } })
+      : navigator.mediaDevices.enumerateDevices().then(function (list) {
+        var cams = list.filter(function (d) { return d.kind === 'videoinput'; });
+        var i = cams.findIndex(function (d) { return d.deviceId === was.deviceId; });
+        return { deviceId: { exact: cams[(i + 1) % cams.length].deviceId } };
+      });
+    var grab = function (want) {
+      r.cam.stop();
+      return navigator.mediaDevices.getUserMedia({ video: Object.assign({}, ROUND_CAM, want) });
+    };
+    pick.then(grab).catch(function () {
+      return grab(was.facingMode ? { facingMode: was.facingMode } : {});
+    }).then(function (s) {
+      r.flipping = false;
+      var track = s.getVideoTracks()[0];
+      if (r.done) return track.stop();
+      roundCam(r, track);
+    }).catch(function (e) {
+      r.flipping = false;
+      recFailed('round', denied(e, 'cam'));
+      toast(t('chats.camDenied'), 'error');
+      stopRoundRec(false);
+    });
+  }
 
   function roundSec(r) {
     return (r.ms + (r.recorder.state === 'paused' ? 0 : Date.now() - r.at)) / 1000;
@@ -2683,18 +2738,29 @@
     if (rrec) return;
     if (rec) cancelVoice();
     navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 } },
+      video: Object.assign({ facingMode: 'user' }, ROUND_CAM),
       audio: true
     }).then(function (stream) {
       if (!chatKey() || rrec) { stream.getTracks().forEach(function (tr) { tr.stop(); }); return; }
-      var recorder = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 1200000 } : undefined);
-      var r = { recorder: recorder, stream: stream, chunks: [], at: Date.now(), ms: 0, send: false, chat: chatKey() };
+      var canvas = document.createElement('canvas');
+      canvas.width = canvas.height = ROUND_SIDE;
+      var out = new MediaStream(canvas.captureStream(30).getVideoTracks().concat(stream.getAudioTracks()));
+      var recorder = new MediaRecorder(out, type ? { mimeType: type, videoBitsPerSecond: 1200000 } : undefined);
+      var r = { recorder: recorder, stream: out, ctx: canvas.getContext('2d'),
+        chunks: [], at: Date.now(), ms: 0, send: false, chat: chatKey() };
       rrec = r;
       recorder.ondataavailable = function (e) { if (e.data && e.data.size) r.chunks.push(e.data); };
       recorder.onstop = function () { finishRound(r); };
       recorder.onerror = function () { r.failed = true; recFailed('round', 'recorder'); };
-      roundPreview.srcObject = stream;
+      roundCam(r, stream.getVideoTracks()[0]);
+      roundDraw(r);
       recorder.start();
+      // Камер больше одной — кнопка другой. Названия и число камер браузер
+      // открывает только после разрешения, поэтому спрашиваем здесь.
+      roundFlipBtn.hidden = true;
+      navigator.mediaDevices.enumerateDevices().then(function (list) {
+        if (rrec === r) roundFlipBtn.hidden = list.filter(function (d) { return d.kind === 'videoinput'; }).length < 2;
+      }).catch(function () {});
       roundRec.classList.remove('hidden');
       roundRec.style.setProperty('--p', 0);
       roundPaused(false);
@@ -2731,6 +2797,7 @@
       roundPreview.srcObject = null;
     }
     r.stream.getTracks().forEach(function (tr) { tr.stop(); });
+    r.cam.stop();
     if (r.send && r.sec >= 1 && (!r.chunks.length || r.failed)) {
       if (!r.failed) recFailed('round', 'empty');
       return toast(t('chats.recFailed'), 'error');
@@ -2752,6 +2819,7 @@
     roundPaused(pause);
   });
 
+  roundFlipBtn.addEventListener('click', flipRound);
   $('roundSend').addEventListener('click', function () { stopRoundRec(true); });
   $('roundCancel').addEventListener('click', function () { stopRoundRec(false); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && rrec) stopRoundRec(false); });
@@ -4045,7 +4113,6 @@
     tkFetch('/api/groups/' + encodeURIComponent(groupId)).then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { if (d) window.TKChats.openGroup(d.group); });
   } else if (groupId) target = groupEl(groupId);
-  if (draft && !target && !peerId && !groupId) toast(t('share.pickChat'));
   var onContactsTab = params.get('tab') === 'contacts';
   // Контакты нужны не только своей вкладке: по ним меню человека решает,
   // предлагать «В контакты» или «Убрать из контактов».

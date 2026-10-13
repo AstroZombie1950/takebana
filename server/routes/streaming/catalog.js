@@ -445,7 +445,8 @@ router.get('/@:nick/:tab(photos|videos)', commonDataMiddleware, async (req, res)
   res.locals.pageOwner = { id: userId, scope: 'profile', access: restricted ? 'them' : '' };
 
   const counts = restricted ? { photos: 0, videos: 0, videosListed: 0 } : await gallery.counts(userId, isSelf);
-  const total = tab === 'photos' ? counts.photos : counts.videosListed;
+  // Фото листаются плитками (по посту или пачке — utils/gallery.js).
+  const total = tab === 'photos' ? (restricted ? 0 : await gallery.photoTiles(userId)) : counts.videosListed;
   // У каждой страницы листалки один адрес: ?page=1 — это сама вкладка,
   // номер за пределами или не число — «не найдено», а не последняя
   // страница под чужим адресом.

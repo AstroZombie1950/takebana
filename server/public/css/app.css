@@ -1114,7 +1114,7 @@ body.tk-app {
   gap: 8px;
 }
 
-.tk-birth .tk-field.tk-select { width: 100%; min-width: 0; padding: 12px 26px 12px 12px; background-position: right 8px center; }
+.tk-birth .tk-field.tk-select:not(.tk-lb__native) { width: 100%; min-width: 0; padding: 12px 26px 12px 12px; background-position: right 8px center; }
 
 .tk-form__toggle {
   display: flex;

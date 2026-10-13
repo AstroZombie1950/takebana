@@ -33,9 +33,13 @@
     return TKNet.json(url, { method: 'POST', body: body || {} });
   }
 
+  // on — подписано ли это устройство (12.10): tk-notify.js по нему молчит,
+  // когда вкладка не на экране, — о сообщении скажет пуш, и уведомлений
+  // было бы два.
   function current() {
     if (!supported()) return Promise.resolve(null);
-    return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); });
+    return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); })
+      .then(function (sub) { api.on = !!sub; return sub; });
   }
 
   // Что показать в настройках: можно ли вообще, разрешил ли браузер,
@@ -69,6 +73,7 @@
         });
       })
       .then(function (sub) {
+        api.on = true;
         var body = { subscription: sub.toJSON() };
         if (prefs && typeof prefs.preview === 'boolean') body.preview = prefs.preview;
         if (prefs && typeof prefs.live === 'boolean') body.live = prefs.live;
@@ -83,7 +88,7 @@
     return current().then(function (sub) {
       if (!sub) return true;
       return post('/api/push/unsubscribe', { endpoint: sub.endpoint })
-        .then(function () { return sub.unsubscribe(); });
+        .then(function () { api.on = false; return sub.unsubscribe(); });
     });
   }
 
@@ -110,11 +115,14 @@
       .catch(function () { return false; });
   }
 
-  window.TKPush = { supported: supported, state: state, enable: enable, disable: disable, prefs: prefs, test: test, sync: sync };
+  var api = window.TKPush = { on: false, supported: supported, state: state, enable: enable, disable: disable, prefs: prefs, test: test, sync: sync };
 
   // Не на первой секунде загрузки: сверка никуда не спешит и не должна
   // мешать странице рисоваться.
-  if (supported()) window.addEventListener('load', function () { setTimeout(sync, 2000); });
+  if (supported()) {
+    current().catch(function () {});
+    window.addEventListener('load', function () { setTimeout(sync, 2000); });
+  }
 
   // Переключили язык — пуши должны заговорить на нём сразу. Язык подписки
   // ставится на сервере из cookie, а страница при переключении не

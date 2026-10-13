@@ -8,11 +8,12 @@
 const GalleryPhoto = require('../models/GalleryPhoto');
 const GalleryVideo = require('../models/GalleryVideo');
 const Recording = require('../models/Recording');
+const Post = require('../models/Post');
+const { Types } = require('mongoose');
 
 // На странице вкладки — по PAGE.
 const PAGE = 24;
 
-const PHOTO_FIELDS = 'url caption likes comments createdAt';
 const VIDEO_FIELDS = 'status error duration thumb upload title views likes comments createdAt';
 
 // Чьё. owner — человек (id): его личное — без снятого от имени заведения;
@@ -27,9 +28,47 @@ function page(total, n) {
   return { page: current, pages, skip: (current - 1) * PAGE };
 }
 
-// Фото: skip/limit — срез ленты.
-function photos(userId, { skip = 0, limit = PAGE } = {}) {
-  return GalleryPhoto.find({ userId }).sort({ createdAt: -1 }).skip(skip).limit(limit).select(PHOTO_FIELDS).lean();
+// Фото — плитками по постам (12.10, Иван: «одна карточка — один пост»,
+// как в Инстаграме): фото поста — одна плитка на пост, прежняя пачка
+// (загружены разом, utils/feed.js, BATCH_MS) — одна плитка на пачку,
+// одиночное фото — своя. Плитка — первый выбранный кадр (он же самый
+// новый: пачка пишется с шагом назад, routes/streaming/profile.js);
+// set — сколько кадров.
+// Склейка — в базе: соседи по времени одного поста или одной пачки
+// получают общий номер группы (сумма «здесь началась новая» с начала).
+const BATCH_MS = 50;
+const tiles = (userId) => [
+  { $match: { userId: new Types.ObjectId(String(userId)) } },
+  { $setWindowFields: { sortBy: { createdAt: 1 }, output: {
+    prevAt: { $shift: { output: '$createdAt', by: -1 } },
+    prevPost: { $shift: { output: '$post', by: -1, default: 'none' } },
+  } } },
+  { $set: { start: { $cond: [{ $or: [
+    { $eq: [{ $ifNull: ['$prevAt', null] }, null] },
+    { $ne: [{ $ifNull: ['$post', null] }, { $ifNull: ['$prevPost', null] }] },
+    { $and: [{ $eq: [{ $ifNull: ['$post', null] }, null] }, { $gt: [{ $subtract: ['$createdAt', '$prevAt'] }, BATCH_MS] }] },
+  ] }, 1, 0] } } },
+  { $setWindowFields: { sortBy: { createdAt: 1 }, output: { group: { $sum: '$start', window: { documents: ['unbounded', 'current'] } } } } },
+  { $sort: { createdAt: -1 } },
+  { $group: { _id: '$group', first: { $first: '$$ROOT' }, set: { $sum: 1 } } },
+];
+
+async function photoTiles(userId) {
+  const [r] = await GalleryPhoto.aggregate([...tiles(userId), { $count: 'n' }]);
+  return r ? r.n : 0;
+}
+
+// skip/limit — срез плиток. У плитки поста — его адрес, текст и оценки.
+async function photos(userId, { skip = 0, limit = PAGE } = {}) {
+  const rows = await GalleryPhoto.aggregate([...tiles(userId), { $sort: { 'first.createdAt': -1 } }, { $skip: skip }, { $limit: limit }]);
+  const posts = new Map((await Post.find({ _id: { $in: rows.map((r) => r.first.post).filter(Boolean) } })
+    .select('text likes comments').lean()).map((p) => [String(p._id), p]));
+  return rows.map(({ first: p, set }) => {
+    const post = p.post && posts.get(String(p.post));
+    return post
+      ? { _id: p._id, url: p.url, href: '/post/' + post._id, caption: post.text, likes: post.likes, comments: post.comments, set }
+      : { _id: p._id, url: p.url, href: '/photo/' + p._id, caption: p.caption, likes: p.likes, comments: p.comments, set };
+  });
 }
 
 // self — смотрит владелец: ему видны и ролики, которые ещё грузятся,
@@ -65,4 +104,4 @@ async function counts(owner, self) {
   return { photos: photosN, videos: videosN, videosListed: listed === null ? videosN : listed };
 }
 
-module.exports = { PAGE, page, photos, videos, counts, recordings, recordingsCount };
+module.exports = { PAGE, BATCH_MS, page, photos, photoTiles, videos, counts, recordings, recordingsCount };

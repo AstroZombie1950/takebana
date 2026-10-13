@@ -8,14 +8,21 @@ const OLDEST = 120;
 
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-// «1990-05-17» из поля даты → Date полночью UTC; кривая, несуществующая
-// (31 февраля), будущая или старше OLDEST лет — null.
-function parse(value, now = new Date()) {
+// «1990-05-17» из поля даты → Date полночью UTC; кривая или несуществующая
+// (31 февраля) — null. Администратору — только это: он вписывает по
+// документу, и ему виднее (Иван, 12.10).
+function day(value) {
   const m = DAY.exec(String(value || ''));
   if (!m) return null;
   const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
   if (d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3]) return null;
-  if (d > now) return null;
+  return d;
+}
+
+// То же для человека: ещё и не будущая, и не старше OLDEST лет.
+function parse(value, now = new Date()) {
+  const d = day(value);
+  if (!d || d > now) return null;
   if (ageOf(d, now) > OLDEST) return null;
   return d;
 }
@@ -36,4 +43,4 @@ const isAdult = (user, now) => !!(user && user.birthDate) && ageOf(user.birthDat
 // Для поля и подписи в настройках: «1990-05-17».
 const iso = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
 
-module.exports = { ADULT, parse, ageOf, isAdult, iso };
+module.exports = { ADULT, day, parse, ageOf, isAdult, iso };

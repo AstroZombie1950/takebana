@@ -131,11 +131,18 @@
     return s.length > 120 ? s.slice(0, 117) + '…' : s;
   }
 
+  // Вкладка не на экране, а устройство подписано на пуши (tk-push.js):
+  // сервер уже шлёт пуш (utils/push.js, onScreen), и своё уведомление со
+  // звуком было бы вторым — «задваиваются пуши» (12.10).
+  function pushed() {
+    return document.visibilityState !== 'visible' && !!(window.TKPush && TKPush.on);
+  }
+
   function message(d) {
     // Только входящие: своё из другой вкладки тоже приходит message:new.
     if (!d || !d.message || !d.peer || d.message.sender !== d.peer.id) return;
     var p = prefs();
-    if (!p.sndMsg && !p.sys) return;
+    if ((!p.sndMsg && !p.sys) || pushed()) return;
     once('m' + d.message._id, function () {
       if (p.sndMsg) ping();
       show(d.peer.displayName, preview(d.message), 'msg-' + d.peer.id, '/chatsPage?peer=' + d.peer.id);
@@ -145,7 +152,7 @@
   // Группа: заголовок — её название, текст — «Автор: сообщение».
   function groupMessage(d) {
     var p = prefs();
-    if (!p.sndMsg && !p.sys) return;
+    if ((!p.sndMsg && !p.sys) || pushed()) return;
     once('m' + d.message._id, function () {
       if (p.sndMsg) ping();
       show(d.group.title, d.sender.displayName + ': ' + preview(d.message), 'group-' + d.groupId, '/chatsPage?group=' + d.groupId);

@@ -35,6 +35,7 @@ const { commonDataMiddleware } = require('./streaming/shared');
 const recording = require('../utils/recording');
 const galleryVideo = require('../utils/galleryVideo');
 const galleryPhotos = require('../utils/galleryPhotos');
+const gallery = require('../utils/gallery');
 const posts = require('../utils/posts');
 const topics = require('../utils/topics');
 const mentions = require('../utils/mentions');
@@ -172,22 +173,29 @@ async function postMedia(post) {
   return post.media.map((m) => by.get(String(m.ref))).filter(Boolean);
 }
 
-// Соседи фото в ленте человека (новые сверху): «назад» — новее, «вперёд» —
-// старше. Листание на странице фото, стрелками и пальцем.
+// Листание на странице фото (стрелками и пальцем) — только внутри пачки
+// (12.10, Иван): стрелки листают кадры одного поста, а не посты. Пачка —
+// фото прежней загрузки разом, соседи ближе BATCH_MS (utils/gallery.js);
+// одиночное фото — без стрелок. n / total — место в пачке; k — номер
+// снимка у автора от старого к новому, для заголовка без подписи.
+const BATCH_WINDOW_MS = 10000;
 async function neighbours(photo) {
-  const q = (cmp, dir) => GalleryPhoto.findOne({ userId: photo.userId._id, createdAt: { [cmp]: photo.createdAt } })
-    .sort({ createdAt: dir }).select('_id').lean();
-  const [newer, older, index, total] = await Promise.all([
-    q('$gt', 1),
-    q('$lt', -1),
-    GalleryPhoto.countDocuments({ userId: photo.userId._id, createdAt: { $gt: photo.createdAt } }),
-    GalleryPhoto.countDocuments({ userId: photo.userId._id }),
+  const at = +photo.createdAt;
+  const [near, older] = await Promise.all([
+    GalleryPhoto.find({ userId: photo.userId._id, post: null, createdAt: { $gte: new Date(at - BATCH_WINDOW_MS), $lte: new Date(at + BATCH_WINDOW_MS) } })
+      .sort({ createdAt: -1 }).select('_id createdAt').lean(),
+    GalleryPhoto.countDocuments({ userId: photo.userId._id, createdAt: { $lt: photo.createdAt } }),
   ]);
+  let i = near.findIndex((p) => String(p._id) === String(photo._id));
+  let from = i, to = i;
+  while (from > 0 && near[from - 1].createdAt - near[from].createdAt <= gallery.BATCH_MS) from--;
+  while (to < near.length - 1 && near[to].createdAt - near[to + 1].createdAt <= gallery.BATCH_MS) to++;
   return {
-    prev: newer ? `/photo/${newer._id}` : '',
-    next: older ? `/photo/${older._id}` : '',
-    n: index + 1,
-    total,
+    prev: i > from ? `/photo/${near[i - 1]._id}` : '',
+    next: i < to ? `/photo/${near[i + 1]._id}` : '',
+    n: i - from + 1,
+    total: to - from + 1,
+    k: older + 1,
   };
 }
 
@@ -314,6 +322,9 @@ function mount(kind) {
     }
     // Видео, которое ещё грузится или ждёт «Опубликовать», живёт на странице загрузки.
     if (item.status === 'uploading' || item.status === 'draft') return res.redirect(`/upload#v${item._id}`);
+    // Фото поста — это пост (12.10, как в Инстаграме): его страница
+    // с каруселью, оценками и разговором поста.
+    if (K.photo && item.post) return res.redirect(301, `/post/${item.post}`);
     const blocked = await restriction.isRestricted(item.userId._id, me);
     res.locals.pageOwner = { id: String(item.userId._id), scope: 'content', access: blocked ? 'them' : '' };
     if (blocked) return res.status(403).render('streamNotFound', { restricted: true });
