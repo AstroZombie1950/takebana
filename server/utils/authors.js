@@ -13,6 +13,7 @@ const Stream = require('../models/Stream');
 const Recording = require('../models/Recording');
 const GalleryPhoto = require('../models/GalleryPhoto');
 const GalleryVideo = require('../models/GalleryVideo');
+const Post = require('../models/Post');
 const Subscription = require('../models/Subscription');
 const userView = require('../utils/userView');
 const privacy = require('./privacy');
@@ -56,15 +57,18 @@ async function liveStreams() {
 // не считались, и человек с одной галереей был в индексе, но ни в одной
 // подборке — сиротой, до которого по ссылкам не дойти. Забаненных отсеиваем
 // здесь же, и тех, кто попросил не показывать его в подборках (utils/privacy.js).
+// С 13.10 и готовый пост (аудит SEO): профиль с одними текстами в индексе
+// и в карте сайта, а уйдя с первой страницы «Ленты», оставался без ссылок.
 // «Сейчас в эфире» он всё равно виден: эфир он открыл сам.
 async function authorIds() {
-  const [everLive, withRecordings, withPhotos, withVideos] = await Promise.all([
+  const [everLive, withRecordings, withPhotos, withVideos, withPosts] = await Promise.all([
     Stream.distinct('userId', { firstLiveAt: { $ne: null } }),
     Recording.distinct('userId', { status: 'ready' }),
     GalleryPhoto.distinct('userId'),
     GalleryVideo.distinct('userId', { status: 'ready' }),
+    Post.distinct('userId', { status: 'ready' }),
   ]);
-  const all = [...new Set([...everLive, ...withRecordings, ...withPhotos, ...withVideos].map(id))].map((x) => new mongoose.Types.ObjectId(x));
+  const all = [...new Set([...everLive, ...withRecordings, ...withPhotos, ...withVideos, ...withPosts].map(id))].map((x) => new mongoose.Types.ObjectId(x));
   if (!all.length) return [];
   // Только живые аккаунты: фото удалённого человека может пережить его
   // запись в базе, и «Все авторы» насчитывали людей, которых не показать.

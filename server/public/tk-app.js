@@ -1266,6 +1266,16 @@ document.addEventListener('DOMContentLoaded', function(){
     let micQuietSince = 0;
     let micDead = false;
     let micRetried = false;
+    // С какой секунды пошёл голос (13.10). Заказчик не слышал Ивана первые
+    // 10–20 секунд, а попытка хранила только энергию, накопленную к 10-й
+    // секунде и к концу: «звук дошёл» — но когда? Теперь шагами: mic_ok —
+    // свой микрофон захвачен и мерится, talk_out — первый срез, где он снял
+    // голос, talk_in — первый срез, где голос собеседника пришёл к нам.
+    // И доли срезов с голосом (outTalk, inTalk: «8/20»): шёл ли он весь
+    // разговор. Голос — от 1e-3 энергии за срез STATS_MS: речь даёт сотые
+    // и десятые, тихая комната — стотысячные.
+    const TALK = 1e-3;
+    const talk = { in: 0, inN: 0, out: 0, outN: 0, inAt: false, outAt: false, mic: false };
     // Собеседник выключил микрофон кнопкой (call:mic, 09.10): это не сбой —
     // так и пишем, без «не слышно собеседника».
     let peerMicOff = false;
@@ -1402,11 +1412,18 @@ document.addEventListener('DOMContentLoaded', function(){
         tr.set(reported === 1 ? 'mic' : 'micEnd', mic && mic.muted ? 'muted' : !voice || voice.energy == null ? 'unknown' : voice.energy > 0 ? 'yes' : 'no');
         tr.set('eIn', energy(sound && sound.energy));
         tr.set('eOut', energy(voice && voice.energy));
+        tr.set('inTalk', talk.in + '/' + talk.inN);
+        tr.set('outTalk', talk.out + '/' + talk.outN);
         // Играет ли звук собеседника у нас: звук дошёл, а не слышно —
         // ответ здесь. CallAudio это тоже пишет, но журнал склеивает
         // одинаковые отчёты и хранит подробности последнего (08.10 утренние
         // затёрли вечерние звонки) — в попытке строка у каждого звонка своя.
-        tr.set(reported === 1 ? 'play' : 'playEnd', !el ? 'none' : el.paused ? 'paused' : el.muted ? 'muted' : el.volume === 0 ? 'vol0' : 'yes');
+        // «yes» прежде значило только «элемент не на паузе» — и без звука
+        // в нём (13.10: у заказчика play yes, а не слышно). Теперь и что
+        // в нём живая дорожка собеседника, по которой идут пакеты.
+        const rt = el && el.srcObject && el.srcObject.getAudioTracks ? el.srcObject.getAudioTracks()[0] : null;
+        tr.set(reported === 1 ? 'play' : 'playEnd', !el ? 'none' : !rt ? 'nosrc' : rt.readyState === 'ended' ? 'ended'
+          : el.paused ? 'paused' : el.muted ? 'muted' : el.volume === 0 ? 'vol0' : rt.muted ? 'trackMuted' : 'yes');
       }
       window.TKAudio.outputs().then((list) => window.TKAudio.send(
         'Звук в звонке (' + when + '): ' + verdict,
@@ -1424,9 +1441,58 @@ document.addEventListener('DOMContentLoaded', function(){
       ));
     }
     window.tkCallReport = reportAudio;
+    // Кнопки разговора — в попытку: своя кнопка микрофона и динамик (смена
+    // звуковой сессии айфона посреди захвата — тоже подозреваемый).
+    window.tkCallStep = (x) => { if (tr) tr.step(x); };
+
+    // Сторож своего микрофона (свой путь): заглушён системой, ровный ноль
+    // при включённой кнопке или дорожки нет вовсе — SILENT_MS подряд.
+    // Настоящий микрофон и в тихой комнате снимает хоть что-то.
+    function micWatch(quiet, now) {
+      // Микрофон снова снимает звук — следующая его смерть заслуживает
+      // нового захвата: 13.10 он умер на второй минуте при погасшем
+      // экране, а захват заново полагался один на весь разговор.
+      if (!quiet) micRetried = false;
+      if (!quiet || !s.micOn || state !== 'live' || !peers) micQuietSince = 0;
+      else if (!micQuietSince) micQuietSince = now;
+      const dead = !!micQuietSince && now - micQuietSince >= SILENT_MS;
+      if (dead === micDead) return;
+      micDead = dead;
+      paint();
+      if (!dead) return;
+      if (tr) tr.step('notice_mic');
+      // Экран погашен — захват заново бесполезен и вреден: айфон не даст
+      // новый микрофон скрытой странице, а старую дорожку, которую он
+      // вернул бы сам при разблокировке, мы бы уже остановили. Тогда
+      // захватываем по возвращении (tkMicBack). Дорожки нет — заново
+      // захватывать нечего: её ждёт ещё не закрытое окно разрешения.
+      const c = window._call;
+      if (micRetried || !c || !c.restartMic || !c.mic() || document.hidden) return;
+      micRetried = true;
+      micQuietSince = 0;
+      if (tr) tr.step('mic_retry');
+      c.restartMic();
+    }
+
+    // Вернулись к странице — разблокировали телефон или пришли из другого
+    // приложения. Айфон глушит захват скрытой странице (13.10: микрофон
+    // Ивана умер на второй минуте разговора, когда погас экран) и обратно
+    // отдаёт не всегда. Дорожка, которая и через полторы секунды
+    // заглушена или кончилась, — захват заново (свой путь; Daily
+    // восстанавливает свою сам).
+    window.tkMicBack = () => setTimeout(() => {
+      const c = window._call;
+      const mic = c && c.mic ? c.mic() : null;
+      if (!mic || !c.restartMic || !s.micOn || !(mic.muted || mic.readyState === 'ended')) return;
+      if (tr) tr.step('mic_back');
+      micQuietSince = 0;
+      micRetried = true;
+      c.restartMic();
+    }, 1500);
 
     // До входа в комнату, то есть до захвата микрофона (tk-notify.js).
     if (window.TKNotify) window.TKNotify.talking(true);
+    holdScreen(true, tr);
     goLive(s, isVideo);
     paint();
     // Окну всё равно, каким путём идёт разговор: и Daily, и свой путь
@@ -1491,6 +1557,20 @@ document.addEventListener('DOMContentLoaded', function(){
         s.level.dataset.sound = grew > 0.0001 ? 'yes' : 'no';
         // Тишина от собеседника: только вдвоём — в группе молчат по очереди.
         const now = Date.now();
+        if (state === 'live' && peers && !group) {
+          talk.inN++;
+          if (grew > TALK) {
+            talk.in++;
+            if (!talk.inAt && tr) tr.step('talk_in');
+            talk.inAt = true;
+          }
+          // Свой микрофон так и не захвачен (окно разрешения, захват
+          // повис): onVoice без дорожки не зовётся, и «Вас не слышно» не
+          // всплывало вовсе — собеседник молчал о нас, а окно писало
+          // «Соединение установлено». Срезы входящего звука идут и тогда.
+          const c = window._call;
+          if (c && c.mic && !c.mic()) micWatch(true, now);
+        }
         if (grew > QUIET || peerMicOff || group || state !== 'live' || !peers) quietSince = 0;
         else if (!quietSince) quietSince = now;
         const quiet = !!quietSince && now - quietSince >= SILENT_MS;
@@ -1504,21 +1584,17 @@ document.addEventListener('DOMContentLoaded', function(){
       // при включённой кнопке. Настоящий микрофон и в тихой комнате снимает
       // хоть что-то, ноль бывает только у мёртвого захвата.
       onVoice: (v) => {
-        const now = Date.now();
-        const quiet = v.muted || v.grew === 0;
-        if (!quiet || !s.micOn || state !== 'live' || !peers) micQuietSince = 0;
-        else if (!micQuietSince) micQuietSince = now;
-        const dead = !!micQuietSince && now - micQuietSince >= SILENT_MS;
-        if (dead === micDead) return;
-        micDead = dead;
-        paint();
-        if (!dead) return;
-        if (tr) tr.step('notice_mic');
-        if (micRetried || !window._call.restartMic) return;
-        micRetried = true;
-        micQuietSince = 0;
-        if (tr) tr.step('mic_retry');
-        window._call.restartMic();
+        if (!talk.mic && tr) tr.step('mic_ok');
+        talk.mic = true;
+        if (state === 'live' && peers && v.grew != null) {
+          talk.outN++;
+          if (v.grew > TALK && s.micOn) {
+            talk.out++;
+            if (!talk.outAt && tr) tr.step('talk_out');
+            talk.outAt = true;
+          }
+        }
+        micWatch(v.muted || v.grew === 0, Date.now());
       },
       // Свой путь: каким путём пошло (напрямую или через наш TURN), дал ли
       // TURN реле, его отказы (tk-peer.js). В группе — последнее соединение.
@@ -1803,6 +1879,9 @@ document.addEventListener('DOMContentLoaded', function(){
     window.tkCallSize = null;
     if (window._call) { window._call.leave(); window._call = null; }
     if (window.TKNotify) window.TKNotify.talking(false);
+    window.tkMicBack = null;
+    window.tkCallStep = null;
+    holdScreen(false);
     // Звук у уха не должен пережить разговор: эфиры и записи на странице
     // играли бы в разговорный динамик (routeAudio).
     try { if (navigator.audioSession) navigator.audioSession.type = 'auto'; } catch (e) {}
@@ -1874,6 +1953,37 @@ document.addEventListener('DOMContentLoaded', function(){
       if (pick) els.forEach((el) => el.setSinkId(pick.deviceId).catch(() => {}));
     }).catch(() => {});
   }
+
+  // ── Экран не гаснет, пока идёт разговор ──
+  // 13.10: на айфоне экран гас через минуту-две разговора, вместе с ним
+  // браузер глушил микрофон — собеседник переставал слышать, а после
+  // разблокировки телефон спрашивал разрешение на микрофон заново.
+  // Wake Lock держит экран, как в пульте эфира (tk-console.js). Браузер
+  // снимает его сам, когда страницу уводят в фон, — берём снова при
+  // возвращении, а если первый запрос не прошёл (не было жеста), —
+  // с первым касанием в разговоре. В попытку — взялся ли (awake).
+  let screenLock = null;
+  function holdScreen(on, tr) {
+    if (!on) {
+      if (screenLock) screenLock.release().catch(() => {});
+      screenLock = null;
+      return;
+    }
+    if (screenLock || document.hidden) return;
+    if (!('wakeLock' in navigator)) { if (tr) tr.set('awake', 'unsupported'); return; }
+    navigator.wakeLock.request('screen').then((lock) => {
+      if (!window._call) { lock.release().catch(() => {}); return; }
+      screenLock = lock;
+      lock.addEventListener('release', () => { if (screenLock === lock) screenLock = null; });
+      if (tr) tr.set('awake', 'yes');
+    }).catch(() => { if (tr) tr.set('awake', 'no'); });
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !window._call) return;
+    holdScreen(true);
+    if (window.tkMicBack) window.tkMicBack();
+  });
+  document.addEventListener('click', () => { if (window._call) holdScreen(true); }, { capture: true, passive: true });
 
   // ── Переписка ──
   // Лента — последняя страница истории (/getMessages), новое приходит
@@ -1990,6 +2100,7 @@ document.addEventListener('DOMContentLoaded', function(){
       s.micOn = !s.micOn;
       if (window._call && window._call.setMic) window._call.setMic(s.micOn);
       if (window.callMic) window.callMic(s.micOn);
+      if (window.tkCallStep) window.tkCallStep(s.micOn ? 'mic_on' : 'mic_off');
       paintTool(s.micBtn, !s.micOn, 'call.micOn', 'call.micOff');
     });
     s.flipBtn.addEventListener('click', () => {
@@ -1998,6 +2109,7 @@ document.addEventListener('DOMContentLoaded', function(){
     s.spkBtn.addEventListener('click', () => {
       s.loud = !s.loud;
       routeAudio(s, s.loud);
+      if (window.tkCallStep) window.tkCallStep(s.loud ? 'spk_loud' : 'spk_ear');
       paintTool(s.spkBtn, s.loud, 'call.speakerOff', 'call.speakerOn');
     });
     s.chatBtn.addEventListener('click', () => showChat(s, s.chat.hidden));

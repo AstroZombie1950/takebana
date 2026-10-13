@@ -149,4 +149,26 @@ function crumbs(items) {
   };
 }
 
-module.exports = { site, video, profile, menu, venue, page, crumbs };
+// Пост (аудит SEO 13.10, задача 49) — публикация человека: Google так
+// размечает посты соцсетей и форумов. Обязательны автор и дата, плюс
+// текст или снимок; лайки и комментарии — счётчиками.
+function post({ path, headline, text, date, author, images, likes, comments }) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'SocialMediaPosting',
+    '@id': siteUrl(path),
+    url: siteUrl(path),
+    headline,
+    ...(text ? { text } : {}),
+    datePublished: iso(date),
+    author: { '@type': 'Person', name: author.name, url: siteUrl(author.url) },
+    ...(images.length ? { image: images.map(siteUrl) } : {}),
+    commentCount: comments || 0,
+    interactionStatistic: [
+      { '@type': 'InteractionCounter', interactionType: 'https://schema.org/LikeAction', userInteractionCount: likes || 0 },
+      { '@type': 'InteractionCounter', interactionType: 'https://schema.org/CommentAction', userInteractionCount: comments || 0 },
+    ],
+  };
+}
+
+module.exports = { site, video, profile, menu, venue, page, post, crumbs };

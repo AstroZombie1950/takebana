@@ -44,6 +44,7 @@ const recommend = require('../utils/recommend');
 const userView = require('../utils/userView');
 const { VENUE_AUTHOR, venueAuthor } = require('../utils/venueAuthor');
 const { profileUrl } = require('../utils/profileUrl');
+const ogImage = require('../utils/ogImage');
 const { audit } = require('../utils/audit');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -312,7 +313,7 @@ function mount(kind) {
   router.get(path, commonDataMiddleware, async (req, res) => {
     // У фото и поста заведения нет — populate поля, которого нет в схеме, Mongoose отвергает.
     const query = OBJECT_ID.test(req.params.id)
-      ? K.Model.findById(req.params.id).populate('userId', 'nickname login email avatar banned role privacy')
+      ? K.Model.findById(req.params.id).populate('userId', 'nickname login email avatar banned role privacy ogCard')
       : null;
     const item = query ? await (K.clip ? query.populate('venue', VENUE_AUTHOR) : query).lean() : null;
     const me = req.session.userId;
@@ -369,6 +370,10 @@ function mount(kind) {
       // Пост: его фото и видео по порядку, тема — подписью и ссылкой на «Ленту».
       media: kind === 'post' ? around : null,
       topic: kind === 'post' && item.topic ? { code: item.topic, i18n: topics.i18nOf(item.topic) } : null,
+      // Пост (аудит SEO 13.10): короткий без медиа — noindex (задача 50);
+      // у текстового — карточка автора вместо общей обложки (задача 52).
+      thin: kind === 'post' && !posts.indexable(item),
+      authorCard: kind === 'post' && !(item.media || []).length ? ogImage.forProfile(item.userId) : null,
       at: K.date(item),
       isOwner,
       myReaction: mine ? mine.value : 0,

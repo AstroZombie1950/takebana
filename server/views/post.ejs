@@ -19,12 +19,19 @@
   var liked = myReaction === 1;
   var first = media.filter(function (m) { return m.kind === 'photo'; })[0];
   var cover = first ? first.url : (media[0] && media[0].thumb && media[0].thumb.url) || '';
+  // Аудит SEO 13.10. Title — с автором (задача 48): у двух «Привет» разных
+  // людей он разный. Текстовый пост — карточка автора вместо общей обложки
+  // (задача 52). Короткий без медиа — noindex (задача 50, utils/posts.js).
+  var pageTitle = said ? ta('post.titleOf', { text: snippet(rec.text, 60), name: author.displayName }) : headTitle;
+  var image = cover || authorCard || '';
+  var shots = media.map(function (m) { return m.kind === 'photo' ? m.url : m.thumb && m.thumb.url; }).filter(Boolean);
 %>
 <!DOCTYPE html>
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
-<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: describe(rec.text, ta('seo.postDesc', { name: author.displayName, date: when })), seo: { path: base, type: 'article', image: cover || undefined, imageAlt: alt, robots: rec.userId.banned || !ready ? 'noindex, follow' : '',
-         jsonld: ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [headTitle, base]]) } }) %>
+<%- include('partials/tkHead', { title: pageTitle + ' — Takebana', description: describe(rec.text, ta('seo.postDesc', { name: author.displayName, date: when })), seo: { path: base, type: 'article', image: image || undefined, imageStd: !cover && !!authorCard, imageAlt: cover ? alt : author.displayName, robots: rec.userId.banned || !ready || thin ? 'noindex, follow' : '',
+         jsonld: [ld.post({ path: base, headline: headTitle, text: said ? rec.text : '', date: rec.createdAt, author: { name: author.displayName, url: author.url }, images: shots, likes: rec.likes, comments: rec.comments }),
+                  ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [headTitle, base]])] } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/watch.css') %>">
@@ -53,9 +60,11 @@
         <div class="tk-post__track">
           <% media.forEach(function (m, i) { %>
           <% if (m.kind === 'photo') { %>
-          <a href="/photo/<%= m._id %>" class="tk-post__slide tk-post__slide--photo">
+          <%# Фото поста — не ссылка: его страница /photo/:id с 12.10 — 301
+              на этот же пост (аудит 13.10: единственная ссылка на редирект). %>
+          <div class="tk-post__slide tk-post__slide--photo">
             <img class="tk-photo__img" src="<%= m.url %>" alt="<%= alt %>"<% if (m.width && m.height) { %> width="<%= m.width %>" height="<%= m.height %>"<% } %> <%- i ? 'loading="lazy"' : imgLoad() %> decoding="async">
-          </a>
+          </div>
           <% } else { %>
           <a href="/video/<%= m._id %>" class="tk-post__slide tk-post__slide--video">
             <% if (m.thumb && m.thumb.url) { %><img src="<%= m.thumb.url %>" alt="<%= ta('alt.cover', { title: alt }) %>" loading="lazy" decoding="async"><% } %>

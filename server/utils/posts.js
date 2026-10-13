@@ -19,6 +19,13 @@ const indexNow = require('./indexNow');
 const errorLog = require('./errorLog');
 
 const TEXT_MAX = 5000;
+
+// В индекс — пост, в котором есть что найти (аудит SEO 13.10, задача 50):
+// фото или видео либо текст от THIN_MIN знаков. «Ставьте лайки» без медиа —
+// тонкая страница: такие тянут сайт вниз в глазах поисковика. Остальное
+// пост видит как обычно — noindex, follow и не в карте сайта (routes/seo.js).
+const THIN_MIN = 50;
+const indexable = (post) => (post.media || []).length > 0 || String(post.text || '').trim().length >= THIN_MIN;
 // Сколько фото и видео в одном посте — как карусель Инстаграма.
 const MEDIA_MAX = 10;
 
@@ -71,10 +78,11 @@ async function create(userId, { text, topic, files, videoIds, order }) {
     await GalleryVideo.updateMany({ _id: { $in: videos.map((v) => v._id) } },
       { $set: { post: _id, publish: true, description: text.slice(0, galleryVideo.DESCRIPTION_MAX) } });
     for (const v of videos) await galleryVideo.publishIfReady(v._id);
-  } else {
+  } else if (indexable(post)) {
     indexNow.ping('/post/' + _id);
   }
-  if (photos.length) indexNow.ping(...photos.map((p) => '/photo/' + p._id));
+  // Фото поста поисковикам не сообщаем: их страница — 301 на пост (12.10),
+  // а пост с роликами сообщается, когда они дожаты (videoDone).
   return post;
 }
 
@@ -91,7 +99,7 @@ async function videoDone(postId) {
   const media = post.media.filter((m) => m.kind === 'photo' || ok.has(String(m.ref)));
   if (!media.length && !post.text) return remove(post);
   await Post.updateOne({ _id: post._id }, { $set: { media, status: 'ready' } });
-  indexNow.ping('/post/' + post._id);
+  if (indexable({ media, text: post.text })) indexNow.ping('/post/' + post._id);
 }
 
 // Фото или видео поста удалили по отдельности (со своей страницы) — из
@@ -136,4 +144,4 @@ function start() {
   setInterval(sweep, 6 * 3600 * 1000).unref();
 }
 
-module.exports = { TEXT_MAX, MEDIA_MAX, PostError, create, videoDone, mediaGone, remove, removeAll, start };
+module.exports = { TEXT_MAX, MEDIA_MAX, THIN_MIN, indexable, PostError, create, videoDone, mediaGone, remove, removeAll, start };

@@ -69,7 +69,7 @@
       <div class="tk-recs">
         <% items.forEach(function (x) { %><%- tab === 'streams' ? include('partials/recordingCard', { r: x, who: venue.name }) : include('partials/galleryVideo', { v: x, who: venue.name }) %><% }); %>
       </div>
-      <% if (pages > 1) { %><%- include('partials/pager') %><% } %>
+      <% if (pages > 1) { %><%- include('partials/pager', { pageHref: pageHref }) %><% } %>
       <% } else if (!tabs.live) { %>
       <p class="tk-note tk-note--center" data-i18n="venue.<%= tab %>Empty"><%- t('venue.' + tab + 'Empty') %></p>
       <% } %>

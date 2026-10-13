@@ -21,6 +21,7 @@ const Recording = require('../models/Recording');
 const GalleryVideo = require('../models/GalleryVideo');
 const GalleryPhoto = require('../models/GalleryPhoto');
 const Post = require('../models/Post');
+const { indexable: postIndexable } = require('../utils/posts');
 const Stream = require('../models/Stream');
 const Establishments = require('../models/Establishments');
 const MenuItem = require('../models/MenuItem');
@@ -153,7 +154,7 @@ async function collect() {
     Recording.find({ status: 'ready' }).select('userId venue category title description isAdult thumb video hls.url duration recordedAt createdAt').lean(),
     GalleryVideo.find({ status: 'ready' }).sort({ createdAt: -1 }).select('userId venue title description thumb video duration createdAt').lean(),
     GalleryPhoto.find({}).sort({ createdAt: -1 }).select('userId url createdAt post').lean(),
-    Post.find({ status: 'ready' }).sort({ createdAt: -1 }).select('userId media createdAt').lean(),
+    Post.find({ status: 'ready' }).sort({ createdAt: -1 }).select('userId media text createdAt').lean(),
     Stream.distinct('userId', { isActive: true }),
     authors.groups(),
     Establishments.find({ status: true }).select('_id status features about cover photos reviewedAt').lean(),
@@ -228,11 +229,15 @@ async function collect() {
     const urlsOf = (list) => list.map((p) => p.url);
     people.push({ loc: url, lastmod, images: urlsOf(pics.slice(0, gallery.PAGE)) });
     // Вкладки — если в них что-то есть: с 09.10 профиль их не повторяет.
+    // Вкладка «Фото» листается плитками (12.10: пост или пачка — одна
+    // плитка), а не снимками: считать страницы по снимкам — значит класть
+    // в карту ?page=N за последней страницей, а там 404 (аудит 13.10).
+    // Снимки страницы — обложки её плиток, как на самой странице.
     if (pics.length) {
-      const { pages: total } = gallery.page(pics.length, 1);
+      const { pages: total } = gallery.page(await gallery.photoTiles(id), 1);
       for (let n = 1; n <= total; n++) {
-        const { skip } = gallery.page(pics.length, n);
-        people.push({ loc: `${url}/photos` + (n > 1 ? `?page=${n}` : ''), lastmod, images: urlsOf(pics.slice(skip, skip + gallery.PAGE)) });
+        const shown = await gallery.photos(id, { skip: (n - 1) * gallery.PAGE, limit: gallery.PAGE });
+        people.push({ loc: `${url}/photos` + (n > 1 ? `?page=${n}` : ''), lastmod, images: urlsOf(shown) });
       }
     }
     // Листалка вкладок человека — по его личному: снятое от имени заведения
@@ -255,7 +260,8 @@ async function collect() {
   const photoPages = [...photosOf.values()].flat().filter((p) => !p.post)
     .map((p) => ({ loc: `/photo/${p._id}`, lastmod: p.createdAt, images: [p.url] }));
   const photoUrl = new Map(photos.map((p) => [String(p._id), p.url]));
-  const postPages = [...postsOf.values()].flat().map((p) => ({ loc: `/post/${p._id}`, lastmod: p.createdAt,
+  // Короткий пост без медиа — не в карте: он noindex (utils/posts.js, задача 50).
+  const postPages = [...postsOf.values()].flat().filter(postIndexable).map((p) => ({ loc: `/post/${p._id}`, lastmod: p.createdAt,
     images: p.media.filter((m) => m.kind === 'photo').map((m) => photoUrl.get(String(m.ref))).filter(Boolean) }));
 
   const watch = [

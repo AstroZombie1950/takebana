@@ -51,7 +51,12 @@
         self.mic = s.getAudioTracks()[0];
         self.mic.enabled = !self.micOff;
         tell();
-      }).catch(function (e) { if (onError) onError(e); });
+      }).catch(function (e) {
+        // Отказ не должен запирать захват: иначе после него restartMic
+        // и startMic молча ничего не делают до конца разговора.
+        self.micAsked = false;
+        if (onError) onError(e);
+      });
     };
 
     // Захват заново. Айфон отдаёт дорожку живой, но глушит её, когда звук
@@ -525,7 +530,9 @@
           var was = voice && voice.energy != null ? voice.energy : null;
           voice = {
             energy: mine,
-            muted: own.mic.muted === true,
+            // Кончившаяся дорожка — тоже мёртвая: энергии у неё больше нет,
+            // и ровного нуля сторож бы не дождался.
+            muted: own.mic.muted === true || own.mic.readyState === 'ended',
             grew: mine == null ? null : was == null ? 0 : mine >= was ? mine - was : mine,
           };
           emit('onVoice', voice);

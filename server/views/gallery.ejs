@@ -79,7 +79,7 @@
       <% } %>
 
       <% if (!restricted && pages > 1) { %>
-      <%- include('partials/pager') %>
+      <%- include('partials/pager', { pageHref: pageHref }) %>
       <% } %>
 
     </div>
