@@ -330,6 +330,13 @@
   // компьютере эта дорога закрыта — там фоновая вкладка камеру не гасит.
   var phone = matchMedia('(pointer: coarse)').matches;
 
+  // Кадр, выбранный в студии (tk-studio.js); не выбирали — вертикально.
+  function framePick() {
+    var v = '';
+    try { v = localStorage.getItem('tk_frame') || ''; } catch (e) {}
+    return v === 'landscape' ? v : 'portrait';
+  }
+
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState !== 'visible') {
       if (phone && awayTrack) away(true);
@@ -457,10 +464,13 @@
       .then(function (f) {
         // Размер кадра уходит вместе с ответом: в журнале панели видно,
         // чем эфир решил свою ориентацию, — иначе разбирать нечем.
+        // Телефон — по выбору в студии (14.10): раньше решало то, как
+        // ведущий держал телефон в миг выхода, и кадр мог оказаться не тем.
+        var pick = phone ? framePick() : '';
         return post('/set-active', {
           streamKey: streamKey,
-          portrait: f.portrait != null ? f.portrait : f.h > f.w,
-          frame: f.w && f.h ? f.w + 'x' + f.h + ' ' + f.from : f.from,
+          portrait: pick ? pick === 'portrait' : f.portrait != null ? f.portrait : f.h > f.w,
+          frame: (f.w && f.h ? f.w + 'x' + f.h + ' ' + f.from : f.from) + (pick ? ' pick ' + pick : ''),
         });
       })
       .then(function () {

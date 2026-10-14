@@ -108,6 +108,19 @@
     startPreview();
   });
 
+  // ── Кадр эфира с телефона ─────────────────────────────────────────────
+  // Выбор помнит телефон (tk_frame), пульт берёт его при выходе в эфир.
+  // Не выбирали — вертикально, как отмечено в разметке.
+  var frames = document.querySelectorAll('input[name="frame"]');
+  var frameSaved = '';
+  try { frameSaved = localStorage.getItem('tk_frame') || ''; } catch (e) {}
+  frames.forEach(function (input) {
+    if (input.value === frameSaved) input.checked = true;
+    input.addEventListener('change', function () {
+      try { localStorage.setItem('tk_frame', input.value); } catch (e) {}
+    });
+  });
+
   // ── Темы раздела ──────────────────────────────────────────────────────
   // Список — из config/catalog.js атрибутом data-subs: [[код, подпись], …].
   // Подпись из атрибута русская; на английском её отдаёт словарь sub.<код>.

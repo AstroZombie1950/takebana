@@ -105,6 +105,7 @@ const CATEGORIES = {
       { code: 'finance', name: 'Финансы', i18n: 'sub.finance' },
       { code: 'marketing', name: 'Маркетинг', i18n: 'sub.marketing' },
       { code: 'career', name: 'Работа и карьера', i18n: 'sub.career' },
+      { code: 'gigs', name: 'Подработка', i18n: 'sub.gigs' },
     ],
   },
   learning: {
