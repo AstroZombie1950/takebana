@@ -122,6 +122,10 @@ if (mailConfigured) {
 
     user.password = await hashPassword(req.body.password);
     user.passwordReset = undefined;
+    // Смена почты, заказанная до сброса, — отменяется (аудит 14.10, S2):
+    // её мог заказать тот, из-за кого пароль и меняют, и его ссылка ещё
+    // сутки забирала бы аккаунт себе.
+    user.emailChange = undefined;
     await user.save();
     await loginGuard.forget(user.email);
 

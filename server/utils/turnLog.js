@@ -36,6 +36,31 @@ const FORGET_MS = 60 * 60 * 1000;
 
 const NAME = /^\d+:([a-f\d]{24}):([\w-]{8,64})$/i;
 
+// Тревога (аудит 14.10, S9): один человек занял за 10 минут больше
+// TURN_USER_ALLOCS реле — по всем своим ключам вместе (звонки и проверка
+// связи). Звонок вчетвером даёт ~9 на человека, с переподключениями — до
+// 30; шестьдесят — уже не звонок, а кто-то держит наш TURN ретранслятором.
+// В «Ошибки» — раз в час на человека.
+const HEAVY_WINDOW_MS = 10 * 60 * 1000;
+const HEAVY_ALLOCS = Number(process.env.TURN_USER_ALLOCS) || 60;
+const HEAVY_REPEAT_MS = 60 * 60 * 1000;
+const heavy = new Map();    // userId → { at: [мс], keys: Set, warnedAt }
+
+function counted(userId, callId) {
+  const now = Date.now();
+  let h = heavy.get(userId);
+  if (!h) heavy.set(userId, h = { at: [], keys: new Set(), warnedAt: 0 });
+  h.at = h.at.filter((t) => now - t < HEAVY_WINDOW_MS);
+  h.at.push(now);
+  h.keys.add(callId);
+  if (h.at.length > HEAVY_ALLOCS && now - h.warnedAt > HEAVY_REPEAT_MS) {
+    h.warnedAt = now;
+    errorLog.media(new Error('Один человек занял много портов TURN'), 'turn.user.heavy',
+      { user: userId, allocs: h.at.length, minutes: HEAVY_WINDOW_MS / 60000, keys: [...h.keys].slice(-10) });
+  }
+  if (heavy.size > 5000) heavy.delete(heavy.keys().next().value);
+}
+
 let offset = null;
 let inode = 0;
 let rest = '';
@@ -67,6 +92,11 @@ function line(s) {
   const m = name && name.match(NAME);
   if (!m) return;
   const [, userId, callId] = m;
+
+  if (s.includes('new, realm=')) counted(userId, callId);
+  // Проверка связи (utils/turn.js, checkIce) — не звонок: в карточку
+  // звонка ей нечего, только в счёт человека выше.
+  if (callId === 'netcheck') return;
 
   if (s.includes('new, realm=')) {
     const u = slot(callId, userId);

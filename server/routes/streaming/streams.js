@@ -29,6 +29,7 @@ const liveNotify = require('../../utils/liveNotify');
 const { publicHost } = require('../../utils/site');
 const { ownApproved } = require('../../utils/venueOwner');
 const mentions = require('../../utils/mentions');
+const playback = require('../../utils/playback');
 
 router.get('/stream-status/:streamId', async (req, res) => {
   if (!/^[a-f\d]{24}$/i.test(req.params.streamId)) return res.status(404).json({ message: 'Стрим не найден' });
@@ -149,7 +150,10 @@ router.post('/start-stream', requireAuth, requireNotBanned, validate({
       stream.dailyRoomName = null;
       stream.dailyRoom = undefined;
     }
-    Object.assign(stream, fields, SOURCES[source], { thumbnail: thumbnail || stream.thumbnail || null, streamKey: user.streamKey, updatedAt: Date.now() });
+    // Новый адрес просмотра (utils/playback.js): черновик могли открыть
+    // зрители, пока он был открытым, а теперь он «только для подписчиков»
+    // или 18+. В эфир черновик ещё не выходил — смотреть по старому некому.
+    Object.assign(stream, fields, SOURCES[source], { thumbnail: thumbnail || stream.thumbnail || null, streamKey: user.streamKey, playbackId: playback.newId(), updatedAt: Date.now() });
     if (cover === 'none') stream.thumbnail = null;
     await stream.save();
   } else {
@@ -333,7 +337,7 @@ router.post('/set-inactive', requireAuth, validate({
 // Та же картинка — обложка по умолчанию для следующих эфиров
 // (User.streamDefaults.thumbnail) и обложка записи (utils/recording.js).
 // requireAuth перед multer — см. комментарий у /profile/avatar.
-router.post('/upload-thumbnail', requireAuth, upload.single('thumbnail'), validate({
+router.post('/upload-thumbnail', requireAuth, requireNotBanned, upload.single('thumbnail'), validate({
   streamId: { type: 'objectId', required: true, label: 'Эфир' },
 }), async (req, res) => {
   const userId = req.session.userId;

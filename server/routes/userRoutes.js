@@ -23,7 +23,7 @@ const age = require('../utils/age');
 const errorLog = require('../utils/errorLog');
 // Подтверждение почты после регистрации (router.sendVerify есть, когда настроена почта).
 const emailRoutes = require('./emailChange');
-const { requireAuthApi } = require('../middleware/auth');
+const { requireAuthApi, requireNotBanned } = require('../middleware/auth');
 
 const NICK_ERRORS = {
   format: 'Ник: 3–20 знаков — латинские буквы, цифры и «_», первая — буква',
@@ -114,7 +114,7 @@ router.post('/register', registerLimiter, validate({
 
 // Имя и никнейм из настроек. Имя — свободная строка, пустое можно. Ник —
 // по правилам utils/nickname.js, уникальный, не чаще раза в 30 дней.
-router.post('/update-profile', validate({
+router.post('/update-profile', requireNotBanned, validate({
   login: { type: 'string', max: 64, allowEmpty: true, default: '', label: 'Имя' },
   nickname: { type: 'string', required: true, max: 40, label: 'Никнейм' },
 }), async (req, res) => {
@@ -165,7 +165,7 @@ router.post('/update-profile', validate({
 // Описание и ссылки профиля из настроек. Ссылки разбирает
 // utils/profileLinks.js; ответ — как их теперь видно, чтобы форма показала
 // принятое значение и итоговую ссылку.
-router.post('/settings/about', requireAuthApi, validate({
+router.post('/settings/about', requireAuthApi, requireNotBanned, validate({
   bio: { type: 'string', max: 300, allowEmpty: true, default: '', label: 'Описание' },
   links: { type: 'object', default: {}, label: 'Ссылки', schema: Object.fromEntries(profileLinks.KINDS.map((k) => [k, { type: 'string', max: 300, allowEmpty: true, default: '' }])) },
 }), async (req, res) => {
@@ -278,6 +278,8 @@ router.post('/update-password', authLimiter, validate({
   }
   await attempt.ok();
   user.password = await hashPassword(newPassword);
+  // Заказанная смена почты — тоже прочь (routes/passwordReset.js, S2).
+  user.emailChange = undefined;
   await user.save();
   // Прочие сеансы — закрыть, как при сбросе пароля и смене администратором:
   // пароль меняют, в том числе, когда его узнал кто-то другой. Этот остаётся.

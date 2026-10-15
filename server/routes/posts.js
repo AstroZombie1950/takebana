@@ -14,7 +14,7 @@ const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const { requireAuthApi, requireNotBanned } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
-const { uploadGallery } = require('./streaming/uploads');
+const { galleryPhotos } = require('./streaming/uploads');
 const { BadImageError } = require('../utils/image');
 const mentions = require('../utils/mentions');
 const topics = require('../utils/topics');
@@ -31,7 +31,7 @@ const postLimiter = rateLimit({
   message: { message: 'Слишком много постов подряд — попробуйте через час' },
 });
 
-router.post('/posts', requireAuthApi, requireNotBanned, postLimiter, uploadGallery.array('photos', posts.MEDIA_MAX), validate({
+router.post('/posts', requireAuthApi, requireNotBanned, postLimiter, galleryPhotos((m) => m.array('photos', posts.MEDIA_MAX)), validate({
   text: { type: 'string', max: posts.TEXT_MAX, allowEmpty: true, default: '', label: 'Текст' },
   topic: { type: 'string', max: 40, allowEmpty: true, default: '', label: 'Тема' },
   videos: { type: 'array', json: true, max: posts.MEDIA_MAX, default: [], of: { type: 'objectId' }, label: 'Видео' },

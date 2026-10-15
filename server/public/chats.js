@@ -1861,10 +1861,11 @@
   //
   // С паузой хронометраж — сумма записанных отрезков: ms — записано до
   // нынешнего отрезка, at — когда он начался (так же у кружка ниже).
-  var VOICE_MAX = 5 * 60;
   var WAVE_BARS = 120;     // с запасом на широкий экран: лишние уходят за край
   var composeForm = $('composeForm');
   var micBtn = $('micBtn');
+  // Длина голосового — из лимитов человека (utils/limits.js), было 5 минут.
+  var VOICE_MAX = Number(micBtn.dataset.max) || 5 * 60;
   var recBar = $('recBar');
   var recWave = $('recWave');
   var recPause = $('recPause');
@@ -2643,9 +2644,10 @@
   // MediaRecorder обрывает запись, если в потоке сменилась дорожка, а на
   // холст рисуется квадрат из середины кадра той камеры, что сейчас в
   // превью, — её можно менять сколько угодно.
-  var ROUND_MAX = 60;
-  var ROUND_SIDE = 640;
   var roundRec = $('roundRec');
+  // Длина кружка — из панели (utils/limits.js), была минута.
+  var ROUND_MAX = Number(roundRec.dataset.max) || 60;
+  var ROUND_SIDE = 640;
   var roundPreview = $('roundPreview');
   var roundPauseBtn = $('roundPause');
   var roundFlipBtn = $('roundFlip');

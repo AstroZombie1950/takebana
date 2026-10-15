@@ -19,8 +19,9 @@ const NotificationSchema = new mongoose.Schema({
     // подписан получатель, вышел в эфир (utils/liveNotify.js),
     // follow — на получателя подписались (routes/streaming/subscriptions.js),
     // reply — ответили на его комментарий (routes/watch.js, notifyReply),
-    // meetup — к его отметке в заведении присоединились (routes/meetups.js)
-    enum: ['message', 'call', 'comment', 'live', 'follow', 'reply', 'meetup'],
+    // meetup — к его отметке в заведении присоединились (routes/meetups.js),
+    // recording — брошенный эфир сохранён записью сам (jobs/streamCleanup.js)
+    enum: ['message', 'call', 'comment', 'live', 'follow', 'reply', 'meetup', 'recording'],
     required: true
   },
   content: {

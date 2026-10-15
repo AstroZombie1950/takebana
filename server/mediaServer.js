@@ -2,6 +2,8 @@ const NodeMediaServer = require('node-media-server');
 
 const { isPublishAuthEnabled, getSecret } = require('./utils/rtmpAuth');
 const hls = require('./utils/hls');
+const playback = require('./utils/playback');
+const limits = require('./utils/limits');
 const webLive = require('./utils/webLive');
 const streamLog = require('./utils/streamLog');
 const rtmpWatch = require('./utils/rtmpWatch');
@@ -278,7 +280,24 @@ nms.on('postPublish', async (id, streamPath, args) => {
     // HLS: единственный формат, который играет на iPhone. HTTP-FLV там не
     // работает в принципе — flv.js собирает поток через MSE, а Media Source
     // Extensions в Safari на iOS недоступны.
-    hls.start(streamKey, { daily: fromDaily });
+    // Каталог — адрес просмотра эфира, не ключ (utils/playback.js): ключ
+    // видят все зрители его открытых эфиров. Без адреса HLS не режем — по
+    // ключу он снова открыл бы закрытые эфиры.
+    // Предел длины записи — владельца эфира (utils/limits.js, личные поверх общих).
+    let out, owner;
+    try {
+        const s = await require('./models/Stream').findOne({ streamKey }).select('playbackId userId').lean();
+        out = await playback.ensure(s);
+        owner = s && s.userId;
+    } catch (e) {
+        errorLog.media(e, 'rtmp.playback', { streamKey });
+    }
+    const lim = await limits.forUser(owner);
+    if (!out) return errorLog.media(new Error('нет адреса просмотра — HLS не запущен'), 'rtmp.playback', { streamKey });
+    // Пока спрашивали базу, вещатель мог уйти (donePublish уже прошёл).
+    const live = activeStreams.get(streamKey);
+    if (!live || live.id !== id) return;
+    hls.start(streamKey, { daily: fromDaily, out, recordMs: limits.recordingMs(lim), owner });
 });
 
 nms.on('donePublish', (id, streamPath, args) => {

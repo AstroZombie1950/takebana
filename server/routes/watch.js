@@ -444,7 +444,7 @@ function mount(kind) {
 
   // Название и описание (у фото — подпись, у поста — текст и тема) — правит
   // автор (и администратор, как у удаления).
-  router.patch(path, requireAuth, checkId, requireOwner(K.Model, { field: 'userId' }), validate(K.edit.schema), async (req, res) => {
+  router.patch(path, requireAuth, requireNotBanned, checkId, requireOwner(K.Model, { field: 'userId' }), validate(K.edit.schema), async (req, res) => {
     const set = K.edit.set(req.body);
     const text = mentions.clean(set[K.text]);
     if (text.foreign) return res.status(400).json({ success: false, message: mentions.FOREIGN_MESSAGE });

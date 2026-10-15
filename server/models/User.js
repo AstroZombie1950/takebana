@@ -121,6 +121,24 @@ const UserSchema = new mongoose.Schema({
     videos: Number,
     recordings: Number
   },
+  // Личные лимиты поверх общих (utils/limits.js, 15.10): нет поля — как у всех.
+  // Ставит администратор в панели; потом — пакетом подписки.
+  limits: {
+    roundSeconds: Number,
+    voiceSeconds: Number,
+    chatVideoMinutes: Number,
+    chatVideoMb: Number,
+    chatPhotoMb: Number,
+    chatDocMb: Number,
+    chatArchiveMb: Number,
+    attachPer10Min: Number,
+    videoMinutes: Number,
+    videoMb: Number,
+    galleryVideos: Number,
+    galleryPhotos: Number,
+    galleryPhotoMb: Number,
+    recordingHours: Number
+  },
   // ── Модерация ───────────────────────────────────────────────────────────────
   // Бан не закрывает вход: аккаунт живёт, страницы открываются, но писать
   // в чат и переписку и выходить в эфир нельзя. Так забаненный видит причину

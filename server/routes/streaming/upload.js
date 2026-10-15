@@ -20,13 +20,16 @@ const { Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 const sharp = require('sharp');
 const { USER_PIXELS } = require('../../utils/watermark');
+const { imageFormat } = require('../../utils/image');
 const GalleryVideo = require('../../models/GalleryVideo');
 const galleryVideo = require('../../utils/galleryVideo');
+const diskGuard = require('../../utils/diskGuard');
+const limits = require('../../utils/limits');
 const galleryPhotos = require('../../utils/galleryPhotos');
 const { requireAuth, requireAuthApi, requireNotBanned } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validate');
 const { commonDataMiddleware } = require('./shared');
-const { uploadGallery } = require('./uploads');
+const { uploadCover } = require('./uploads');
 const { audit } = require('../../utils/audit');
 const { ownApproved } = require('../../utils/venueOwner');
 const { venueAuthor } = require('../../utils/venueAuthor');
@@ -74,13 +77,16 @@ function mine(req, extra = {}) {
 // они в правке. Чужое или неодобренное — молча обычная загрузка.
 router.get('/upload', requireAuth, commonDataMiddleware, async (req, res) => {
   const venue = venueAuthor(await ownApproved(req.session.userId, req.query.venue));
+  const lim = await limits.forUser(req.session.userId);
   const drafts = await GalleryVideo.find({ userId: req.session.userId, status: { $in: ['uploading', 'draft', 'processing'] } })
-    .sort({ createdAt: -1 }).limit(galleryVideo.MAX_PER_USER).lean();
+    .sort({ createdAt: -1 }).limit(lim.galleryVideos).lean();
   res.render('upload', {
     venue,
     drafts: drafts.map(draftView),
     videoEnabled: galleryVideo.enabled,
-    maxSeconds: galleryVideo.MAX_SECONDS,
+    maxSeconds: limits.videoSeconds(lim),
+    maxBytes: limits.videoBytes(lim),
+    photoMb: lim.galleryPhotoMb,
     limits: { title: galleryVideo.TITLE_MAX, description: galleryVideo.DESCRIPTION_MAX, caption: galleryPhotos.CAPTION_MAX },
   });
 });
@@ -88,21 +94,36 @@ router.get('/upload', requireAuth, commonDataMiddleware, async (req, res) => {
 // Начать загрузку видео: черновик и пустой файл под него.
 router.post('/upload/video', requireAuthApi, requireNotBanned, validate({
   name: { type: 'string', max: 200, default: '', label: 'Имя файла' },
-  size: { type: 'int', required: true, min: 1, max: galleryVideo.MAX_MB * 1024 * 1024, label: 'Размер' },
+  // Потолок схемы — наибольший, что разрешает панель; действующий — ниже.
+  size: { type: 'int', required: true, min: 1, max: limits.FIELDS.videoMb.max * 1024 * 1024, label: 'Размер' },
   venue: { type: 'objectId', label: 'Заведение' }, // от имени своего заведения (29.09)
 }), async (req, res) => {
   if (!galleryVideo.enabled) return res.status(503).json({ success: false, message: 'Видео сейчас не принимаются' });
   const venue = req.body.venue ? await ownApproved(req.session.userId, req.body.venue) : null;
   if (req.body.venue && !venue) return res.status(403).json({ success: false, message: 'Загружать можно только от своего одобренного заведения' });
+  const lim = await limits.forUser(req.session.userId);
   const n = await GalleryVideo.countDocuments({ userId: req.session.userId, status: { $ne: 'failed' } });
-  if (n >= galleryVideo.MAX_PER_USER) {
-    return res.status(400).json({ success: false, message: 'В галерее уже 30 видео — удалите что-нибудь' });
+  if (n >= lim.galleryVideos) {
+    audit(req, 'upload.videos.limit', { result: 'denied', meta: { max: lim.galleryVideos } });
+    return res.status(400).json({ success: false, message: 'В галерее уже предельное число видео — удалите что-нибудь' });
   }
+  // Незаконченное лежит на нашем диске: не больше двух роликов по потолку
+  // на человека разом (AUDIT-2026-10-14, S8).
+  if (req.body.size > limits.videoBytes(lim)) {
+    audit(req, 'upload.size.limit', { result: 'denied', meta: { sizeMb: Math.round(req.body.size / 1048576), maxMb: lim.videoMb } });
+    return res.status(400).json({ success: false, message: 'Видео больше, чем можно загрузить' });
+  }
+  const pending = await galleryVideo.pendingBytes(req.session.userId);
+  if (pending + req.body.size > limits.pendingBytes(lim)) {
+    audit(req, 'upload.pending.limit', { result: 'denied', meta: { pendingMb: Math.round(pending / 1048576), sizeMb: Math.round(req.body.size / 1048576) } });
+    return res.status(400).json({ success: false, message: 'Дождитесь, пока загрузятся начатые видео, или удалите черновик' });
+  }
+  if (diskGuard.full(galleryVideo.UPLOAD_DIR)) return diskGuard.refuse(req, res, 'video');
   const doc = await GalleryVideo.create({
     userId: req.session.userId,
     venue: venue ? venue._id : null,
     status: 'uploading',
-    upload: { name: req.body.name, size: req.body.size, received: 0 },
+    upload: { name: req.body.name, size: req.body.size, received: 0, at: new Date() },
   });
   await fs.promises.writeFile(galleryVideo.partPath(doc._id), '');
   res.json({ success: true, chunk: CHUNK, video: draftView(doc) });
@@ -116,7 +137,7 @@ router.get('/upload/video/:id', requireAuthApi, async (req, res) => {
 
 // Кусок файла. Тело читаем сами, потоком в файл: express.json его не трогает
 // (тип application/octet-stream), в память целиком он не ложится.
-router.put('/upload/video/:id', requireAuthApi, async (req, res) => {
+router.put('/upload/video/:id', requireAuthApi, requireNotBanned, async (req, res) => {
   const v = await mine(req, { status: 'uploading' });
   if (!v) return res.status(404).json({ success: false, message: 'Видео не найдено' });
   const id = String(v._id);
@@ -128,6 +149,8 @@ router.put('/upload/video/:id', requireAuthApi, async (req, res) => {
     return res.status(400).json({ success: false, message: 'Неверный кусок файла' });
   }
   if (writing.has(id)) return res.status(409).json({ success: false, received, busy: true });
+  // Места мало — кусок не берём; загрузка ждёт и повторяет (public/tk-upload.js).
+  if (diskGuard.full(galleryVideo.UPLOAD_DIR)) return diskGuard.refuse(req, res, 'video', { start: false });
   writing.add(id);
 
   const part = galleryVideo.partPath(id);
@@ -156,7 +179,7 @@ router.put('/upload/video/:id', requireAuthApi, async (req, res) => {
   const done = now === size;
   const saved = await GalleryVideo.findOneAndUpdate(
     { _id: id, status: 'uploading', 'upload.received': received },
-    { $set: { 'upload.received': now, ...(done ? { status: 'draft' } : {}) } },
+    { $set: { 'upload.received': now, 'upload.at': new Date(), ...(done ? { status: 'draft' } : {}) } },
     { returnDocument: 'after' },
   ).lean();
   if (!saved) return res.status(409).json({ success: false, received });
@@ -170,7 +193,7 @@ router.put('/upload/video/:id', requireAuthApi, async (req, res) => {
 
 // Правка и «Опубликовать». Пока файл едет, можно и то и другое: нажали
 // «Опубликовать» раньше конца — пережатие начнётся, как только файл доедет.
-router.post('/upload/video/:id/edit', requireAuthApi, validate({
+router.post('/upload/video/:id/edit', requireAuthApi, requireNotBanned, validate({
   start: { type: 'number', min: 0, max: 86400, default: 0, label: 'Начало' },
   end: { type: 'number', min: 0, max: 86400, default: 0, label: 'Конец' },
   mute: { type: 'bool', default: false, label: 'Без звука' },
@@ -197,11 +220,13 @@ router.post('/upload/video/:id/edit', requireAuthApi, validate({
 
 // Своя картинка обложки. Лежит у нас до пережатия, знак ставится там же
 // (utils/galleryVideo.js, ownCover).
-router.post('/upload/video/:id/cover', requireAuthApi, uploadGallery.single('cover'), async (req, res) => {
+router.post('/upload/video/:id/cover', requireAuthApi, requireNotBanned, uploadCover.single('cover'), async (req, res) => {
   const v = await mine(req, { status: { $in: ['uploading', 'draft'] } });
   if (!v) return res.status(404).json({ success: false, message: 'Видео не найдено' });
   if (!req.file) return res.status(400).json({ success: false, message: 'Файл не передан' });
   try {
+    // Формат — до sharp (utils/image.js, imageFormat): metadata — уже разбор.
+    if (!imageFormat(req.file.buffer)) throw new Error('не jpeg, png или webp');
     await sharp(req.file.buffer, { limitInputPixels: USER_PIXELS }).metadata();
   } catch (e) {
     return res.status(400).json({ success: false, message: 'Не удалось обработать изображение' });

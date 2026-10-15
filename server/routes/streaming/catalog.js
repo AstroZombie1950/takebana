@@ -19,6 +19,7 @@ const { commonDataMiddleware, byNick } = require('./shared');
 const { notFound } = require('../../middleware/errors');
 const { fragmentOnly } = require('../../middleware/fragment');
 const authors = require('../../utils/authors');
+const adultCover = require('../../utils/adultCover');
 const userView = require('../../utils/userView');
 const { VENUE_AUTHOR, venueAuthor } = require('../../utils/venueAuthor');
 const restriction = require('../../utils/restrict');
@@ -72,7 +73,7 @@ async function findStreams(category, filters) {
     .limit(PAGE_SIZE)
     .populate('userId', 'nickname login email avatar')
     .populate('venue', VENUE_AUTHOR)
-    .select('title category city viewers thumbnail userId venue isActive subscribersOnly')
+    .select('title category city viewers thumbnail userId venue isActive subscribersOnly isAdult')
     .lean();
 
   // Эфир удалённого пользователя приходит с userId: null. Прежде на нём
@@ -82,6 +83,9 @@ async function findStreams(category, filters) {
     const displayName = userView.displayName(user);
     return {
       streamId: stream._id,
+      _id: stream._id,
+      userId: user._id,
+      isAdult: !!stream.isAdult,
       title: stream.title,
       category: stream.category,
       city: stream.city,
@@ -229,7 +233,10 @@ router.get('/streaming/:category/grid', fragmentOnly((req) => baseUrl(req.params
   }
 
   const filters = readFilters(category, req.query);
-  const streams = await findStreams(category, filters);
+  const [streams, viewer] = await Promise.all([findStreams(category, filters), adultCover.viewerOf(req.session.userId)]);
+  // Обложки 18+ — по зрителю (utils/adultCover.js): шапки здесь нет,
+  // и commonDataMiddleware, который знает зрителя, не стоит.
+  res.locals.viewer = viewer;
   // «N в эфире» над сеткой (partials/liveCount.ejs) catalog.js берёт отсюда.
   res.set('X-Live-Count', String(streams.length));
   res.render('partials/catalogGrid', {

@@ -38,6 +38,16 @@ const StreamSchema = new mongoose.Schema({
     type: String,
     required: true // Stream должен содержать streamKey
   },
+  // Адрес просмотра (14.10, аудит S3): каталог HLS эфира — /live/<playbackId>/.
+  // Ключ вещания постоянный и его видно на страницах всех открытых эфиров
+  // автора, поэтому плейлист по ключу открывал и его эфиры «для подписчиков»
+  // и 18+ прямой ссылкой. У каждого эфира свой, его получает только тот,
+  // кому можно смотреть (routes/streaming/streamPages.js). Новый — у каждого
+  // нового эфира и при каждой правке черновика (utils/playback.js).
+  playbackId: {
+    type: String,
+    default: () => require('../utils/playback').newId()
+  },
   isActive: {
     type: Boolean,
     default: true

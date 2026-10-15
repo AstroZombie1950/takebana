@@ -24,21 +24,24 @@ const engagement = require('./engagement');
 const { encode, schedule } = require('./videoEncode');
 const { stamp } = require('./watermark');
 const GalleryVideo = require('../models/GalleryVideo');
+const limits = require('./limits');
 
 // Обложка своя — под плитку галереи и постер плеера.
 const COVER = { width: 1280, height: 1280 };
 
-const MAX_SECONDS = 60 * 60;
-// По весу предела для человека нет — только по длительности. 8 ГБ —
-// технический потолок, чтобы один файл не забил диск сервера.
-const MAX_MB = 8192;
-const MAX_PER_USER = 30;
+// Длина, вес и число роликов — из панели, свои у человека (utils/limits.js,
+// с 15.10; было час, 8 ГБ и 30). Незаконченное (uploading + draft) лежит
+// на диске сервера, а не в Bunny: сумма заявленных размеров на человека —
+// не больше двух роликов по потолку (limits.pendingBytes, AUDIT-2026-10-14, S8).
 // Название и описание — те же пределы, что у записи эфира (routes/watch.js).
 const TITLE_MAX = 120;
 const DESCRIPTION_MAX = 5000;
 const CHUNK_MB = 8;
-// Недокачанное и неопубликованное живёт столько, потом убирается.
-const DRAFT_DAYS = 3;
+// Недокачанное и неопубликованное живёт сутки, потом убирается (было трое
+// суток до 14.10, AUDIT-2026-10-14, S8): брошенная загрузка дольше места
+// не держит. Едущий файл считается от последнего куска, а не от начала —
+// восемь гигабайт по мобильной сети едут и дольше суток.
+const DRAFT_DAYS = 1;
 const UPLOAD_DIR = path.join(__dirname, '..', 'media', 'upload');
 const partPath = (id) => path.join(UPLOAD_DIR, `${id}.part`);
 const coverPath = (id) => path.join(UPLOAD_DIR, `${id}.cover`);
@@ -51,7 +54,7 @@ async function convert(doc, src, queuedAt = Date.now()) {
   const t = { queueMs: Date.now() - queuedAt };
   let at = Date.now();
   try {
-    const out = await encode(src, dir, { maxSeconds: MAX_SECONDS, log: { video: String(doc._id) }, edit: doc.edit || {} });
+    const out = await encode(src, dir, { maxSeconds: limits.videoSeconds(await limits.forUser(doc.userId)), log: { video: String(doc._id) }, edit: doc.edit || {} });
     t.encodeMs = Date.now() - at;
     at = Date.now();
     const videoUrl = await storage.put(out.video, `${base}.mp4`, 'video/mp4');
@@ -162,14 +165,40 @@ async function sweep() {
 
 // Брошенные загрузки и черновики старше DRAFT_DAYS — вон вместе с файлом.
 async function sweepDrafts() {
-  const old = await GalleryVideo.find({
-    status: { $in: ['uploading', 'draft'] },
-    createdAt: { $lt: new Date(Date.now() - DRAFT_DAYS * 864e5) },
-  }).lean().catch(() => []);
-  for (const doc of old) await remove(doc).catch((e) => errorLog.server(e, 'gallery.sweepDrafts'));
+  const cutoff = new Date(Date.now() - DRAFT_DAYS * 864e5);
+  let old = [];
+  try {
+    old = await GalleryVideo.find({
+      createdAt: { $lt: cutoff },
+      $or: [{ status: 'draft' }, { status: 'uploading', 'upload.at': { $not: { $gte: cutoff } } }],
+    }).lean();
+  } catch (e) {
+    return errorLog.server(e, 'gallery.sweepDrafts');
+  }
+  let removed = 0;
+  let bytes = 0;
+  for (const doc of old) {
+    try {
+      await remove(doc);
+      removed += 1;
+      bytes += (doc.upload && doc.upload.received) || 0;
+    } catch (e) {
+      errorLog.server(e, 'gallery.sweepDrafts', { video: String(doc._id) });
+    }
+  }
+  if (removed) console.log(`[gallery] убрано брошенных черновиков: ${removed}, ${(bytes / 1048576).toFixed(0)} МБ`);
+}
+
+// Сколько байт у человека в незаконченных загрузках (заявлено, не доехало).
+async function pendingBytes(userId) {
+  const [r] = await GalleryVideo.aggregate([
+    { $match: { userId: new GalleryVideo.base.Types.ObjectId(String(userId)), status: { $in: ['uploading', 'draft'] } } },
+    { $group: { _id: null, n: { $sum: '$upload.size' } } },
+  ]);
+  return r ? r.n : 0;
 }
 
 module.exports = {
-  enabled: storage.enabled, MAX_SECONDS, MAX_MB, MAX_PER_USER, CHUNK_MB, TITLE_MAX, DESCRIPTION_MAX,
-  partPath, coverPath, enqueue, publishIfReady, remove, sweep, sweepDrafts,
+  enabled: storage.enabled, CHUNK_MB, TITLE_MAX, DESCRIPTION_MAX,
+  UPLOAD_DIR, partPath, coverPath, enqueue, publishIfReady, remove, sweep, sweepDrafts, pendingBytes,
 };

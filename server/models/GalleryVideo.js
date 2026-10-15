@@ -28,6 +28,9 @@ const galleryVideoSchema = new Schema({
     name: { type: String, default: '' },
     size: { type: Number, default: 0 },
     received: { type: Number, default: 0 },
+    // Когда пришёл последний кусок: брошенную загрузку уборка черновиков
+    // считает от него, а не от начала (utils/galleryVideo.js, sweepDrafts).
+    at: { type: Date, default: null },
   },
   // Правка со страницы загрузки: обрезка (секунды от начала исходника),
   // без звука, кадр обложки. Своя картинка обложки — media/upload/<id>.cover,

@@ -17,7 +17,9 @@
   if (!form) return;
 
   var MAX = 10;              // фото и видео в посте — utils/posts.js, MEDIA_MAX
-  var PHOTO_MB = 10;         // фото галереи — routes/streaming/uploads.js
+  // Вес фото — из лимитов человека (utils/limits.js), был 10 МБ.
+  var PHOTO_MB = Number(form.dataset.photoMb) || 10;
+
   var openBtn = form.querySelector('[data-compose-open]');
   var body = form.querySelector('.tk-compose__body');
   var text = form.elements.text;
@@ -38,7 +40,7 @@
   openBtn.addEventListener('click', function () { open(true); });
 
   // Отмена — всё прочь: и фото, и уже начатые ролики (черновик на сервере
-  // тоже, иначе он висел бы до уборки через три дня).
+  // тоже, иначе он висел бы до уборки через сутки).
   form.querySelector('[data-compose-cancel]').addEventListener('click', function () {
     items.slice().forEach(drop);
     text.value = '';
@@ -52,6 +54,9 @@
     items.forEach(function (it) {
       if (it.kind !== 'video' || it.id !== d.id) return;
       it.done = d.status !== 'uploading';
+      // Сервер не принимает (мало места) — сказать один раз, загрузка ждёт сама.
+      if (d.held && !it.held) toast(t('upload.serverFull'), 'error');
+      it.held = d.held;
       var bar = it.el.querySelector('i');
       if (bar && d.size) bar.style.width = Math.round(100 * d.received / d.size) + '%';
       it.el.classList.toggle('is-done', it.done);

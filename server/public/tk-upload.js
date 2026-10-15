@@ -98,7 +98,7 @@
 
   function emit(job) {
     document.dispatchEvent(new CustomEvent('tk:upload', {
-      detail: { id: job.id, status: job.status, received: job.received, size: job.size, name: job.name, error: job.error || '' },
+      detail: { id: job.id, status: job.status, received: job.received, size: job.size, name: job.name, error: job.error || '', held: !!job.held },
     }));
     chip();
   }
@@ -204,6 +204,7 @@
           }
           job.received = r.body.video.received;
           job.status = r.body.video.status;
+          job.held = false;
           emit(job);
           if (job.status !== 'uploading') return finish(job, job.status);
           return step();
@@ -217,6 +218,14 @@
           retry('retry');
           job.received = r.body.received;
           return wait(pause).then(function () { pause = Math.min(pause * 2, 30000); return step(); });
+        }
+        // На сервере мало места (utils/diskGuard.js): загрузка стоит, на
+        // карточке — почему; пробуем раз в минуту, место освободят — поедет.
+        if (r.status === 507) {
+          job.held = true;
+          retry('disk_full');
+          emit(job);
+          return wait(60000).then(step);
         }
         // Черновик удалили (на профиле или в другой вкладке) — всё.
         if (r.status === 404) return finish(job, 'gone');

@@ -17,12 +17,15 @@ const { isPlainFileName } = require('./safePath');
 const recording = require('./recording');
 const errorLog = require('./errorLog');
 const streamLog = require('./streamLog');
+const limits = require('./limits');
+const { audit } = require('./audit');
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 
 // Отсюда плейлист и сегменты раздаёт nginx (location /live/ в
 // ops/nginx/takebana.conf), а локально — express.static в app.js: зритель
-// забирает /live/<streamKey>/index.m3u8.
+// забирает /live/<playbackId>/index.m3u8 (адрес просмотра, utils/playback.js;
+// у камеры заведения — свой ключ).
 const HLS_ROOT = path.join(__dirname, '..', 'media', 'live');
 
 // Адрес CDN перед /live/ — HLS_BASE_URL, например https://live.takebana.com.
@@ -179,7 +182,7 @@ const note = (streamKey, job, e, d) => (job.log ? job.log(e, d) : streamLog.even
 
 function watchReady(streamKey, job) {
     const t0 = Date.now();
-    const file = path.join(dirFor(streamKey), 'index.m3u8');
+    const file = path.join(dirFor(job.out), 'index.m3u8');
     const tick = () => {
         if (job.stopping || jobs.get(streamKey) !== job) return;
         if (fs.existsSync(file)) return note(streamKey, job, 'hls.ready', { ms: Date.now() - t0 });
@@ -189,8 +192,10 @@ function watchReady(streamKey, job) {
     setTimeout(tick, 500).unref();
 }
 
-function dirFor(streamKey) {
-    return path.join(HLS_ROOT, streamKey);
+// out — имя каталога: у эфира его адрес просмотра (utils/playback.js),
+// у камеры заведения — свой ключ (utils/venueCam.js, hlsKey).
+function dirFor(out) {
+    return path.join(HLS_ROOT, out);
 }
 
 // Чистим только своё: плейлист и сегменты. Каталог не удаляем — его может
@@ -429,11 +434,29 @@ const TIMING = [
 ];
 
 function spawnFfmpeg(streamKey, job) {
-    const dir = dirFor(streamKey);
+    const dir = dirFor(job.out);
     // Каждый запуск — новый кусок записи: после паузы и перезапуска тоже.
-    const part = job.input ? null : recording.newPart(streamKey, { unmarked: job.mark === 'overlay' });
+    // Запись упёрлась в предел длины (job.recordMs, utils/limits.js) — эфир
+    // идёт без неё: ffmpeg перезапускается без куска (recCap ниже), одна
+    // заминка в секунду-две у зрителей, зато диск не растёт.
+    const left = job.input ? 0 : recording.leftMs(streamKey, job.recordMs);
+    const part = job.input || left <= 0 ? null : recording.newPart(streamKey, { unmarked: job.mark === 'overlay' });
+    if (!job.input && left <= 0 && !job.capLogged) {
+        job.capLogged = true;
+        note(streamKey, job, 'hls.record.limit', { hours: job.recordMs / 3600000 });
+        audit(null, 'recording.limit', { actor: job.owner || null, targetType: 'stream', targetLabel: streamKey, meta: { hours: job.recordMs / 3600000 } });
+    }
     const proc = spawn(FFMPEG, ffmpegArgs(streamKey, dir, job.profile, part, job.audio, job.input, job.mark === 'frame', job.daily), { stdio: ['ignore', 'ignore', 'pipe'] });
     job.proc = proc;
+    clearTimeout(job.recCap);
+    if (part) {
+        job.recCap = setTimeout(() => {
+            if (job.stopping || job.proc !== proc || proc.exitCode !== null) return;
+            job.capping = true;
+            proc.kill('SIGTERM');
+        }, left);
+        job.recCap.unref();
+    }
     // Плейлист ждём раз на конвейер: перезапуск ffmpeg каталог не стирает,
     // и прежний index.m3u8 давал «первый плейлист» после каждого обрыва.
     if (!job.watched) { job.watched = true; watchReady(streamKey, job); }
@@ -480,6 +503,13 @@ function spawnFfmpeg(streamKey, job) {
         if (job.stopping) {
             finish(streamKey, job);
             clean(dir);
+            return;
+        }
+
+        // Остановили сами: запись дошла до предела — дальше без неё, не в счёт обрывов.
+        if (job.capping) {
+            job.capping = false;
+            spawnFfmpeg(streamKey, job);
             return;
         }
 
@@ -545,15 +575,17 @@ function cpuCheck() {
 // Эфир — на postPublish, то есть после проверки подписи и ключа.
 // Камера заведения — по готовности потока в MediaMTX (utils/venueCam.js):
 // opts.input — его адрес, opts.profile — 'venue' или 'venueCopy', opts.log —
-// её хронология.
+// её хронология. opts.out — каталог HLS (адрес просмотра эфира, 14.10);
+// без него — сам ключ.
 function start(streamKey, opts = {}) {
-    if (!isPlainFileName(streamKey)) {
-        console.error(`[hls] некорректный streamKey, транскод не запущен: ${streamKey}`);
+    const out = opts.out || streamKey;
+    if (!isPlainFileName(streamKey) || !isPlainFileName(out)) {
+        console.error(`[hls] некорректный streamKey или каталог, транскод не запущен: ${streamKey} → ${out}`);
         return;
     }
     if (jobs.has(streamKey)) return;
 
-    const dir = dirFor(streamKey);
+    const dir = dirFor(out);
     try {
         fs.mkdirSync(dir, { recursive: true });
     } catch (e) {
@@ -590,14 +622,16 @@ function start(streamKey, opts = {}) {
     const profile = opts.profile || (kept && kept.profile) || (full < MAX_FULL_TRANSCODES && room ? 'full' : mark === 'frame' ? 'lite' : 'copy');
     if (!opts.profile) held.set(streamKey, { profile, mark, until: Infinity });
 
-    const job = { proc: null, restarts: 0, stopping: false, timer: null, profile, mark, input: opts.input || null, log: opts.log || null, daily: !!opts.daily, audio: true, silent: false };
+    // recordMs — предел длины записи владельца (utils/limits.js); owner — ему в журнал.
+    const job = { out, proc: null, restarts: 0, stopping: false, timer: null, profile, mark, input: opts.input || null, log: opts.log || null, daily: !!opts.daily, audio: true, silent: false,
+        recordMs: opts.recordMs || limits.recordingMs(), owner: opts.owner || null, recCap: null, capping: false, capLogged: false };
     job.done = new Promise((resolve) => { job.resolve = resolve; });
     jobs.set(streamKey, job);
     spawnFfmpeg(streamKey, job);
     cpuCheck();
     const what = PROFILES[profile].copy ? 'копия видео' : 'транскод ' + PROFILES[profile].renditions.map((r) => r.height + 'p').join('/');
     const why = kept ? ' (режим эфира до обрыва)' : profile === 'lite' || profile === 'copy' ? ' (лимит полных транскодов)' : isVenue(profile) ? ' (камера заведения)' : '';
-    console.log(`[hls ${streamKey}] ${what}, знак ${mark === 'frame' ? 'в кадре' : 'поверх плеера'}${why} → /live/${streamKey}/index.m3u8`);
+    console.log(`[hls ${streamKey}] ${what}, знак ${mark === 'frame' ? 'в кадре' : 'поверх плеера'}${why} → /live/${out}/index.m3u8`);
     note(streamKey, job, 'hls.start', { profile, mark, kept: !!kept });
 }
 
@@ -620,6 +654,7 @@ function stop(streamKey, opts = {}) {
 
     job.stopping = true;
     if (job.timer) clearTimeout(job.timer);
+    clearTimeout(job.recCap);
     note(streamKey, job, 'hls.stop');
 
     if (job.proc && job.proc.exitCode === null) {
@@ -631,7 +666,7 @@ function stop(streamKey, opts = {}) {
         }, 5000).unref();
     } else {
         finish(streamKey, job);
-        clean(dirFor(streamKey));
+        clean(dirFor(job.out));
     }
     console.log(`[hls ${streamKey}] остановлен`);
 }

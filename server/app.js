@@ -216,6 +216,8 @@ app.use(require('./utils/theme').pageLocals);
 // Нужен всем страницам, а commonDataMiddleware стоит не на всех.
 const places = require('./utils/places');
 const topics = require('./utils/topics');
+const adultCover = require('./utils/adultCover');
+const siteLimits = require('./utils/limits');
 app.use((req, res, next) => {
   res.locals.path = req.path;
   res.locals.url = req.originalUrl;
@@ -230,6 +232,15 @@ app.use((req, res, next) => {
   res.locals.placeOptions = (kind) => places.options(kind, res.locals.lang);
   // Подпись темы поста (utils/topics.js): ключ словаря раздела или темы.
   res.locals.topicI18n = topics.i18nOf;
+  // Обложка 18+ на карточке: автору и подтвердившему — как есть, остальным —
+  // размытая копия (utils/adultCover.js). Зритель — из commonDataMiddleware;
+  // где его нет, маршрут кладёт res.locals.viewer сам.
+  // Пределы загрузок из панели (utils/limits.js): длина кружка и т. п.
+  res.locals.siteLimits = siteLimits.get();
+  res.locals.cover = (kind, item, src) => adultCover.pick(kind, item, src, res.locals.viewer || {
+    id: req.session && req.session.userId,
+    adult: !!(res.locals.currentUser && res.locals.currentUser.adultConfirmedAt),
+  });
   next();
 });
 // У кого не открывается CDN — тому адреса медиа подменяются на наши
@@ -290,6 +301,9 @@ require('./utils/posts').start();
 require('./utils/venueMenu').sweep();
 // Фото галереи из строк User.gallery — в документы (25.09.2026), один раз.
 require('./utils/galleryPhotos').start();
+adultCover.start();
+siteLimits.start();
+require('./utils/bunnyBalance').start();
 // Готовые записи без нескольких качеств — в очередь пережатия (utils/recordingHls.js).
 require('./utils/recordingHls').resume();
 // Файл замера для страницы /check — на диск и в хранилище CDN записей.
@@ -330,6 +344,8 @@ app.use(require('./routes/pages'));
 // robots.txt и карта сайта (docs/seo/).
 app.use(require('./routes/seo'));
 app.use(require('./routes/streamStatus'));
+// Размытые обложки 18+ для витрины (utils/adultCover.js).
+app.use(require('./routes/blur'));
 
 // Обработчик ошибок — последним, после всех маршрутов: он ловит то, что
 // до него не поймал никто. Без него ошибка уходила во встроенный обработчик

@@ -57,10 +57,44 @@ function newPart(streamKey, { unmarked = false } = {}) {
   return path.join(dir, `part-${Date.now()}.ts`);
 }
 
+// Предел длины записи (utils/limits.js, recordingHours, с 15.10 — 6 часов
+// по умолчанию; до того предела не было): сколько ещё можно писать этому
+// ключу. Записано — по кускам: от метки в имени до последней правки файла.
+// Эфир дольше предела идёт дальше, только без записи (utils/hls.js).
+function leftMs(streamKey, limitMs) {
+  const dir = dirFor(streamKey);
+  if (!dir) return 0;
+  let used = 0;
+  try {
+    for (const n of fs.readdirSync(dir)) {
+      const m = /^part-(\d+)\.ts$/.exec(n);
+      if (m) used += Math.max(0, fs.statSync(path.join(dir, n)).mtimeMs - Number(m[1]));
+    }
+  } catch (e) {
+    if (e.code !== 'ENOENT') errorLog.media(e, 'recording.leftMs', { streamKey });
+  }
+  return Math.max(0, limitMs - used);
+}
+
 // Куски прошлого эфира этого ключа — при создании нового и без сохранения.
 async function discard(streamKey) {
   const dir = dirFor(streamKey);
   if (dir) await fs.promises.rm(dir, { recursive: true, force: true });
+}
+
+// Есть ли что сохранять: хоть один непустой кусок. Брошенный эфир
+// (jobs/streamCleanup.js) с кусками сохраняется сам, без них — удаляется.
+async function hasParts(streamKey) {
+  const dir = dirFor(streamKey);
+  if (!dir) return false;
+  let names;
+  try { names = await fs.promises.readdir(dir); } catch { return false; }
+  for (const n of names) {
+    if (!/^part-\d+\.ts$/.test(n)) continue;
+    const st = await fs.promises.stat(path.join(dir, n)).catch(() => null);
+    if (st && st.size > 0) return true;
+  }
+  return false;
 }
 
 function run(bin, args) {
@@ -321,4 +355,4 @@ function clock(seconds) {
   return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
 }
 
-module.exports = { enabled: storage.enabled, newPart, discard, save, remove, sweep, clock };
+module.exports = { enabled: storage.enabled, newPart, leftMs, discard, hasParts, save, remove, sweep, clock };

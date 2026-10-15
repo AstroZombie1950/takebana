@@ -28,6 +28,7 @@ const os = require('os');
 const path = require('path');
 const { stamp } = require('./watermark');
 const storage = require('./storage');
+const limits = require('./limits');
 const errorLog = require('./errorLog');
 const { TRANSLIT } = require('./nickname');
 const { FFMPEG, run, probe, containerOf, input, encode, schedule } = require('./videoEncode');
@@ -37,9 +38,9 @@ const AUDIO_FORMAT = { mp3: 'mp3', m4a: 'mov', ogg: 'ogg', wav: 'wav' };
 const Message = require('../models/Message');
 
 const MB = 1024 * 1024;
-const VOICE_SECONDS = 5 * 60;
-const ROUND_SECONDS = 60;
-const VIDEO_SECONDS = 10 * 60;
+// Длины голосового, кружка и видео и веса файлов — из панели, свои у
+// отправителя (utils/limits.js, с 15.10; были 5 минут, минута и 10 минут).
+// inspect() кладёт действующие лимиты в info.lim — по ним и пережатие.
 
 // Сигнатуры: первые байты файла. at — смещение.
 const SIG = {
@@ -80,43 +81,43 @@ function plainText(head) {
 
 // Расширение → вид, тип для раздачи, предел и проверка содержимого.
 const TYPES = {
-  jpg:  { kind: 'image', mime: 'image/jpeg', mb: 10, ok: (h) => is(h, 'jpeg') },
-  jpeg: { kind: 'image', mime: 'image/jpeg', mb: 10, ok: (h) => is(h, 'jpeg') },
-  png:  { kind: 'image', mime: 'image/png', mb: 10, ok: (h) => is(h, 'png') },
-  webp: { kind: 'image', mime: 'image/webp', mb: 10, ok: (h) => is(h, 'webp') },
-  gif:  { kind: 'image', mime: 'image/gif', mb: 10, ok: (h) => is(h, 'gif') },
+  jpg:  { kind: 'image', mime: 'image/jpeg', cap: 'chatPhotoMb', ok: (h) => is(h, 'jpeg') },
+  jpeg: { kind: 'image', mime: 'image/jpeg', cap: 'chatPhotoMb', ok: (h) => is(h, 'jpeg') },
+  png:  { kind: 'image', mime: 'image/png', cap: 'chatPhotoMb', ok: (h) => is(h, 'png') },
+  webp: { kind: 'image', mime: 'image/webp', cap: 'chatPhotoMb', ok: (h) => is(h, 'webp') },
+  gif:  { kind: 'image', mime: 'image/gif', cap: 'chatPhotoMb', ok: (h) => is(h, 'gif') },
 
-  pdf:  { kind: 'file', mime: 'application/pdf', mb: 25, ok: (h) => is(h, 'pdf') },
-  docx: { kind: 'file', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', mb: 25, ok: (h) => is(h, 'zip') },
-  xlsx: { kind: 'file', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', mb: 25, ok: (h) => is(h, 'zip') },
-  pptx: { kind: 'file', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', mb: 25, ok: (h) => is(h, 'zip') },
-  odt:  { kind: 'file', mime: 'application/vnd.oasis.opendocument.text', mb: 25, ok: (h) => is(h, 'zip') },
-  ods:  { kind: 'file', mime: 'application/vnd.oasis.opendocument.spreadsheet', mb: 25, ok: (h) => is(h, 'zip') },
-  rtf:  { kind: 'file', mime: 'application/rtf', mb: 25, ok: (h) => is(h, 'rtf') },
-  txt:  { kind: 'file', mime: 'text/plain; charset=utf-8', mb: 25, ok: plainText },
-  csv:  { kind: 'file', mime: 'text/csv; charset=utf-8', mb: 25, ok: plainText },
-  zip:  { kind: 'file', mime: 'application/zip', mb: 50, ok: (h) => is(h, 'zip') },
-  '7z': { kind: 'file', mime: 'application/x-7z-compressed', mb: 50, ok: (h) => is(h, '7z') },
-  rar:  { kind: 'file', mime: 'application/vnd.rar', mb: 50, ok: (h) => is(h, 'rar') },
+  pdf:  { kind: 'file', mime: 'application/pdf', cap: 'chatDocMb', ok: (h) => is(h, 'pdf') },
+  docx: { kind: 'file', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', cap: 'chatDocMb', ok: (h) => is(h, 'zip') },
+  xlsx: { kind: 'file', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', cap: 'chatDocMb', ok: (h) => is(h, 'zip') },
+  pptx: { kind: 'file', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', cap: 'chatDocMb', ok: (h) => is(h, 'zip') },
+  odt:  { kind: 'file', mime: 'application/vnd.oasis.opendocument.text', cap: 'chatDocMb', ok: (h) => is(h, 'zip') },
+  ods:  { kind: 'file', mime: 'application/vnd.oasis.opendocument.spreadsheet', cap: 'chatDocMb', ok: (h) => is(h, 'zip') },
+  rtf:  { kind: 'file', mime: 'application/rtf', cap: 'chatDocMb', ok: (h) => is(h, 'rtf') },
+  txt:  { kind: 'file', mime: 'text/plain; charset=utf-8', cap: 'chatDocMb', ok: plainText },
+  csv:  { kind: 'file', mime: 'text/csv; charset=utf-8', cap: 'chatDocMb', ok: plainText },
+  zip:  { kind: 'file', mime: 'application/zip', cap: 'chatArchiveMb', ok: (h) => is(h, 'zip') },
+  '7z': { kind: 'file', mime: 'application/x-7z-compressed', cap: 'chatArchiveMb', ok: (h) => is(h, '7z') },
+  rar:  { kind: 'file', mime: 'application/vnd.rar', cap: 'chatArchiveMb', ok: (h) => is(h, 'rar') },
 
-  mp3:  { kind: 'audio', mime: 'audio/mpeg', mb: 50, ok: (h) => is(h, 'id3') || mp3Frame(h) },
-  m4a:  { kind: 'audio', mime: 'audio/mp4', mb: 50, ok: (h) => is(h, 'ftyp') },
-  ogg:  { kind: 'audio', mime: 'audio/ogg', mb: 50, ok: (h) => is(h, 'ogg') },
-  wav:  { kind: 'audio', mime: 'audio/wav', mb: 50, ok: (h) => is(h, 'wav') },
+  mp3:  { kind: 'audio', mime: 'audio/mpeg', cap: 'chatArchiveMb', ok: (h) => is(h, 'id3') || mp3Frame(h) },
+  m4a:  { kind: 'audio', mime: 'audio/mp4', cap: 'chatArchiveMb', ok: (h) => is(h, 'ftyp') },
+  ogg:  { kind: 'audio', mime: 'audio/ogg', cap: 'chatArchiveMb', ok: (h) => is(h, 'ogg') },
+  wav:  { kind: 'audio', mime: 'audio/wav', cap: 'chatArchiveMb', ok: (h) => is(h, 'wav') },
 
-  mp4:  { kind: 'video', mime: 'video/mp4', mb: 200, ok: (h) => is(h, 'ftyp') },
-  mov:  { kind: 'video', mime: 'video/quicktime', mb: 200, ok: (h) => is(h, 'ftyp') || movAtom(h) },
-  webm: { kind: 'video', mime: 'video/webm', mb: 200, ok: (h) => is(h, 'ebml') },
+  mp4:  { kind: 'video', mime: 'video/mp4', cap: 'chatVideoMb', ok: (h) => is(h, 'ftyp') },
+  mov:  { kind: 'video', mime: 'video/quicktime', cap: 'chatVideoMb', ok: (h) => is(h, 'ftyp') || movAtom(h) },
+  webm: { kind: 'video', mime: 'video/webm', cap: 'chatVideoMb', ok: (h) => is(h, 'ebml') },
 };
+
+// cap — какой лимит веса (utils/limits.js, с 15.10; были числа здесь же):
+// фото 10 МБ, документы 25, архивы и музыка 50, видео 200.
 
 // Голосовое и кружок пишет браузер: Chrome и Firefox — webm, Safari — mp4.
 const RECORDED = {
-  voice: { mb: 10, types: { webm: (h) => is(h, 'ebml'), m4a: (h) => is(h, 'ftyp') }, bad: 'Голосовое не распознано', big: 'Голосовое слишком большое' },
-  round: { mb: 60, types: { webm: (h) => is(h, 'ebml'), mp4: (h) => is(h, 'ftyp') }, bad: 'Кружок не распознан', big: 'Кружок слишком большой' },
+  voice: { mb: limits.voiceMb, types: { webm: (h) => is(h, 'ebml'), m4a: (h) => is(h, 'ftyp') }, bad: 'Голосовое не распознано', big: 'Голосовое слишком большое' },
+  round: { mb: limits.roundMb, types: { webm: (h) => is(h, 'ebml'), mp4: (h) => is(h, 'ftyp') }, bad: 'Кружок не распознан', big: 'Кружок слишком большой' },
 };
-
-// Самый большой предел из всех — для multer: точный проверяется здесь по виду.
-const MAX_MB = Math.max(...Object.values(TYPES).map((x) => x.mb));
 
 const bad = (message) => Object.assign(new Error(message), { status: 400, expose: true });
 
@@ -158,7 +159,7 @@ async function readHead(file) {
 // Проверка принятого файла: вид, тип, имя. Ничего не обрабатывает — это
 // store(). special — 'voice' или 'round': записанное на странице.
 // Бросает 400 с понятным текстом; временный файл удаляет вызывающий.
-async function inspect(file, { special = '' } = {}) {
+async function inspect(file, { special = '', lim = limits.get() } = {}) {
   const name = originalName(file);
   const ext = extOf(name);
   const head = await readHead(file.path);
@@ -167,16 +168,16 @@ async function inspect(file, { special = '' } = {}) {
   if (rec) {
     // Первые байты — в журнал панели: по ним видно, что записал телефон.
     if (!rec.types[ext] || !rec.types[ext](head)) throw Object.assign(bad(rec.bad), { head: head.subarray(0, 16).toString('hex') });
-    if (file.size > rec.mb * MB) throw bad(rec.big);
+    if (file.size > rec.mb(lim) * MB) throw bad(rec.big);
     const out = special === 'voice' ? 'voice.m4a' : 'round.mp4';
-    return { kind: special, ext, mime: special === 'voice' ? 'audio/mp4' : 'video/mp4', name: out, size: file.size, path: file.path };
+    return { kind: special, ext, mime: special === 'voice' ? 'audio/mp4' : 'video/mp4', name: out, size: file.size, path: file.path, lim };
   }
 
   const type = TYPES[ext];
   if (!type) throw bad('Такие файлы не принимаем');
-  if (file.size > type.mb * MB) throw bad(`Файл больше ${type.mb} МБ`);
+  if (file.size > lim[type.cap] * MB) throw bad(`Файл больше ${lim[type.cap]} МБ`);
   if (!type.ok(head)) throw bad('Содержимое файла не совпадает с его типом');
-  return { kind: type.kind, ext, mime: type.mime, name, size: file.size, path: file.path };
+  return { kind: type.kind, ext, mime: type.mime, name, size: file.size, path: file.path, lim };
 }
 
 // Волна голосового: 48 столбиков громкости 0–31. Звук — моно 2 кГц,
@@ -238,11 +239,11 @@ async function storeVideo(info, base, dir) {
     const queuedAt = Date.now();
     out = await schedule(() => {
       info.queueMs = Date.now() - queuedAt;
-      return encode(info.path, dir, { maxSeconds: round ? ROUND_SECONDS : VIDEO_SECONDS, round, log: { key: base } })
+      return encode(info.path, dir, { maxSeconds: round ? info.lim.roundSeconds : info.lim.chatVideoMinutes * 60, round, log: { key: base } })
         .finally(() => { info.encodeMs = Date.now() - queuedAt - info.queueMs; });
     });
   } catch (e) {
-    if (e.reason === 'long') throw Object.assign(bad(round ? 'Кружок длиннее минуты' : 'Видео длиннее 10 минут'), { reason: 'long' });
+    if (e.reason === 'long') throw Object.assign(bad(round ? 'Кружок длиннее, чем можно записать' : 'Видео длиннее, чем можно отправить'), { reason: 'long' });
     if (e.reason === 'novideo') throw Object.assign(bad('В файле нет видео'), { cause: e, reason: 'novideo' });
     throw e;
   }
@@ -276,7 +277,7 @@ async function storeVoice(info, base, dir) {
   }
   const p = await probe(out);
   if (!p || !p.audio) throw bad('Голосовое не распознано');
-  if (p.duration > VOICE_SECONDS + 2) throw bad('Голосовое длиннее 5 минут');
+  if (p.duration > info.lim.voiceSeconds + 2) throw bad('Голосовое длиннее, чем можно записать');
   const wave = await waveOf(out).catch(() => null);
   const [file] = await putAll([[out, `${base}.m4a`, 'audio/mp4']]);
   return { key: file.key, url: file.url, duration: Math.max(1, Math.round(p.duration)), mime: 'audio/mp4', ...(wave ? { wave } : {}) };
@@ -328,4 +329,4 @@ async function deleteMessages(filter) {
 // Пережимается минуту-другую — отвечаем 202, сообщение приходит сокетом.
 const SLOW = new Set(['video', 'round']);
 
-module.exports = { enabled: storage.enabled, MAX_MB, SLOW, inspect, store, release, deleteMessages };
+module.exports = { enabled: storage.enabled, SLOW, inspect, store, release, deleteMessages };

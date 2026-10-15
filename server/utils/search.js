@@ -192,6 +192,7 @@ async function findStreams(rx, limit) {
     .lean();
   return streams.filter((s) => s.userId).map((s) => ({
     _id: s._id,
+    userId: s.userId._id,
     title: s.title,
     category: s.category,
     city: s.city,
@@ -232,6 +233,7 @@ const RECORDING_CARD = 'title duration thumb isAdult createdAt recordedAt userId
 function recordingCards(recordings) {
   return recordings.filter((r) => r.userId).map((r) => ({
     _id: r._id,
+    userId: r.userId._id,
     title: r.title,
     duration: r.duration,
     thumb: r.thumb && r.thumb.url ? r.thumb.url : null,

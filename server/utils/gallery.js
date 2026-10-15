@@ -83,7 +83,8 @@ function videos(owner, self, { skip = 0, limit = PAGE } = {}) {
 
 // Записи эфиров: чужому — только готовые, автору — и те, что ещё
 // склеиваются или не склеились.
-const REC_FIELDS = 'title status duration thumb isAdult createdAt views';
+// userId — обложке 18+: автору она видна как есть (utils/adultCover.js).
+const REC_FIELDS = 'title status duration thumb isAdult createdAt views userId';
 const recFilter = (owner, self) => ({ ...whose(owner), ...(self ? {} : { status: 'ready' }) });
 
 function recordings(owner, self, { skip = 0, limit = PAGE } = {}) {

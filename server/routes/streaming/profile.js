@@ -9,9 +9,10 @@ const fs = require('fs');
 const path = require('path');
 const User = require('../../models/User');
 const Subscription = require('../../models/Subscription');
-const { requireAuth } = require('../../middleware/auth');
+const { requireAuth, requireNotBanned } = require('../../middleware/auth');
 const { resolveWithin, isPlainFileName } = require('../../utils/safePath');
-const { UPLOADS, uploadAvatar, uploadGallery } = require('./uploads');
+const { UPLOADS, uploadAvatar, galleryUpload } = require('./uploads');
+const limits = require('../../utils/limits');
 const GalleryVideo = require('../../models/GalleryVideo');
 const GalleryPhoto = require('../../models/GalleryPhoto');
 const Establishments = require('../../models/Establishments');
@@ -106,7 +107,7 @@ const avatarOf = (user) => userView.avatarStyle(user);
 // Загрузка аватарки профиля. Прежнее фото с диска удаляется.
 // requireAuth стоит ПЕРЕД multer намеренно: иначе файл успевал лечь на диск
 // до проверки сессии — аноним получал 401, но место на диске уже занял.
-router.post('/profile/avatar', requireAuth, uploadAvatar.single('avatar'), async (req, res) => {
+router.post('/profile/avatar', requireAuth, requireNotBanned, uploadAvatar.single('avatar'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'Файл не передан' });
   }
@@ -147,7 +148,8 @@ router.delete('/profile/avatar', requireAuth, async (req, res) => {
   res.json({ success: true, avatar: avatarOf(user) });
 });
 
-// Загрузка фотографий в галерею (до MAX_PER_USER суммарно, за раз — до
+// Загрузка фотографий в галерею (до лимита galleryPhotos суммарно — свой
+// у человека, utils/limits.js, было 100; за раз — до
 // PER_REQUEST). Файлы multer держит в памяти, поэтому сколько принять,
 // решается до него: раньше до 100 файлов по 10 МБ читались целиком и только
 // потом упирались в лимит. Больше остатка multer не примет — 400.
@@ -155,7 +157,7 @@ router.delete('/profile/avatar', requireAuth, async (req, res) => {
 //
 // Подписи (25.09) — полем captions, JSON-массивом в порядке файлов: у формы
 // с файлами тело не JSON, и validate() до него не дотягивается.
-const { MAX_PER_USER: PHOTOS_MAX, PER_REQUEST: PHOTOS_PER_REQUEST, CAPTION_MAX } = galleryPhotos;
+const { PER_REQUEST: PHOTOS_PER_REQUEST, CAPTION_MAX } = galleryPhotos;
 
 function captionsOf(raw, n) {
   let list = [];
@@ -164,15 +166,21 @@ function captionsOf(raw, n) {
   return Array.from({ length: n }, (_, i) => String(list[i] == null ? '' : list[i]).trim().slice(0, CAPTION_MAX));
 }
 
-router.post('/profile/gallery', requireAuth, async (req, res, next) => {
-  const left = PHOTOS_MAX - await GalleryPhoto.countDocuments({ userId: req.session.userId });
-  if (left <= 0) return res.status(400).json({ success: false, message: 'Лимит 100 фото уже достигнут' });
-  uploadGallery.array('photos', Math.min(left, PHOTOS_PER_REQUEST))(req, res, next);
+const PHOTOS_FULL = 'В галерее уже предельное число фото — удалите что-нибудь';
+
+router.post('/profile/gallery', requireAuth, requireNotBanned, async (req, res, next) => {
+  const lim = await limits.forUser(req.session.userId);
+  const left = lim.galleryPhotos - await GalleryPhoto.countDocuments({ userId: req.session.userId });
+  if (left <= 0) {
+    audit(req, 'upload.photos.limit', { result: 'denied', meta: { max: lim.galleryPhotos } });
+    return res.status(400).json({ success: false, message: PHOTOS_FULL });
+  }
+  (await galleryUpload(req)).array('photos', Math.min(left, PHOTOS_PER_REQUEST))(req, res, next);
 }, async (req, res) => {
   const userId = req.session.userId;
   // Параллельная загрузка могла занять место, пока шёл этот запрос.
-  const left = PHOTOS_MAX - await GalleryPhoto.countDocuments({ userId });
-  if (left <= 0) return res.status(400).json({ success: false, message: 'Лимит 100 фото уже достигнут' });
+  const left = (await limits.forUser(userId)).galleryPhotos - await GalleryPhoto.countDocuments({ userId });
+  if (left <= 0) return res.status(400).json({ success: false, message: PHOTOS_FULL });
   const files = (req.files || []).slice(0, left);
   const captions = captionsOf(req.body.captions, files.length).map(mentions.clean);
   if (captions.some((c) => c.foreign)) return res.status(400).json({ success: false, message: mentions.FOREIGN_MESSAGE });

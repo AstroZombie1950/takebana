@@ -44,7 +44,7 @@ const upload = multer({
   },
 });
 
-const { requireAuth, requireOwner, wrap } = require('../middleware/auth');
+const { requireAuth, requireOwner, requireNotBanned, wrap } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
 // Адрес фотографии заведения — только файл в своей папке: его выдаёт загрузка
@@ -146,7 +146,7 @@ router.get(['/map', '/main'], (req, res) => {
 
 // Заявка на заведение — страница /company-register (public/tk-company.js).
 // На карту заведение попадает после проверки: status выставляет админка.
-router.post('/register-establishment', requireAuth, validate({
+router.post('/register-establishment', requireAuth, requireNotBanned, validate({
     name: { type: 'string', required: true, max: 200, label: 'Название' },
     ...PLACE,
     address: { type: 'string', required: true, max: 300, label: 'Адрес' },
@@ -230,7 +230,7 @@ router.get('/establishmentsLocation', wrap(async (req, res) => {
 // панели, а на карте до тех пор остаётся прежнее (решение 29.09). До этого
 // любая правка ставила status: false, и заведение пропадало с карты, пока
 // его не одобрят заново. Правку администратора не проверяет никто.
-router.put('/updateEstablishment/:id', requireAuth, requireOwner(Establishments), upload.array('newPhotos', MAX_PHOTOS), validate({
+router.put('/updateEstablishment/:id', requireAuth, requireNotBanned, requireOwner(Establishments), upload.array('newPhotos', MAX_PHOTOS), validate({
     name: { type: 'string', max: 200, label: 'Название' },
     ...PLACE,
     address: { type: 'string', max: 300, label: 'Адрес' },
@@ -352,7 +352,7 @@ router.delete('/establishment/:id', requireAuth, requireOwner(Establishments), w
 
 
 // Оценка: одна от человека, повторная заменяет прежнюю.
-router.post('/rateEstablishment', requireAuth, validate({
+router.post('/rateEstablishment', requireAuth, requireNotBanned, validate({
     establishmentId: { type: 'objectId', required: true, label: 'Заведение' },
     // Оценка пятибалльная: без верхней границы одним запросом ставилась
     // произвольная, и средний балл заведения уезжал куда угодно.
@@ -467,7 +467,7 @@ router.get('/venue/:venueId/settings', (req, res) => res.redirect(301, '/venue/'
 // Одна настройка за запрос — так их шлёт переключатель страницы. Пустое тело
 // ничего не меняет и не ошибка.
 // requireOwner пускает владельца и администратора, как у правки.
-router.put('/venue/:id/settings', requireAuth, requireOwner(Establishments), validate({
+router.put('/venue/:id/settings', requireAuth, requireNotBanned, requireOwner(Establishments), validate({
     videoMenu: { type: 'bool', label: 'Видео-меню' },
 }), wrap(async (req, res) => {
     const venue = req.resource;

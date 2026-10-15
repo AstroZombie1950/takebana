@@ -112,7 +112,10 @@
     { name: 'tcp', run: relay, url: pick(/^turn:.*tcp/) },
     { name: 'tls', run: relay, url: pick(/^turns:/) },
   ].filter(function (c) {
-    if (!c.url) row(c.name).remove();
+    // Ключ TURN уже выдавали трижды за 10 минут (utils/turn.js, checkIce):
+    // строку не прячем — говорим, что проверить можно чуть позже.
+    if (!c.url && data.iceLater && /^(udp|tcp|tls)$/.test(c.name)) show(c.name, 'check.later', null, '');
+    else if (!c.url) row(c.name).remove();
     return !!c.url;
   });
 

@@ -15,6 +15,7 @@ asyncify(router); // ошибки async-обработчиков уходят в
 const { requireAdmin, sendCsv } = require('./shared');
 const storageReport = require('../../utils/storageReport');
 const usage = require('../../utils/usage');
+const bunnyBalance = require('../../utils/bunnyBalance');
 
 const DAY = 86400000;
 const GB = 1073741824;
@@ -73,8 +74,10 @@ async function load(req) {
     storageReport.get({ fresh: req.query.fresh === '1' }),
     usage.bunny(new Date(Date.now() - 30 * DAY), new Date()),
   ]);
-  if (report.pending || report.error) return { ...report, zone };
-  return { report, zone, costs: costs(report, zone) };
+  // Баланс Bunny и порог из «Лимитов» (utils/bunnyBalance.js).
+  const balance = bunnyBalance.state();
+  if (report.pending || report.error) return { ...report, zone, balance };
+  return { report, zone, balance, costs: costs(report, zone) };
 }
 
 router.get('/storage', requireAdmin, async (req, res) => res.json(await load(req)));

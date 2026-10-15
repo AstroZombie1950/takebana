@@ -6,6 +6,7 @@
 
 const rateLimit = require('express-rate-limit');
 const { audit } = require('../utils/audit');
+const limits = require('../utils/limits');
 
 // Срабатывание лимита — это событие для журнала, а не только отказ в ответе:
 // подбор пароля и накрутка регистраций видны именно по нему. Ответ остаётся
@@ -76,12 +77,19 @@ const geocodeLimiter = rateLimit({
     message: { message: 'Слишком много запросов адреса. Попробуйте через несколько минут.' },
 });
 
-// Вложения в переписке: 60 файлов с адреса за 10 минут. Каждый файл — место
-// в хранилище и, у видео, минута кодирования; живому человеку хватает
-// с запасом, скрипту, заливающему хранилище, — нет.
+// Вложения в переписке: 60 файлов от человека за 10 минут (по умолчанию). Каждый файл —
+// место в хранилище и, у видео, минута кодирования; живому человеку хватает
+// с запасом, скрипту, заливающему хранилище, — нет. Считаем по человеку,
+// а не по адресу (с 14.10, AUDIT-2026-10-14, F2): за адресом мобильного
+// оператора сидят сотни людей, и один общий счётчик отказывал всем.
+// Маршрут только для вошедших — адрес остаётся запасным ключом.
 const attachLimiter = rateLimit({
     windowMs: 10 * 60 * 1000,
-    limit: Number(process.env.RATE_LIMIT_ATTACH) || 60,
+    // Сколько — из панели, свой у человека (utils/limits.js, attachPer10Min;
+    // по умолчанию RATE_LIMIT_ATTACH или 60).
+    limit: async (req) => (await limits.forUser(req.session && req.session.userId)).attachPer10Min,
+    keyGenerator: (req) => (req.session && req.session.userId ? 'u:' + req.session.userId : rateLimit.ipKeyGenerator(req.ip)),
+    handler: hit('attach'),
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { message: 'Слишком много файлов. Попробуйте через несколько минут.' },

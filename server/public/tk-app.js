@@ -283,10 +283,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // К отметке о встрече присоединились (routes/meetups.js): ведёт
             // на её строку на странице заведения, текстом — заведение и день.
             const isMeetup = n.type === 'meetup';
+            // Брошенный эфир сохранился записью сам (jobs/streamCleanup.js):
+            // ведёт на запись, текстом — название эфира.
+            const isRecording = n.type === 'recording';
             // Звонок группе (utils/groupPush.js) ведёт в группу, в content —
             // её название.
             const href = isCall ? (n.link || '/chatsPage?tab=calls')
-              : isComment || isReply || isLive || isFollow || isMeetup ? (n.link || '/')
+              : isComment || isReply || isLive || isFollow || isMeetup || isRecording ? (n.link || '/')
               : '/chatsPage?peer=' + encodeURIComponent(sender._id || '');
             const title = isCall && n.link ? t('modal.notifications.missedGroupCall', { name, group: n.content || '' })
               : isCall ? t('modal.notifications.missedCall', { name })
@@ -295,8 +298,9 @@ document.addEventListener('DOMContentLoaded', () => {
               : isLive ? t('modal.notifications.live', { name })
               : isFollow ? t('modal.notifications.follow', { name })
               : isMeetup ? t('modal.notifications.meetup', { name })
+              : isRecording ? t('modal.notifications.recordingSaved')
               : t('modal.notifications.from') + ' ' + name;
-            const text = isCall || isFollow ? '' : isLive || isMeetup ? (n.content || '') : (n.content || t('modal.notifications.fallback'));
+            const text = isCall || isFollow ? '' : isLive || isMeetup || isRecording ? (n.content || '') : (n.content || t('modal.notifications.fallback'));
             return `
             <a class="tk-notice${n.isRead ? '' : ' tk-notice--new'}" href="${escapeHtml(href)}">
               <span class="tk-notice__top">

@@ -613,6 +613,14 @@ VIEWS.person = {
         '<span class="tk-panel__why">Пока не применяются: файлы хранятся бессрочно.</span></div></div>');
     }
 
+    // Свои лимиты поверх общих: пусто — как у всех (вкладка «Лимиты»).
+    if (d.limits) {
+      html += card('Лимиты', '<div data-lim-box><div class="tk-dcard__ret">' +
+        LIM_GROUPS.filter(([group]) => group !== 'Сервер').flatMap(([group, rows]) => rows.map(([k, name]) =>
+          '<label class="tk-dcard__ret-row"><span>' + esc(group + ': ' + name.toLowerCase()) + '</span>' + limSelect(k, d.limits.own[k] ?? null, d.limits.all[k]) + '</label>')).join('') +
+        '</div><div class="tk-dcard__foot"><button type="button" class="tk-btn tk-btn--outline tk-btn--xs" data-act="lim-user" data-id="' + esc(p.id) + '">Сохранить лимиты</button></div></div>');
+    }
+
     html += card('Заведения', d.venues.length
       ? '<ul class="tk-list">' + d.venues.map((v) => '<li>' + (v.online ? dot(true) : '') + esc(v.name || 'без названия') +
           ' <span class="tk-panel__why">' + esc(countryTitle(v)) + ' · ' + esc(VENUE_TYPE.get(v.type) || v.typeOther || v.type || '') +
@@ -907,6 +915,7 @@ const GROUPS = [
   { value: 'stream', title: 'Эфиры' },
   { value: 'recording', title: 'Записи' },
   { value: 'video', title: 'Видео галереи' },
+  { value: 'upload', title: 'Пределы загрузок' },
   { value: 'venue', title: 'Заведения' },
   { value: 'mod', title: 'Модерация' },
   { value: 'report', title: 'Жалобы' },
@@ -1580,8 +1589,10 @@ VIEWS.storage = {
     if (d.pending) return { html: note('Считаем место: обходим Bunny и диск сервера. Начали ' + when(d.startedAt) + ' — страница обновится сама.'), sub: '' };
     if (d.error) return { html: note('Не удалось посчитать: ' + d.error), sub: '' };
 
-    const r = d.report, c = d.costs, z = d.zone;
+    const r = d.report, c = d.costs, z = d.zone, bal = d.balance || {};
     let html = '';
+    // Баланс ниже порога из «Лимитов» — первым делом: кончится — встанет раздача.
+    if (bal.low) html += '<p class="tk-panel__warn">Баланс Bunny ' + money(bal.usd) + ' — ниже порога ' + money(bal.minUsd) + '. Пополните счёт: на нуле Bunny остановит раздачу записей, галереи, переписки и эфиров.</p>';
 
     html += '<h2 class="tk-panel__h2">Bunny — записи, галерея, переписка</h2>';
     if (!r.bunny) {
@@ -1596,6 +1607,9 @@ VIEWS.storage = {
       if (c.traffic) {
         html += tile('Трафик за 30 дней', bytes(c.traffic.bytes), '≈ ' + money(c.traffic.usd) + ' по $' + c.tariff.trafficGb + ' за ГБ');
         if (c.traffic.spentUsd != null) html += tile('Списано Bunny', money(c.traffic.spentUsd), 'за 30 дней, на счёте ' + money(c.traffic.balanceUsd));
+      }
+      if (bal.usd != null) {
+        html += tile('Баланс Bunny', money(bal.usd), (bal.minUsd > 0 ? 'порог ' + money(bal.minUsd) + ' — ниже него запись в «Ошибки»' : 'порог не задан — «Лимиты»') + ', проверен ' + when(bal.at));
       }
       html += '</div>';
       if (!z.configured) html += '<p class="tk-panel__why">Ключ аккаунта Bunny (BUNNY_API_KEY) не задан: трафик, списания и число копий неизвестны — считаем одну копию.</p>';
@@ -1655,7 +1669,7 @@ VIEWS.storage = {
   },
 };
 
-// ── Сроки хранения ───────────────────────────────────────────────────────────
+// ── Сроки хранения (вкладка «Лимиты») ───────────────────────────────────────
 //
 // Сколько хранить то, что люди загружают, — всем и отдельным людям
 // (routes/admin/retention.js). Пока сроки не применяются: вкладка хранит
@@ -1685,12 +1699,86 @@ function retValues(root) {
   return out;
 }
 
-VIEWS.retention = {
-  title: 'Сроки хранения',
+// ── Лимиты ───────────────────────────────────────────────────────────────────
+//
+// С 15.10 вкладка «Лимиты» (была «Сроки хранения»): сверху — пределы
+// загрузок (routes/admin/limits.js, utils/limits.js), ниже — сроки хранения.
+const limSec = (v) => (v < 60 ? v + ' с' : comma(v / 60, v % 60 ? 1 : 0) + ' мин');
+const limMin = (v) => (v < 60 ? v + ' мин' : comma(v / 60, v % 60 ? 1 : 0) + ' ч');
+const limMb = (v) => (v < 1024 ? v + ' МБ' : comma(v / 1024, v % 1024 ? 1 : 0) + ' ГБ');
+const limNum = (v) => num(v);
+// [поле, что, пояснение, варианты, подпись]; разделы — по месту в сайте.
+const LIM_GROUPS = [
+  ['Переписка', [
+    ['roundSeconds', 'Кружок — длина', 'запись в браузере останавливается сама', [15, 30, 60, 90, 120, 180, 240, 300], limSec],
+    ['voiceSeconds', 'Голосовое — длина', '', [30, 60, 120, 300, 600, 900, 1200, 1800], limSec],
+    ['chatVideoMinutes', 'Видео — длина', 'присланный файл', [1, 3, 5, 10, 15, 20, 30, 45, 60], limMin],
+    ['chatVideoMb', 'Видео — вес', '', [50, 100, 200, 300, 500, 1024, 2048], limMb],
+    ['chatPhotoMb', 'Фото — вес', '', [5, 10, 15, 20, 30, 50], limMb],
+    ['chatDocMb', 'Документы — вес', 'pdf, docx, xlsx, txt и т. п.', [10, 25, 50, 100, 200, 500], limMb],
+    ['chatArchiveMb', 'Архивы и музыка — вес', 'zip, 7z, rar, mp3, m4a, ogg, wav', [25, 50, 100, 200, 500, 1024], limMb],
+    ['attachPer10Min', 'Вложений за 10 минут', 'от одного человека', [10, 20, 30, 60, 100, 200, 500, 1000], limNum],
+  ]],
+  ['Галерея', [
+    ['videoMinutes', 'Видео — длина', 'профиль, пост, от заведения', [10, 15, 30, 60, 90, 120, 180], limMin],
+    ['videoMb', 'Видео — вес', 'незаконченных на человека — вдвое больше', [1024, 2048, 4096, 8192, 12288, 16384], limMb],
+    ['galleryVideos', 'Видео — всего у человека', '', [10, 30, 50, 100, 200, 500, 1000], limNum],
+    ['galleryPhotos', 'Фото — всего у человека', '', [50, 100, 200, 500, 1000, 2000, 5000, 10000], limNum],
+    ['galleryPhotoMb', 'Фото — вес', '', [5, 10, 15, 20], limMb],
+  ]],
+  ['Эфиры', [
+    ['recordingHours', 'Запись эфира — длина', 'дольше эфир идёт без записи', [1, 2, 3, 4, 6, 8, 12, 24], (v) => v + ' ч'],
+  ]],
+  ['Сервер', [
+    ['diskMinFreeGb', 'Свободно на диске — не меньше', 'ниже — видео и файлы не принимаются, эфиры идут', [5, 10, 20, 30, 50, 100], (v) => v + ' ГБ'],
+    ['bunnyMinUsd', 'Баланс Bunny — порог', 'ниже — запись в «Ошибки» раз в сутки; 0 — не следить', [0, 5, 10, 20, 50, 100], (v) => (v ? money(v) : 'не следить')],
+  ]],
+];
+const LIM_ROWS = LIM_GROUPS.flatMap(([, rows]) => rows);
+const limRow = (k) => LIM_ROWS.find((r) => r[0] === k);
+const limGroup = (k) => LIM_GROUPS.find(([, rows]) => rows.some((r) => r[0] === k))[0];
+
+// Выбор лимита. inherit — у человека: первым пунктом «как у всех (…)».
+function limSelect(key, value, inherit) {
+  const [, , , list, label] = limRow(key);
+  const all = value == null || list.includes(value) ? list : list.concat([value]).sort((a, b) => a - b);
+  return '<select class="tk-field tk-select" data-lim="' + key + '">' +
+    (inherit != null ? '<option value=""' + (value == null ? ' selected' : '') + '>как у всех — ' + esc(label(inherit)) + '</option>' : '') +
+    all.map((v) => '<option value="' + v + '"' + (v === value ? ' selected' : '') + '>' + esc(label(v)) + '</option>').join('') + '</select>';
+}
+
+// Собрать выбранное: у общих — числа, у личных пустое — null («как у всех»).
+function limValues(root) {
+  const out = {};
+  root.querySelectorAll('[data-lim]').forEach((x) => { out[x.dataset.lim] = x.value === '' ? null : Number(x.value); });
+  return out;
+}
+
+VIEWS.limits = {
+  title: 'Лимиты',
   admin: true,
   async render() {
-    const d = await api('/retention');
-    let html = '<p class="tk-panel__warn">Сроки пока не применяются: все файлы хранятся бессрочно. Здесь их задают заранее и видят, сколько файлов ушло бы, начни мы убирать сегодня.</p>';
+    const [l, d] = await Promise.all([api('/limits'), api('/retention')]);
+    let html = '';
+    for (const [group, rows] of LIM_GROUPS) {
+      html += '<h2 class="tk-panel__h2">' + esc(group) + '</h2>';
+      html += table([{ title: 'Что' }, { title: 'Предел' }, { title: 'По умолчанию' }], rows.map(([k, name, hint]) =>
+        '<tr><td>' + esc(name) + (hint ? '<br><span class="tk-panel__why">' + esc(hint) + '</span>' : '') + '</td>' +
+        '<td>' + limSelect(k, l.limits[k]) + '</td><td>' + esc(limRow(k)[4](l.defaults[k])) + '</td></tr>'));
+    }
+    html += '<p class="tk-panel__more"><button type="button" class="tk-btn tk-btn--primary tk-btn--xs" data-act="lim-save">Сохранить лимиты</button></p>';
+    html += '<p class="tk-panel__why">Действует сразу и для всех, у кого нет своих: для новых записей и загрузок, уже загруженное не трогается. ' +
+      (l.updatedAt ? 'Изменены ' + when(l.updatedAt) + '.' : 'Пока — значения по умолчанию.') + '</p>';
+
+    html += '<h2 class="tk-panel__h2">Личные лимиты</h2>';
+    html += l.people.length
+      ? table([{ title: 'Человек' }, { title: 'Свои лимиты' }], l.people.map((p) =>
+          '<tr><td>' + person(p.person) + '</td><td>' + Object.entries(p.own).map(([k, v]) => esc(limGroup(k) + ': ' + limRow(k)[1].toLowerCase() + ' — ' + limRow(k)[4](v))).join('<br>') + '</td></tr>'))
+      : note('Ни у кого нет своих лимитов');
+    html += '<p class="tk-panel__why">Свои лимиты задают в профиле человека — поверх общих, кроме порогов сервера (потом — пакетом подписки).</p>';
+
+    html += '<h2 class="tk-panel__h2">Сроки хранения</h2>';
+    html += '<p class="tk-panel__warn">Сроки пока не применяются: все файлы хранятся бессрочно. Здесь их задают заранее и видят, сколько файлов ушло бы, начни мы убирать сегодня.</p>';
     html += table([{ title: 'Что' }, { title: 'Хранить' }, { title: 'Ушло бы сегодня' }], RET_KINDS.map(([k, name, hint]) => {
       const p = d.preview[k] || { files: 0, bytes: 0 };
       return '<tr><td>' + esc(name) + '<br><span class="tk-panel__why">' + esc(hint) + '</span></td>' +
@@ -1706,7 +1794,7 @@ VIEWS.retention = {
           '<tr><td>' + person(p.person) + '</td>' + RET_KINDS.map(([k]) => '<td>' + (p.own[k] == null ? '<span class="tk-panel__why">как у всех</span>' : esc(retTitle(p.own[k]))) + '</td>').join('') + '</tr>'))
       : note('Ни у кого нет своих сроков');
     html += '<p class="tk-panel__why">Свой срок задают в профиле человека — например, тому, кому нужно хранить дольше (потом — пакетом подписки).</p>';
-    return { html, sub: d.updatedAt ? 'Изменены ' + when(d.updatedAt) : 'По умолчанию — всё бессрочно' };
+    return { html, sub: 'Сроки хранения ' + (d.updatedAt ? 'изменены ' + when(d.updatedAt) : 'по умолчанию — всё бессрочно') };
   },
 };
 
@@ -2109,7 +2197,7 @@ function serverParams(params) {
   return out;
 }
 
-const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'support', 'broadcast', 'venues', 'recordings', 'audit', 'errors', 'traces', 'costs', 'storage', 'retention', 'system'];
+const ORDER = ['summary', 'live', 'streams', 'people', 'reports', 'support', 'broadcast', 'venues', 'recordings', 'audit', 'errors', 'traces', 'costs', 'storage', 'limits', 'system'];
 
 function drawNav(active) {
   nav.innerHTML = ORDER.filter((name) => !VIEWS[name].admin || IS_ADMIN).map((name) => {
@@ -2253,6 +2341,18 @@ view.addEventListener('click', async (e) => {
       } finally {
         el.disabled = false;
       }
+      return;
+    }
+
+    if (act === 'lim-save') {
+      await send('PUT', '/api/admin/limits', limValues(view));
+      toast('Лимиты сохранены', 'ok');
+      return show();
+    }
+
+    if (act === 'lim-user') {
+      await send('PUT', '/api/admin/users/' + id + '/limits', limValues(el.closest('[data-lim-box]')));
+      toast('Лимиты человека сохранены', 'ok');
       return;
     }
 

@@ -15,11 +15,11 @@
  * css/upload.css.
  */
 (function () {
-  var D = window.TK_UPLOAD || { drafts: [], maxSeconds: 3600, videoEnabled: false };
+  var D = window.TK_UPLOAD || { drafts: [], maxSeconds: 3600, maxBytes: 0, videoEnabled: false };
   var t = function (k, v) { return window.t ? window.t(k, v) : k; };
   var $ = function (id) { return document.getElementById(id); };
 
-  var PHOTO_MB = 10;
+  var PHOTO_MB = D.photoMb || 10; // из лимитов человека (utils/limits.js)
   var PHOTOS_AT_ONCE = 100;
   var CAPTION_MAX = D.captionMax || 2200; // utils/galleryPhotos.js
   var MIN_LEN = 1;          // короче секунды обрезать нельзя (сервер проверяет то же)
@@ -76,8 +76,10 @@
     if (heavy.length) toast(t(heavy.length === 1 ? 'user.photoHeavy' : 'user.photosHeavy', { name: heavy[0].name, n: heavy.length, mb: PHOTO_MB }), 'error');
     addPhotos(photos.filter(function (f) { return heavy.indexOf(f) === -1; }));
     videos.forEach(function (f) {
+      // Пределы — из панели (utils/limits.js): сервер проверит то же.
+      if (D.maxBytes && f.size > D.maxBytes) return toast(t('user.videoTooBig', { name: f.name, gb: Math.round(D.maxBytes / 1073741824 * 10) / 10 }), 'error');
       duration(f).then(function (s) {
-        if (s > D.maxSeconds + 1) return toast(t('user.videoTooLong', { name: f.name }), 'error');
+        if (s > D.maxSeconds + 1) return toast(t('user.videoTooLong', { name: f.name, n: Math.round(D.maxSeconds / 60) }), 'error');
         return window.TKUpload.add(f).then(function (v) { card(v, f).el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
       }).catch(function (e) { toast(t('app.errorShort', { message: e.message }), 'error'); });
     });
@@ -384,6 +386,8 @@
 
     if (v.status === 'uploading' && !job) {
       window.tkText(state, 'upload.lost');
+    } else if (v.status === 'uploading' && job.held) {
+      window.tkText(state, 'upload.serverFull');
     } else if (v.status === 'uploading') {
       window.tkText(state, v.publish ? 'upload.waiting' : 'upload.progress', {
         p: v.size ? Math.floor(got / v.size * 100) : 0, got: bytes(got), total: bytes(v.size),

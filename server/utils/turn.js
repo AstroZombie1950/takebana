@@ -22,22 +22,51 @@ function configured() {
 // Серверы для RTCPeerConnection: STUN — для прямого соединения браузеров,
 // TURN — когда напрямую не выходит. Порядок адресов TURN — порядок
 // предпочтения: UDP, потом TCP, потом TLS.
-// ttl — короче для проверки связи (utils/netCheck.js): ключ живёт на странице.
 // callId — третьим полем имени: coturn пишет имя в каждую строку журнала,
 // и по нему utils/turnLog.js раскладывает реле по звонкам. Подпись
 // считается от имени целиком, срок coturn берёт из числа до первого «:».
 function iceServers(userId, { ttl = TTL_S, callId = '' } = {}) {
-  const host = process.env.TURN_HOST;
   const username = Math.floor(Date.now() / 1000 + ttl) + ':' + userId + (callId ? ':' + callId : '');
+  return [{ urls: `stun:${process.env.TURN_HOST}:3478` }, relayFor(username)];
+}
+
+// Ключ проверки связи (/check, routes/pages.js; аудит 14.10, S9). Раньше
+// каждое открытие страницы давало новый ключ на 10 минут, а user-quota
+// coturn считает реле на имя ключа, — один человек, обновляя страницу,
+// мог занять все порты. Теперь:
+//  • имя одно на человека на минуту (срок округлён до минуты) — открытия
+//    в ту же минуту получают тот же ключ, и квота считает их вместе;
+//  • живёт 2 минуты — проверке хватает полминуты;
+//  • разных ключей — не больше CHECK_PER за 10 минут; сверх — null, и
+//    страница говорит «проверяли недавно».
+// Третье поле — netcheck: utils/turnLog.js видит такие реле по человеку.
+const CHECK_TTL_S = 120;
+const CHECK_WINDOW_MS = 10 * 60 * 1000;
+const CHECK_PER = 3;
+const checks = new Map(); // userId → [{ name, at }]
+
+function checkIce(userId) {
+  const now = Date.now();
+  const expiry = (Math.floor(now / 60000) + 1) * 60 + CHECK_TTL_S;
+  const name = expiry + ':' + userId + ':netcheck';
+  const list = (checks.get(String(userId)) || []).filter((x) => now - x.at < CHECK_WINDOW_MS);
+  if (!list.some((x) => x.name === name)) {
+    if (list.length >= CHECK_PER) { checks.set(String(userId), list); return null; }
+    list.push({ name, at: now });
+  }
+  checks.set(String(userId), list);
+  if (checks.size > 10000) checks.delete(checks.keys().next().value);
+  return relayFor(name);
+}
+
+function relayFor(username) {
+  const host = process.env.TURN_HOST;
   const credential = createHmac('sha1', process.env.TURN_SECRET).update(username).digest('base64');
-  return [
-    { urls: `stun:${host}:3478` },
-    {
-      urls: [`turn:${host}:3478?transport=udp`, `turn:${host}:3478?transport=tcp`, `turns:${host}:5349?transport=tcp`],
-      username,
-      credential,
-    },
-  ];
+  return {
+    urls: [`turn:${host}:3478?transport=udp`, `turn:${host}:3478?transport=tcp`, `turns:${host}:5349?transport=tcp`],
+    username,
+    credential,
+  };
 }
 
 // Порты реле — min-port..max-port в ops/coturn/turnserver.conf, 49160–49400.
@@ -51,4 +80,4 @@ const PORTS = Number(process.env.TURN_PORTS) || 241;
 // Оценка сверху для IPv4; двухстековая сеть может взять вдвое больше.
 const portsFor = (members) => members * (members - 1) * 3;
 
-module.exports = { configured, iceServers, PORTS, portsFor };
+module.exports = { configured, iceServers, checkIce, PORTS, portsFor, CHECK_PER };

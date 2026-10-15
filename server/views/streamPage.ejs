@@ -37,6 +37,7 @@
       <% if (s) { %>
       data-stream-id="<%= s._id %>"
       data-stream-key="<%= s.streamKey %>"
+      data-playback-id="<%= playbackId %>"
       data-started-at="<%= s.isActive && s.startedAt ? new Date(s.startedAt).toISOString() : '' %>"
       data-first-live="<%= s.firstLiveAt ? '1' : '' %>"
       data-autostart="<%= autostart ? '1' : '' %>"

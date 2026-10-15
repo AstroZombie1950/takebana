@@ -7,6 +7,8 @@
 
 const Stream = require('../models/Stream');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
+const push = require('../utils/push');
 const { unlinkUpload } = require('../utils/userDelete');
 const recording = require('../utils/recording');
 const streamLog = require('../utils/streamLog');
@@ -21,7 +23,8 @@ const ioRef = require('../utils/io');
 const ACTIVE_TTL_MINUTES = Number(process.env.STREAM_CLEANUP_ACTIVE_TTL_MINUTES || 5);
 const INACTIVE_TTL_DAYS = Number(process.env.STREAM_CLEANUP_INACTIVE_TTL_DAYS || 30);
 
-const STREAM_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // run every 5 minutes
+// Раз в 5 минут; зонды (temp/probe-limits-1014.mjs) ставят чаще.
+const STREAM_CLEANUP_INTERVAL_MS = Number(process.env.STREAM_CLEANUP_INTERVAL_SEC || 300) * 1000;
 
 const cleanupAbandonedStreams = async () => {
   try {
@@ -41,7 +44,7 @@ const cleanupAbandonedStreams = async () => {
     // пульта обычно закрывают. Раньше такой эфир удалялся через 5–10 минут,
     // пока OBS лил, а ffmpeg писал в стёртый каталог записи.
     const media = require('../mediaServer');
-    const toDelete = (await Stream.find(query).select('_id isActive updatedAt userId streamType streamKey dailyRoomName thumbnail').lean())
+    const toDelete = (await Stream.find(query).select('_id isActive updatedAt userId streamType streamKey dailyRoomName thumbnail title description category subcategory city isAdult venue firstLiveAt stoppedByModeration').lean())
       .filter((s) => !(s.isActive && media.activeStreams.has(s.streamKey)));
     if (!toDelete.length) return;
 
@@ -53,17 +56,35 @@ const cleanupAbandonedStreams = async () => {
       if (s.isActive) {
         await stopActive(s, media);
         await streamLog.close(s.streamKey, { endedBy: 'cleanup', streamId: s._id });
-        audit(null, 'stream.cleanup', { actor: s.userId, targetType: 'stream', targetId: s._id, targetLabel: s.streamKey });
       }
     }
 
     await Stream.deleteMany({ _id: { $in: toDelete.map(s => s._id) } });
-    // Брошенный эфир так и не сказал, сохранять ли запись, — куски удаляются.
-    await Promise.all(toDelete.map((s) => recording.discard(s.streamKey).catch(() => {})));
+
+    // Брошенный эфир так и не сказал, сохранять ли запись. До 14.10 куски
+    // удалялись — и честный обрыв (сел телефон, iOS выгрузил вкладку) стоил
+    // ведущему всей записи. Теперь эфир, который выходил в эфир и не погашен
+    // модерацией, сохраняется сам, как «Сохранить запись»; удалить запись
+    // ведущий может сам (AUDIT-2026-10-14, F1).
+    const kept = new Set();
+    for (const s of toDelete) {
+      const saved = await autoSave(s);
+      if (saved) kept.add(s);
+      if (s.isActive || saved) {
+        audit(null, 'stream.cleanup', {
+          actor: s.userId, targetType: 'stream', targetId: s._id, targetLabel: s.streamKey,
+          meta: { saved: !!saved, wasActive: !!s.isActive, recording: saved ? String(saved._id) : null },
+        });
+      }
+    }
+    await Promise.all(toDelete.filter((s) => !kept.has(s))
+      .map((s) => recording.discard(s.streamKey).catch((e) => errorLog.media(e, 'streamCleanup.discard', { stream: String(s._id) }))));
     // Обложка — с диска, если её больше никто не держит: та же картинка
     // бывает обложкой по умолчанию у ведущего (streamDefaults) и у его
-    // следующего эфира. Запись берёт себе копию (utils/recording.js).
-    for (const url of new Set(toDelete.map((s) => s.thumbnail).filter(Boolean))) {
+    // следующего эфира. Сохранённой записи обложка нужна для склейки —
+    // её не трогаем, как и «Сохранить запись» (routes/streaming/streams.js).
+    const coverOfKept = new Set([...kept].map((s) => s.thumbnail));
+    for (const url of new Set(toDelete.map((s) => s.thumbnail).filter((u) => u && !coverOfKept.has(u)))) {
       const used = await Stream.exists({ thumbnail: url }) || await User.exists({ 'streamDefaults.thumbnail': url });
       if (!used) unlinkUpload(url, 'thumbnails');
     }
@@ -71,6 +92,41 @@ const cleanupAbandonedStreams = async () => {
     errorLog.server(error, 'streamCleanup');
   }
 };
+
+// Сохранить запись брошенного эфира — те же условия, что у «Сохранить
+// запись» на пульте, плюс хоть один непустой кусок. Ведущему — строка
+// в колокольчик и пуш. Сбой — в журнал ошибок, куски тогда удаляются.
+async function autoSave(s) {
+  try {
+    if (!recording.enabled || !s.firstLiveAt || s.stoppedByModeration) return null;
+    if (!(await recording.hasParts(s.streamKey))) return null;
+    const owner = await User.findById(s.userId).select('banned').lean();
+    if (!owner || owner.banned) return null;
+    const rec = await recording.save(s);
+    streamLog.attachRecording(s.streamKey, rec);
+    audit(null, 'recording.save', { actor: s.userId, targetType: 'recording', target: rec, meta: { auto: true } });
+    notifySaved(s, rec).catch((e) => errorLog.server(e, 'streamCleanup.notify', { recording: String(rec._id) }));
+    return rec;
+  } catch (e) {
+    errorLog.media(e, 'streamCleanup.autoSave', { stream: String(s._id) });
+    return null;
+  }
+}
+
+async function notifySaved(s, rec) {
+  const link = '/recording/' + rec._id;
+  await Notification.create({ recipient: s.userId, sender: s.userId, type: 'recording', content: s.title || '', link });
+  const io = ioRef.get();
+  if (io) io.to(`user:${s.userId}`).emit('notification:new');
+  if (push.onScreen(s.userId)) return;
+  await push.send(s.userId, {
+    topic: 'recording',
+    titleKey: 'push.recordingSaved',
+    body: s.title || '',
+    tag: 'recording-' + String(rec._id),
+    url: link,
+  });
+}
 
 // Гасим брошенный эфир тем же порядком, что /terminate-stream
 // (routes/streaming/streams.js): выход и комната Daily, публикация, HLS;

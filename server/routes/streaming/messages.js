@@ -27,6 +27,8 @@ const errorLog = require('../../utils/errorLog');
 const attachments = require('../../utils/attachments');
 const uploadTrace = require('../../utils/uploadTrace');
 const { uploadAttachment } = require('./uploads');
+const os = require('os');
+const diskGuard = require('../../utils/diskGuard');
 const { attachLimiter } = require('../../middleware/rateLimit');
 const limits = require('../../utils/messageLimit');
 const push = require('../../utils/push');
@@ -551,7 +553,7 @@ router.post('/sendMessage', requireAuthApi, requireNotBanned, sendLimiter, valid
 // со знаком минуту-другую: ответ 202 сразу, сообщение уходит обоим, когда
 // готово, а вкладка отправителя узнаёт своё по ref (message:new или
 // message:failed).
-router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter, uploadAttachment.single('file'), async (req, res) => {
+router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter, diskGuard.guard(os.tmpdir(), 'attach'), uploadAttachment, async (req, res) => {
   const file = req.file;
   const drop = () => file && fs.promises.rm(file.path, { force: true }).catch(() => {});
   const { recipientId } = req.body;
@@ -627,7 +629,7 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
 
   let info;
   try {
-    info = await attachments.inspect(file, { special });
+    info = await attachments.inspect(file, { special, lim: req.attachLimits });
   } catch (e) {
     note(e);
     mark('fail', { error: e.message, stage: 'inspect' });

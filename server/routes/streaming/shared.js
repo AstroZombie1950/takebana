@@ -4,6 +4,7 @@
 // commonDataMiddleware кладёт всё это в res.locals, поэтому обработчику страницы
 // остаётся только отрисовать шаблон.
 
+const limits = require('../../utils/limits');
 const mongoose = require('mongoose');
 const User = require('../../models/User');
 const Subscription = require('../../models/Subscription');
@@ -37,7 +38,7 @@ const commonDataMiddleware = async (req, res, next) => {
       const me = new mongoose.Types.ObjectId(String(currentUserId));
       const [currentUser, subscribedUsers, unreadNotificationsCount, missedCalls, unreadMessages, myVenues] = await Promise.all([
         User.findById(currentUserId)
-          .select('nickname login email avatar streamKey banned banReason adultConfirmedAt lang theme role')
+          .select('nickname login email avatar streamKey banned banReason adultConfirmedAt lang theme role limits')
           .lean(),
         Subscription.aggregate([
           { $match: { subscriberId: me } },
@@ -99,6 +100,9 @@ const commonDataMiddleware = async (req, res, next) => {
       // Есть ли у человека эфир, каждой странице кабинета больше знать не
       // нужно: это решает студия (/studio), куда ведёт «Запустить эфир».
       // Раньше на каждый запрос кабинета уходил поиск эфира ради окна настроек.
+      // Действующие лимиты вошедшего — личные поверх общих (utils/limits.js):
+      // длина кружка и голосового, вес фото — страницам.
+      res.locals.siteLimits = { ...limits.get(), ...limits.ownOf(currentUser) };
       res.locals.currentUser = {
           _id: currentUser._id,
           url: profileUrl(currentUser),

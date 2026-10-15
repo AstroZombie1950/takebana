@@ -15,6 +15,7 @@
 const multer = require('multer');
 const os = require('os');
 const path = require('path');
+const limits = require('../../utils/limits');
 
 const UPLOADS = path.join(__dirname, '..', '..', 'public', 'uploads');
 
@@ -42,7 +43,21 @@ const inMemory = (mb) => multer({
 
 const upload = inMemory(5);         // обложки эфиров
 const uploadAvatar = inMemory(5);
-const uploadGallery = inMemory(10); // фото галереи бывают крупнее
+const uploadCover = inMemory(10);   // своя обложка видео
+
+// Предел веса фото галереи и вложений — свой у человека (utils/limits.js,
+// с 15.10; было 10 МБ и 200 МБ): multer собирается на запрос, одинаковые
+// пределы — один экземпляр.
+const built = new Map();
+const once = (key, make) => built.get(key) || built.set(key, make()).get(key);
+async function galleryUpload(req) {
+  const lim = await limits.forUser(req.session.userId);
+  return once('g' + lim.galleryPhotoMb, () => inMemory(lim.galleryPhotoMb));
+}
+// Готовый обработчик: galleryPhotos((m) => m.array('photos', 10)).
+const galleryPhotos = (use) => async (req, res, next) => {
+  try { use(await galleryUpload(req))(req, res, next); } catch (e) { next(e); }
+};
 
 // Большое в память не берём: файл ложится во временную папку.
 const toTmp = multer.diskStorage({ destination: os.tmpdir(), filename: (req, file, cb) => cb(null, 'tk-upload-' + Date.now() + '-' + Math.random().toString(36).slice(2)) });
@@ -50,9 +65,17 @@ const toTmp = multer.diskStorage({ destination: os.tmpdir(), filename: (req, fil
 // Вложения переписки — на диск: видео до 200 МБ. Тип здесь не
 // проверяется — присланному браузером типу верить нельзя; вид, предел
 // и содержимое проверяет utils/attachments.js, он же удаляет файл.
-const uploadAttachment = multer({
-  storage: toTmp,
-  limits: { fileSize: require('../../utils/attachments').MAX_MB * 1024 * 1024, files: 1, fields: 8 },
-});
+// Предел multer — наибольший из пределов отправителя; точный по виду
+// проверяет utils/attachments.js. Лимиты — в req.attachLimits.
+async function uploadAttachment(req, res, next) {
+  try {
+    const lim = await limits.forUser(req.session.userId);
+    req.attachLimits = lim;
+    const mb = limits.chatMaxMb(lim);
+    once('a' + mb, () => multer({ storage: toTmp, limits: { fileSize: mb * 1024 * 1024, files: 1, fields: 8 } }).single('file'))(req, res, next);
+  } catch (e) {
+    next(e);
+  }
+}
 
-module.exports = { UPLOADS, upload, uploadAvatar, uploadGallery, uploadAttachment };
+module.exports = { UPLOADS, upload, uploadAvatar, uploadCover, galleryUpload, galleryPhotos, uploadAttachment };

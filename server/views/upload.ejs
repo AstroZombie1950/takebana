@@ -48,7 +48,8 @@
         <span class="tk-btn tk-btn--primary tk-btn--sm" data-i18n="upload.pick"><%- t('upload.pick') %></span>
         <span class="tk-up__or" data-i18n="upload.drop"><%- t('upload.drop') %></span>
         <% var limitsKey = venue ? 'upload.limitsVideo' : videoEnabled ? 'upload.limits' : 'upload.limitsPhoto'; %>
-        <span class="tk-note" data-i18n="<%= limitsKey %>"><%- t(limitsKey) %></span>
+        <% var limitsVars = { n: Math.round(maxSeconds / 60), mb: photoMb }; %>
+        <span class="tk-note" data-i18n="<%= limitsKey %>" data-i18n-vars='<%= JSON.stringify(limitsVars) %>'><%- t(limitsKey, limitsVars) %></span>
       </label>
 
       <%# Фото: снимки выбора с подписью у каждого и одна кнопка на все. %>
@@ -136,6 +137,8 @@
   window.TK_UPLOAD = {
     drafts: <%- JSON.stringify(drafts).replace(/</g, '\\u003c') %>,
     maxSeconds: <%- JSON.stringify(maxSeconds) %>,
+    maxBytes: <%- JSON.stringify(maxBytes) %>,
+    photoMb: <%- JSON.stringify(photoMb) %>,
     captionMax: <%- JSON.stringify(limits.caption) %>,
     videoEnabled: <%- JSON.stringify(videoEnabled) %>,
     venue: <%- JSON.stringify(venue ? String(venue._id) : '') %>

@@ -134,7 +134,7 @@
       preview.hidden = false;
       showHint(null);
     });
-    TKHls.play(preview, '/live/' + streamKey + '/index.m3u8');
+    TKHls.play(preview, '/live/' + data.playbackId + '/index.m3u8');
 
     // Идёт ли OBS-эфир, решает приём RTMP (mediaServer.js) — он и присылает
     // stream:update. Реагируем только на смену состояния.

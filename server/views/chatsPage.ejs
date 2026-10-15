@@ -278,7 +278,7 @@
                 (chats.css, .has-text). %>
             <div class="tk-chat__acts">
               <div class="tk-chat__media">
-                <button type="button" class="tk-chat__tool tk-chat__mic" id="micBtn" aria-label="<%= ta('chats.voice') %>" data-i18n-aria="chats.voice" title="<%= ta('chats.voice') %>" data-i18n-title="chats.voice">
+                <button type="button" class="tk-chat__tool tk-chat__mic" id="micBtn" data-max="<%= siteLimits.voiceSeconds %>" aria-label="<%= ta('chats.voice') %>" data-i18n-aria="chats.voice" title="<%= ta('chats.voice') %>" data-i18n-title="chats.voice">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"></path></svg>
                 </button>
                 <button type="button" class="tk-chat__tool tk-chat__cam" id="roundBtn" aria-label="<%= ta('chats.round') %>" data-i18n-aria="chats.round" title="<%= ta('chats.round') %>" data-i18n-title="chats.round">
@@ -429,7 +429,7 @@
 </div>
 
 <!-- Запись кружка -->
-<div class="tk-roundrec tk-dark hidden" id="roundRec" role="dialog" aria-modal="true" aria-label="<%= ta('chats.round') %>" data-i18n-aria="chats.round">
+<div class="tk-roundrec tk-dark hidden" id="roundRec" data-max="<%= siteLimits.roundSeconds %>" role="dialog" aria-modal="true" aria-label="<%= ta('chats.round') %>" data-i18n-aria="chats.round">
   <div class="tk-roundrec__stage">
     <video id="roundPreview" muted playsinline autoplay></video>
     <svg class="tk-roundrec__ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48"></circle></svg>

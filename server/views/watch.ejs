@@ -35,8 +35,11 @@
   // Своё длинное у одноимённых часто одно и то же — номер впереди.
   var headDescription = describe(rec.description, ta(kind === 'recording' ? 'seo.recordingDesc' : 'seo.videoDesc', { name: author.displayName, date: when + (nth ? ', ' + ta('rec.nth', { k: nth }) : '') }));
   if (nth && headDescription.indexOf(ta('rec.nth', { k: nth })) === -1) headDescription = describe(ta('rec.nth', { k: nth }) + '. ' + headDescription, '');
+  // Обложка 18+ наружу не уходит: ни в превью ссылки, ни в разметку —
+  // её видят мессенджеры и поисковики, а им 18+ не подтвердить (S5, 14.10).
+  var shareCover = rec.isAdult ? '' : rec.thumb && rec.thumb.url;
   var jsonld = [
-    ld.video({ path: base, title: mediaName, description: headDescription, thumb: rec.thumb && rec.thumb.url,
+    ld.video({ path: base, title: mediaName, description: headDescription, thumb: shareCover,
                src: src, seconds: rec.duration, date: at, views: rec.views,
                author: { url: author.url, name: author.displayName, org: !!author.venue } }),
     ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [mediaName, base]]),
@@ -45,7 +48,7 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
-<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: headDescription, seo: { path: base, type: 'video.other', image: rec.thumb && rec.thumb.url, imageAlt: mediaName, robots: rec.userId.banned ? 'noindex, follow' : '', jsonld: jsonld } }) %>
+<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: headDescription, seo: { path: base, type: 'video.other', image: shareCover, imageAlt: mediaName, robots: rec.userId.banned ? 'noindex, follow' : '', jsonld: jsonld } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/player.css') %>">
@@ -114,7 +117,7 @@
             </div>
 
             <%- include('partials/shareReport', { cls: 'tk-watch__pill', report: currentUser && !isOwner,
-                  s: { kind: kind, id: rec._id, title: mediaName, image: rec.isAdult ? '' : rec.thumb && rec.thumb.url, author: author.displayName, reportName: title } }) %>
+                  s: { kind: kind, id: rec._id, title: mediaName, image: shareCover, author: author.displayName, reportName: title } }) %>
           </div>
           <% } %>
         </div>

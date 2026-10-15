@@ -25,6 +25,7 @@ const { buildObsStreamKey, getSignExpiry } = require('../../utils/rtmpAuth');
 const { publicHost } = require('../../utils/site');
 const { VENUE_AUTHOR, venueAuthor } = require('../../utils/venueAuthor');
 const { ownApproved } = require('../../utils/venueOwner');
+const playback = require('../../utils/playback');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
@@ -50,9 +51,11 @@ async function loadStream(streamId) {
 // Пульт и студия. stream — эфир владельца или null, если его ещё нет.
 // Ключ и адрес для OBS видны уже в студии: программу настраивают до выхода
 // в эфир. Вебу настраивать нечего — ему ключ не показываем.
-function renderConsole(req, res, { stream, user, defaults, streamKey, venue = null }) {
+function renderConsole(req, res, { stream, user, defaults, streamKey, venue = null, playbackId = '' }) {
   res.render('streamPage', {
     stream,
+    // Адрес просмотра (utils/playback.js) — предпросмотру OBS на пульте.
+    playbackId,
     user,
     venue,
     defaults,
@@ -142,7 +145,7 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
     const venue = draft && req.query.venue === '0' ? null
       : draft && req.query.venue ? venueAuthor(await ownApproved(req.session.userId, req.query.venue)) || page.venue
       : page.venue;
-    return renderConsole(req, res, { ...page, venue, defaults: page.stream, streamKey: page.stream.streamKey });
+    return renderConsole(req, res, { ...page, venue, defaults: page.stream, streamKey: page.stream.streamKey, playbackId: await playback.ensure(page.stream) });
   }
 
   const isSubscribed = !!req.session.userId && !!(await Subscription.exists({
@@ -150,12 +153,14 @@ router.get('/stream/:streamId', commonDataMiddleware, async (req, res) => {
     subscribedToId: page.user._id,
   }));
   // Только для подписчиков: страница есть — название, автор, «Подписаться»,
-  // — но без плеера, чата и ключа эфира. По ключу собирается адрес
-  // плейлиста и заходят в комнату чата — чужому он не нужен.
+  // — но без плеера, чата и ключа эфира. По ключу заходят в комнату чата,
+  // по адресу просмотра (utils/playback.js) играет плеер — чужому не нужно
+  // ни то ни другое.
   const locked = !(await restriction.canWatch(page.stream, req.session.userId));
   res.render('streamPageViewer', {
     ...page, isSubscribed, locked,
     streamKey: locked ? '' : page.stream.streamKey,
+    playbackId: locked ? '' : await playback.ensure(page.stream),
     overlayMark: hls.overlayMark(page.stream.streamKey),
   });
 });

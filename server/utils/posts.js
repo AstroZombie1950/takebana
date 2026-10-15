@@ -12,6 +12,7 @@ const mongoose = require('mongoose');
 const Post = require('../models/Post');
 const GalleryPhoto = require('../models/GalleryPhoto');
 const GalleryVideo = require('../models/GalleryVideo');
+const limits = require('./limits');
 const galleryPhotos = require('./galleryPhotos');
 const galleryVideo = require('./galleryVideo');
 const engagement = require('./engagement');
@@ -55,8 +56,9 @@ async function create(userId, { text, topic, files, videoIds, order }) {
     : [];
   if (videos.length !== videoIds.length) throw new PostError('Видео не найдено — загрузите его заново');
   if (files.length) {
-    const left = galleryPhotos.MAX_PER_USER - await GalleryPhoto.countDocuments({ userId });
-    if (files.length > left) throw new PostError(`Фото у вас уже ${galleryPhotos.MAX_PER_USER - left} из ${galleryPhotos.MAX_PER_USER} — удалите лишние`);
+    const max = (await limits.forUser(userId)).galleryPhotos;
+    const left = max - await GalleryPhoto.countDocuments({ userId });
+    if (files.length > left) throw new PostError(`Фото у вас уже ${max - left} из ${max} — удалите лишние`);
   }
 
   const _id = new mongoose.Types.ObjectId();

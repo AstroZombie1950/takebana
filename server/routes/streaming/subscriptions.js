@@ -37,9 +37,9 @@ async function notifyFollow(io, subscriber, targetId) {
   });
 }
 const { validate } = require('../../middleware/validate');
-const { requireAuthApi } = require('../../middleware/auth');
+const { requireAuthApi, requireNotBanned } = require('../../middleware/auth');
 
-router.post('/subscribe', validate({
+router.post('/subscribe', requireNotBanned, validate({
   userId: { type: 'objectId', required: true, label: 'Пользователь' },
 }), async (req, res) => {
   const { userId } = req.body; // Получаем ID пользователя для подписки

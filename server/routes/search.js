@@ -9,6 +9,7 @@ const { asyncify } = require('../middleware/asyncRouter');
 asyncify(router); // ошибки async-обработчиков уходят в next(), а не вешают запрос
 const { commonDataMiddleware } = require('./streaming/shared');
 const search = require('../utils/search');
+const adultCover = require('../utils/adultCover');
 const { searchLimiter } = require('../middleware/rateLimit');
 
 // Вкладки страницы. all — по нескольку из каждого вида, остальные — один вид
@@ -29,7 +30,15 @@ router.get('/api/search', searchLimiter, async (req, res) => {
   const type = search.TYPES.includes(req.query.type) ? [req.query.type] : search.TYPES;
   const asked = Number(req.query.limit);
   const limit = Number.isInteger(asked) && asked > 0 ? Math.min(asked, 10) : QUICK_LIMIT;
-  res.json(await search.search(req.query.q, { limit, types: type, viewer: req.session.userId }));
+  const [found, viewer] = await Promise.all([
+    search.search(req.query.q, { limit, types: type, viewer: req.session.userId }),
+    adultCover.viewerOf(req.session.userId),
+  ]);
+  // Обложки 18+ — размытые тому, кто 18+ не подтвердил (utils/adultCover.js);
+  // страница поиска делает то же в шаблоне (cover()).
+  found.streams = found.streams.map((x) => ({ ...x, thumbnail: adultCover.pick('stream', x, x.thumbnail, viewer) }));
+  found.recordings = found.recordings.map((x) => ({ ...x, thumb: adultCover.pick('recording', x, x.thumb, viewer) }));
+  res.json(found);
 });
 
 router.get('/search', searchLimiter, commonDataMiddleware, async (req, res) => {

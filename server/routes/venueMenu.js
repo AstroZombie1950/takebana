@@ -23,6 +23,7 @@ const { requireAuthApi, requireOwner, requireNotBanned } = require('../middlewar
 const { validate } = require('../middleware/validate');
 const { commonDataMiddleware } = require('./streaming/shared');
 const { audit } = require('../utils/audit');
+const diskGuard = require('../utils/diskGuard');
 const ld = require('../utils/jsonld');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -133,7 +134,7 @@ router.post('/venue/:id/menu/:itemId/move', ...guard, validate({
 
 // Ролик позиции: файл и start — с какой секунды исходника. Пережатие идёт
 // в фоне; страница спрашивает позицию, пока ролик не готов.
-router.post('/venue/:id/menu/:itemId/clip', ...guard, uploadClip.single('clip'), async (req, res) => {
+router.post('/venue/:id/menu/:itemId/clip', ...guard, diskGuard.guard(os.tmpdir(), 'menu'), uploadClip.single('clip'), async (req, res) => {
   const file = req.file && req.file.path;
   const drop = () => file && fs.promises.rm(file, { force: true }).catch(() => {});
   const item = await itemOf(req);

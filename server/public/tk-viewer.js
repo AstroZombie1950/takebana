@@ -147,8 +147,9 @@
   var player = TKPlayer.mount(playerRoot);
   var video = player.video;
   var base = data.hlsBase;
-  var hlsUrl = base + '/live/' + data.streamKey + '/index.m3u8';
-  var fallback = /^https?:/.test(base) ? '/lf/live/' + data.streamKey + '/index.m3u8' : '';
+  // Адрес просмотра, а не ключ (utils/playback.js, 14.10).
+  var hlsUrl = base + '/live/' + data.playbackId + '/index.m3u8';
+  var fallback = /^https?:/.test(base) ? '/lf/live/' + data.playbackId + '/index.m3u8' : '';
 
   // Телеметрия просмотра (docs/TELEMETRY.md): за сколько пришёл плейлист
   // и первый кадр, сколько раз и как долго вставало, каким путём и каким

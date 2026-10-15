@@ -20,9 +20,9 @@ const errorLog = require('./errorLog');
 const { saveImages } = require('./image');
 const { resolveWithin } = require('./safePath');
 
-// Сколько фото у человека всего и сколько за один запрос: файлы multer
-// держит в памяти (routes/streaming/profile.js).
-const MAX_PER_USER = 100;
+// Сколько фото за один запрос: файлы multer держит в памяти
+// (routes/streaming/profile.js). Сколько всего у человека и вес фото —
+// из панели (utils/limits.js, с 15.10; было 100 и 10 МБ).
 const PER_REQUEST = 20;
 // Подпись — как у Инстаграма.
 const CAPTION_MAX = 2200;
@@ -167,4 +167,4 @@ function start() {
     .catch((e) => errorLog.server(e, 'gallery.migrate'));
 }
 
-module.exports = { MAX_PER_USER, PER_REQUEST, CAPTION_MAX, save, remove, removeAll, start };
+module.exports = { PER_REQUEST, CAPTION_MAX, save, remove, removeAll, start };

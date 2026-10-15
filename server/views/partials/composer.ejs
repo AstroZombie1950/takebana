@@ -8,7 +8,7 @@
   Тема — по желанию: раздел целиком («Другое» в нём) или тема в разделе.
 %>
 <% var av = currentUser.avatarStyle; %>
-<form class="tk-compose" id="composer" data-video="<%= videoEnabled ? '1' : '' %>" novalidate>
+<form class="tk-compose" id="composer" data-video="<%= videoEnabled ? '1' : '' %>" data-photo-mb="<%= siteLimits.galleryPhotoMb %>" novalidate>
   <span class="tk-compose__ava"<% if (!av.url) { %> data-bg="<%= av.gradient %>"<% } %> aria-hidden="true"><% if (av.url) { %><img src="<%= av.url %>" alt=""><% } else { %><%= av.initial %><% } %></span>
   <button type="button" class="tk-compose__open" data-compose-open data-i18n="post.new"><%- t('post.new') %></button>
 

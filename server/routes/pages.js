@@ -49,10 +49,14 @@ router.get('/check', commonDataMiddleware, (req, res) => {
   // к мета-тегу шаблона, его видят и те роботы, что HTML не разбирают.
   res.set('X-Robots-Tag', 'noindex, nofollow');
   const userId = req.session && req.session.userId;
+  // Ключ TURN — не чаще, чем нужно проверке (utils/turn.js, checkIce; S9).
+  const ice = userId && turn.configured() ? turn.checkIce(userId) : null;
+  if (userId && turn.configured() && !ice) audit(req, 'turn.check.limit', { result: 'denied', meta: { per10min: turn.CHECK_PER } });
   res.render('check', {
     check: {
       ...netCheck.targets(),
-      ice: userId && turn.configured() ? turn.iceServers(userId, { ttl: 10 * 60 })[1] : null,
+      ice,
+      iceLater: !!(userId && turn.configured() && !ice),
     },
   });
 });

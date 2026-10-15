@@ -47,9 +47,23 @@ class BadImageError extends Error {
 // от разных людей не должны затирать друг друга.
 const newName = () => Date.now() + '-' + crypto.randomBytes(6).toString('hex') + '.webp';
 
+// Формат картинки от человека — по первым байтам, до sharp (аудит 14.10, S1).
+// Тип, который заявил браузер (multer, file.mimetype), подделывается, а sharp
+// формат узнаёт сам и разбирает и SVG (librsvg), и PDF: SVG под видом PNG
+// доходил до библиотеки, в которой находят уязвимости. Спрашивать sharp
+// (metadata) нельзя — это уже разбор. null — не jpeg, не png и не webp.
+function imageFormat(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg';
+  if (buf.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) return 'png';
+  if (buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP') return 'webp';
+  return null;
+}
+
 async function saveImage(buffer, preset, dir) {
   const p = PRESETS[preset];
   if (!p) throw new Error('Неизвестный профиль обработки: ' + preset);
+  if (!imageFormat(buffer)) throw new BadImageError(new Error('не jpeg, png или webp'));
 
   let data;
   try {
@@ -87,4 +101,4 @@ async function saveImages(files, preset, dir) {
   return names;
 }
 
-module.exports = { saveImage, saveImages, BadImageError, PRESETS };
+module.exports = { saveImage, saveImages, imageFormat, BadImageError, PRESETS };
