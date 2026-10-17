@@ -16,6 +16,10 @@ const contactSchema = new Schema({
   // Избранные идут первыми в списке, остальные — по алфавиту.
   favorite: { type: Boolean, default: false },
   note: { type: String, default: '', maxlength: 200 },
+  // Своё имя для человека (17.10), как в телефонной книжке: видно только
+  // владельцу — в списках, шапке диалога, пушах и звонках (utils/contactNames.js).
+  // Пусто — показывается ник.
+  name: { type: String, default: '', trim: true, maxlength: 64 },
   // Откуда добавлен — для понимания, какие кнопки работают, а какие стоят зря.
   source: { type: String, enum: ['profile', 'call', 'search', 'chat', 'recent'], default: 'profile' },
 });

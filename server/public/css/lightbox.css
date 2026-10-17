@@ -47,6 +47,9 @@
 /* Окно во весь экран, поверх него — системные панели: крестик держим ниже
  * чёлки. */
 .tk-lightbox__close { top: calc(20px + var(--tk-safe-t)); right: calc(20px + var(--tk-safe-r)); }
+/* «Показать в чате» (17.10, панель диалога) — рядом с крестиком. */
+.tk-lightbox__goto { top: calc(20px + var(--tk-safe-t)); right: calc(72px + var(--tk-safe-r)); }
+.tk-lightbox__goto[hidden] { display: none; }
 
 /* Видео: плеер 16:9 по ширине окна. */
 .tk-videobox__stage {
@@ -58,4 +61,5 @@
 @media (max-width: 767px) {
   .tk-lightbox__btn { width: 38px; height: 38px; }
   .tk-lightbox__close { top: calc(12px + var(--tk-safe-t)); right: calc(12px + var(--tk-safe-r)); }
+  .tk-lightbox__goto { top: calc(12px + var(--tk-safe-t)); right: calc(58px + var(--tk-safe-r)); }
 }

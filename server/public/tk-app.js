@@ -570,7 +570,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     // Переписка: события сокета уходят в document как tk:<событие>, их слушает
     // страница переписки (chats.js). Колокольчик зажигается на любой странице.
     ['message:new', 'message:failed', 'message:expired', 'message:limit', 'message:read', 'message:delivered', 'message:deleted', 'conversation:deleted',
-      'group:message', 'group:read', 'group:updated', 'group:removed',
+      'group:message', 'group:read', 'group:updated', 'group:removed', 'chat:pinned', 'chat:muted',
       'call:logged', 'call:deleted', 'live:changed', 'author:live', 'recording:status'].forEach((name) => {
       socket.on(name, (detail) => document.dispatchEvent(new CustomEvent('tk:' + name, { detail })));
     });
@@ -594,8 +594,9 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       // Заявка на переписку (utils/privacy.js) — молча: ни счётчика, ни звука.
       if (d && d.request) return;
       if (d && d.message && d.peer && d.message.sender === d.peer.id) window.tkChatBadge({ addMessages: 1 });
-      // Звук и системное уведомление — если включены в настройках (tk-notify.js).
-      if (window.TKNotify) window.TKNotify.message(d);
+      // Звук и системное уведомление — если включены в настройках (tk-notify.js)
+      // и у диалога не выключен звук (routes/chatInfo.js, muted).
+      if (window.TKNotify && !d.muted) window.TKNotify.message(d);
     });
     // Пропущенный звонок — счётчик у иконки переписки в шапке, у пункта
     // «Звонки» в панели и у вкладки. Открытая вкладка гасит его сама (chats.js).

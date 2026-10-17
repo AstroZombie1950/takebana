@@ -32,6 +32,8 @@ const groupSchema = new Schema({
   invite: { type: String, default: null },
   lastMessage: { type: Schema.Types.ObjectId, ref: 'Message', default: null },
   lastUpdated: { type: Date, default: Date.now },
+  // Закреплённое сообщение (17.10) — одно, ставят и снимают администраторы.
+  pinned: { type: Schema.Types.ObjectId, ref: 'Message', default: null },
 }, { timestamps: true });
 
 // Группы человека страницами от свежих — рядом с личными диалогами.

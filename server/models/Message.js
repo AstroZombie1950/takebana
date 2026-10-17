@@ -135,6 +135,13 @@ messageSchema.index({ recipient: 1, deliveredAt: 1 });
 // Жив ли ещё файл: удаление вложения проверяет, не ссылается ли на него
 // пересланная копия. Частичный — у большинства сообщений вложений нет.
 messageSchema.index({ 'attachments.key': 1 }, { partialFilterExpression: { 'attachments.0': { $exists: true } } });
+// Вкладки «Медиа», «Файлы», «Голосовые» в панели диалога (utils/chatInfo.js):
+// вложения нужного вида в одном диалоге, от свежих. Частичные — как выше.
+messageSchema.index({ conversationId: 1, 'attachments.kind': 1, sentAt: -1 }, { partialFilterExpression: { 'attachments.0': { $exists: true } } });
+// Вкладка «Публикации»: то, чем поделились, — редкость на фоне переписки.
+// Ключ не совпадает с лентой выше: два индекса с одним ключом база
+// различает по фильтру не во всех версиях.
+messageSchema.index({ conversationId: 1, sentAt: -1, 'share.kind': 1 }, { partialFilterExpression: { 'share.kind': { $exists: true } } });
 // Уборка исчерпанных и просроченных сообщений с ограничением.
 messageSchema.index({ 'limit.expiresAt': 1 }, { partialFilterExpression: { 'limit.expiresAt': { $exists: true } } });
 

@@ -77,6 +77,11 @@ const EN = {
     // Группы (routes/groups.js)
     'Группа не найдена': 'Group not found',
     'Это могут только администраторы группы': 'Only group admins can do this',
+    // Панель диалога (17.10, routes/chatInfo.js)
+    'Это сообщение нельзя закрепить': 'This message cannot be pinned',
+    'Неверный срок': 'Invalid duration',
+    'Слишком много поисков. Подождите минуту.': 'Too many searches. Please wait a minute.',
+    'Поиск занял слишком много времени — уточните запрос': 'The search took too long — try a more specific query',
     'Участники': 'Members',
     'Участник': 'Member',
     'В группе не больше 100 участников': 'A group can have at most 100 members',

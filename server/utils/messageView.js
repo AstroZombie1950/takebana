@@ -84,4 +84,4 @@ async function viewAll(list) {
   return list.map((m) => view(m, m.replyTo && byId.get(String(m.replyTo))));
 }
 
-module.exports = { view, viewAll, QUOTED };
+module.exports = { view, viewAll, attachmentView, replyView, QUOTED };

@@ -182,7 +182,9 @@
         : '<p class="tk-ginfo__name">' + escapeHtml(g.title) + '</p>') +
       '<p class="tk-note">' + escapeHtml(t('groups.count', { n: g.count })) + '</p>' +
 
-      '<label class="tk-gswitch"><input type="checkbox" data-gp="mute"' + (g.muted ? ' checked' : '') + '><span>' + escapeHtml(t('groups.mute')) + '</span></label>' +
+      // «Без звука» со сроком и поиск по переписке — те же, что в панели
+      // личного диалога (17.10, tk-chatinfo.js).
+      window.TKChatInfo.groupBlock(g) +
 
       (manage
         ? '<section class="tk-gsec"><h3 class="tk-kicker">' + escapeHtml(t('groups.invite')) + '</h3>' +
@@ -207,7 +209,11 @@
       '<section class="tk-gsec tk-gsec--danger"><div class="tk-gacts">' +
         '<button type="button" class="tk-btn tk-btn--ghost tk-btn--sm" data-gp="leave">' + escapeHtml(t('groups.leave')) + '</button>' +
         (g.myRole === 'owner' ? '<button type="button" class="tk-btn tk-btn--ghost tk-btn--sm tk-gdanger" data-gp="delete">' + escapeHtml(t('groups.delete')) + '</button>' : '') +
-      '</div></section>');
+      '</div></section>' +
+
+      // Медиа, файлы, голосовые и публикации группы — внизу, листаются до конца.
+      window.TKChatInfo.groupMedia());
+    window.TKChatInfo.groupMount(pane);
   }
 
   // Роли нескольким сразу (24.09) — у создателя, когда есть кому их дать.
@@ -408,12 +414,6 @@
       }
       return repaintPicker();
     }
-    if (box.getAttribute('data-gp') === 'mute') {
-      // Без звука — на год: «пока не включу обратно».
-      return post('/api/groups/' + encodeURIComponent(state.group.id) + '/mute', { hours: box.checked ? 24 * 365 : 0 })
-        .then(function (d) { state.group.muted = d.muted; })
-        .catch(function (err) { box.checked = !box.checked; fail(err); });
-    }
     if (box.hasAttribute('data-gp-file') && box.files[0]) {
       // Квадрат выбирает человек (public/tk-crop.js), как у аватара.
       var gid = state.group.id;
@@ -480,7 +480,7 @@
 
   $('newGroupBtn').addEventListener('click', create);
 
-  window.TKGroups = { settings: settings, create: create, join: join };
+  window.TKGroups = { settings: settings, create: create, join: join, close: close };
 
   var code = new URLSearchParams(location.search).get('join');
   if (code) join(code);

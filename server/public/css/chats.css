@@ -2053,7 +2053,9 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 }
 
 .tk-gpane[hidden] { display: none; }
-.tk-chat.is-pane .tk-chat__area > .tk-gpane { display: flex; }
+/* Только открытый экран: их два — группы и панель диалога (17.10), и без
+ * :not([hidden]) пустой спрятанный ложился поверх открытого. */
+.tk-chat.is-pane .tk-chat__area > .tk-gpane:not([hidden]) { display: flex; }
 
 .tk-gpane__head {
   flex: none;
@@ -2157,16 +2159,6 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 
 .tk-ginfo__title { display: flex; gap: 8px; }
 .tk-ginfo__title .tk-field { flex: 1; min-width: 0; padding: 10px 14px; }
-
-.tk-gswitch {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--tk-fg-2);
-  cursor: pointer;
-}
-
-.tk-gswitch input { width: 16px; height: 16px; accent-color: var(--tk-accent); }
 
 .tk-gsec {
   display: flex;
@@ -2341,3 +2333,417 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 }
 .tk-lib__more { display: flex; margin: 14px auto 0; }
 .tk-lib__more[hidden] { display: none; }
+
+/* ── Панель диалога (17.10, public/tk-chatinfo.js) ───────────────────────
+ * Тот же экран поверх диалога, что у группы (.tk-gpane): фото и имя
+ * по центру, ряд кнопок, строки действий, вкладки вложений. На широком
+ * экране — колонкой по центру, чтобы строки не растягивались на всю ширину. */
+.tk-cinfo__body { gap: 16px; }
+.tk-cinfo__body > * { width: 100%; max-width: 640px; margin-left: auto; margin-right: auto; }
+
+.tk-cinfo__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  text-align: center;
+}
+
+.tk-cinfo__ava {
+  width: 96px;
+  height: 96px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 36px;
+  font-weight: 900;
+  color: var(--tk-paper);
+  text-decoration: none;
+}
+
+.tk-cinfo__ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tk-cinfo__ava:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
+
+/* Имя — кнопка: нажали — поле своего имени на его месте. */
+.tk-cinfo__name {
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  background: none;
+  font: inherit;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--tk-fg);
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.tk-cinfo__name:hover,
+.tk-cinfo__name:focus-visible { border-color: var(--tk-rule); outline: none; }
+
+.tk-cinfo__rename { display: flex; align-items: center; gap: 6px; width: min(100%, 360px); }
+.tk-cinfo__rename .tk-field { flex: 1; min-width: 0; padding: 9px 12px; }
+
+.tk-cinfo__nick {
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 14px;
+  letter-spacing: .03em;
+  color: var(--tk-accent-text);
+  text-decoration: none;
+}
+
+.tk-cinfo__nick:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+.tk-cinfo__seen {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--tk-muted);
+}
+
+.tk-cinfo__seen .presence-dot { position: static; width: 7px; height: 7px; border: none; border-radius: 50%; }
+
+/* Описание — одной строкой; нажатие раскрывает целиком. Ширина — не
+ * больше строки для чтения, по центру, как вся карточка: длинное в одну
+ * строку иначе прижималось к левому краю. */
+.tk-cinfo__bio {
+  max-width: min(100%, 520px);
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--tk-fg-2);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tk-cinfo__bio[aria-expanded="true"] { white-space: pre-line; overflow-wrap: anywhere; }
+
+/* Ряд кнопок: звонок, видео, звук, поиск — поровну во всю ширину. */
+.tk-cinfo__acts {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.tk-cinfo__act {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  border: 1px solid var(--tk-rule);
+  background: none;
+  color: var(--tk-fg-2);
+  cursor: pointer;
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.tk-cinfo__act:hover,
+.tk-cinfo__act:focus-visible { color: var(--tk-accent-text); border-color: var(--tk-accent); outline: none; }
+.tk-cinfo__act[aria-pressed="true"] { color: var(--tk-accent-text); }
+
+.tk-cinfo__rows { display: flex; flex-direction: column; border-top: 1px solid var(--tk-rule); }
+
+.tk-cinfo__row {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  padding: 12px 4px;
+  border: none;
+  border-bottom: 1px solid var(--tk-rule);
+  background: none;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 14px;
+  letter-spacing: .03em;
+  text-align: left;
+  color: var(--tk-fg-2);
+  cursor: pointer;
+}
+
+.tk-cinfo__row:hover,
+.tk-cinfo__row:focus-visible { color: var(--tk-fg); background: rgb(var(--tk-fg-rgb) / .04); outline: none; }
+.tk-cinfo__row.is-danger { color: var(--tk-accent-text); }
+
+.tk-cinfo__group {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tk-cinfo__group:hover .tk-gmember__name { color: var(--tk-accent-text); }
+
+/* Вкладки вложений: на узком экране — прокрутка вбок, без переноса. */
+.tk-cinfo__media { display: flex; flex-direction: column; gap: 10px; }
+
+.tk-cinfo__tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-cinfo__tabs::-webkit-scrollbar { display: none; }
+
+.tk-cinfo__tab {
+  flex: none;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 14px;
+  letter-spacing: .04em;
+  color: var(--tk-muted);
+  cursor: pointer;
+}
+
+.tk-cinfo__tab[aria-selected="true"] { color: var(--tk-fg); border-bottom-color: var(--tk-accent); }
+.tk-cinfo__tab:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: -2px; }
+
+.tk-cinfo__filefind[hidden] { display: none; }
+.tk-cinfo__filefind .tk-field { width: 100%; padding: 9px 12px; }
+
+.tk-cinfo__items { display: flex; flex-direction: column; }
+.tk-cinfo__items--grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 4px; }
+.tk-cinfo__items--grid .tk-cinfo__note,
+.tk-cinfo__items--grid .tk-cinfo__retry { grid-column: 1 / -1; }
+.tk-cinfo__note { margin: 18px 0; }
+.tk-cinfo__retry { justify-self: center; align-self: center; }
+
+.tk-cinfo__tile {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  background: var(--tk-shot);
+  cursor: pointer;
+}
+
+.tk-cinfo__tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tk-cinfo__tile:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: -2px; }
+
+/* Длина видео — поверх кадра: цвета бренда, а не темы. */
+.tk-cinfo__len {
+  position: absolute;
+  left: 5px;
+  bottom: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  background: rgba(10, 10, 10, .75);
+  font: 400 11px/1.6 Oswald, 'Oswald Fallback', sans-serif;
+  color: var(--tk-paper);
+}
+
+.tk-cinfo__line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-cinfo__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tk-cinfo__main:hover .tk-cinfo__title { color: var(--tk-accent-text); }
+
+.tk-cinfo__thumb {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  overflow: hidden;
+  background: var(--tk-shot);
+}
+
+.tk-cinfo__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tk-cinfo__thumb--icon { display: flex; align-items: center; justify-content: center; color: var(--tk-accent-text); background: rgb(var(--tk-fg-rgb) / .05); }
+
+.tk-cinfo__text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.tk-cinfo__title,
+.tk-cinfo__meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-cinfo__title { font-size: 14px; color: var(--tk-fg); }
+.tk-cinfo__meta { font-size: 12px; color: var(--tk-muted); }
+
+@media (max-width: 767px) {
+  .tk-cinfo__items--grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; }
+  .tk-cinfo__act { height: 48px; }
+}
+
+/* ── Поиск по переписке и закреплённое (17.10) ─────────────────────────── */
+.tk-chat__find[hidden],
+.tk-chat__pin[hidden],
+.tk-chat__found[hidden],
+.tk-chat__down[hidden] { display: none; }
+
+/* Полоса поиска — на месте шапки, той же высоты. */
+.tk-chat__find {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--tk-rule);
+}
+
+.tk-chat__find .tk-field { flex: 1; min-width: 0; padding: 8px 12px; }
+
+.tk-chat__findpos {
+  flex: none;
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 13px;
+  color: var(--tk-muted);
+  white-space: nowrap;
+}
+
+.tk-chat__findpos:empty { display: none; }
+.tk-chat__find .tk-chat__tool:disabled { opacity: .35; cursor: default; }
+.tk-chat__find .tk-chat__tool:disabled:hover { color: var(--tk-muted); border-color: transparent; }
+
+/* Найденное — списком поверх ленты, под полосой поиска: верх ставит
+ * tk-chatinfo.js по низу полосы. */
+.tk-chat__found {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  top: 61px;
+  bottom: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--tk-bg);
+}
+
+.tk-chat__hit {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 20px;
+  border: none;
+  border-bottom: 1px solid var(--tk-rule);
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--tk-fg-2);
+  cursor: pointer;
+}
+
+.tk-chat__hit:hover,
+.tk-chat__hit:focus-visible,
+.tk-chat__hit.is-on { background: rgba(227, 66, 52, .08); outline: none; }
+
+.tk-chat__hit-top { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--tk-muted); }
+.tk-chat__hit-name { font-weight: 700; color: var(--tk-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-chat__hit-top time { flex: none; }
+.tk-chat__hit-text { font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.tk-chat__hit mark { background: rgba(227, 66, 52, .28); color: var(--tk-fg); }
+
+/* Закреплённое — тонкой полосой под шапкой. */
+.tk-chat__pin {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 0 20px;
+  border-bottom: 1px solid var(--tk-rule);
+  background: rgb(var(--tk-fg-rgb) / .03);
+}
+
+.tk-chat__pin-go {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--tk-fg-2);
+  cursor: pointer;
+}
+
+.tk-chat__pin-icon { flex: none; color: var(--tk-accent-text); }
+.tk-chat__pin-text { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.tk-chat__pin-text .tk-quote__thumb { width: 30px; height: 30px; }
+.tk-chat__pin-text .tk-quote__body { min-width: 0; }
+.tk-chat__pin-text .tk-quote__text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-chat__pin .tk-chat__tool { width: 32px; height: 32px; }
+
+/* «К последним» — круглая кнопка над полем ввода у правого края ленты:
+ * высоту над полем ставит chats.js (paintDown), поле растёт с текстом. */
+.tk-chat__down {
+  position: absolute;
+  z-index: 4;
+  right: 20px;
+  bottom: 90px;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--tk-rule);
+  border-radius: 50%;
+  background: var(--tk-layer);
+  color: var(--tk-fg-2);
+  box-shadow: 0 6px 18px var(--tk-shadow-c);
+  cursor: pointer;
+}
+
+.tk-chat__down:hover,
+.tk-chat__down:focus-visible { color: var(--tk-accent-text); border-color: var(--tk-accent); outline: none; }
+
+/* Без звука — перечёркнутый колокольчик после имени в строке списка. */
+.tk-dialog[data-muted] .tk-dialog__who::after {
+  content: '';
+  flex: none;
+  width: 13px;
+  height: 13px;
+  background: var(--tk-muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 16.5V11a6 6 0 0110-4.5M18 11v5.5l1.5 1.5H8M10 20.5h4M4 4l16 16'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 16.5V11a6 6 0 0110-4.5M18 11v5.5l1.5 1.5H8M10 20.5h4M4 4l16 16'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.tk-dialog[data-muted] .tk-dialog__unread { background: var(--tk-muted); color: var(--tk-bg); }
+
+@media (max-width: 640px) {
+  .tk-chat__find { padding: 10px 16px; gap: 6px; }
+  .tk-chat__find .tk-chat__tool { width: 32px; height: 32px; }
+  .tk-chat__hit { padding: 10px 16px; }
+  .tk-chat__pin { padding-left: 16px; }
+  .tk-chat__down { right: 16px; }
+}

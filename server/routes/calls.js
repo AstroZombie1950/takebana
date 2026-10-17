@@ -15,6 +15,7 @@ const User = require('../models/User');
 const callLog = require('../utils/callLog');
 const restriction = require('../utils/restrict');
 const privacy = require('../utils/privacy');
+const contactNames = require('../utils/contactNames');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
 const { randomUUID: uuidv4 } = require('crypto');
 
@@ -51,9 +52,11 @@ router.post('/api/calls/create', requireAuthApi, requireNotBanned, callLimiter, 
   // Кто может звонить — решает вызываемый (utils/privacy.js).
   const rule = await privacy.decide('calls', calleeId, callerId);
   if (!rule.ok) return res.status(403).json({ success: false, privacy: rule.rule, message: rule.message });
-  const [caller, callee] = await Promise.all([
+  const [caller, callee, alias] = await Promise.all([
     User.findById(callerId).select('nickname login email avatar').lean(),
     User.exists({ _id: calleeId }),
+    // У вызываемого звонящий может быть записан своим именем (utils/contactNames.js).
+    contactNames.nameFor(calleeId, callerId),
   ]);
   if (!callee) return res.status(404).json({ success: false, message: 'Пользователь не найден' });
   const callId = uuidv4();
@@ -64,7 +67,7 @@ router.post('/api/calls/create', requireAuthApi, requireNotBanned, callLimiter, 
     pendingCalls.set(callId, { callerId, calleeId: String(calleeId), type, own: own === true, createdAt: Date.now() });
   }
   callLog.created(callId, { callerId, calleeId, type });
-  const displayName = caller ? userView.displayName(caller) : '';
+  const displayName = alias || (caller ? userView.displayName(caller) : '');
   const avatarUrl = caller?.avatar || null;
   // notify callee via socket room
   if (io) {

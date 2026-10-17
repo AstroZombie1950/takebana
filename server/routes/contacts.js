@@ -19,8 +19,16 @@ const restriction = require('../utils/restrict');
 const privacy = require('../utils/privacy');
 const { rankPeers } = require('../utils/recentPeers');
 const errorLog = require('../utils/errorLog');
+const contactNames = require('../utils/contactNames');
+const { audit } = require('../utils/audit');
 
 const FIELDS = 'nickname login email avatar isOnline lastSeen role';
+
+// Записанный: под своим именем, если оно задано, ник — для поиска.
+function named(c) {
+  const p = person(c.peer, { favorite: !!c.favorite, note: c.note || '', addedAt: c.addedAt, name: c.name || '' });
+  return c.name ? { ...contactNames.rename(p, c.name), login: userView.displayName(c.peer) } : p;
+}
 
 function person(user, extra) {
   const displayName = userView.displayName(user);
@@ -54,9 +62,11 @@ router.get('/api/contacts', requireAuthApi, async (req, res) => {
   const me = String(req.session.userId);
   const rows = await Contact.find({ owner: me }).populate('peer', FIELDS).lean();
   await privacy.maskPresence(me, rows.map((c) => c.peer));
+  // Своё имя (17.10, utils/contactNames.js) — вместо ника; поиск во вкладке
+  // ищет и по нику (login несёт его, когда имя своё).
   const contacts = rows
     .filter((c) => c.peer) // человек удалил аккаунт
-    .map((c) => person(c.peer, { favorite: !!c.favorite, note: c.note || '', addedAt: c.addedAt }))
+    .map((c) => named(c))
     .sort(order);
 
   if (contacts.length || req.query.suggest !== '1') return res.json({ contacts, suggest: [] });
@@ -106,6 +116,33 @@ router.post('/api/contacts/remove', requireAuthApi, validate({
   // а не после перезагрузки своей страницы (utils/privacy.js).
   if (deletedCount) privacy.recheckPresence(req.app.get('io'), me).catch((e) => errorLog.server(e, 'privacy.recheck'));
   res.json({ success: true, removed: deletedCount });
+});
+
+// Своё имя (17.10): из панели диалога. Кого ещё нет в книжке — записывает,
+// как в Telegram «добавить в контакты» с именем. Пустое имя — снова ник,
+// человек остаётся в контактах.
+router.post('/api/contacts/rename', requireAuthApi, requireNotBanned, validate({
+  peerId: { type: 'objectId', required: true, label: 'Собеседник' },
+  name: { type: 'string', max: contactNames.MAX, allowEmpty: true, default: '', label: 'Имя' },
+}), async (req, res) => {
+  const me = String(req.session.userId);
+  const { peerId } = req.body;
+  const name = req.body.name.replace(/\s+/g, ' ').trim();
+  if (peerId === me) return res.status(400).json({ message: 'Себя в контакты добавить нельзя' });
+  const barred = await restriction.between(me, peerId);
+  if (barred) return res.status(403).json({ restricted: barred, message: restriction.BLOCKED[barred] });
+  const peer = await User.findById(peerId).select(FIELDS).lean();
+  if (!peer) return res.status(404).json({ message: 'Пользователь не найден' });
+  await privacy.maskPresence(me, [peer]);
+
+  const row = await Contact.findOneAndUpdate(
+    { owner: me, peer: peerId },
+    { $set: { name }, $setOnInsert: { addedAt: new Date(), source: 'chat' } },
+    { upsert: true, returnDocument: 'after' }
+  ).lean();
+  // Само имя в журнал не пишем: это личная запись человека.
+  audit(req, 'contact.rename', { targetType: 'user', target: peer, meta: { cleared: !name, len: name.length } });
+  res.json({ success: true, contact: named({ ...row, peer }) });
 });
 
 router.post('/api/contacts/favorite', requireAuthApi, validate({

@@ -18,6 +18,7 @@ const privacy = require('./privacy');
 const { view } = require('./messageView');
 const { isPlainFileName, resolveWithin } = require('./safePath');
 const avatarSmall = require('./avatarSmall');
+const contactNames = require('./contactNames');
 
 const MAX_MEMBERS = 100;
 const TITLE_MAX = 64;
@@ -76,9 +77,11 @@ async function info(group, me) {
   await privacy.maskPresence(me, users);
   const byId = new Map(users.map((u) => [String(u._id), u]));
   const rank = { owner: 0, admin: 1, member: 2 };
+  // Свои имена контактов (utils/contactNames.js) — и в списке участников.
+  const names = await contactNames.namesFor(me, users.map((u) => u._id));
   const members = group.members
     .filter((m) => byId.has(String(m.user)))
-    .map((m) => ({ ...person(byId.get(String(m.user))), role: m.role }))
+    .map((m) => ({ ...contactNames.rename(person(byId.get(String(m.user))), names.get(String(m.user))), role: m.role }))
     .sort((a, b) => rank[a.role] - rank[b.role] || a.displayName.localeCompare(b.displayName, ['ru', 'en'], { sensitivity: 'base' }));
   const myRole = roleOf(group, me);
   const mine = memberOf(group, me);
@@ -86,6 +89,7 @@ async function info(group, me) {
     ...brief(group),
     myRole,
     muted: !!(mine && mine.mutedUntil && mine.mutedUntil > new Date()),
+    mutedUntil: mine && mine.mutedUntil > new Date() ? mine.mutedUntil : null,
     invite: canManage(myRole) ? group.invite : null,
     members,
   };

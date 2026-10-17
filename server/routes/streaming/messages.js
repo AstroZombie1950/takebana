@@ -42,6 +42,8 @@ const { tr, langOf } = require('../../utils/i18n');
 const share = require('../../utils/share');
 const library = require('../../utils/library');
 const Contact = require('../../models/Contact');
+const contactNames = require('../../utils/contactNames');
+const chatInfo = require('../../utils/chatInfo');
 
 // Ограничение доступа закрывает и переписку (utils/restrict.js): 403
 // с объяснением, кто кого ограничил. true — ответ уже отправлен.
@@ -157,10 +159,11 @@ function pushText(m) {
 
 // Пуш о сообщении: на устройства получателя, когда он не читает его прямо
 // сейчас. Ничего не ждёт и ничего не роняет — пуш не важнее сообщения.
-function pushMessage({ message, sender, recipient }) {
+// name — как отправитель записан у получателя (utils/contactNames.js).
+function pushMessage({ message, sender, recipient, name }) {
   const note = Object.assign({
     topic: 'message',
-    title: userView.displayName(sender),
+    title: name || userView.displayName(sender),
     bodyKey: 'push.newMessage',
     // Метка по собеседнику: пять сообщений подряд — одно уведомление
     // на экране, а не стопка из пяти.
@@ -204,19 +207,28 @@ async function deliver(req, { conversation, sender, recipient, content = '', att
   // Заявка (utils/privacy.js): получатель видит её в своей папке, без пуша
   // и звука, и в счётчик она не идёт.
   const request = !!conversation.requestFor && String(conversation.requestFor) === String(recipient._id);
+  // Без звука у получателя (utils/chatInfo.js) — ни пуша, ни звука во
+  // вкладке; счётчик идёт.
+  const muted = !!chatInfo.mutedUntil(conversation, recipient._id);
 
   // В колокольчик сообщение не пишется (18.09.2026): о нём говорит счётчик
   // у иконки переписки в шапке, его ведёт tk-app.js по message:new.
 
+  // Каждый видит другого под своим именем для него (utils/contactNames.js):
+  // строка в списке, уведомление вкладки, пуш.
+  const [toRecipient, toSender] = await Promise.all([
+    contactNames.nameFor(recipient._id, sender._id),
+    contactNames.nameFor(sender._id, recipient._id),
+  ]);
   const out = view(message, reply);
   const socket = io(req);
   if (socket) {
-    socket.to(`user:${recipient._id}`).emit('message:new', { message: out, peer: person(sender), ...(request ? { request: true } : {}) });
-    socket.to(`user:${sender._id}`).emit('message:new', { message: out, peer: person(recipient), ...(ref ? { ref } : {}) });
+    socket.to(`user:${recipient._id}`).emit('message:new', { message: out, peer: contactNames.rename(person(sender), toRecipient), ...(request ? { request: true } : {}), ...(muted ? { muted: true } : {}) });
+    socket.to(`user:${sender._id}`).emit('message:new', { message: out, peer: contactNames.rename(person(recipient), toSender), ...(ref ? { ref } : {}) });
   }
   // silent — пересылка пачкой: двадцать писем за секунду это одно действие
   // человека, и будить телефон двадцать раз незачем. Пуш уходит с последним.
-  if (!silent && !request) pushMessage({ message, sender, recipient });
+  if (!silent && !request && !muted) pushMessage({ message, sender, recipient, name: toRecipient });
   return out;
 }
 
@@ -268,19 +280,22 @@ async function dialogPage(me, before, { requests = false } = {}) {
   })));
   const lastBy = new Map(lastRows.filter((r) => r.last).map((r) => [String(r._id), r.last]));
   const unreadBy = new Map(unreadRows.map((r) => [String(r._id), r.n]));
+  const peerOf = (c) => (String(c.userOne._id) === String(me) ? c.userTwo : c.userOne);
+  const names = await contactNames.namesFor(me, conversations.filter((c) => c.userOne && c.userTwo).map((c) => peerOf(c)._id));
 
   const list = conversations
     // Собеседник мог удалить аккаунт — такой диалог не показать.
     .filter((c) => c.userOne && c.userTwo)
     .map((c) => {
-      const peer = String(c.userOne._id) === String(me) ? c.userTwo : c.userOne;
+      const peer = peerOf(c);
       const last = lastBy.get(String(c._id)) || null;
       return {
         interlocutor: {
-          ...person(peer),
+          ...contactNames.rename(person(peer), names.get(String(peer._id))),
           _id: peer._id,
           isOnline: !!peer.isOnline,
         },
+        ...(chatInfo.mutedUntil(c, me) ? { muted: true } : {}),
         last: last && {
           // id — строке в списке: истёкшее исчезающее меняет подпись и
           // у диалога, который сейчас не открыт (public/chats.js).
@@ -331,8 +346,10 @@ async function groupRows(me, before) {
   const nameOf = new Map(authors.map((u) => [String(u._id), userView.displayName(u)]));
   return list.map((g, i) => {
     const last = lasts[i];
+    const mine = g.members.find((m) => String(m.user) === String(me));
     return {
       group: groups.brief(g),
+      ...(mine && mine.mutedUntil > new Date() ? { muted: true } : {}),
       last: last && {
         content: last.content || '',
         kind: last.attachments && last.attachments[0] ? last.attachments[0].kind : last.share && last.share.kind ? 'share' : '',
@@ -373,7 +390,8 @@ router.get('/chatsPage', requireAuth, commonDataMiddleware, async (req, res) => 
     await privacy.maskPresence(me, users);
     for (const user of users) known.set(String(user._id), { ...person(user), isOnline: !!user.isOnline });
   }
-  const recent = order.map((id) => known.get(id)).filter(Boolean);
+  const recentNames = await contactNames.namesFor(me, unknown);
+  const recent = order.map((id) => known.get(id)).filter(Boolean).map((p) => contactNames.rename(p, recentNames.get(String(p.id))));
 
   // Вкладки «Звонки» и «Контакты» открываются и адресом: из уведомления
   // о пропущенном и из ссылок «в контакты» на других страницах.
@@ -452,7 +470,7 @@ router.post('/start-conversation', requireAuthApi, requireNotBanned, validate({
 
   // Карточка собеседника — строке диалога, которой у страницы ещё нет
   // (chats.js, openPeer: ?peer= на диалог старше первой страницы).
-  res.json({ success: true, conversationId: conversation._id, peer: person(peer) });
+  res.json({ success: true, conversationId: conversation._id, peer: contactNames.rename(person(peer), await contactNames.nameFor(me, recipientId)) });
 });
 
 
@@ -464,13 +482,23 @@ router.post('/start-conversation', requireAuthApi, requireNotBanned, validate({
 // Вместе со страницей — звонки двоих за тот же отрезок: лента показывает их
 // между сообщениями. Страница неполная — дальше сообщений нет, и звонки
 // берутся до самого начала.
+//
+// after и around (17.10) — лента вокруг сообщения, к которому перешли из
+// поиска или закреплённого, и её продолжение вниз (utils/chatInfo.js,
+// historyPage). older/newer — есть ли ещё в ту сторону.
 router.get('/getMessages', requireAuthApi, async (req, res) => {
   const { recipientId } = req.query;
-  const before = req.query.before ? new Date(req.query.before) : null;
+  const time = (v) => (typeof v === 'string' && v ? new Date(v) : null);
+  const before = time(req.query.before);
+  const after = time(req.query.after);
+  const around = typeof req.query.around === 'string' ? req.query.around : null;
   const me = req.session.userId;
 
-  if (typeof recipientId !== 'string' || !ObjectId.isValid(recipientId) || (before && isNaN(before))) {
+  if (typeof recipientId !== 'string' || !ObjectId.isValid(recipientId)) {
     return res.status(400).json({ message: 'Не указан ID получателя' });
+  }
+  if ((before && isNaN(before)) || (after && isNaN(after)) || (around && !ObjectId.isValid(around))) {
+    return res.status(400).json({ message: 'Неверный запрос' });
   }
 
   const conversation = await findConversation(me, recipientId);
@@ -478,21 +506,22 @@ router.get('/getMessages', requireAuthApi, async (req, res) => {
     return res.status(404).json({ message: 'Диалог не найден' });
   }
 
-  const messages = await Message.find({
-    conversationId: conversation._id,
-    deletedFor: { $ne: me },
-    ...(before ? { sentAt: { $lt: before } } : {}),
-  })
-    .sort({ sentAt: -1 })
-    .limit(PAGE)
-    .lean();
-
-  const from = messages.length === PAGE ? messages[messages.length - 1].sentAt : null;
-  const calls = await callLog.between(me, recipientId, { from, to: before });
+  const page = await chatInfo.historyPage(conversation._id, me, { before, after, around }, PAGE);
+  if (!page) return res.status(404).json({ message: 'Сообщение не найдено' });
+  const calls = await callLog.between(me, recipientId, { from: page.from, to: page.to });
 
   // Заявка: 'in' — ко мне (показать «Принять»), 'out' — моя, ждёт ответа.
   const request = conversation.requestFor ? (String(conversation.requestFor) === String(me) ? 'in' : 'out') : null;
-  res.json({ messages: await viewAll(messages.reverse()), calls, restricted: await restriction.between(me, recipientId), request });
+  res.json({
+    messages: await viewAll(page.list),
+    calls,
+    older: page.older,
+    newer: page.newer,
+    restricted: await restriction.between(me, recipientId),
+    request,
+    pinned: await chatInfo.pinnedView(conversation._id, me, conversation.pinned),
+    muted: chatInfo.mutedUntil(conversation, me),
+  });
 });
 
 

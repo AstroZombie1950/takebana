@@ -113,7 +113,7 @@
           <%# Группа (routes/groups.js): data-group вместо data-id, без присутствия
               и меню человека. Последнее — с автором; служебную строку
               подписывает chats.js (sysText) — здесь она ключом словаря. %>
-          <button type="button" class="tk-dialog tk-dialog--group" data-group="<%= g.id %>" data-name="<%= g.title %>" data-count="<%= g.count %>"
+          <button type="button" class="tk-dialog tk-dialog--group" data-group="<%= g.id %>" data-name="<%= g.title %>" data-count="<%= g.count %>"<% if (c.muted) { %> data-muted<% } %>
                   data-ava-url="<%= g.avatarStyle.url || '' %>" data-ava-bg="<%= g.avatarStyle.gradient || '' %>" data-ava-initial="<%= g.avatarStyle.initial || '' %>">
             <span class="tk-dialog__ava"<% if (!g.avatarStyle.url) { %> style="background: <%= g.avatarStyle.gradient %>"<% } %>>
               <% if (g.avatarStyle.url) { %><img src="<%= g.avatarStyle.url %>" alt="" loading="lazy"><% } else { %><%= g.avatarStyle.initial %><% } %>
@@ -145,7 +145,8 @@
             data-ava-initial="<%= p.avatarStyle.initial || '' %>"
             data-presence-user="<%= p.id %>"<% if (c.last) { %>
             data-last="<%= c.last.id %>"<% } %><% if (p.official) { %>
-            data-official<% } %>
+            data-official<% } %><% if (c.muted) { %>
+            data-muted<% } %>
           >
             <span class="tk-dialog__ava"<% if (!p.avatarStyle.url) { %> data-bg="<%= p.avatarStyle.gradient %>"<% } %>>
               <% if (p.avatarStyle.url) { %><img src="<%= p.avatarStyle.url %>" alt="" loading="lazy"><% } else { %><%= p.avatarStyle.initial %><% } %>
@@ -182,10 +183,12 @@
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
           </button>
 
-          <%# Имя, аватар и присутствие ставит chats.js при выборе диалога. %>
+          <%# Имя, аватар и присутствие ставит chats.js при выборе диалога.
+              Аватар и имя открывают панель диалога (17.10, tk-chatinfo.js),
+              из неё — профиль. %>
           <span class="tk-chat__ava-big" id="chatAvatar"></span>
 
-          <div class="tk-chat__peer-wrap" id="peerLink">
+          <div class="tk-chat__peer-wrap" id="peerLink" role="button" tabindex="0" aria-label="<%= ta('chatinfo.open') %>" data-i18n-aria="chatinfo.open">
             <div class="tk-chat__peer" id="chatHeaderPresence" data-presence-user="">
               <h2 id="peerName"></h2>
               <span class="presence-dot presence-offline"></span>
@@ -203,17 +206,7 @@
           <button type="button" class="tk-chat__tool" id="callVideo" aria-label="<%= ta('calls.video') %>" data-i18n-aria="calls.video" title="<%= ta('calls.video') %>" data-i18n-title="calls.video">
             <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M3.5 6.5h11v11h-11zM14.5 10.5l6-3v9l-6-3z"></path></svg>
           </button>
-
-          <%# Записать собеседника или убрать из записной книжки, не уходя
-              из переписки (23.09). Две кнопки, видна одна (24.09): какая —
-              решает chats.js по списку контактов, пока он не пришёл —
-              ни одной. %>
-          <button type="button" class="tk-chat__tool" id="contactAdd" hidden aria-label="<%= ta('contacts.add') %>" data-i18n-aria="contacts.add" title="<%= ta('contacts.add') %>" data-i18n-title="contacts.add">
-            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M9.5 11.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 19.5c0-3 2.9-5 6.5-5 .8 0 1.6.1 2.3.3M17.5 13.5v6M14.5 16.5h6"></path></svg>
-          </button>
-          <button type="button" class="tk-chat__tool" id="contactRemove" hidden aria-label="<%= ta('contacts.remove') %>" data-i18n-aria="contacts.remove" title="<%= ta('contacts.remove') %>" data-i18n-title="contacts.remove">
-            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M9.5 11.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 19.5c0-3 2.9-5 6.5-5 .8 0 1.6.1 2.3.3M14.5 16.5h6"></path></svg>
-          </button>
+          <%# «В контакты» и «Убрать» отсюда ушли в панель диалога (17.10). %>
         </div>
 
         <%# Режим выбора: вместо шапки диалога — сколько выбрано и что с этим
@@ -228,7 +221,50 @@
           <button type="button" class="tk-btn tk-btn--primary tk-btn--sm" data-pick="delete" data-i18n="chats.delete"><%- t('chats.delete') %></button>
         </div>
 
+        <%# Поиск по переписке (17.10, tk-chatinfo.js) — на месте шапки, как
+            полоса выбора. Найденное — списком поверх ленты; выбрали —
+            лента встаёт к сообщению, стрелки ведут к соседним совпадениям. %>
+        <div class="tk-chat__find" id="findBar" hidden>
+          <button type="button" class="tk-chat__tool" id="findClose" aria-label="<%= ta('chatinfo.findClose') %>" data-i18n-aria="chatinfo.findClose" title="<%= ta('chatinfo.findClose') %>" data-i18n-title="chatinfo.findClose">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+          </button>
+          <input type="search" class="tk-field" id="findInput" maxlength="100" autocomplete="off" enterkeyhint="search" placeholder="<%= ta('chatinfo.search') %>" data-i18n-placeholder="chatinfo.search" aria-label="<%= ta('chatinfo.search') %>" data-i18n-aria="chatinfo.search">
+          <span class="tk-chat__findpos" id="findPos" aria-live="polite"></span>
+          <button type="button" class="tk-chat__tool" id="findPrev" disabled aria-label="<%= ta('chatinfo.findOlder') %>" data-i18n-aria="chatinfo.findOlder" title="<%= ta('chatinfo.findOlder') %>" data-i18n-title="chatinfo.findOlder">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M6 14l6-6 6 6"></path></svg>
+          </button>
+          <button type="button" class="tk-chat__tool" id="findNext" disabled aria-label="<%= ta('chatinfo.findNewer') %>" data-i18n-aria="chatinfo.findNewer" title="<%= ta('chatinfo.findNewer') %>" data-i18n-title="chatinfo.findNewer">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M6 10l6 6 6-6"></path></svg>
+          </button>
+        </div>
+
+        <%# Закреплённое сообщение (17.10): цитата ведёт к нему в ленте,
+            крестик — открепить (кому можно — решает chats.js). %>
+        <div class="tk-chat__pin" id="pinBar" hidden>
+          <button type="button" class="tk-chat__pin-go" id="pinGo" aria-label="<%= ta('chatinfo.pinGoto') %>" data-i18n-aria="chatinfo.pinGoto">
+            <svg class="tk-chat__pin-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6l-1 6 4 3.5H6l4-3.5zM12 13v7.5"></path></svg>
+            <span class="tk-chat__pin-text" id="pinText"></span>
+          </button>
+          <button type="button" class="tk-chat__tool" id="pinOff" hidden aria-label="<%= ta('chatinfo.unpin') %>" data-i18n-aria="chatinfo.unpin" title="<%= ta('chatinfo.unpin') %>" data-i18n-title="chatinfo.unpin">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+          </button>
+        </div>
+
         <div class="tk-chat__feed" id="feed"></div>
+
+        <%# Список найденного поиском — поверх ленты. %>
+        <div class="tk-chat__found" id="findList" role="listbox" aria-label="<%= ta('chatinfo.search') %>" data-i18n-aria="chatinfo.search" hidden></div>
+
+        <%# К последним сообщениям: лента ушла вверх или стоит у найденного
+            сообщения в глубине истории (chats.js, newer). %>
+        <button type="button" class="tk-chat__down" id="toLatest" hidden aria-label="<%= ta('chatinfo.toLatest') %>" data-i18n-aria="chatinfo.toLatest" title="<%= ta('chatinfo.toLatest') %>" data-i18n-title="chatinfo.toLatest">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M6 10l6 6 6-6"></path></svg>
+        </button>
+
+        <%# Панель диалога (17.10, tk-chatinfo.js) — тем же экраном поверх
+            диалога, что и экран группы; у группы её вкладки встают в экран
+            группы. %>
+        <section class="tk-gpane tk-cinfo" id="infoPane" hidden></section>
 
         <%# Экран группы — создание, настройки, вступление по ссылке — поверх
             диалога, на телефоне во весь экран. Содержимое собирает
@@ -324,6 +360,8 @@
   <button type="button" role="menuitem" data-act="reply" data-for="reply" data-i18n="chats.reply"><%- t('chats.reply') %></button>
   <button type="button" role="menuitem" data-act="forward" data-for="message" data-i18n="chats.forward"><%- t('chats.forward') %></button>
   <button type="button" role="menuitem" data-act="copy" data-for="message" data-i18n="chats.copy"><%- t('chats.copy') %></button>
+  <button type="button" role="menuitem" data-act="pin" data-for="pin" data-i18n="chatinfo.pin"><%- t('chatinfo.pin') %></button>
+  <button type="button" role="menuitem" data-act="unpin" data-for="unpin" data-i18n="chatinfo.unpin"><%- t('chatinfo.unpin') %></button>
   <button type="button" role="menuitem" data-act="select" data-i18n="chats.select"><%- t('chats.select') %></button>
   <button type="button" role="menuitem" data-act="delete" class="tk-msgmenu__danger" data-i18n="chats.delete"><%- t('chats.delete') %></button>
 </div>
@@ -464,6 +502,10 @@
   <button type="button" class="tk-lightbox__btn tk-lightbox__close" id="lightboxClose" aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
   </button>
+  <%# К сообщению в ленте — когда фото открыто из панели диалога (tk-chatinfo.js). %>
+  <button type="button" class="tk-lightbox__btn tk-lightbox__goto" id="lightboxGoto" hidden aria-label="<%= ta('chatinfo.goto') %>" data-i18n-aria="chatinfo.goto" title="<%= ta('chatinfo.goto') %>" data-i18n-title="chatinfo.goto">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5h16v10.5H9.5L5.5 19.5V16H4z"></path><path d="M9 10.75h6M12.5 8.25l2.5 2.5-2.5 2.5"></path></svg>
+  </button>
   <%# Без src: адрес подставляет chats.js при открытии. %>
   <img id="lightboxImg" alt="">
 </div>
@@ -475,6 +517,9 @@
   <button type="button" class="tk-lightbox__btn tk-lightbox__close" id="videoBoxClose" aria-label="<%= ta('common.close') %>" data-i18n-aria="common.close">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
   </button>
+  <button type="button" class="tk-lightbox__btn tk-lightbox__goto" id="videoBoxGoto" hidden aria-label="<%= ta('chatinfo.goto') %>" data-i18n-aria="chatinfo.goto" title="<%= ta('chatinfo.goto') %>" data-i18n-title="chatinfo.goto">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5h16v10.5H9.5L5.5 19.5V16H4z"></path><path d="M9 10.75h6M12.5 8.25l2.5 2.5-2.5 2.5"></path></svg>
+  </button>
   <div class="tk-videobox__stage">
     <%- include('partials/player', { mode: 'vod' }) %>
   </div>
@@ -483,5 +528,6 @@
 <script defer src="<%= asset('/chats.js') %>"></script>
 <script defer src="<%= asset('/tk-crop.js') %>"></script>
 <script defer src="<%= asset('/tk-groups.js') %>"></script>
+<script defer src="<%= asset('/tk-chatinfo.js') %>"></script>
 </body>
 </html>

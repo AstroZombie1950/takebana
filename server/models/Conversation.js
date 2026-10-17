@@ -32,7 +32,16 @@ const conversationSchema = new Schema({
   // одновременных «написать» (двойное нажатие, оба пишут друг другу)
   // заводили два диалога, и история расползалась. Есть только у диалогов
   // с 24.09.2026; старые находятся по userOne/userTwo, как и раньше.
-  pair: { type: String }
+  pair: { type: String },
+  // Без звука (17.10): у каждого свой срок — пуши не приходят, вкладка
+  // не пищит, счётчик идёт. until в прошлом — снова со звуком.
+  muted: {
+    type: [{ _id: false, user: { type: Schema.Types.ObjectId, ref: 'User' }, until: Date }],
+    default: undefined
+  },
+  // Закреплённое сообщение (17.10) — одно на диалог, общее у двоих: шапка
+  // ленты показывает его полосой (utils/chatInfo.js).
+  pinned: { type: Schema.Types.ObjectId, ref: 'Message', default: null }
 }, {
   timestamps: true // Автоматически добавляет поля createdAt и updatedAt
 });

@@ -31,6 +31,8 @@ const { viewAll, QUOTED } = require('../utils/messageView');
 const { audit } = require('../utils/audit');
 const { saveImage, BadImageError } = require('../utils/image');
 const { uploadAvatar } = require('./streaming/uploads');
+const chatInfo = require('../utils/chatInfo');
+const contactNames = require('../utils/contactNames');
 
 const PAGE = 15;
 const io = (req) => req.app.get('io');
@@ -268,16 +270,8 @@ router.post('/api/groups/:id/delete', requireAuthApi, async (req, res) => {
   res.json({ success: true });
 });
 
-// Без звука: until — до какого времени, null — снова со звуком.
-router.post('/api/groups/:id/mute', requireAuthApi, validate({
-  hours: { type: 'int', required: true, min: 0, max: 24 * 365, label: 'Срок' },
-}), async (req, res) => {
-  const group = await mine(req, res);
-  if (!group) return;
-  const until = req.body.hours ? new Date(Date.now() + req.body.hours * 3600e3) : null;
-  await Group.updateOne({ _id: group._id }, { $set: { 'members.$[me].mutedUntil': until } }, { arrayFilters: [{ 'me.user': req.session.userId }] });
-  res.json({ muted: !!until, until });
-});
+// «Без звука» — общий у групп и личных диалогов: /api/chat/mute
+// (routes/chatInfo.js, 17.10).
 
 // ── Ссылка-приглашение ───────────────────────────────────────────────────────
 // on: true — новая ссылка (прежняя перестаёт работать), false — выключить.
@@ -336,23 +330,31 @@ router.post('/api/groups/join', requireAuthApi, requireNotBanned, validate({
 // История страницами по PAGE от конца, как у личной. people — авторы
 // страницы (и тех, кто уже вышел), seenUntil — докуда дочитал хоть кто-то
 // из остальных: до этого места свои сообщения «прочитаны».
+// after и around (17.10) — как у личной (utils/chatInfo.js, historyPage).
 router.get('/api/groups/:id/messages', requireAuthApi, async (req, res) => {
   const group = await mine(req, res);
   if (!group) return;
-  const before = req.query.before ? new Date(req.query.before) : null;
-  if (before && isNaN(before)) return res.status(400).json({ message: 'Неверный запрос' });
-  const list = await Message.find({
-    conversationId: group._id,
-    deletedFor: { $ne: req.session.userId },
-    ...(before ? { sentAt: { $lt: before } } : {}),
-  }).sort({ sentAt: -1 }).limit(PAGE).lean();
+  const time = (v) => (typeof v === 'string' && v ? new Date(v) : null);
+  const before = time(req.query.before);
+  const after = time(req.query.after);
+  const around = typeof req.query.around === 'string' ? req.query.around : null;
+  if ((before && isNaN(before)) || (after && isNaN(after)) || (around && !/^[a-f\d]{24}$/i.test(around))) {
+    return res.status(400).json({ message: 'Неверный запрос' });
+  }
+  const page = await chatInfo.historyPage(group._id, req.session.userId, { before, after, around }, PAGE);
+  if (!page) return res.status(404).json({ message: 'Сообщение не найдено' });
+  const list = page.list;
   const authors = await User.find({ _id: { $in: [...new Set(list.map((m) => String(m.sender)))] } }).select(groups.PEOPLE).lean();
   const others = group.members.filter((m) => String(m.user) !== me(req)).map((m) => m.readAt);
+  const people = await contactNames.applyAll(me(req), authors.map(groups.person));
   res.json({
-    messages: await viewAll(list.reverse()),
-    people: Object.fromEntries(authors.map((u) => [String(u._id), groups.person(u)])),
+    messages: await viewAll(list),
+    older: page.older,
+    newer: page.newer,
+    people: Object.fromEntries(people.map((p) => [p.id, p])),
     seenUntil: others.length ? new Date(Math.max(...others)) : null,
     group: await groups.info(group, me(req)),
+    pinned: await chatInfo.pinnedView(group._id, req.session.userId, group.pinned),
   });
 });
 

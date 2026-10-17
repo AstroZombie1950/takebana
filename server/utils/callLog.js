@@ -15,6 +15,7 @@ const User = require('../models/User');
 const push = require('./push');
 const userView = require('./userView');
 const errorLog = require('./errorLog');
+const contactNames = require('./contactNames');
 
 const MISSED = ['missed', 'canceled'];
 
@@ -91,11 +92,14 @@ async function finished(io, callId, outcome) {
 // пуш-сервисы копят сообщения, чтобы не будить телефон зря. Звонок за это
 // время кончится, и уведомление про идущий звонок было бы враньём.
 async function missedPush(call) {
-  const caller = await User.findById(call.caller).select('nickname login email').lean();
+  const [caller, alias] = await Promise.all([
+    User.findById(call.caller).select('nickname login email').lean(),
+    contactNames.nameFor(call.callee, call.caller),
+  ]);
   if (!caller) return;
   return push.send(call.callee, {
     topic: 'call',
-    title: userView.displayName(caller),
+    title: alias || userView.displayName(caller),
     bodyKey: 'push.missedCall',
     tag: 'call-' + String(call.caller),
     url: '/chatsPage?tab=calls',
@@ -143,13 +147,14 @@ async function journal(me) {
     Notification.updateMany({ recipient: me, type: 'call', isRead: false }, { $set: { isRead: true } }),
   ]);
 
-  return calls
-    .filter((c) => c.caller && c.callee) // собеседник мог удалить аккаунт
-    .map((c) => {
-      const other = String(c.caller._id) === String(me) ? c.callee : c.caller;
-      const displayName = userView.displayName(other);
-      return { ...view(c), peer: { id: String(other._id), displayName, avatarStyle: userView.avatarStyle(other, displayName) } };
-    });
+  const rows = calls.filter((c) => c.caller && c.callee); // собеседник мог удалить аккаунт
+  const otherOf = (c) => (String(c.caller._id) === String(me) ? c.callee : c.caller);
+  const names = await contactNames.namesFor(me, rows.map((c) => otherOf(c)._id));
+  return rows.map((c) => {
+    const other = otherOf(c);
+    const displayName = names.get(String(other._id)) || userView.displayName(other);
+    return { ...view(c), peer: { id: String(other._id), displayName, avatarStyle: userView.avatarStyle(other, displayName) } };
+  });
 }
 
 // Звонки двоих за отрезок времени — для ленты диалога: from включительно,
