@@ -633,7 +633,7 @@
   "viewer.prev": "Anterior",
   "viewer.next": "Próximo",
   "viewer.saving": "Salvando…",
-  "viewer.saveReady": "Arquivo pronto — toque em «Salvar» de novo",
+  "viewer.saveReady": "Arquivo pronto — toque de novo",
   "viewer.saveFailed": "Não foi possível salvar: {why}",
   "viewer.gone": "o arquivo não existe mais",
   "viewer.shareFailed": "o menu «Compartilhar» não abriu",

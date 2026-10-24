@@ -636,7 +636,7 @@
   "viewer.prev": "Предыдущее",
   "viewer.next": "Следующее",
   "viewer.saving": "Сохраняем…",
-  "viewer.saveReady": "Файл готов — нажмите «Сохранить» ещё раз",
+  "viewer.saveReady": "Файл готов — нажмите ещё раз",
   "viewer.saveFailed": "Не сохранилось: {why}",
   "viewer.gone": "файла уже нет",
   "viewer.shareFailed": "не открылось окно «Поделиться»",

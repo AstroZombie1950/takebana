@@ -1610,7 +1610,8 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
 /* ── Окно просмотра фото и видео (23.10, как в Telegram) ──
  * Тёмное в любой теме (.tk-dark): поверх медиа. Полоса сверху лежит поверх
  * картинки с затемнением — картинка во весь экран. Вырезы экрана — полосе
- * и стрелкам. */
+ * и стрелкам. Кнопки — на тёмных размытых кружках (24.10): на светлом
+ * снимке одного затемнения полосы не хватало, тонкие значки пропадали. */
 .tk-viewer {
   position: fixed;
   inset: 0;
@@ -1629,29 +1630,32 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   padding: calc(6px + var(--tk-safe-t)) calc(8px + var(--tk-safe-r)) 18px calc(8px + var(--tk-safe-l));
   background: linear-gradient(rgb(var(--tk-bg-rgb) / .78), rgb(var(--tk-bg-rgb) / 0));
 }
 
 .tk-viewer__btn {
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  background: none;
+  background: rgb(var(--tk-bg-rgb) / .55);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   border: 0;
-  color: var(--tk-fg-2);
+  border-radius: 50%;
+  color: var(--tk-fg);
   cursor: pointer;
-  transition: color .18s ease;
+  transition: background-color .18s ease, color .18s ease;
 }
 
 .tk-viewer__btn:hover,
 .tk-viewer__btn:focus-visible,
-.tk-viewer__btn[aria-expanded="true"] { color: var(--tk-fg); }
+.tk-viewer__btn[aria-expanded="true"] { background: rgb(var(--tk-bg-rgb) / .8); }
 .tk-viewer__btn[hidden] { display: none; }
 .tk-viewer__btn.is-busy { opacity: .5; pointer-events: none; }
 .tk-viewer__btn.is-ready { color: var(--tk-accent-text); }
@@ -1674,13 +1678,15 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   font-size: 15px;
   font-weight: 600;
   color: var(--tk-fg);
+  text-shadow: 0 1px 3px rgb(var(--tk-bg-rgb) / .9);
 }
 
 .tk-viewer__when {
   font-family: Oswald, 'Oswald Fallback', sans-serif;
   font-size: 12px;
   letter-spacing: .04em;
-  color: var(--tk-muted);
+  color: var(--tk-fg-2);
+  text-shadow: 0 1px 3px rgb(var(--tk-bg-rgb) / .9);
 }
 
 .tk-viewer__menu {
@@ -1735,14 +1741,16 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   align-items: center;
   justify-content: center;
   padding: 0;
-  background: rgb(var(--tk-bg-rgb) / .4);
+  background: rgb(var(--tk-bg-rgb) / .55);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   border: 0;
-  color: var(--tk-fg-2);
+  color: var(--tk-fg);
   cursor: pointer;
-  transition: color .18s ease, background-color .18s ease;
+  transition: background-color .18s ease;
 }
 
-.tk-viewer__nav:hover { color: var(--tk-fg); background: rgb(var(--tk-bg-rgb) / .7); }
+.tk-viewer__nav:hover { background: rgb(var(--tk-bg-rgb) / .8); }
 .tk-viewer__nav[hidden] { display: none; }
 .tk-viewer__nav--prev { left: calc(12px + var(--tk-safe-l)); }
 .tk-viewer__nav--next { right: calc(12px + var(--tk-safe-r)); }

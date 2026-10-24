@@ -23,12 +23,13 @@ const VOICE_DIR = path.join(__dirname, '..', 'public', 'lab', 'voice');
 const POOL = 8;
 
 // Цены — developers.openai.com/api/docs/pricing на 24.10.2026, Standard,
-// доллары за миллион токенов. effort — см. utils/openai.js.
+// доллары за миллион токенов. effort — см. utils/openai.js. gpt-4.1-nano
+// OpenAI сняла (404 deprecated, проверено 24.10) — в списке её нет.
 const TEXT_MODELS = [
   { id: 'gpt-6-luna', in: 0.10, out: 0.50, effort: 'none', note: 'новая малая модель' },
   { id: 'gpt-5.6-luna', in: 0.20, out: 1.20, effort: 'none', note: 'малая прошлого поколения' },
   { id: 'gpt-5-nano', in: 0.05, out: 0.40, effort: 'minimal', note: 'самая дешёвая, снимается с поддержки' },
-  { id: 'gpt-4.1-nano', in: 0.10, out: 0.40, note: 'без рассуждения' },
+  { id: 'gpt-5.4-nano', in: 0.20, out: 1.25, effort: 'none', note: 'малая прошлого поколения' },
   { id: 'gpt-4o-mini', in: 0.15, out: 0.60, note: 'без рассуждения' },
   { id: 'gpt-6-sol', in: 2.00, out: 10.00, effort: 'none', note: 'большая — образец качества' },
 ];
@@ -136,8 +137,8 @@ async function spending(v) {
   const by = v.spentBy || {};
   const log = (v.log || []).slice().reverse();
   const ids = [...new Set([...Object.keys(by), ...log.map((e) => String(e.user))])];
-  const users = await User.find({ _id: { $in: ids } }).select('login').lean();
-  const name = new Map(users.map((u) => [String(u._id), u.login]));
+  const users = await User.find({ _id: { $in: ids } }).select('login nickname').lean();
+  const name = new Map(users.map((u) => [String(u._id), u.login || u.nickname]));
   return {
     spent: v.spent || 0,
     people: Object.entries(by).map(([id, usd]) => ({ who: name.get(id) || '—', usd })).sort((a, b) => b.usd - a.usd),
@@ -160,7 +161,7 @@ async function pool(items, fn) {
 // остальные, но попадает в журнал.
 async function translateOne(text, to, model) {
   try {
-    const r = await translate(text, to, model);
+    const r = await translate(text, to, { model: model.id, effort: model.effort });
     return { text: r.text, tokensIn: r.tokensIn, tokensOut: r.tokensOut, ms: r.ms, usd: textCost(model, r) };
   } catch (err) {
     errorLog.external(err, 'lab.translate', { model: model.id, to });

@@ -1007,25 +1007,29 @@ router.get('/messages/:id/file', requireAuthApi, async (req, res) => {
   await limits.pipe(req, res, m, req.query.part === 'preview' ? 'preview' : 'main');
 });
 
-// «Сохранить» из окна просмотра (23.10): фото или видео переписки нашим
-// адресом и как вложение. На телефоне браузер отдаёт файл системному окну
-// «Поделиться» («Сохранить изображение» — в галерею), на компьютере это
-// обычная загрузка. С CDN так нельзя: чужой домен без CORS браузер в файл
-// не отдаёт. Только то, что я вижу: своё, мне или в моей группе;
-// исчезающее не сохраняется. Знак уже в файле (utils/watermark.js).
+// «Сохранить» из окна просмотра (23.10) и «Скачать» в меню сообщения (24.10):
+// фото, видео, документ или аудиофайл переписки нашим адресом и как вложение.
+// На iPhone браузер отдаёт файл системному окну «Поделиться» («Сохранить
+// изображение» — в галерею, «Сохранить в Файлы»), в остальных — обычная
+// загрузка. С CDN так нельзя: чужой домен без CORS браузер в файл не отдаёт.
+// Только то, что я вижу: своё, мне или в моей группе; исчезающее, голосовое
+// и кружок не скачиваются. Знак уже в файле (utils/watermark.js).
+const SAVE_KINDS = new Set(['image', 'video', 'file', 'audio']);
 router.get('/messages/:id/save', requireAuthApi, async (req, res) => {
   if (!ObjectId.isValid(req.params.id)) return res.status(404).end();
   const me = String(req.session.userId);
   const m = await Message.findOne({ _id: req.params.id, deletedFor: { $ne: me }, expiredAt: null, 'limit.mode': { $exists: false } })
     .select('sender recipient conversationId attachments sentAt').lean();
   const a = m && m.attachments[0];
-  if (!a || !albums.KINDS.has(a.kind)) return res.status(404).end();
+  if (!a || !SAVE_KINDS.has(a.kind)) return res.status(404).end();
   const mine = m.recipient
     ? String(m.sender) === me || String(m.recipient) === me
     : await Group.exists({ _id: m.conversationId, 'members.user': me });
   if (!mine) return res.status(404).end();
-  // Имя — по времени отправки, расширение — как у файла в хранилище
-  // (фото там всегда jpg/png/webp/gif после знака, видео — mp4).
+  // Документ — под своим именем. Фото и видео — по времени отправки,
+  // расширение — как у файла в хранилище (фото там всегда jpg/png/webp/gif
+  // после знака, видео — mp4).
+  if (!albums.KINDS.has(a.kind)) return attachments.pipe(req, res, a.url, { name: a.name, disposition: 'attachment' });
   const ext = (/\.(\w{2,5})(?:\?|$)/.exec(a.url) || [])[1] || (a.kind === 'video' ? 'mp4' : 'jpg');
   const stamp = new Date(m.sentAt).toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-');
   await attachments.pipe(req, res, a.url, { name: `takebana-${stamp}.${ext}`, disposition: 'attachment' });

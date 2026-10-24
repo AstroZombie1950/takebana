@@ -2611,20 +2611,22 @@
   var playerLoading = null;
   // list — [{ id, a, sender, sentAt }], i — открытое; more — раньше
   // первого: { can() — есть ли ещё, load() — промис нового списка };
-  // goto — «Показать в чате»; ready — файл, ждущий второго нажатия (saveItem).
-  var vw = { list: [], i: 0, more: null, goto: null, sealed: false, pushed: false, skipPop: false, ready: null, shown: '' };
+  // goto — «Показать в чате».
+  var vw = { list: [], i: 0, more: null, goto: null, sealed: false, pushed: false, skipPop: false, shown: '' };
 
   function viewerOpen() { return !viewer.classList.contains('hidden'); }
   function vbtn(name) { return viewer.querySelector('[data-v="' + name + '"]'); }
 
-  // Фото и видео загруженной ленты — в её порядке. Исчезающее и исчезнувшее
-  // сюда не входят.
-  function feedMedia() {
-    return messages.filter(function (m) {
-      var a = m.attachments && m.attachments[0];
-      return a && a.url && /^(image|video)$/.test(a.kind) && !m.limit && !m.expired;
-    }).map(function (m) { return { id: m._id, a: m.attachments[0], sender: m.sender, sentAt: m.sentAt }; });
+  // Фото или видео сообщения — для окна просмотра и «Сохранить». Исчезающее
+  // и исчезнувшее сюда не входят.
+  function mediaItem(m) {
+    var a = m.attachments && m.attachments[0];
+    return a && a.url && /^(image|video)$/.test(a.kind) && !m.limit && !m.expired
+      ? { id: m._id, a: a, sender: m.sender, sentAt: m.sentAt } : null;
   }
+
+  // Фото и видео загруженной ленты — в её порядке.
+  function feedMedia() { return messages.map(mediaItem).filter(Boolean); }
 
   function senderName(id) {
     return id === ME ? t('chats.replyYou') : peer && peer.id === id ? peer.name : personOf(id).name;
@@ -2665,7 +2667,7 @@
     $('viewerName').textContent = senderName(x.sender);
     $('viewerWhen').textContent = x.sentAt ? tkDate(x.sentAt) : '';
     ['save', 'forward', 'more'].forEach(function (n) { vbtn(n).hidden = vw.sealed; });
-    vbtn('save').classList.toggle('is-ready', !!(vw.ready && vw.ready.id === x.id));
+    markReady();
     vbtn('prev').hidden = vw.sealed || (vw.i === 0 && !(vw.more && vw.more.can()));
     vbtn('next').hidden = vw.sealed || vw.i >= vw.list.length - 1;
     if (x.a.kind === 'image') {
@@ -2823,7 +2825,7 @@
       viewerMenu.querySelector('[data-v="goto"]').hidden = !vw.goto;
       if (open) viewerMenu.querySelector('button:not([hidden])').focus();
     } else if (act === 'save') {
-      saveItem(x);
+      saveMedia([x], b, 'viewer');
     } else if (act === 'forward') {
       openForward(null, [viewerMessage(x)], 'viewer');
     } else if (act === 'goto') {
@@ -2897,21 +2899,29 @@
 
   // ── «Сохранить» ──
   // Файл берём нашим адресом (/messages/:id/save): с CDN браузер файл
-  // в руки не даёт. На телефоне — системное окно «Поделиться»: в нём
-  // «Сохранить изображение» кладёт фото в галерею (на iPhone другой дороги
-  // в «Фото» у сайта нет). На компьютере — обычная загрузка; видео — сразу
-  // ссылкой: браузер ведёт её сам, с полосой, не держа файл во вкладке.
+  // в руки не даёт. На iPhone и iPad — системное окно «Поделиться»: в нём
+  // «Сохранить изображение» кладёт фото в галерею (другой дороги в «Фото»
+  // у сайта там нет). На Android и компьютере — обычная загрузка: в окне
+  // «Поделиться» Android сохранения нет (жалоба заказчика 24.10), а
+  // загруженное галерея показывает в папке «Download». Видео и документы
+  // там — сразу ссылкой: браузер ведёт её сам, с полосой, не держа файл во
+  // вкладке. Сохраняют из окна просмотра и «Скачать» в меню сообщения
+  // (альбом — целиком, документ — под своим именем).
   // Каждая попытка — в телеметрию (chat.save, docs/TELEMETRY.md).
-  var touchScreen = matchMedia('(pointer: coarse)');
+  var SHARE_SAVES = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var SAVE_MS = 120000;
+  // Файлы, ждущие второго нажатия: { key — id сообщений через запятую, files, tr }.
+  var saveReady = null;
 
-  function handOver(file) {
-    if (touchScreen.matches && navigator.canShare && navigator.canShare({ files: [file] })) {
-      return navigator.share({ files: [file] }).then(function () { return 'share'; });
+  function handOver(files) {
+    if (SHARE_SAVES && navigator.canShare && navigator.canShare({ files: files })) {
+      return navigator.share({ files: files }).then(function () { return 'share'; });
     }
-    var url = URL.createObjectURL(file);
-    clickLink(url, file.name);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    files.forEach(function (file) {
+      var url = URL.createObjectURL(file);
+      clickLink(url, file.name);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    });
     return Promise.resolve('download');
   }
 
@@ -2924,11 +2934,25 @@
     link.remove();
   }
 
-  function saveItem(x) {
-    var btn = vbtn('save');
-    var ready = vw.ready && vw.ready.id === x.id ? vw.ready : null;
-    var tr = ready ? ready.tr : window.TKTrace ? TKTrace.start('chat.save', x.id) : null;
-    if (tr && !ready) tr.set('what', x.a.kind);
+  function saveUrl(x) { return '/messages/' + encodeURIComponent(x.id) + '/save'; }
+
+  // Кнопка окна просмотра подсвечена, пока файл открытого ждёт второго нажатия.
+  function markReady() {
+    var x = viewerOpen() && vw.list[vw.i];
+    vbtn('save').classList.toggle('is-ready', !!(x && saveReady && saveReady.key === x.id));
+  }
+
+  // items — [{ id, a }]; btn — кнопка окна просмотра (у меню её нет);
+  // from — откуда сохраняют: viewer, menu.
+  function saveMedia(items, btn, from) {
+    var key = items.map(function (x) { return x.id; }).join(',');
+    var ready = saveReady && saveReady.key === key ? saveReady : null;
+    var tr = ready ? ready.tr : window.TKTrace ? TKTrace.start('chat.save', items[0].id) : null;
+    if (tr && !ready) {
+      tr.set('what', items.map(function (x) { return x.a.kind; }).filter(function (k, i, all) { return all.indexOf(k) === i; }).join(','));
+      tr.set('from', from);
+      if (items.length > 1) tr.set('n', items.length);
+    }
     var sharing = false;
     var done = function (via) {
       if (!tr) return;
@@ -2939,9 +2963,9 @@
     var failed = function (e) {
       // Окно «Поделиться» без свежего нажатия не открывается (iOS, после
       // загрузки файла): файл готов — следующее нажатие отдаёт его сразу.
-      if (e && e.name === 'NotAllowedError' && sharing && e.file) {
-        vw.ready = { id: x.id, file: e.file, tr: tr };
-        btn.classList.add('is-ready');
+      if (e && e.name === 'NotAllowedError' && sharing && e.files) {
+        saveReady = { key: key, files: e.files, tr: tr };
+        markReady();
         toast(t('viewer.saveReady'));
         if (tr) tr.mark('notice_ready');
         return;
@@ -2954,47 +2978,47 @@
     };
 
     if (ready) {
-      vw.ready = null;
-      btn.classList.remove('is-ready');
+      saveReady = null;
+      markReady();
       sharing = true;
-      return handOver(ready.file).then(done, failed);
+      return handOver(ready.files).then(done, failed);
     }
-    var url = '/messages/' + encodeURIComponent(x.id) + '/save';
-    if (x.a.kind === 'video' && !touchScreen.matches) {
-      clickLink(url);
-      return done('link');
-    }
-    btn.classList.add('is-busy');
+    // Без окна «Поделиться» фото уходит файлом, остальное — ссылкой.
+    var files = items.filter(function (x) { return SHARE_SAVES || x.a.kind === 'image'; });
+    items.forEach(function (x) { if (files.indexOf(x) === -1) clickLink(saveUrl(x)); });
+    if (!files.length) return done('link');
+    if (btn) btn.classList.add('is-busy');
     // Заголовки пришли, а файл ещё идёт (видео с телефона) — сказать, что ждём.
     var slow = null;
-    tkFetch(url, { timeout: SAVE_MS, button: btn })
-      .then(function (r) {
+    Promise.all(files.map(function (x) {
+      return tkFetch(saveUrl(x), { timeout: SAVE_MS, button: btn || null }).then(function (r) {
         if (!r.ok) {
           var err = new Error(TKNet.explain(r));
           err.status = r.status;
           throw err;
         }
-        slow = setTimeout(function () { toast(t('viewer.saving')); if (tr) tr.mark('notice_slow'); }, 2000);
+        if (!slow) slow = setTimeout(function () { toast(t('viewer.saving')); if (tr) tr.mark('notice_slow'); }, 2000);
         var m = /filename\*=UTF-8''([^;]+)/i.exec(r.headers.get('content-disposition') || '');
-        var name = m ? decodeURIComponent(m[1]) : 'takebana.' + (x.a.kind === 'video' ? 'mp4' : 'jpg');
+        var name = m ? decodeURIComponent(m[1]) : x.a.name || 'takebana.' + (x.a.kind === 'video' ? 'mp4' : 'jpg');
         return r.blob().then(function (b) { return new File([b], name, { type: b.type }); });
-      })
-      .then(function (file) {
+      });
+    }))
+      .then(function (list) {
         clearTimeout(slow);
-        btn.classList.remove('is-busy');
+        if (btn) btn.classList.remove('is-busy');
         if (tr) {
           tr.step('fetched');
-          tr.set('kb', Math.round(file.size / 1024));
+          tr.set('kb', Math.round(list.reduce(function (n, f) { return n + f.size; }, 0) / 1024));
         }
         sharing = true;
-        return handOver(file).catch(function (e) {
-          if (e) e.file = file;
+        return handOver(list).catch(function (e) {
+          if (e) e.files = list;
           throw e;
         });
       })
       .then(done, function (e) {
         clearTimeout(slow);
-        btn.classList.remove('is-busy');
+        if (btn) btn.classList.remove('is-busy');
         failed(e || new Error(''));
       });
   }
@@ -4097,6 +4121,7 @@
     var isPinned = what.kind === 'message' && pinned && pinned.id === what.m._id;
     menu.querySelector('[data-for="pin"]').hidden = what.kind !== 'message' || !plain(what.m) || !!what.m.system || isPinned || !canPin();
     menu.querySelector('[data-for="unpin"]').hidden = !isPinned || !canPin();
+    menu.querySelector('[data-act="save"]').hidden = !(what.kind === 'message' && savable(key).length);
     menu.hidden = false;
     var target = el.querySelector('.tk-msg__bubble') || el;
     var r = target.getBoundingClientRect();
@@ -4347,11 +4372,21 @@
     else if (act === 'pin') pin(resolve(key).m._id);
     else if (act === 'unpin') pin(null);
     else if (act === 'copy') copy([key]);
+    else if (act === 'save') saveMedia(savable(key), null, 'menu');
     else if (act === 'forward') openForward([key]);
     else if (act === 'delete') removeItems([key]);
   });
 
   function plain(m) { return !m.limit && !m.expired; }
+
+  // Что из сообщения можно скачать: фото, видео (у альбома — все), документ,
+  // аудиофайл. Голосовое и кружок — нет.
+  function savable(key) {
+    return pickedMessages([key]).filter(plain).map(function (m) {
+      var a = m.attachments && m.attachments[0];
+      return a && a.url && /^(image|video|file|audio)$/.test(a.kind) ? { id: m._id, a: a } : null;
+    }).filter(Boolean);
+  }
 
   // Сообщения выбранного — в порядке ленты, без звонков. Альбом выделен
   // своей головой — в действие идёт целиком (albumKeys).

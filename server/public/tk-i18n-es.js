@@ -633,7 +633,7 @@
   "viewer.prev": "Anterior",
   "viewer.next": "Siguiente",
   "viewer.saving": "Guardando…",
-  "viewer.saveReady": "Archivo listo: toca «Guardar» otra vez",
+  "viewer.saveReady": "Archivo listo: toca otra vez",
   "viewer.saveFailed": "No se pudo guardar: {why}",
   "viewer.gone": "el archivo ya no existe",
   "viewer.shareFailed": "no se abrió el menú «Compartir»",

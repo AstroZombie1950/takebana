@@ -636,7 +636,7 @@
   "viewer.prev": "Previous",
   "viewer.next": "Next",
   "viewer.saving": "Saving…",
-  "viewer.saveReady": "File ready — tap “Save” again",
+  "viewer.saveReady": "File ready — tap again",
   "viewer.saveFailed": "Couldn’t save: {why}",
   "viewer.gone": "the file is gone",
   "viewer.shareFailed": "the share sheet didn’t open",

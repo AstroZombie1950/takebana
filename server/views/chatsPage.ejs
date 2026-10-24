@@ -354,11 +354,13 @@
 
 <%# Действия с сообщением или звонком в ленте: правый клик, на телефоне —
     удержание, с клавиатуры — Enter. У звонка — только «Выделить» и «Удалить»:
-    data-for="message" chats.js прячет. %>
+    data-for="message" chats.js прячет. «Скачать» — у фото, видео (альбом
+    целиком), документа и аудиофайла. %>
 <div class="tk-msgmenu" id="msgMenu" role="menu" hidden>
   <button type="button" role="menuitem" data-act="reply" data-for="reply" data-i18n="chats.reply"><%- t('chats.reply') %></button>
   <button type="button" role="menuitem" data-act="forward" data-for="message" data-i18n="chats.forward"><%- t('chats.forward') %></button>
   <button type="button" role="menuitem" data-act="copy" data-for="message" data-i18n="chats.copy"><%- t('chats.copy') %></button>
+  <button type="button" role="menuitem" data-act="save" data-i18n="chats.download"><%- t('chats.download') %></button>
   <button type="button" role="menuitem" data-act="pin" data-for="pin" data-i18n="chatinfo.pin"><%- t('chatinfo.pin') %></button>
   <button type="button" role="menuitem" data-act="unpin" data-for="unpin" data-i18n="chatinfo.unpin"><%- t('chatinfo.unpin') %></button>
   <button type="button" role="menuitem" data-act="select" data-i18n="chats.select"><%- t('chats.select') %></button>
@@ -509,10 +511,10 @@
     </button>
     <span class="tk-viewer__who"><span class="tk-viewer__name" id="viewerName"></span><time class="tk-viewer__when" id="viewerWhen"></time></span>
     <button type="button" class="tk-viewer__btn" data-v="save" aria-label="<%= ta('viewer.save') %>" data-i18n-aria="viewer.save" title="<%= ta('viewer.save') %>" data-i18n-title="viewer.save">
-      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>
+      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>
     </button>
     <button type="button" class="tk-viewer__btn" data-v="forward" aria-label="<%= ta('chats.forward') %>" data-i18n-aria="chats.forward" title="<%= ta('chats.forward') %>" data-i18n-title="chats.forward">
-      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 6l6 6-6 6"></path><path d="M20 12H10a6 6 0 00-6 6v1"></path></svg>
+      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 6l6 6-6 6"></path><path d="M20 12H10a6 6 0 00-6 6v1"></path></svg>
     </button>
     <button type="button" class="tk-viewer__btn" data-v="more" aria-haspopup="menu" aria-expanded="false" aria-label="<%= ta('viewer.more') %>" data-i18n-aria="viewer.more" title="<%= ta('viewer.more') %>" data-i18n-title="viewer.more">
       <svg viewBox="0 0 24 24" width="21" height="21" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5.5" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="12" cy="18.5" r="1.7"></circle></svg>
@@ -533,10 +535,10 @@
     </div>
   </div>
   <button type="button" class="tk-viewer__nav tk-viewer__nav--prev" data-v="prev" aria-label="<%= ta('viewer.prev') %>" data-i18n-aria="viewer.prev" hidden>
-    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
   </button>
   <button type="button" class="tk-viewer__nav tk-viewer__nav--next" data-v="next" aria-label="<%= ta('viewer.next') %>" data-i18n-aria="viewer.next" hidden>
-    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
   </button>
 </div>
 
