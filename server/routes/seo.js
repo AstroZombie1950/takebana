@@ -79,6 +79,7 @@ Disallow: /venues/mine
 Disallow: /venue/*/settings
 Disallow: /check
 Disallow: /calc
+Disallow: /lab
 Disallow: /streaming/*/grid
 Disallow: /stream-status/
 Disallow: /getMessages

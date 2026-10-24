@@ -10,17 +10,18 @@
 //   plural — локаль форм слов, если правила locale не годятся
 //   og     — og:locale
 //   name   — своё название, для меню языка
+//   aiName — название для модели перевода (utils/translate.js), по-английски
 //
 // Модуль без зависимостей: его подключают модели (enum у User.lang).
 const LANGS = {
-    en: { locale: 'en-US', og: 'en_US', name: 'English' },
-    ru: { locale: 'ru-RU', og: 'ru_RU', name: 'Русский' },
+    en: { locale: 'en-US', og: 'en_US', name: 'English', aiName: 'English' },
+    ru: { locale: 'ru-RU', og: 'ru_RU', name: 'Русский', aiName: 'Russian' },
     // Латиноамериканский испанский и бразильский португальский (LANGUAGES.md, §7);
     // hreflang — просто es и pt.
-    es: { locale: 'es-419', og: 'es_LA', name: 'Español' },
+    es: { locale: 'es-419', og: 'es_LA', name: 'Español', aiName: 'Latin American Spanish' },
     // Формы слов — по pt-PT: CLDR для pt-BR считает 0 единственным
     // («0 visualização»), а в Бразилии пишут «0 visualizações».
-    pt: { locale: 'pt-BR', plural: 'pt-PT', og: 'pt_BR', name: 'Português' },
+    pt: { locale: 'pt-BR', plural: 'pt-PT', og: 'pt_BR', name: 'Português', aiName: 'Brazilian Portuguese' },
 };
 
 const LANG_CODES = Object.keys(LANGS);

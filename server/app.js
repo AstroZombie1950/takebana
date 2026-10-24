@@ -344,6 +344,8 @@ app.use(require('./routes/watch'));
 // Публикация постов (09.10); страница поста — в routes/watch.js.
 app.use(require('./routes/posts'));
 app.use(require('./routes/pages'));
+// Полигон перевода для заказчика (24.10, docs/TRANSLATE.md) — временный.
+app.use(require('./routes/translateLab'));
 // robots.txt и карта сайта (docs/seo/).
 app.use(require('./routes/seo'));
 app.use(require('./routes/streamStatus'));

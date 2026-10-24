@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Takebana — полигон перевода</title>
+<!--
+  Полигон перевода для заказчика (routes/translateLab.js, GET /lab/translate,
+  только администратору; 24.10.2026, docs/TRANSLATE.md). Набор фраз и
+  голосовых, прогнанный через модели OpenAI, цена за единицу и за месяц,
+  живая проба текстом и голосом. Данные — /api/lab/translate/state.
+  Стиль — как у views/calc.html. Временная: удаляется вместе с полигоном.
+-->
+<style>
+  :root {
+    --bg: #f6f4ef; --card: #fff; --ink: #1a1a1a; --muted: #6b665e; --rule: #e3ded4;
+    --head: #efebe3; --accent: #c8372c; --good: #2f7d4f; --field: #fbfaf7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 32px 16px 56px; }
+  h1 { margin: 0 0 4px; font-size: 28px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0 0 18px; max-width: 820px; }
+  nav { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 18px; font-size: 14px; }
+  nav a { color: var(--accent); text-decoration: none; }
+  section { background: var(--card); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 20px 22px 16px; margin-bottom: 18px; }
+  h2 { margin: 0 0 4px; font-size: 19px; }
+  h2 span { color: var(--accent); margin-right: 6px; }
+  h3 { margin: 16px 0 6px; font-size: 15px; }
+  .how { margin: 0 0 14px; color: var(--muted); font-size: 14px; max-width: 860px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; margin-bottom: 14px; }
+  label.f { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #3b372f; }
+  label.f input, label.f select, textarea { font: inherit; font-size: 15px; padding: 7px 9px; border: 1px solid var(--rule);
+    border-radius: 6px; background: var(--field); color: var(--ink); width: 100%; font-variant-numeric: tabular-nums; }
+  textarea { min-height: 84px; resize: vertical; }
+  label.f input:focus, label.f select:focus, textarea:focus { outline: 2px solid #d9b8a8; border-color: #c9a898; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--rule); text-align: right; vertical-align: top; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { background: var(--head); font-size: 13px; font-weight: 600; color: #3b372f; }
+  tbody tr:last-child td { border-bottom: none; }
+  .wrap { overflow-x: auto; }
+  .txt td, .txt th { text-align: left; }
+  .txt table { min-width: 980px; font-size: 14px; }
+  .txt td:first-child { width: 260px; background: #faf8f4; }
+  .ms { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .err { color: var(--accent); font-size: 13px; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 9px; background: var(--head);
+    color: #3b372f; margin: 0 4px 2px 0; }
+  .tag.hot { background: #f6dcd8; color: var(--accent); }
+  .note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+  .warn { font-size: 14px; color: var(--accent); margin: 8px 0 0; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 14px; }
+  button { font: inherit; font-size: 14px; padding: 7px 14px; border: 1px solid var(--rule); border-radius: 6px;
+    background: var(--card); color: var(--ink); cursor: pointer; }
+  button.main { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  .bar span { font-size: 13px; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+  .chips label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; padding: 4px 9px;
+    border: 1px solid var(--rule); border-radius: 14px; background: var(--field); cursor: pointer; }
+  .meter { height: 8px; background: var(--head); border-radius: 4px; overflow: hidden; margin: 6px 0 0; max-width: 420px; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--good); transition: width .4s; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; margin-top: 12px; }
+  .card { border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; background: var(--field); }
+  .card h4 { margin: 0 0 6px; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; }
+  .card h4 small { color: var(--muted); font-weight: 400; white-space: nowrap; }
+  .card p { margin: 0 0 8px; font-size: 14px; }
+  .card p b { display: block; font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .voice { border-top: 1px solid var(--rule); padding: 14px 0 6px; }
+  .voice:first-of-type { border-top: none; }
+  .voice audio { width: 100%; max-width: 360px; height: 36px; }
+  .said { margin: 6px 0 8px; font-size: 14px; }
+  .said b { color: var(--muted); font-weight: 600; font-size: 12px; margin-right: 6px; }
+  .best { color: var(--good); font-weight: 700; }
+  .money { display: flex; flex-wrap: wrap; gap: 8px 28px; align-items: baseline; margin: 0 0 10px; }
+  .money .big { font-size: 34px; font-weight: 800; letter-spacing: -.02em; }
+  .money span { font-size: 14px; color: var(--muted); }
+  .money span b { color: var(--ink); }
+  .paid { color: var(--good); font-weight: 600; }
+  details summary { cursor: pointer; font-size: 14px; color: var(--accent); margin: 6px 0; }
+  #moneyLog { font-size: 14px; }
+  #moneyLog td:nth-child(4) { max-width: 420px; overflow-wrap: anywhere; }
+  .rec { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin-right: 6px; }
+  .recording .rec { animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  @media (max-width: 600px) {
+    section { padding: 16px 14px 12px; }
+    h1 { font-size: 23px; }
+    th, td { padding: 7px 6px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Takebana — полигон перевода</h1>
+  <p class="sub">Как языковые модели OpenAI переводят то, что пишут люди на сайте, и сколько это стоит. Набор из 40 фраз и 12 голосовых на английском, русском, испанском и португальском прогнан через несколько моделей; ниже — их переводы, расшифровки, скорость и цена. Можно написать своё или записать голосовое.</p>
+  <nav>
+    <a href="#money">Траты</a><a href="#price">Цена и скорость</a><a href="#set">Набор фраз</a><a href="#voices">Голосовые</a>
+    <a href="#try">Написать</a><a href="#say">Записать голосовое</a>
+  </nav>
+  <p class="warn" id="noKey" hidden>На сервере не задан ключ OpenAI — перевод не работает.</p>
+
+  <div class="bar">
+    <button type="button" id="runBtn">Прогнать набор заново</button>
+    <span id="runInfo"></span>
+  </div>
+  <div class="meter" id="runMeter" hidden><i></i></div>
+
+  <section id="money">
+    <h2><span>0</span>Траты полигона</h2>
+    <p class="how">Каждый перевод и каждая расшифровка здесь — настоящий запрос к OpenAI за деньги. Суммы копятся в базе сайта и не пропадают при обновлении страницы.</p>
+    <div class="money"><b class="big" id="moneyTotal">$0</b><span id="moneyPeople"></span></div>
+    <details><summary>Последние действия</summary><div class="wrap txt"><table id="moneyLog"></table></div></details>
+  </section>
+
+  <section id="price">
+    <h2><span>1</span>Цена и скорость</h2>
+    <p class="how">Цена — по токенам, которые каждая модель реально потратила на набор, по тарифу OpenAI на 24 октября 2026. Одно сообщение переводится на один язык — язык читателя. Пост, описание, «о себе» и меню переводятся сразу при сохранении на все три других языка сайта, поэтому их цена — за три перевода. Голосовое сначала расшифровывается, потом расшифровка переводится.</p>
+    <div class="wrap"><table id="priceText"></table></div>
+    <h3>Расшифровка голосовых и кружков</h3>
+    <div class="wrap"><table id="priceSpeech"></table></div>
+    <p class="note">Точность — доля слов, совпавших со сказанным. Число словами («полвосьмого») против цифр («7:30») считается расхождением, хотя смысл тот же.</p>
+    <h3>В месяц</h3>
+    <div class="grid">
+      <label class="f">Переводов сообщений<input type="number" min="0" step="1000" data-k="msg" value="100000"></label>
+      <label class="f">Переводов чата эфира и комментариев<input type="number" min="0" step="1000" data-k="chat" value="50000"></label>
+      <label class="f">Постов и описаний (каждый — на 3 языка)<input type="number" min="0" step="100" data-k="post" value="10000"></label>
+      <label class="f">Голосовых и кружков<input type="number" min="0" step="1000" data-k="voice" value="50000"></label>
+      <label class="f">Средняя длина голосового, с<input type="number" min="1" step="1" data-k="voiceSec" value="20"></label>
+      <label class="f">Модель расшифровки<select data-k="speech" id="monthSpeech"></select></label>
+    </div>
+    <div class="wrap"><table id="priceMonth"></table></div>
+  </section>
+
+  <section id="set" class="txt">
+    <h2><span>2</span>Набор фраз</h2>
+    <p class="how">Переписка, чат эфира, посты, «о себе», меню; со сленгом, опечатками, смесью языков и попытками дать модели команду — такую фразу надо перевести, а не выполнить.</p>
+    <div class="grid">
+      <label class="f">Перевод на<select id="setTo"></select></label>
+      <label class="f">Что<select id="setCat">
+        <option value="">всё</option><option value="msg">переписка</option>
+        <option value="chat">чат эфира, комментарии</option><option value="post">посты, описания</option>
+      </select></label>
+    </div>
+    <div class="chips" id="setModels"></div>
+    <div class="wrap"><table id="setTable"></table></div>
+  </section>
+
+  <section id="voices">
+    <h2><span>3</span>Голосовые из набора</h2>
+    <p class="how">Синтезированные голоса трёх видов: чистая запись, улица с шумом и «как по телефону» — узкая полоса и шипение. Перевод — расшифровки самой дешёвой модели (gpt-4o-mini-transcribe).</p>
+    <div class="grid">
+      <label class="f">Перевод на<select id="voiceTo"></select></label>
+      <label class="f">Моделью<select id="voiceModel"></select></label>
+    </div>
+    <div id="voiceList"></div>
+  </section>
+
+  <section id="try">
+    <h2><span>4</span>Написать — получить перевод</h2>
+    <p class="how">Язык текста определяется сам; перевод — на три других языка сайта, каждой выбранной моделью.</p>
+    <textarea id="tryText" maxlength="4000" placeholder="Напишите сообщение на любом из четырёх языков"></textarea>
+    <div class="chips" id="tryModels" style="margin-top:10px"></div>
+    <div class="bar"><button type="button" class="main" id="tryBtn">Перевести</button><span id="tryInfo"></span></div>
+    <div class="cards" id="tryOut"></div>
+  </section>
+
+  <section id="say">
+    <h2><span>5</span>Записать голосовое</h2>
+    <p class="how">До двух минут. Расшифровка — каждой выбранной моделью, перевод — расшифровки первой из выбранных.</p>
+    <h3>Расшифровка</h3>
+    <div class="chips" id="saySpeech"></div>
+    <h3>Перевод</h3>
+    <div class="chips" id="sayModels"></div>
+    <div class="bar">
+      <button type="button" class="main" id="recBtn"><i class="rec"></i><span>Записать</span></button>
+      <label><button type="button" id="fileBtn">Выбрать файл</button><input type="file" id="sayFile" accept="audio/*" hidden></label>
+      <span id="sayInfo"></span>
+    </div>
+    <audio id="sayPlay" controls hidden></audio>
+    <div class="cards" id="sayHeard"></div>
+    <div class="cards" id="sayOut"></div>
+  </section>
+
+  <p class="note">Цены: developers.openai.com/api/docs/pricing, 24 октября 2026, тариф Standard. Суммы — в долларах США. Полигон временный: когда модель выбрана и перевод встроен в сайт, страница удаляется.</p>
+</main>
+<script>
+(() => {
+  const LANG = { en: 'английский', ru: 'русский', es: 'испанский', pt: 'португальский' };
+  const CAT = { msg: 'переписка', chat: 'чат эфира', post: 'пост, описание' };
+  const COND = { clean: 'чистая запись', street: 'улица, шум', phone: 'как по телефону' };
+  const API = '/api/lab/translate';
+  const $ = (id) => document.getElementById(id);
+  let S = null;
+
+  // Узлы — только через textContent: переводы и расшифровки — ответ модели,
+  // в разметку как HTML не попадают.
+  function h(tag, attrs, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === 'class') el.className = v;
+      else if (k === 'text') el.textContent = v;
+      else el.setAttribute(k, v);
+    }
+    for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : String(kid));
+    return el;
+  }
+
+  const nf = (d) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: d, minimumFractionDigits: d });
+  function usd(v) {
+    if (!(v > 0)) return '$0';
+    if (v >= 100) return '$' + nf(0).format(v);
+    if (v >= 1) return '$' + nf(2).format(v);
+    if (v >= 0.01) return '$' + nf(3).format(v);
+    return '$' + new Intl.NumberFormat('ru-RU', { maximumSignificantDigits: 2 }).format(v);
+  }
+  const sec = (ms) => nf(1).format(ms / 1000) + ' с';
+  const pct = (v) => Math.round(v * 100) + '%';
+  const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+  const sum = (a) => a.reduce((x, y) => x + y, 0);
+
+  async function api(path, opts) {
+    const res = await fetch(API + path, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || ('Ошибка ' + res.status));
+    return data;
+  }
+  const postJson = (path, body) => api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+  function chips(box, models, on) {
+    box.replaceChildren(...models.map((m) => h('label', {},
+      Object.assign(h('input', { type: 'checkbox', value: m.id }), { checked: on(m) }), m.id)));
+  }
+  const checked = (box) => [...box.querySelectorAll('input:checked')].map((i) => i.value);
+  const options = (sel, pairs) => sel.replaceChildren(...pairs.map(([v, t]) => h('option', { value: v, text: t })));
+
+  // Слова для точности расшифровки: без знаков, регистра и ударений-апострофов.
+  const words = (s) => s.toLowerCase().replace(/ё/g, 'е').replace(/[\p{P}\p{S}]+/gu, ' ').split(/\s+/).filter(Boolean);
+  function accuracy(ref, got) {
+    const a = words(ref), b = words(got);
+    if (!a.length) return 0;
+    let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+    return Math.max(0, 1 - prev[b.length] / a.length);
+  }
+
+  // ── Цена ─────────────────────────────────────────────────────────────
+  // По прогону: средняя цена одного перевода по видам текста, цена перевода
+  // секунды голосового (расшифровка переведена на три языка — делим на 3),
+  // средняя задержка; у расшифровки — цена минуты по ответам и точность.
+  function stats() {
+    const run = S.run;
+    const byPhrase = new Map(S.phrases.map((p) => [p.id, p]));
+    const text = {};
+    for (const m of S.textModels) {
+      const cost = { msg: [], chat: [], post: [] };
+      const ms = [];
+      let errs = 0;
+      for (const r of run.phrases) {
+        for (const x of Object.values(r.results[m.id] || {})) {
+          if (x.err) { errs++; continue; }
+          cost[byPhrase.get(r.id).cat].push(x.usd);
+          ms.push(x.ms);
+        }
+      }
+      let trUsd = 0, trSec = 0;
+      for (const v of run.voices) {
+        const tr = Object.values((v.translated || {})[m.id] || {}).filter((x) => !x.err);
+        if (!tr.length) continue;
+        trUsd += sum(tr.map((x) => x.usd)) / tr.length;
+        trSec += S.samples.find((s) => s.id === v.id).sec;
+      }
+      text[m.id] = {
+        msg: mean(cost.msg), chat: mean(cost.chat), post: mean(cost.post),
+        ms: mean(ms), errs, voicePerSec: trSec ? trUsd / trSec : 0,
+      };
+    }
+    const speech = {};
+    for (const m of S.speechModels) {
+      let u = 0, s = 0;
+      const acc = [], ms = [];
+      for (const v of run.voices) {
+        const x = v.heard[m.id];
+        if (!x || x.err) continue;
+        const sample = S.samples.find((z) => z.id === v.id);
+        u += x.usd; s += sample.sec; ms.push(x.ms); acc.push(accuracy(sample.ref, x.text));
+      }
+      speech[m.id] = { perMin: s ? (u / s) * 60 : m.perMin, acc: mean(acc), ms: mean(ms), n: acc.length };
+    }
+    return { text, speech };
+  }
+
+  function renderPrice() {
+    const T = $('priceText'), P = $('priceSpeech'), M = $('priceMonth');
+    if (!S.run) {
+      const empty = h('tbody', {}, h('tr', {}, h('td', { text: 'Набор ещё не прогоняли — цены появятся после прогона.' })));
+      T.replaceChildren(empty); P.replaceChildren(); M.replaceChildren();
+      return;
+    }
+    const st = stats();
+    T.replaceChildren(
+      h('thead', {}, h('tr', {}, ['Модель', 'Тариф, за 1 млн токенов', 'Задержка', '1 млн сообщений', '1 млн сообщений чата', '1 млн постов (×3 языка)', 'Перевод 1 000 ч голосовых']
+        .map((t) => h('th', { text: t })))),
+      h('tbody', {}, S.textModels.map((m) => {
+        const x = st.text[m.id];
+        return h('tr', {},
+          h('td', {}, h('b', { text: m.id }), h('span', { class: 'ms', text: m.note || '' }), x.errs ? h('span', { class: 'err', text: `ошибок: ${x.errs}` }) : null),
+          h('td', { text: `${usd(m.in)} / ${usd(m.out)}` }),
+          h('td', { text: sec(x.ms) }),
+          h('td', { text: usd(x.msg * 1e6) }),
+          h('td', { text: usd(x.chat * 1e6) }),
+          h('td', { text: usd(x.post * 3 * 1e6) }),
+          h('td', { text: usd(x.voicePerSec * 3600 * 1000) }));
+      })));
+    P.replaceChildren(
+      h('thead', {}, h('tr', {}, ['Модель', 'Тариф за минуту', 'Вышло за минуту', 'Точность', 'Задержка', '1 000 ч'].map((t) => h('th', { text: t })))),
+      h('tbody', {}, S.speechModels.map((m) => {
+        const x = st.speech[m.id];
+        return h('tr', {},
+          h('td', {}, h('b', { text: m.id }), m.note ? h('span', { class: 'ms', text: m.note }) : null),
+          h('td', { text: usd(m.perMin) }),
+          h('td', { text: usd(x.perMin) }),
+          h('td', { text: x.n ? pct(x.acc) : '—' }),
+          h('td', { text: x.n ? sec(x.ms) : '—' }),
+          h('td', { text: usd(x.perMin * 60 * 1000) }));
+      })));
+    renderMonth(st);
+  }
+
+  function renderMonth(st) {
+    const v = {};
+    for (const el of document.querySelectorAll('#price [data-k]')) v[el.dataset.k] = el.tagName === 'SELECT' ? el.value : Math.max(0, Number(el.value) || 0);
+    const sp = st.speech[v.speech] || st.speech[S.speechModels[0].id];
+    const voiceSec = v.voice * v.voiceSec;
+    const speechUsd = (voiceSec / 60) * sp.perMin;
+    $('priceMonth').replaceChildren(
+      h('thead', {}, h('tr', {}, ['Модель перевода', 'Сообщения', 'Чат и комментарии', 'Посты и описания', 'Голосовые: расшифровка + перевод', 'Всего в месяц'].map((t) => h('th', { text: t })))),
+      h('tbody', {}, S.textModels.map((m) => {
+        const x = st.text[m.id];
+        const parts = [x.msg * v.msg, x.chat * v.chat, x.post * 3 * v.post, speechUsd + x.voicePerSec * voiceSec];
+        return h('tr', {}, h('td', {}, h('b', { text: m.id })), parts.map((p) => h('td', { text: usd(p) })), h('td', {}, h('b', { text: usd(sum(parts)) })));
+      })));
+  }
+
+  // ── Набор фраз ───────────────────────────────────────────────────────
+  function renderSet() {
+    const to = $('setTo').value, cat = $('setCat').value;
+    const models = S.textModels.filter((m) => checked($('setModels')).includes(m.id));
+    const rows = S.phrases.filter((p) => p.lang !== to && (!cat || p.cat === cat));
+    const res = new Map(((S.run && S.run.phrases) || []).map((r) => [r.id, r.results]));
+    $('setTable').replaceChildren(
+      h('thead', {}, h('tr', {}, h('th', { text: 'Исходный текст' }), models.map((m) => h('th', { text: m.id })))),
+      h('tbody', {}, rows.map((p) => h('tr', {},
+        h('td', {}, h('span', { class: 'tag', text: LANG[p.lang] }), h('span', { class: 'tag', text: CAT[p.cat] }),
+          p.tag ? h('span', { class: 'tag' + (p.tag === 'попытка команды' ? ' hot' : ''), text: p.tag }) : null, h('div', { text: p.text })),
+        models.map((m) => {
+          const x = res.get(p.id) && res.get(p.id)[m.id] && res.get(p.id)[m.id][to];
+          if (!x) return h('td', { class: 'ms', text: '—' });
+          if (x.err) return h('td', {}, h('span', { class: 'err', text: x.err }));
+          return h('td', {}, x.text, h('span', { class: 'ms', text: `${sec(x.ms)} · ${usd(x.usd)}` }));
+        })))));
+  }
+
+  // ── Голосовые набора ─────────────────────────────────────────────────
+  function renderVoices() {
+    const to = $('voiceTo').value, model = $('voiceModel').value;
+    const res = new Map(((S.run && S.run.voices) || []).map((v) => [v.id, v]));
+    $('voiceList').replaceChildren(...S.samples.map((s) => {
+      const r = res.get(s.id);
+      const acc = r ? S.speechModels.map((m) => (r.heard[m.id] && !r.heard[m.id].err ? accuracy(s.ref, r.heard[m.id].text) : -1)) : [];
+      const top = Math.max(...acc, 0);
+      const tr = r && r.translated[model] && r.translated[model][to];
+      return h('div', { class: 'voice' },
+        h('div', {}, h('span', { class: 'tag', text: LANG[s.lang] }), h('span', { class: 'tag', text: COND[s.cond] }), h('span', { class: 'tag', text: nf(1).format(s.sec) + ' с' })),
+        h('audio', { controls: '', preload: 'none', src: `/lab/voice/${s.id}.m4a` }),
+        h('p', { class: 'said' }, h('b', { text: 'Сказано' }), s.ref),
+        !r ? h('p', { class: 'note', text: 'Ещё не прогоняли.' }) : h('div', { class: 'wrap txt' }, h('table', { style: 'min-width:640px' },
+          h('thead', {}, h('tr', {}, ['Модель', 'Расшифровка', 'Точность', 'Задержка'].map((t) => h('th', { text: t })))),
+          h('tbody', {}, S.speechModels.map((m, i) => {
+            const x = r.heard[m.id];
+            if (!x || x.err) return h('tr', {}, h('td', { text: m.id }), h('td', {}, h('span', { class: 'err', text: (x && x.err) || '—' })), h('td'), h('td'));
+            return h('tr', {}, h('td', { text: m.id }), h('td', { text: x.text }),
+              h('td', { class: acc[i] === top ? 'best' : '', text: pct(acc[i]) }), h('td', { text: sec(x.ms) }));
+          })))),
+        s.lang !== to && tr ? h('p', { class: 'said' }, h('b', { text: `Перевод, ${LANG[to]}` }), tr.err ? h('span', { class: 'err', text: tr.err }) : tr.text) : null);
+    }));
+  }
+
+  // ── Траты ────────────────────────────────────────────────────────────
+  const KIND = { text: 'текст', voice: 'голосовое', run: 'прогон набора' };
+  function renderMoney() {
+    const M = S.money;
+    $('moneyTotal').textContent = usd(M.spent);
+    $('moneyPeople').replaceChildren(...M.people.map((p, i) => h('span', {}, i ? ' · ' : '', p.who + ': ', h('b', { text: usd(p.usd) }))));
+    $('moneyLog').replaceChildren(
+      h('thead', {}, h('tr', {}, ['Когда', 'Кто', 'Что', 'Текст', 'Списано'].map((t) => h('th', { text: t })))),
+      h('tbody', {}, M.log.length ? M.log.slice(0, 100).map((e) => h('tr', {},
+        h('td', { text: new Date(e.at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }),
+        h('td', { text: e.who }), h('td', { text: KIND[e.kind] || e.kind }), h('td', { text: e.what }),
+        h('td', { class: 'paid', text: usd(e.usd) }))) : h('tr', {}, h('td', { text: 'Пока ничего не потрачено.' }))));
+  }
+  // После запроса: сколько списано им и сколько всего.
+  function paid(r) {
+    S.money = r.money;
+    renderMoney(); renderRunInfo();
+    return `Списано ${usd(r.usd)} · всего потрачено ${usd(r.money.spent)}.`;
+  }
+
+  // ── Прогон ───────────────────────────────────────────────────────────
+  function renderRunInfo() {
+    const d = S.run && new Date(S.run.at);
+    const when = d ? `Последний прогон — ${d.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}, занял ${Math.round(S.run.ms / 1000)} с, стоил ${usd(S.run.usd)}.` : 'Набор ещё не прогоняли.';
+    $('runInfo').textContent = when;
+  }
+
+  async function poll() {
+    const j = await api('/job').catch(() => null);
+    if (!j) return setTimeout(poll, 4000);
+    $('runMeter').hidden = !j.running;
+    $('runMeter').firstElementChild.style.width = j.total ? (j.done / j.total) * 100 + '%' : '0';
+    if (j.running) {
+      $('runBtn').disabled = true;
+      $('runInfo').textContent = `Идёт прогон: ${j.done} из ${j.total} запросов…`;
+      return setTimeout(poll, 2000);
+    }
+    $('runBtn').disabled = !S.configured;
+    await load();
+  }
+
+  $('runBtn').onclick = async () => {
+    $('runBtn').disabled = true;
+    try { await postJson('/run', {}); poll(); }
+    catch (e) { $('runInfo').textContent = e.message; $('runBtn').disabled = false; }
+  };
+
+  // ── Живая проба: текст ───────────────────────────────────────────────
+  function resultCards(box, results, lang) {
+    box.replaceChildren(...Object.entries(results).map(([id, byLang]) => {
+      const all = Object.values(byLang);
+      const ok = all.filter((x) => !x.err);
+      return h('div', { class: 'card' },
+        h('h4', {}, id, h('small', { text: ok.length ? `${sec(Math.max(...ok.map((x) => x.ms)))} · ${usd(sum(ok.map((x) => x.usd)))}` : '' })),
+        Object.entries(byLang).map(([to, x]) => h('p', {}, h('b', { text: LANG[to] }), x.err ? h('span', { class: 'err', text: x.err }) : x.text)));
+    }));
+  }
+
+  $('tryBtn').onclick = async () => {
+    const text = $('tryText').value.trim();
+    if (!text) return;
+    $('tryBtn').disabled = true;
+    $('tryInfo').textContent = 'Переводим…';
+    try {
+      const r = await postJson('/text', { text, models: checked($('tryModels')) });
+      $('tryInfo').textContent = `Язык текста — ${LANG[r.lang]}. ${paid(r)}`;
+      resultCards($('tryOut'), r.results);
+    } catch (e) { $('tryInfo').textContent = e.message; }
+    $('tryBtn').disabled = false;
+  };
+
+  // ── Живая проба: голос ───────────────────────────────────────────────
+  // Длина записи — по часам: у webm из MediaRecorder длины в файле нет.
+  const MAX_SEC = 120;
+  let rec = null;
+
+  async function sendVoice(blob, seconds) {
+    $('sayPlay').src = URL.createObjectURL(blob); $('sayPlay').hidden = false;
+    $('sayInfo').textContent = 'Расшифровываем и переводим…';
+    $('sayHeard').replaceChildren(); $('sayOut').replaceChildren();
+    $('recBtn').disabled = true;
+    const form = new FormData();
+    form.append('audio', blob, 'voice');
+    form.append('seconds', String(Math.max(1, Math.round(seconds))));
+    form.append('speech', checked($('saySpeech')).join(','));
+    form.append('models', checked($('sayModels')).join(','));
+    try {
+      const r = await api('/voice', { method: 'POST', body: form });
+      $('sayInfo').textContent = `${r.lang ? 'Язык — ' + LANG[r.lang] + '. ' : ''}${paid(r)}`;
+      $('sayHeard').replaceChildren(...Object.entries(r.heard).map(([id, x]) => h('div', { class: 'card' },
+        h('h4', {}, id + (id === r.base ? ' → перевод' : ''), h('small', { text: x.err ? '' : `${sec(x.ms)} · ${usd(x.usd)}` })),
+        h('p', {}, x.err ? h('span', { class: 'err', text: x.err }) : (x.text || '— тишина —')))));
+      resultCards($('sayOut'), r.translated);
+    } catch (e) { $('sayInfo').textContent = e.message; }
+    $('recBtn').disabled = false;
+  }
+
+  function stopRec() { if (rec && rec.mr.state !== 'inactive') rec.mr.stop(); }
+
+  $('recBtn').onclick = async () => {
+    if (rec) return stopRec();
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { $('sayInfo').textContent = 'Нет доступа к микрофону — разрешите его в браузере.'; return; }
+    const type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus'].find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
+    const mr = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+    const parts = [];
+    const t0 = Date.now();
+    rec = { mr };
+    mr.ondataavailable = (e) => e.data.size && parts.push(e.data);
+    mr.onstop = () => {
+      clearInterval(rec.timer);
+      stream.getTracks().forEach((t) => t.stop());
+      $('recBtn').classList.remove('recording');
+      $('recBtn').lastElementChild.textContent = 'Записать';
+      const seconds = (Date.now() - t0) / 1000;
+      rec = null;
+      sendVoice(new Blob(parts, { type: mr.mimeType || 'audio/webm' }), seconds);
+    };
+    mr.start();
+    $('recBtn').classList.add('recording');
+    rec.timer = setInterval(() => {
+      const s = Math.round((Date.now() - t0) / 1000);
+      $('recBtn').lastElementChild.textContent = `Стоп · ${s} с`;
+      if (s >= MAX_SEC) stopRec();
+    }, 250);
+  };
+
+  $('fileBtn').onclick = () => $('sayFile').click();
+  $('sayFile').onchange = () => {
+    const f = $('sayFile').files[0];
+    if (!f) return;
+    const a = new Audio(URL.createObjectURL(f));
+    a.onloadedmetadata = () => {
+      if (!isFinite(a.duration) || a.duration > MAX_SEC) { $('sayInfo').textContent = `Файл — до ${MAX_SEC} секунд.`; return; }
+      sendVoice(f, a.duration);
+    };
+    a.onerror = () => { $('sayInfo').textContent = 'Этот файл браузер не открывает как звук.'; };
+    $('sayFile').value = '';
+  };
+
+  // ── Загрузка ─────────────────────────────────────────────────────────
+  let first = true;
+  async function load() {
+    S = await api('/state');
+    $('noKey').hidden = S.configured;
+    for (const id of ['runBtn', 'tryBtn', 'recBtn', 'fileBtn']) $(id).disabled = !S.configured;
+    if (first) {
+      first = false;
+      const langs = S.langs.map((l) => [l, LANG[l] || l]);
+      options($('setTo'), langs); $('setTo').value = 'ru';
+      options($('voiceTo'), langs); $('voiceTo').value = 'ru';
+      options($('voiceModel'), S.textModels.map((m) => [m.id, m.id]));
+      options($('monthSpeech'), S.speechModels.map((m) => [m.id, m.id]));
+      chips($('setModels'), S.textModels, () => true);
+      chips($('tryModels'), S.textModels, () => true);
+      chips($('saySpeech'), S.speechModels, () => true);
+      chips($('sayModels'), S.textModels, (m) => m === S.textModels[0]);
+      $('setTo').onchange = $('setCat').onchange = renderSet;
+      $('setModels').onchange = renderSet;
+      $('voiceTo').onchange = $('voiceModel').onchange = renderVoices;
+      for (const el of document.querySelectorAll('#price [data-k]')) el.oninput = () => S.run && renderMonth(stats());
+    }
+    renderMoney(); renderRunInfo(); renderPrice(); renderSet(); renderVoices();
+    if (S.job.running) poll();
+  }
+  load().catch((e) => { $('runInfo').textContent = e.message; });
+})();
+</script>
+</body>
+</html>
