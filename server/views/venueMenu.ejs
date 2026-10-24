@@ -17,7 +17,7 @@
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { title: venue.name + ' — ' + ta('venue.tab.menu') + ' — Takebana', description: ta('venue.menuDescription', { name: venue.name }),
-      seo: { path: path, robots: indexable ? '' : 'noindex, follow', image: venue.cover || (venue.photos || [])[0] || venue.avatar, imageAlt: venue.name,
+      seo: { path: path, lang: venueLang(venue), robots: indexable ? '' : 'noindex, follow', image: venue.cover || (venue.photos || [])[0] || venue.avatar, imageAlt: venue.name,
              jsonld: [ld.crumbs([['Takebana', '/'], [ta('app.venues'), '/venues'], [venue.name, '/venue/' + venue._id], [ta('venue.tab.menu'), path]]), menuLd].filter(Boolean) } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/venue.css') %>">

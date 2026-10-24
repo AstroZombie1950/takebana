@@ -22,6 +22,7 @@ const { escapeXML } = require('ejs');
 const { VENUE_TYPES } = require('../config/catalog');
 const Place = require('../models/Place');
 const { text } = require('./i18n');
+const { LANG_CODES, BASE_LANG, toLang } = require('./langs');
 const errorLog = require('./errorLog');
 
 const KINDS = ['country', 'type'];
@@ -33,31 +34,28 @@ const clean = (s) => (typeof s === 'string' ? s.trim().replace(/\s+/g, ' ').slic
 
 // Страны — все двухбуквенные коды, у которых Intl знает имя, кроме
 // объединений и служебных («Евросоюз», «ООН», «Неизвестный регион»).
-const REGION = {
-  ru: new Intl.DisplayNames(['ru'], { type: 'region', fallback: 'none' }),
-  en: new Intl.DisplayNames(['en'], { type: 'region', fallback: 'none' }),
-};
+const REGION = Object.fromEntries(LANG_CODES.map((l) => [l, new Intl.DisplayNames([l], { type: 'region', fallback: 'none' })]));
 const NOT_COUNTRY = new Set(['EU', 'EZ', 'QO', 'UN', 'XA', 'XB', 'ZZ']);
 const COUNTRIES = [];
 for (let a = 65; a < 91; a++) {
   for (let b = 65; b < 91; b++) {
     const c = String.fromCharCode(a, b);
-    if (!NOT_COUNTRY.has(c) && REGION.en.of(c)) COUNTRIES.push({ code: c.toLowerCase(), region: c });
+    if (!NOT_COUNTRY.has(c) && REGION[BASE_LANG].of(c)) COUNTRIES.push({ code: c.toLowerCase(), region: c });
   }
 }
 
 const BASE = { country: COUNTRIES, type: VENUE_TYPES };
 const all = (kind) => BASE[kind].concat(added[kind]);
 const find = (kind, code) => (typeof code === 'string' && code && BASE[kind] ? all(kind).find((x) => x.code === code) || null : null);
-const L = (lang) => (lang === 'en' ? 'en' : 'ru');
 
 // Подпись на языке страницы. У страны — имя из Intl, у типа — строка
-// словаря, у добавленного панелью — оба имени, их вписала она.
+// словаря, у добавленного панелью — имена ru и en, их вписала она; на
+// другом языке — английское.
 function name(kind, code, lang) {
   const x = find(kind, code);
   if (!x) return '';
-  if (x.region) return REGION[L(lang)].of(x.region);
-  return x.i18n ? text(lang, x.i18n, x.name) : x.names[L(lang)] || x.names.ru;
+  if (x.region) return REGION[toLang(lang)].of(x.region);
+  return x.i18n ? text(lang, x.i18n, x.name) : x.names[lang] || x.names.en || x.names.ru;
 }
 
 // Подпись разметкой для шаблонов (placeHtml в app.js): у основы — с ключом
@@ -79,7 +77,7 @@ const label = (kind, code, other, lang) => name(kind, code, lang) || other || ''
 // Пункты выпадашки: { code, i18n, region, text }. Страны — по алфавиту языка.
 function options(kind, lang) {
   const list = all(kind).map((x) => ({ code: x.code, i18n: x.i18n || '', region: x.region || '', text: name(kind, x.code, lang) }));
-  return kind === 'country' ? list.sort((a, b) => a.text.localeCompare(b.text, L(lang))) : list;
+  return kind === 'country' ? list.sort((a, b) => a.text.localeCompare(b.text, toLang(lang))) : list;
 }
 
 // Тип и страна из формы — заявки, правки владельца, панели. Тип — код из
@@ -126,7 +124,7 @@ async function add(kind, { ru, en }) {
   ru = clean(ru);
   en = clean(en) || ru;
   const same = (s) => !!s && (s.toLowerCase() === ru.toLowerCase() || s.toLowerCase() === en.toLowerCase());
-  const had = all(kind).find((x) => same(name(kind, x.code, 'ru')) || same(name(kind, x.code, 'en')));
+  const had = all(kind).find((x) => LANG_CODES.some((l) => same(name(kind, x.code, l))));
   if (had) return had.code;
   const code = codeFor(kind, en);
   await Place.create({ kind, code, name: { ru, en } });

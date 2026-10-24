@@ -81,7 +81,7 @@ async function create(userId, { text, topic, files, videoIds, order }) {
       { $set: { post: _id, publish: true, description: text.slice(0, galleryVideo.DESCRIPTION_MAX) } });
     for (const v of videos) await galleryVideo.publishIfReady(v._id);
   } else if (indexable(post)) {
-    indexNow.ping('/post/' + _id);
+    indexNow.pingItem('/post/' + _id, post);
   }
   // Фото поста поисковикам не сообщаем: их страница — 301 на пост (12.10),
   // а пост с роликами сообщается, когда они дожаты (videoDone).
@@ -101,7 +101,7 @@ async function videoDone(postId) {
   const media = post.media.filter((m) => m.kind === 'photo' || ok.has(String(m.ref)));
   if (!media.length && !post.text) return remove(post);
   await Post.updateOne({ _id: post._id }, { $set: { media, status: 'ready' } });
-  if (indexable({ media, text: post.text })) indexNow.ping('/post/' + post._id);
+  if (indexable({ media, text: post.text })) indexNow.pingItem('/post/' + post._id, post);
 }
 
 // Фото или видео поста удалили по отдельности (со своей страницы) — из

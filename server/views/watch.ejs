@@ -48,7 +48,7 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
-<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: headDescription, seo: { path: base, type: 'video.other', image: shareCover, imageAlt: mediaName, robots: rec.userId.banned ? 'noindex, follow' : '', jsonld: jsonld } }) %>
+<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: headDescription, seo: { path: base, lang: itemLang(rec, rec.userId), type: 'video.other', image: shareCover, imageAlt: mediaName, robots: rec.userId.banned ? 'noindex, follow' : '', jsonld: jsonld } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/player.css') %>">

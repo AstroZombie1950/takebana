@@ -38,15 +38,17 @@ const callSchema = new Schema({
   // выдано, сколько ещё открыто, сколько КБ прошло к собеседнику и от
   // него, отказы по кодам (486, 508, auth). Пусто — звонок шёл через Daily
   // или журнал coturn не читается.
-  turn: [{
-    _id: false,
+  // errors — имя, занятое у Mongoose: без отдельной схемы с suppressReservedKeysWarning
+  // он предупреждал об этом в журнал pm2 при каждом запуске. Переименовать
+  // нельзя — так поле читают панель и уже записанные звонки.
+  turn: [new Schema({
     user: { type: Schema.Types.ObjectId, ref: 'User' },
     allocs: Number,
     open: Number,
     inKB: Number,
     outKB: Number,
     errors: Schema.Types.Mixed,
-  }],
+  }, { _id: false, suppressReservedKeysWarning: true })],
   participants: [{
     user: { type: Schema.Types.ObjectId, ref: 'User' },
     joinedAt: { type: Date, default: Date.now },

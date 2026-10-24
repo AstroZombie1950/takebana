@@ -109,7 +109,7 @@
       var n = new Notification(title, { body: body, tag: tag, icon: '/favicon.svg', requireInteraction: !!sticky });
       n.onclick = function () {
         window.focus();
-        if (url) location.href = url;
+        if (url) location.href = tkHref(url);
         n.close();
       };
       return n;

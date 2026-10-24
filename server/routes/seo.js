@@ -30,7 +30,10 @@ const { meaningful, describe } = require('../utils/snippet');
 const gallery = require('../utils/gallery');
 const authors = require('../utils/authors');
 const { siteUrl } = require('../utils/site');
-const { text, langOf } = require('../utils/i18n');
+const { text } = require('../utils/i18n');
+const { LANG_CODES, localeOf } = require('../utils/langs');
+const { langUrl } = require('../utils/langUrl');
+const { itemLang, profileLang, venueLang } = require('../utils/contentLang');
 const { CATEGORIES } = require('../config/catalog');
 const userView = require('../utils/userView');
 const { profileUrl } = require('../utils/profileUrl');
@@ -123,15 +126,13 @@ const newest = (dates) => dates.reduce((a, b) => (b && (!a || b > a) ? b : a), n
 
 // Название и описание видео — те же, что в разметке его страницы
 // (views/watch.ejs, mediaTitle и describe): своё, если оно что-то говорит,
-// иначе наше. Язык — тот, что видит робот: без cookie и Accept-Language
-// сайт отвечает по-английски (utils/i18n.js, langOf).
-const ROBOT = langOf({ headers: {} });
-const longDate = (d) => new Date(d).toLocaleString(ROBOT === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+// иначе наше — на языке версии страницы, которая в индексе.
+const longDate = (d, lang) => new Date(d).toLocaleString(localeOf(lang), { day: 'numeric', month: 'long', year: 'numeric' });
 
-function videoEntry(path, v, kind, name, date) {
-  const entry = { loc: path, lastmod: date };
-  const vars = { name, date: longDate(date) };
-  const title = meaningful(v.title) ? v.title.trim() : text(ROBOT, kind === 'recording' ? 'rec.untitledBy' : 'video.untitledBy', vars);
+function videoEntry(path, v, kind, name, date, lang) {
+  const entry = { loc: path, lang, lastmod: date };
+  const vars = { name, date: longDate(date, lang) };
+  const title = meaningful(v.title) ? v.title.trim() : text(lang, kind === 'recording' ? 'rec.untitledBy' : 'video.untitledBy', vars);
   // Без превью и файла Google видео не примет; страница в карте остаётся.
   // Файл — то же, что играет плеер (routes/watch.js, KINDS.src): у записи
   // после нарезки — плейлист HLS, MP4 тогда уже удалён.
@@ -140,7 +141,7 @@ function videoEntry(path, v, kind, name, date) {
     entry.video = {
       thumbnail_loc: siteUrl(v.thumb.url),
       title,
-      description: describe(v.description, text(ROBOT, kind === 'recording' ? 'seo.recordingDesc' : 'seo.videoDesc', vars)),
+      description: describe(v.description, text(lang, kind === 'recording' ? 'seo.recordingDesc' : 'seo.videoDesc', vars)),
       content_loc: siteUrl(src),
       duration: v.duration > 0 ? Math.min(Math.round(v.duration), 28800) : null,
       publication_date: date.toISOString(),
@@ -153,7 +154,7 @@ async function collect() {
   const [recordings, videos, photos, posts, live, groups, venues, menus, authorTotal] = await Promise.all([
     Recording.find({ status: 'ready' }).select('userId venue category title description isAdult thumb video hls.url duration recordedAt createdAt').lean(),
     GalleryVideo.find({ status: 'ready' }).sort({ createdAt: -1 }).select('userId venue title description thumb video duration createdAt').lean(),
-    GalleryPhoto.find({}).sort({ createdAt: -1 }).select('userId url createdAt post').lean(),
+    GalleryPhoto.find({}).sort({ createdAt: -1 }).select('userId url caption createdAt post').lean(),
     Post.find({ status: 'ready' }).sort({ createdAt: -1 }).select('userId media text createdAt').lean(),
     Stream.distinct('userId', { isActive: true }),
     authors.groups(),
@@ -164,8 +165,11 @@ async function collect() {
 
   const withContent = new Set([...recordings, ...videos, ...photos, ...posts].map((x) => String(x.userId)).concat(live.map(String)));
   const users = await User.find({ banned: { $ne: true }, _id: { $in: [...withContent] } })
-    .select('nickname login email').lean();
+    .select('nickname login email bio lang').lean();
   const names = new Map(users.map((u) => [String(u._id), userView.displayName(u)]));
+  // Язык страницы в индексе — как у самой страницы (utils/contentLang.js).
+  const authorOf = new Map(users.map((u) => [String(u._id), u]));
+  const langOfItem = (x) => itemLang(x, authorOf.get(String(x.userId)));
   const open = new Set(names.keys());
   const byUser = (list) => list.reduce((m, x) => {
     const id = String(x.userId);
@@ -183,24 +187,27 @@ async function collect() {
   const shown = recordings.filter((r) => !r.isAdult);
   const latest = newest([...shown, ...videos, ...photos].map((x) => x.createdAt));
   const latestMedia = newest([...videos, ...photos, ...posts].map((x) => x.createdAt));
-  const pages = [{ loc: '/', lastmod: latest },
+  const own = [{ loc: '/', lastmod: latest },
     ...Object.keys(CATEGORIES).map((c) => ({ loc: '/streaming/' + c, lastmod: newest(shown.filter((r) => r.category === c).map((r) => r.createdAt)) })),
     { loc: '/about' }];
   // «Лента» (04.10) — если есть хоть один пост, фото или видео: иначе она noindex.
-  if (posts.length || photos.length || videos.length) pages.push({ loc: '/feed', lastmod: latestMedia });
-  if (Object.values(groups).some((g) => g.length)) pages.push({ loc: '/authors', lastmod: latest });
+  if (posts.length || photos.length || videos.length) own.push({ loc: '/feed', lastmod: latestMedia });
+  if (Object.values(groups).some((g) => g.length)) own.push({ loc: '/authors', lastmod: latest });
   // Все авторы (04.10) — каждая страница листалки, без фильтров: они noindex.
   const authorPages = Math.ceil(authorTotal / authors.ALL_PAGE);
-  for (let n = 1; n <= authorPages; n++) pages.push({ loc: '/authors/all' + (n > 1 ? `?page=${n}` : ''), lastmod: latest });
+  for (let n = 1; n <= authorPages; n++) own.push({ loc: '/authors/all' + (n > 1 ? `?page=${n}` : ''), lastmod: latest });
   // Раздел — если одобрено хоть одно заведение: тогда он в индексе
   // (views/venues.ejs). Страница заведения — одобренного и с описанием:
   // у остальных noindex (views/venue.ejs, docs/VENUES.md п. 5). До 04.10
   // раздел шёл в карту только при заведении с описанием и выпадал из неё,
   // оставаясь в индексе.
   const described = venues.filter(indexableVenue);
-  if (venues.length) pages.push({ loc: '/venues', lastmod: newest(venues.map((v) => v.reviewedAt)) });
+  if (venues.length) own.push({ loc: '/venues', lastmod: newest(venues.map((v) => v.reviewedAt)) });
+  // Наши страницы — на всех языках сайта (docs/seo/LANGUAGES.md, §5.2).
+  const pages = own.flatMap((p) => LANG_CODES.map((lang) => ({ ...p, lang })));
   // Со снимками заведения — обложкой камеры и фото (задача 31, 04.10).
-  pages.push(...described.map((v) => ({ loc: `/venue/${v._id}`, lastmod: v.reviewedAt || null, images: [v.cover, ...(v.photos || [])].filter(Boolean) })));
+  // Заведение и его вкладки — на языке описания.
+  pages.push(...described.map((v) => ({ loc: `/venue/${v._id}`, lang: venueLang(v), lastmod: v.reviewedAt || null, images: [v.cover, ...(v.photos || [])].filter(Boolean) })));
   // Вкладки «Эфиры», «Видео» и включённое «Меню» заведения (29.09) — у тех
   // же, если есть что показать.
   const venueHas = (list) => new Set(list.filter((x) => x.venue).map((x) => String(x.venue)));
@@ -208,9 +215,10 @@ async function collect() {
   const withVideos = venueHas(videos);
   const withMenu = new Set(menus.map(String));
   for (const v of described) {
-    if (v.features && v.features.videoMenu && withMenu.has(String(v._id))) pages.push({ loc: `/venue/${v._id}/menu` });
-    if (withRecs.has(String(v._id))) pages.push({ loc: `/venue/${v._id}/streams` });
-    if (withVideos.has(String(v._id))) pages.push({ loc: `/venue/${v._id}/videos` });
+    const lang = venueLang(v);
+    if (v.features && v.features.videoMenu && withMenu.has(String(v._id))) pages.push({ loc: `/venue/${v._id}/menu`, lang });
+    if (withRecs.has(String(v._id))) pages.push({ loc: `/venue/${v._id}/streams`, lang });
+    if (withVideos.has(String(v._id))) pages.push({ loc: `/venue/${v._id}/videos`, lang });
   }
 
   const people = [];
@@ -226,8 +234,9 @@ async function collect() {
       ...(recsOf.get(id) || []).map((r) => r.createdAt),
     ]);
     const url = profileUrl(u);
+    const lang = profileLang(u);
     const urlsOf = (list) => list.map((p) => p.url);
-    people.push({ loc: url, lastmod, images: urlsOf(pics.slice(0, gallery.PAGE)) });
+    people.push({ loc: url, lang, lastmod, images: urlsOf(pics.slice(0, gallery.PAGE)) });
     // Вкладки — если в них что-то есть: с 09.10 профиль их не повторяет.
     // Вкладка «Фото» листается плитками (12.10: пост или пачка — одна
     // плитка), а не снимками: считать страницы по снимкам — значит класть
@@ -237,7 +246,7 @@ async function collect() {
       const { pages: total } = gallery.page(await gallery.photoTiles(id), 1);
       for (let n = 1; n <= total; n++) {
         const shown = await gallery.photos(id, { skip: (n - 1) * gallery.PAGE, limit: gallery.PAGE });
-        people.push({ loc: `${url}/photos` + (n > 1 ? `?page=${n}` : ''), lastmod, images: urlsOf(shown) });
+        people.push({ loc: `${url}/photos` + (n > 1 ? `?page=${n}` : ''), lang, lastmod, images: urlsOf(shown) });
       }
     }
     // Листалка вкладок человека — по его личному: снятое от имени заведения
@@ -245,30 +254,30 @@ async function collect() {
     const own = vids.filter((v) => !v.venue);
     if (own.length) {
       const { pages: total } = gallery.page(own.length, 1);
-      for (let n = 1; n <= total; n++) people.push({ loc: `${url}/videos` + (n > 1 ? `?page=${n}` : ''), lastmod });
+      for (let n = 1; n <= total; n++) people.push({ loc: `${url}/videos` + (n > 1 ? `?page=${n}` : ''), lang, lastmod });
     }
     // Все записи (/@ник/recordings, 29.09) — так же.
     const recs = (recsOf.get(id) || []).filter((r) => !r.venue);
     if (recs.length) {
       const { pages: total } = gallery.page(recs.length, 1);
-      for (let n = 1; n <= total; n++) people.push({ loc: `${url}/recordings` + (n > 1 ? `?page=${n}` : ''), lastmod });
+      for (let n = 1; n <= total; n++) people.push({ loc: `${url}/recordings` + (n > 1 ? `?page=${n}` : ''), lang, lastmod });
     }
   }
 
   // Страницы фото — со снимком; посты (09.10) — со снимками своих фото.
   // Фото поста — не своя страница: 301 на пост (12.10), в карте — пост.
   const photoPages = [...photosOf.values()].flat().filter((p) => !p.post)
-    .map((p) => ({ loc: `/photo/${p._id}`, lastmod: p.createdAt, images: [p.url] }));
+    .map((p) => ({ loc: `/photo/${p._id}`, lang: langOfItem(p), lastmod: p.createdAt, images: [p.url] }));
   const photoUrl = new Map(photos.map((p) => [String(p._id), p.url]));
   // Короткий пост без медиа — не в карте: он noindex (utils/posts.js, задача 50).
-  const postPages = [...postsOf.values()].flat().filter(postIndexable).map((p) => ({ loc: `/post/${p._id}`, lastmod: p.createdAt,
+  const postPages = [...postsOf.values()].flat().filter(postIndexable).map((p) => ({ loc: `/post/${p._id}`, lang: langOfItem(p), lastmod: p.createdAt,
     images: p.media.filter((m) => m.kind === 'photo').map((m) => photoUrl.get(String(m.ref))).filter(Boolean) }));
 
   const watch = [
     ...[...recsOf.values()].flat().filter((r) => !r.isAdult)
-      .map((r) => videoEntry(`/recording/${r._id}`, r, 'recording', names.get(String(r.userId)), r.recordedAt || r.createdAt)),
+      .map((r) => videoEntry(`/recording/${r._id}`, r, 'recording', names.get(String(r.userId)), r.recordedAt || r.createdAt, langOfItem(r))),
     ...[...videosOf.values()].flat()
-      .map((v) => videoEntry(`/video/${v._id}`, v, 'video', names.get(String(v.userId)), v.createdAt)),
+      .map((v) => videoEntry(`/video/${v._id}`, v, 'video', names.get(String(v.userId)), v.createdAt, langOfItem(v))),
   ];
 
   return { pages, users: people, photos: photoPages.concat(postPages), video: watch };
@@ -276,7 +285,7 @@ async function collect() {
 
 function urlset(entries) {
   const urls = entries.map((e) => {
-    let x = '<url>' + tag('loc', siteUrl(e.loc));
+    let x = '<url>' + tag('loc', langUrl(e.lang, e.loc));
     if (e.lastmod) x += tag('lastmod', e.lastmod.toISOString());
     for (const img of e.images || []) x += '<image:image>' + tag('image:loc', siteUrl(img)) + '</image:image>';
     if (e.video) {

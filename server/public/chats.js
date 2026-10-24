@@ -3582,7 +3582,7 @@
     if (requestPeers[p.id]) { delete requestPeers[p.id]; paintRequests(); }
     post('/start-conversation', { recipientId: p.id })
       .then(function (d) { select(dialogEl(p.id) || addDialog(d.peer)); })
-      .catch(function () { location.href = '/userPage/' + encodeURIComponent(p.id); });
+      .catch(function () { location.href = tkHref('/userPage/' + encodeURIComponent(p.id)); });
   }
 
   // ── Действия с сообщением и звонком ───────────────────────────────────
@@ -3740,7 +3740,7 @@
     var quote = e.target.closest('[data-goto]');
     if (quote && !picking && !longPressed) return revealMessage(quote.getAttribute('data-goto'));
     var who = e.target.closest('[data-person]');
-    if (who && !picking) return (location.href = '/userPage/' + encodeURIComponent(who.getAttribute('data-person')));
+    if (who && !picking) return (location.href = tkHref('/userPage/' + encodeURIComponent(who.getAttribute('data-person'))));
     var el = itemOf(e.target);
     if (!el || !picking) return;
     if (longPressed) return;   // клик, которым кончилось удержание

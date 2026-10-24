@@ -121,7 +121,7 @@
     // Дата рождения — один раз (utils/age.js): сначала спрашиваем, верно ли,
     // и уходит она первой — не принял сервер, имя и ник ждут исправления.
     var asked = day
-      ? confirmDialog(t('settings.birthConfirm', { date: new Date(day + 'T00:00:00Z').toLocaleDateString(window.tkLang && window.tkLang() === 'en' ? 'en-US' : 'ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' }) }), { okText: t('common.save') })
+      ? confirmDialog(t('settings.birthConfirm', { date: new Date(day + 'T00:00:00Z').toLocaleDateString(window.tkLocale(), { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' }) }), { okText: t('common.save') })
       : Promise.resolve(true);
     asked.then(function (yes) {
       if (!yes) return;
@@ -295,7 +295,7 @@
       confirmDialog(t('settings.delete.ask'), { okText: t('settings.delete.btn') }).then(function (yes) {
         if (!yes) return;
         send('/profile/delete', json(pass ? { password: pass.value } : {}))
-          .then(function () { location.href = '/'; })
+          .then(function () { location.href = tkHref('/'); })
           .catch(function (err) {
             if (pass) pass.value = '';
             toast(t('app.errorPrefix', { message: err.message }), 'error');

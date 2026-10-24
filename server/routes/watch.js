@@ -313,7 +313,7 @@ function mount(kind) {
   router.get(path, commonDataMiddleware, async (req, res) => {
     // У фото и поста заведения нет — populate поля, которого нет в схеме, Mongoose отвергает.
     const query = OBJECT_ID.test(req.params.id)
-      ? K.Model.findById(req.params.id).populate('userId', 'nickname login email avatar banned role privacy ogCard')
+      ? K.Model.findById(req.params.id).populate('userId', 'nickname login email avatar banned role privacy ogCard lang')
       : null;
     const item = query ? await (K.clip ? query.populate('venue', VENUE_AUTHOR) : query).lean() : null;
     const me = req.session.userId;

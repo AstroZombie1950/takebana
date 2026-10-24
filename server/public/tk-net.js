@@ -258,6 +258,11 @@
 
   function tkFetch(url, opts) {
     opts = Object.assign({}, opts);
+    // Ответ — на языке этой страницы, а не той, что открыта в другой
+    // вкладке (utils/i18n.js, langOf). Только своему серверу.
+    if (typeof url === 'string' && url[0] === '/' && url[1] !== '/' && window.tkLang) {
+      opts.headers = Object.assign({ 'X-TK-Lang': window.tkLang() }, opts.headers);
+    }
     var tr = fileTrace(url, opts.body);
     var limit = opts.timeout != null ? opts.timeout : isFile(opts.body) ? FILE_TIMEOUT : TIMEOUT;
     var method = String(opts.method || 'GET').toUpperCase();

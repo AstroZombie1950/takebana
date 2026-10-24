@@ -12,6 +12,8 @@
 
 const { PUBLIC_URL, siteUrl } = require('./site');
 const errorLog = require('./errorLog');
+const { langUrl } = require('./langUrl');
+const { itemLang } = require('./contentLang');
 
 const KEY = '50bdf9f338bb658d80a26cd2b26f8577';
 const ENDPOINT = 'https://api.indexnow.org/indexnow';
@@ -40,12 +42,20 @@ async function flush() {
   }
 }
 
-// Путь страницы (/recording/…, /video/…, /photo/…), которая только что
-// появилась в индексе или пропала из него.
-function ping(...paths) {
-  if (!ON) return;
-  for (const p of paths) if (p) queue.add(siteUrl(p));
+function add(url) {
+  queue.add(url);
   if (!timer) timer = setTimeout(flush, DELAY_MS);
 }
 
-module.exports = { KEY, ping };
+// Страница видео, записи, фото или поста (/recording/…), которая только что
+// появилась в индексе, — адресом той языковой версии, что в индексе
+// (utils/contentLang.js, как у страницы и карты сайта). Язык автора нужен,
+// когда своего текста нет.
+function pingItem(path, item) {
+  if (!ON || !item) return;
+  require('../models/User').findById(item.userId).select('lang').lean()
+    .then((author) => add(langUrl(itemLang(item, author), path)))
+    .catch((e) => errorLog.server(e, 'indexnow.lang'));
+}
+
+module.exports = { KEY, pingItem };

@@ -179,6 +179,12 @@
   .tk-home__bar .tk-cat__reset { grid-column: 1 / -1; }
 }
 
+/* Уже 375 пополам не помещаются «Todos los temas», «Por espectadores» — друг
+ * под другом (24.10). У «Всех авторов» пункты длиннее («With photos and
+ * videos», «Todos los creadores») — так уже с 480. */
+@media (max-width: 480px) { .tk-home__bar--stack { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 374px) { .tk-home__bar { grid-template-columns: minmax(0, 1fr); } }
+
 /* ── Секции ── */
 .tk-cat__sec { padding-top: 40px; }
 

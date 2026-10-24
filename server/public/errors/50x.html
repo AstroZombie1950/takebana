@@ -5,7 +5,8 @@
   error_page) — поэтому всё внутри: стили, тексты, скрипт. От приложения
   ничего, кроме /healthz, который оно и так отвечает первым.
 
-  Язык — из cookie lang, как у сайта, без неё — по языку браузера. Раз
+  Язык — из cookie lang, как у сайта, без неё — по языку браузера; нет
+  у сайта такого — английский. Раз
   в 10 секунд спрашивает /healthz и, как только сайт ответил, перезагружает
   страницу: человек возвращается туда, куда шёл, сам.
 -->
@@ -48,18 +49,36 @@ a.btn:hover, a.btn:focus-visible { background: #F5F1EA; color: #0A0A0A; }
 <a class="btn" href="" data-t="reload">Обновить сейчас</a>
 <script>
 (function () {
-  var EN = {
-    kicker: 'Maintenance',
-    title: 'Back in a moment',
-    text: 'We are updating Takebana or fixing a problem. It usually takes a minute or two. This page will reload by itself as soon as everything works again.',
-    wait: 'Checking…',
-    reload: 'Reload now'
+  // Строки на языках сайта, кроме русского — он уже в разметке (utils/langs.js).
+  var T = {
+    en: {
+      kicker: 'Maintenance',
+      title: 'Back in a moment',
+      text: 'We are updating Takebana or fixing a problem. It usually takes a minute or two. This page will reload by itself as soon as everything works again.',
+      wait: 'Checking…',
+      reload: 'Reload now'
+    },
+    es: {
+      kicker: 'Mantenimiento',
+      title: 'Volvemos enseguida',
+      text: 'Estamos actualizando Takebana o resolviendo un problema. Suele tardar uno o dos minutos. Esta página se recargará sola en cuanto todo vuelva a funcionar.',
+      wait: 'Verificando…',
+      reload: 'Recargar ahora'
+    },
+    pt: {
+      kicker: 'Manutenção',
+      title: 'Voltamos já',
+      text: 'Estamos atualizando a Takebana ou resolvendo um problema. Costuma levar um ou dois minutos. Esta página recarrega sozinha assim que tudo voltar a funcionar.',
+      wait: 'Verificando…',
+      reload: 'Recarregar agora'
+    }
   };
-  var m = /(?:^|;\s*)lang=(ru|en)/.exec(document.cookie);
-  var lang = m ? m[1] : (/^ru\b/i.test(navigator.language || '') ? 'ru' : 'en');
-  if (lang === 'en') {
-    document.documentElement.lang = 'en';
-    document.querySelectorAll('[data-t]').forEach(function (el) { el.textContent = EN[el.getAttribute('data-t')]; });
+  var m = /(?:^|;\s*)lang=([a-z]{2})(?:;|$)/.exec(document.cookie);
+  var lang = m && (m[1] === 'ru' || T[m[1]]) ? m[1] : (navigator.language || '').slice(0, 2).toLowerCase();
+  if (lang !== 'ru' && !T[lang]) lang = 'en';
+  if (T[lang]) {
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-t]').forEach(function (el) { el.textContent = T[lang][el.getAttribute('data-t')]; });
   }
   setInterval(function () {
     fetch('/healthz', { cache: 'no-store' }).then(function (r) { if (r.ok) location.reload(); }).catch(function () {});

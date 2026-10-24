@@ -49,6 +49,8 @@ const ACTIONS = {
   'profile.gallery.video.delete': 'Удаление видео из галереи',
   'profile.delete': 'Удаление своего аккаунта',
   'age.confirm': 'Подтверждение 18+',
+  'lang.pick': 'Выбор языка в меню',
+  'lang.auto': 'Язык по браузеру (переадресация)',
 
   'stream.setup': 'Настройки эфира',
   'stream.live': 'Выход в эфир',

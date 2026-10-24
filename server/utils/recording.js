@@ -186,7 +186,7 @@ async function finalize(rec, dir, cover) {
     });
     if (!saved) await Promise.all([...keys, thumbKey].filter(Boolean).map((k) => storage.remove(k).catch(() => {})));
     // 18+ в индекс не идёт — как и в карту сайта (routes/seo.js).
-    else if (!saved.isAdult) indexNow.ping('/recording/' + rec._id);
+    else if (!saved.isAdult) indexNow.pingItem('/recording/' + rec._id, saved);
     console.log(`[rec ${rec._id}] готова: ${duration} с, ${(size / 1048576).toFixed(1)} МБ`);
 
     // Автору — сейчас. Склейка идёт минуты, и до 20.09.2026 он не узнавал

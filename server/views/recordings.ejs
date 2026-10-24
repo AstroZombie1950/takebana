@@ -12,7 +12,7 @@
 <head>
 <%- include('partials/tkHead', { titleKey: page > 1 ? 'page.recordings.titlePage' : 'page.recordings.title', titleVars: { name: owner.displayName, n: page },
          description: ta('seo.recordingsDesc', { name: owner.displayName }) + (page > 1 ? ' ' + ta('seo.page', { n: page }) : ''),
-         seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow',
+         seo: { path: pageHref(page), lang: owner.textLang, robots: indexable ? '' : 'noindex, follow',
          jsonld: ld.crumbs([['Takebana', '/'], [owner.displayName, owner.url], [ta('rec.title'), pageHref(1)]]) } }) %>
 <% if (page > 1) { %><link rel="prev" href="<%= pageHref(page - 1) %>"><% } %>
 <% if (page < pages) { %><link rel="next" href="<%= pageHref(page + 1) %>"><% } %>

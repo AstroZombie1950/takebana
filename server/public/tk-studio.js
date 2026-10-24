@@ -220,7 +220,7 @@
         if (res.b.streamId) {
           // Камеру освобождаем до перехода: на телефоне её держит один владелец.
           stopPreview();
-          var next = '/stream/' + res.b.streamId + (res.ok && source() === 'web' ? '?go=1' : '');
+          var next = tkHref('/stream/' + res.b.streamId + (res.ok && source() === 'web' ? '?go=1' : ''));
           // Отказ обложки эфир не держит — о нём скажет тост, эфир идёт.
           return (res.ok ? sendCover(res.b.streamId) : Promise.resolve()).then(function () { location.href = next; });
         }

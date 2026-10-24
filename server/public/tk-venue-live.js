@@ -76,17 +76,9 @@
     viewersBadge.hidden = !on;
   }
 
-  // Формы слова «зритель» — те же правила, что у эфира (tk-stream.js).
-  function viewersKey(n) {
-    var d10 = n % 10, d100 = n % 100;
-    if (d10 === 1 && d100 !== 11) return 'stream.viewerOne';
-    if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return 'stream.viewerFew';
-    return 'stream.viewerMany';
-  }
-
   function viewers(n) {
     $('viewersNum').textContent = String(n);
-    tkText($('viewersText'), viewersKey(n));
+    tkText($('viewersText'), window.tkPlural(n, 'stream.viewer'));
   }
 
   // ── Чат ────────────────────────────────────────────────────────────────

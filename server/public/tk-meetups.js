@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   const t = (key, vars) => (window.t ? window.t(key, vars) : '');
-  const locale = () => (window.tkLang && window.tkLang() === 'en' ? 'en-US' : 'ru-RU');
+  const locale = () => window.tkLocale();
 
   let box = document.getElementById('meetups');
   if (!box) return;

@@ -17,6 +17,7 @@ const Broadcast = require('../models/Broadcast');
 const PushSubscription = require('../models/PushSubscription');
 const errorLog = require('./errorLog');
 const { siteUrl } = require('./site');
+const { pickText } = require('./langs');
 
 const SENDER = 'nickname login email avatar role supportWelcome';
 
@@ -46,6 +47,23 @@ A couple of steps to get everything working:
 • On your phone, add Takebana to the Home Screen — that is how push notifications arrive, and the site opens like an app.
 
 If something doesn't work or you have a question, just write here, in this chat.`,
+    // Приветствие уходит само, без панели, — поэтому и на остальных языках сайта.
+    es: `¡Hola! Te escribe el soporte de Takebana: nos alegra tenerte aquí.
+
+Un par de pasos para que todo funcione bien:
+• Agrega una foto y unas palabras sobre ti en la configuración del perfil: {site}/settings
+• Las notificaciones de mensajes y llamadas se activan en cada dispositivo por separado: {site}/settings#pushPanel
+• En el teléfono, agrega Takebana a la pantalla de inicio: así llegan las notificaciones y el sitio se abre como una app.
+
+Si algo no funciona o tienes alguna pregunta, escribe aquí mismo, en este chat.`,
+    pt: `Olá! Aqui é o suporte da Takebana — que bom ter você com a gente.
+
+Alguns passos para tudo funcionar direitinho:
+• Adicione uma foto e algumas palavras sobre você nas configurações do perfil: {site}/settings
+• As notificações de mensagens e chamadas são ativadas em cada aparelho separadamente: {site}/settings#pushPanel
+• No celular, adicione a Takebana à Tela de Início — é assim que as notificações chegam, e o site abre como um app.
+
+Se algo não funcionar ou você tiver uma dúvida, é só escrever aqui mesmo, neste chat.`,
   },
   notifications: {
     title: 'Уведомления',
@@ -140,7 +158,7 @@ function welcome(req, user, lang) {
     .then((sender) => {
       if (!sender || !sender.supportWelcome) return null;
       const t = TEMPLATES.welcome;
-      return send(req, sender, user, fill(lang === 'en' ? t.en : t.ru));
+      return send(req, sender, user, fill(pickText(t, lang)));
     })
     .catch((e) => errorLog.server(e, 'support.welcome'));
 }
@@ -177,7 +195,8 @@ async function run(req, doc, sender) {
   let failed = 0;
   let n = 0;
   for await (const user of cursor) {
-    const text = user.lang === 'en' && doc.text.en ? doc.text.en : doc.text.ru || doc.text.en;
+    // Кто не заходил с тех пор, как язык запоминается (User.lang), — по-русски.
+    const text = pickText(doc.text, user.lang || 'ru');
     try {
       await send(req, sender, user, text, { push: doc.push });
       sent++;

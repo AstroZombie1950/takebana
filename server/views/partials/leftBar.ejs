@@ -143,10 +143,24 @@
   </div>
 
   <div class="tk-aside__foot">
-    <%# Тема и язык — только здесь, у всех и на любой ширине (правки
-        06.10: из шапки убраны). Тема переключателем слева, язык справа.
-        Тема — public/tk-theme.js (data-theme-pick), язык — public/tk-i18n.js. %>
+    <%# Язык и тема — только здесь, у всех и на любой ширине (правки 06.10:
+        из шапки убраны). Язык слева, меню выпадает вверх (docs/seo/LANGUAGES.md,
+        §5.3а), тема справа. Пункты языка публичной страницы — ссылки на её
+        версии (hreflang раньше href — их не переводит utils/langUrl.js),
+        у закрытой — кнопки: она переводится на месте. Выбор — public/tk-i18n.js
+        (data-lang), тема — public/tk-theme.js (data-theme-pick). %>
     <div class="tk-aside__prefs">
+      <details class="tk-langmenu" data-langmenu>
+        <summary class="tk-langmenu__btn" title="<%= ta('settings.lang') %>" data-i18n-title="settings.lang">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9s1.3-6.4 3.8-9Z"></path></svg>
+          <span class="tk-langmenu__name"><%= langInfo.name %></span>
+        </summary>
+        <ul class="tk-langmenu__list">
+          <% Object.keys(siteLangs).forEach(function (l) { var on = l === lang; %>
+          <li><% if (langAlt) { %><a hreflang="<%= l %>" lang="<%= l %>" href="<%= langAlt[l] %>"<% } else { %><button type="button" lang="<%= l %>"<% } %> class="tk-langmenu__item" data-lang="<%= l %>"<%- on ? ' aria-current="true"' : '' %>><%= siteLangs[l].name %></<%= langAlt ? 'a' : 'button' %>></li>
+          <% }); %>
+        </ul>
+      </details>
       <div class="tk-lang tk-aside__theme" role="group" aria-label="<%= ta('settings.theme') %>" data-i18n-aria="settings.theme">
         <button type="button" class="tk-lang__btn<%= themeOn === 'dark' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= themeOn === 'dark' %>" data-theme-pick="dark" aria-label="<%= ta('theme.dark') %>" data-i18n-aria="theme.dark" title="<%= ta('theme.dark') %>" data-i18n-title="theme.dark">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5Z"></path></svg>
@@ -154,10 +168,6 @@
         <button type="button" class="tk-lang__btn<%= themeOn === 'light' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= themeOn === 'light' %>" data-theme-pick="light" aria-label="<%= ta('theme.light') %>" data-i18n-aria="theme.light" title="<%= ta('theme.light') %>" data-i18n-title="theme.light">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
         </button>
-      </div>
-      <div class="tk-lang" role="group" aria-label="<%= ta('settings.lang') %>" data-i18n-aria="settings.lang">
-        <button type="button" class="tk-lang__btn<%= lang === 'ru' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'ru' %>" data-lang="ru">RU</button>
-        <button type="button" class="tk-lang__btn<%= lang === 'en' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'en' %>" data-lang="en">EN</button>
       </div>
     </div>
     <nav class="tk-aside__docs" aria-label="<%= ta('side.docs') %>" data-i18n-aria="side.docs">

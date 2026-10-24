@@ -143,14 +143,7 @@
   var viewersNum = document.querySelector('.viewers-number');
   var viewersText = document.querySelector('.viewers-text');
 
-  // Формы слова — из словаря: по-английски «few» и «many» совпадают,
-  // поэтому те же правила годятся для обоих языков.
-  function viewersKey(n) {
-    var d10 = n % 10, d100 = n % 100;
-    if (d10 === 1 && d100 !== 11) return 'stream.viewerOne';
-    if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return 'stream.viewerFew';
-    return 'stream.viewerMany';
-  }
+  function viewersKey(n) { return window.tkPlural(n, 'stream.viewer'); }
 
   // ── Сокет ──
   var updateHandlers = [];

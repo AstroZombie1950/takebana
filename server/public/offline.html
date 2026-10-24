@@ -2,8 +2,8 @@
 <!--
   Страница, которую показывает service worker (public/sw.js), когда сети нет
   вовсе. Самостоятельная: ни стилей, ни скриптов снаружи — за ними пришлось бы
-  идти в ту самую сеть, которой нет. Двуязычная без словаря: язык берётся
-  у браузера, строк здесь две.
+  идти в ту самую сеть, которой нет. Языки сайта без словаря: язык берётся
+  у браузера, строк здесь три.
 -->
 <html lang="ru">
 <head>
@@ -47,11 +47,19 @@
   <p id="text">Страница откроется, как только вернётся интернет.</p>
   <button id="again" onclick="location.reload()">Повторить</button>
 <script>
-  if (!/^ru\b/i.test(navigator.language || '')) {
-    document.documentElement.lang = 'en';
-    document.getElementById('head').textContent = 'No connection';
-    document.getElementById('text').textContent = 'The page will open as soon as the internet is back.';
-    document.getElementById('again').textContent = 'Try again';
+  // Строки на языках сайта, кроме русского — он уже в разметке (utils/langs.js).
+  var T = {
+    en: ['No connection', 'The page will open as soon as the internet is back.', 'Try again'],
+    es: ['Sin conexión', 'La página se abrirá en cuanto vuelva internet.', 'Reintentar'],
+    pt: ['Sem conexão', 'A página abre assim que a internet voltar.', 'Tentar de novo']
+  };
+  var lang = (navigator.language || '').slice(0, 2).toLowerCase();
+  if (lang !== 'ru') {
+    if (!T[lang]) lang = 'en';
+    document.documentElement.lang = lang;
+    document.getElementById('head').textContent = T[lang][0];
+    document.getElementById('text').textContent = T[lang][1];
+    document.getElementById('again').textContent = T[lang][2];
   }
   // Сеть вернулась сама — не заставляем нажимать кнопку.
   window.addEventListener('online', function () { location.reload(); });

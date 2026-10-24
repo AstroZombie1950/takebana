@@ -13,6 +13,7 @@ const mongoose = require('mongoose');
 const Meetup = require('../models/Meetup');
 const User = require('../models/User');
 const userView = require('./userView');
+const { localeOf } = require('./langs');
 const { profileUrl } = require('./profileUrl');
 const age = require('./age');
 
@@ -65,7 +66,7 @@ const labels = new Map();
 function dayLabel(day, lang) {
   let f = labels.get(lang);
   if (!f) {
-    f = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'ru-RU', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
+    f = new Intl.DateTimeFormat(localeOf(lang), { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
     labels.set(lang, f);
   }
   return f.format(utcOf(day));

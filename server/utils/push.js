@@ -23,6 +23,7 @@ const PushSubscription = require('../models/PushSubscription');
 const errorLog = require('./errorLog');
 const io = require('./io');
 const { text } = require('./i18n');
+const { isLang } = require('./langs');
 
 const PUBLIC = process.env.VAPID_PUBLIC || '';
 const PRIVATE = process.env.VAPID_PRIVATE || '';
@@ -108,7 +109,7 @@ async function subscribe(userId, sub, { ua = '', lang = 'ru', preview, live } = 
     endpoint: sub.endpoint,
     keys: { p256dh: keys.p256dh, auth: keys.auth },
     ua: String(ua).slice(0, 300),
-    lang: lang === 'en' ? 'en' : 'ru',
+    lang: isLang(lang) ? lang : 'ru',
     lastOkAt: new Date(),
   };
   // preview и live приходят, только когда их меняют: при обычном обновлении

@@ -39,9 +39,12 @@
 <script>
 (function () {
   var sent = 0, seen = {};
+  // Стек из расширения браузера — его поломка, не наша (журнал 14.10:
+  // contentScriptData из webkit-masked-url://). Тот же список — в routes/clientErrors.js.
+  var EXT = /(webkit-masked-url|chrome-extension|moz-extension|safari(-web)?-extension):\/\//;
   function send(d) {
     var key = (d.message || '') + '|' + (d.line || '');
-    if (sent >= 5 || seen[key]) return;
+    if (sent >= 5 || seen[key] || EXT.test((d.stack || '') + ' ' + (d.source || ''))) return;
     seen[key] = 1; sent++;
     try {
       var body = JSON.stringify({
@@ -129,9 +132,20 @@
 <%# canonical — только у страниц в индексе: рядом с noindex он противоречив. %>
 <%# Картинка — как есть: своя или с CDN (решение 24.09 — диск сервера маленький,
     облако большое). Размер знаем у общей обложки и у карточки профиля (imageStd). %>
-<% var seoUrl = siteUrl(seo.path), seoImage = siteUrl(seo.image || '/img/og-cover.jpg'), seoImageAlt = seo.imageAlt || headTitle; %>
+<%# Языковые версии (docs/seo/LANGUAGES.md, §5.2). seo.lang — язык
+    содержимого людей (utils/contentLang.js): такая страница в индексе только
+    на нём, версии на других языках ведут canonical туда. Наша страница (без
+    seo.lang) — на всех языках, каждая сама себе canonical, между ними —
+    hreflang, x-default — основной язык в корне. Микроразметка — только
+    у той версии, что в индексе, с адресами на её языке. %>
+<% var seoLangs = seo.lang ? [seo.lang] : Object.keys(siteLangs);
+   var seoLang = seoLangs.indexOf(lang) !== -1 ? lang : seoLangs[0], seoMain = seoLang === lang;
+   var seoUrl = langUrl(seoLang, seo.path), seoImage = siteUrl(seo.image || '/img/og-cover.jpg'), seoImageAlt = seo.imageAlt || headTitle; %>
 <% var seoImageStd = !seo.image || seo.imageStd; %>
-<% if (!headRobots) { %><link rel="canonical" href="<%= seoUrl %>"><% } %>
+<% if (!headRobots) { %><link rel="canonical" href="<%= seoUrl %>">
+<% if (seoMain && seoLangs.length > 1) { seoLangs.forEach(function (l) { %><link rel="alternate" hreflang="<%= l %>" href="<%= langUrl(l, seo.path) %>">
+<% }); %><link rel="alternate" hreflang="x-default" href="<%= langUrl(baseLang, seo.path) %>">
+<% } } %>
 <meta property="og:type" content="<%= seo.type || 'website' %>">
 <meta property="og:site_name" content="Takebana">
 <meta property="og:title" content="<%= headTitle %>">
@@ -144,10 +158,15 @@
 <meta property="og:image:height" content="630">
 <% } %>
 <meta property="og:image:alt" content="<%= seoImageAlt %>">
-<meta property="og:locale" content="<%= lang === 'en' ? 'en_US' : 'ru_RU' %>">
+<meta property="og:locale" content="<%= langInfo.og %>">
+<% if (seoMain) seoLangs.forEach(function (l) { if (l !== lang) { %><meta property="og:locale:alternate" content="<%= siteLangs[l].og %>">
+<% } }); %>
 <meta name="twitter:card" content="summary_large_image">
-<% if (seo.jsonld && !headRobots) { %>
-<script type="application/ld+json"><%- JSON.stringify(seo.jsonld).replace(/</g, '\\u003c') %></script>
+<%# inLanguage — язык этой версии; крошкам и организации он ни к чему. %>
+<% if (seo.jsonld && !headRobots && seoMain) {
+     var withLang = function (x) { return !x || /^(BreadcrumbList|Organization)$/.test(x['@type']) ? x : Object.assign({}, x, { inLanguage: lang }); };
+     var ld = Array.isArray(seo.jsonld) ? seo.jsonld.map(withLang) : withLang(seo.jsonld); %>
+<script type="application/ld+json"><%- localizeUrls(JSON.stringify(ld), lang).replace(/</g, '\\u003c') %></script>
 <% } %>
 <% } %>
 <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">

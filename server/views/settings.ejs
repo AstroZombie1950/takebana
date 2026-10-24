@@ -366,8 +366,9 @@
           <p class="tk-panel__title" data-i18n="settings.look"><%- t('settings.look') %></p>
           <div class="tk-set__look">
             <div class="tk-lang tk-set__lang" role="group" aria-label="<%= ta('settings.lang') %>" data-i18n-aria="settings.lang">
-              <button type="button" class="tk-lang__btn<%= lang === 'ru' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'ru' %>" data-lang="ru">RU</button>
-              <button type="button" class="tk-lang__btn<%= lang === 'en' ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === 'en' %>" data-lang="en">EN</button>
+              <% Object.keys(siteLangs).forEach(function (l) { %>
+              <button type="button" class="tk-lang__btn<%= lang === l ? ' tk-lang__btn--on' : '' %>" aria-pressed="<%= lang === l %>" data-lang="<%= l %>" lang="<%= l %>" title="<%= siteLangs[l].name %>"><%= l.toUpperCase() %></button>
+              <% }); %>
             </div>
             <div class="tk-lang tk-set__lang" role="group" aria-label="<%= ta('settings.theme') %>" data-i18n-aria="settings.theme">
               <% ['dark', 'light', 'auto'].forEach(function (k) { %>

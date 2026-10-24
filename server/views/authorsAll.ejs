@@ -50,7 +50,7 @@
           <h1 class="tk-home__h1" data-i18n="authors.all"><%- t('authors.all') %></h1>
           <span class="tk-home__count" data-i18n="<%= count.key %>" data-i18n-vars='<%= JSON.stringify({ n: num(total) }) %>'><%= count.text %></span>
         </div>
-        <div class="tk-home__bar">
+        <div class="tk-home__bar tk-home__bar--stack">
           <select name="show" class="tk-field tk-select" aria-label="<%= ta('authors.showAria') %>" data-i18n-aria="authors.showAria">
             <% shows.forEach(function (o) { %><option value="<%= o[0] %>"<%= show === o[0] ? ' selected' : '' %> data-i18n="<%= o[1] %>"><%- t(o[1]) %></option><% }); %>
           </select>

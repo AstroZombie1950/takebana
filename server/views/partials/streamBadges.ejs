@@ -12,9 +12,7 @@
     <span class="viewers-number"><%= stream.viewers %></span>
     <%# Форма слова считается здесь, чтобы первый показ был правильным без
         скрипта; дальше её обновляет public/tk-stream.js. %>
-    <% var _v = Number(stream.viewers) || 0, _d10 = _v % 10, _d100 = _v % 100;
-       var _vk = (_d10 === 1 && _d100 !== 11) ? 'stream.viewerOne'
-               : (_d10 >= 2 && _d10 <= 4 && (_d100 < 12 || _d100 > 14)) ? 'stream.viewerFew' : 'stream.viewerMany'; %>
+    <% var _vk = plural(Number(stream.viewers) || 0, 'stream.viewer').key; %>
     <span class="viewers-text" data-i18n="<%= _vk %>"><%- t(_vk) %></span>
   </span>
 </div>

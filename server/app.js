@@ -125,6 +125,8 @@ app.use('/lf/live', liveStatic);
 // Подложка карты заведений — плитки, шрифты, значки (ops/basemap/fetch.sh).
 // На проде, как и /live, её отдаёт nginx; здесь — для локального запуска.
 app.use('/basemap', express.static(path.join(__dirname, 'media', 'basemap'), { index: false, maxAge: '1d' }));
+// Язык в адресе (/ru/@anna) — до всего, что смотрит на путь.
+app.use(require('./middleware/langPrefix'));
 // /About, /about/ → /about: у страницы один адрес (middleware/canonicalPath.js).
 // До сессий — редиректу они не нужны.
 app.use(require('./middleware/canonicalPath'));

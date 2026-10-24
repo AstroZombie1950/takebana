@@ -6,7 +6,7 @@
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { titleKey: 'page.user.title', titleVars: { name: user.displayName }, description: describe(user.bio, ta('seo.profileDesc', { name: user.displayName })),
-         seo: { path: user.url, type: 'profile', robots: indexable ? '' : 'noindex, follow', image: ogImage, imageStd: !!ogImage, imageAlt: user.displayName,
+         seo: { path: user.url, lang: user.textLang, type: 'profile', robots: indexable ? '' : 'noindex, follow', image: ogImage, imageStd: !!ogImage, imageAlt: user.displayName,
          jsonld: ld.profile({ url: user.url, name: user.displayName, alternateName: user.nickname ? '@' + user.nickname : '',
            image: user.avatarStyle.full, followers: user.followersCount, created: user.createdAt, modified: lastAt,
            description: user.bio, sameAs: user.links.map(function (l) { return l.url; }) }) } }) %>

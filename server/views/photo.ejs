@@ -25,7 +25,7 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
-<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: describe(rec.caption, ta('seo.photoDesc', { name: author.displayName, k: around.k, date: when })), seo: { path: base, type: 'article', image: rec.url, imageAlt: alt, robots: rec.userId.banned ? 'noindex, follow' : '',
+<%- include('partials/tkHead', { title: headTitle + ' — Takebana', description: describe(rec.caption, ta('seo.photoDesc', { name: author.displayName, k: around.k, date: when })), seo: { path: base, lang: itemLang(rec, rec.userId), type: 'article', image: rec.url, imageAlt: alt, robots: rec.userId.banned ? 'noindex, follow' : '',
          jsonld: ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [ta('gallery.photos'), author.url + '/photos'], [headTitle, base]]) } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">
 <link rel="stylesheet" href="<%= asset('/css/stream.css') %>">

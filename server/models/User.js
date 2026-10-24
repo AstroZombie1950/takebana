@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { LANG_CODES } = require('../utils/langs');
 // crypto.randomUUID() встроен в Node и даёт тот же формат, что uuid v4.
 // Пакет uuid убран: использовался только ради v4, а его advisory
 // (буфер в v3/v5/v6) тянулся в аудит на пустом месте.
@@ -88,10 +89,11 @@ const UserSchema = new mongoose.Schema({
     }, { _id: false }),
     default: undefined,
   },
-  // Язык интерфейса, которым человек пользуется последним (пишет
-  // commonDataMiddleware). Нужен тому, что собирается без его запроса:
-  // рассылкам поддержки (utils/support.js).
-  lang: { type: String, enum: ['ru', 'en'] },
+  // Язык, выбранный человеком в меню или настройках (пишет
+  // commonDataMiddleware; при регистрации — язык страницы). Нужен тому,
+  // что собирается без его запроса: рассылкам поддержки (utils/support.js)
+  // и canonical страниц без текста (utils/contentLang.js).
+  lang: { type: String, enum: LANG_CODES },
   // Тема оформления (utils/theme.js): пусто — ещё не выбирал.
   theme: { type: String, enum: ['dark', 'light', 'auto'] },
   // Аккаунт поддержки (utils/support.js) — один из администраторов: от него

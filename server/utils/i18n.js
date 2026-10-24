@@ -1,17 +1,25 @@
 // Язык страниц и ответов сервера.
 //
-// Язык запроса — cookie `lang`, её ставит переключатель (public/tk-i18n.js).
+// Язык запроса — адрес публичной страницы, иначе выбор и cookie (langOf ниже).
 //
-// Страницы. Словарь интерфейса один — public/tk-i18n-ru.js и tk-i18n-en.js,
-// сервер подключает те же файлы, что и браузер. Шаблоны берут строки через
+// Страницы. Словарь интерфейса один — public/tk-i18n-<код>.js, сервер
+// подключает те же файлы, что и браузер. Шаблоны берут строки через
 // `t` и отдают страницу сразу на нужном языке; ключи `data-i18n` в разметке
 // остаются для переключения без перезагрузки.
 //
 // Сообщения — «Эфир не найден», «Неверная почта или пароль», разбор полей
-// из middleware/validate.js. Ключ здесь — сам русский текст, как он написан
-// в маршруте: код остаётся читаемым, а строка без перевода показывается
-// по-русски, а не пустой. Полноту проверяет temp/probe-i18n.mjs: каждая
-// русская строка в message/label маршрутов обязана быть здесь.
+// из middleware/validate.js, письма. Ключ здесь — сам русский текст, как он
+// написан в маршруте: код остаётся читаемым, а строка без перевода
+// показывается по-английски, а нет английской — по-русски, но не пустой.
+// Английские — ниже (EN), других языков — utils/i18n-<код>.js. Полноту
+// проверяет temp/probe-i18n.mjs: каждая русская строка в message/label
+// маршрутов обязана быть в EN, а строки EN — в картах других языков.
+//
+// Языки — список в utils/langs.js.
+
+const { LANGS, LANG_CODES, BASE_LANG, FALLBACK_LANG, SITE_LANG, isLang, toLang, localeOf } = require('./langs');
+const { PUBLIC, langPath, langUrl, localizeHtml, localizeUrls } = require('./langUrl');
+const { itemLang, profileLang, venueLang } = require('./contentLang');
 
 const EN = {
     // Общие
@@ -436,17 +444,17 @@ const EN = {
     'допустимо только: {values}': 'allowed values: {values}',
 };
 
-// Язык запроса: выбор человека — cookie `lang`; без неё — по языку браузера
-// (docs/seo/DECISIONS.md, 24.09): русский, если русский у него первым,
-// иначе английский. Аудитория международная, английский — основной, и робот
-// поиска, который приходит без cookie и чаще всего без Accept-Language,
-// видит английскую версию. Первый же ответ браузер запоминает в cookie
-// (public/tk-i18n.js), дальше язык не прыгает.
-//
-// SITE_LANG=ru|en — без cookie всегда этот язык, без угадывания. Нужен
-// зондам: безголовый Chrome шлёт en-US, а ждут они русский (temp/run-probes.sh).
-const SITE_LANG = /^(ru|en)$/.test(process.env.SITE_LANG || '') ? process.env.SITE_LANG : '';
+// Язык запроса (docs/seo/LANGUAGES.md, §5.3):
+//   1. публичная страница — язык её адреса (req.urlLang, middleware/langPrefix.js);
+//   2. запрос скрипта — язык страницы, с которой он пришёл (X-TK-Lang, tk-net.js);
+//   3. cookie `lang_choice` — выбор в меню языка;
+//   4. cookie `lang` — язык последней публичной страницы (public/tk-i18n.js):
+//      по нему закрытые страницы (переписка, вход, студия) продолжают язык,
+//      на котором человек ходил по сайту;
+//   5. SITE_LANG, иначе первый язык браузера, если он есть у сайта, иначе
+//      основной. Робот поиска приходит без cookie и Accept-Language.
 
+// Первый по весу язык Accept-Language, если он есть у сайта, иначе основной.
 function browserLang(header) {
     let best = null, bestQ = -1;
     for (const part of String(header || '').split(',')) {
@@ -454,51 +462,88 @@ function browserLang(header) {
         const q = params.reduce((v, p) => (/^\s*q=/.test(p) ? parseFloat(p.split('=')[1]) : v), 1);
         if (tag && tag !== '*' && q > bestQ) { best = tag; bestQ = q; }
     }
-    return best && best.split('-')[0] === 'ru' ? 'ru' : 'en';
+    return toLang(best && best.split('-')[0]);
 }
 
+const cookieRx = (name) => new RegExp('(?:^|;\\s*)' + name + '=(' + LANG_CODES.join('|') + ')(?:;|$)');
+const CHOICE_COOKIE = cookieRx('lang_choice');
+const LAST_COOKIE = cookieRx('lang');
+
+// Выбор в меню языка (cookie `lang_choice`) или ''.
+const langChoice = (req) => (CHOICE_COOKIE.exec(req.headers.cookie || '') || [])[1] || '';
+
 function langOf(req) {
-    const m = /(?:^|;\s*)lang=(en|ru)(?:;|$)/.exec(req.headers.cookie || '');
+    if (req.urlLang) return req.urlLang;
+    const header = req.headers['x-tk-lang'];
+    if (isLang(header)) return header;
+    const cookie = req.headers.cookie || '';
+    const m = CHOICE_COOKIE.exec(cookie) || LAST_COOKIE.exec(cookie);
     if (m) return m[1];
     return SITE_LANG || browserLang(req.headers['accept-language']);
 }
 
+// Подстановки {имя}. Строки словаря с разметкой выводятся как есть (`<%-`),
+// поэтому в шаблоны значения идут экранированными (wrap = escapeHtml):
+// в них бывают имена и названия (аудит 14.10, S7).
+const fill = (s, vars, wrap = String) =>
+    s.replace(/\{(\w+)\}/g, (whole, name) => (vars[name] === undefined ? whole : wrap(vars[name])));
+const escapeHtml = (v) => String(v).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+// Карты сообщений по языкам, ключ — русский текст: английская — здесь,
+// остальные — utils/i18n-<код>.js. Нет строки — английская (не «основного
+// языка»: у зондов основной — русский, SITE_LANG).
+const KEY_LANG = 'ru';
+const MESSAGES = Object.fromEntries(LANG_CODES.filter((l) => l !== KEY_LANG)
+    .map((l) => [l, l === 'en' ? EN : require('./i18n-' + l)]));
+
 // tr('en', 'не короче {min} символов', { min: 6 }) → 'at least 6 characters'
 function tr(lang, text, vars) {
-    const out = (lang === 'en' && EN[text]) || text;
-    if (!vars) return out;
-    return out.replace(/\{(\w+)\}/g, (whole, name) => (vars[name] === undefined ? whole : vars[name]));
+    const out = lang === KEY_LANG ? text : (MESSAGES[lang] || {})[text] || EN[text] || text;
+    return vars ? fill(out, vars) : out;
 }
 
 // Переводит `message` в JSON-ответах. Тело не меняется на месте, а
 // копируется: лимитер входа отдаёт один и тот же объект всем запросам, и
 // переведённый однажды текст достался бы потом русскому интерфейсу.
 function localizeMessages(req, res, next) {
-    if (langOf(req) !== 'en') return next();
+    const lang = langOf(req);
+    if (lang === KEY_LANG) return next();
     const json = res.json;
     res.json = function localizedJson(body) {
-        if (body && typeof body.message === 'string' && EN[body.message]) {
-            body = { ...body, message: EN[body.message] };
+        if (body && typeof body.message === 'string') {
+            const message = tr(lang, body.message);
+            if (message !== body.message) body = { ...body, message };
         }
         return json.call(this, body);
     };
     next();
 }
 
-const TK_I18N = { ru: require('../public/tk-i18n-ru'), en: require('../public/tk-i18n-en') };
+const TK_I18N = Object.fromEntries(LANG_CODES.map((l) => [l, require('../public/tk-i18n-' + l)]));
 const { meaningful } = require('./snippet');
-const LOCALE = { ru: 'ru-RU', en: 'en-US' }; // как tkDate в браузере
+
+// Строка словаря: своя, нет её — запасного языка.
+function lookup(lang, key) {
+    const v = TK_I18N[toLang(lang)][key];
+    return v === undefined ? TK_I18N[FALLBACK_LANG][key] : v;
+}
 
 // Строка словаря по языку, без запроса. Шаблонам её подаёт pageLocals ниже
 // (он же t), а отдельно она нужна там, где запроса нет вовсе: текст пуша
 // собирается для спящего устройства, и язык берётся из его подписки
 // (utils/push.js). Запасная строка и подстановки — как у t() в браузере.
-function text(lang, key, arg) {
-    const v = TK_I18N[lang === 'en' ? 'en' : 'ru'][key];
+function text(lang, key, arg, wrap) {
+    const v = lookup(lang, key);
     if (v === undefined) return typeof arg === 'string' ? arg : '';
-    if (!arg || typeof arg !== 'object') return v;
-    return v.replace(/\{(\w+)\}/g, (whole, name) => (arg[name] === undefined ? whole : arg[name]));
+    return arg && typeof arg === 'object' ? fill(v, arg, wrap) : v;
 }
+
+// Форма слова по числу: суффикс ключа One / Few / Many. Правила языка —
+// из Intl (у английского и испанского «21» — уже Many, у русского — One);
+// «other» и всё, чего в словаре нет, — Many.
+const PLURAL = new Map(LANG_CODES.map((l) => [l, new Intl.PluralRules(LANGS[l].plural || LANGS[l].locale)]));
+const FORM = { one: 'One', few: 'Few', many: 'Many' };
+const pluralForm = (lang, n) => FORM[PLURAL.get(toLang(lang)).select(n)] || 'Many';
 
 // Часовой пояс посетителя — cookie `tz` из tk-i18n.js. Без неё или с чужим
 // значением — пояс сервера.
@@ -521,21 +566,38 @@ function timeZoneOf(req) {
 //   date(user.lastSeen)   date(expiresAt, { day: '2-digit', month: '2-digit', year: 'numeric' })
 function pageLocals(req, res, next) {
     const lang = langOf(req);
-    const t = (key, arg) => text(lang, key, arg);
+    const locale = localeOf(lang);
+    const t = (key, arg) => text(lang, key, arg, escapeHtml);
     res.locals.lang = lang;
+    res.locals.langInfo = LANGS[lang];
+    res.locals.siteLangs = LANGS;
+    // Публичная страница: её версии на всех языках — для меню языка
+    // (с метками адреса) и <head> (без них). Закрытая — null.
+    res.locals.urlLang = req.urlLang || null;
+    res.locals.langAlt = req.urlLang
+        ? Object.fromEntries(LANG_CODES.map((l) => [l, langPath(l, req.path + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''))]))
+        : null;
+    res.locals.baseLang = BASE_LANG;
+    res.locals.publicRx = PUBLIC.source;
+    res.locals.langPath = langPath;
+    res.locals.langUrl = langUrl;
+    res.locals.localizeUrls = localizeUrls;
+    // Язык содержимого людей для seo.lang (utils/contentLang.js).
+    res.locals.itemLang = itemLang;
+    res.locals.profileLang = profileLang;
+    res.locals.venueLang = venueLang;
     res.locals.t = t;
-    res.locals.ta = (key, arg) => t(key, arg).replace(/<[^>]*>/g, '');
+    // Без разметки: подстановки сырые, экранирует сам вывод `<%=`.
+    res.locals.ta = (key, arg) => text(lang, key, arg).replace(/<[^>]*>/g, '');
     // Число с разрядами по языку: 12 345 / 12,345.
-    res.locals.num = (n) => Number(n || 0).toLocaleString(LOCALE[lang]);
+    res.locals.num = (n) => Number(n || 0).toLocaleString(locale);
     // Форма слова по числу: plural(5, 'rec.views') → ключ rec.viewsMany.
-    // По-английски «few» и «many» совпадают — правила годятся обоим языкам.
     res.locals.plural = (n, base, vars) => {
-        const d10 = n % 10, d100 = n % 100;
-        const form = d10 === 1 && d100 !== 11 ? 'One' : d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14) ? 'Few' : 'Many';
-        return { key: base + form, text: t(base + form, { n: n.toLocaleString(LOCALE[lang]), ...vars }) };
+        const key = base + pluralForm(lang, n);
+        return { key, text: t(key, { n: n.toLocaleString(locale), ...vars }) };
     };
     res.locals.date = (value, opts) =>
-        new Date(value).toLocaleString(LOCALE[lang], { ...opts, timeZone: timeZoneOf(req) });
+        new Date(value).toLocaleString(locale, { ...opts, timeZone: timeZoneOf(req) });
     // Название записи или видео для h1, <title>, alt и разметки: своё, если
     // оно что-то говорит, иначе «Запись эфира {ник} от {даты}» / «Видео {ник}
     // от {даты}». «.», «)» и пустое — одинаково безымянные (docs/seo, 04.10).
@@ -551,13 +613,22 @@ function pageLocals(req, res, next) {
     res.locals.imgLoad = () => lead-- > 0 ? 'fetchpriority="high"' : 'loading="lazy"';
     // Одна и та же ссылка отдаёт разные страницы: кэш между сервером
     // и браузером (CDN) обязан различать их по cookie.
+    // Ссылки на публичные страницы в готовой разметке — на язык страницы
+    // (utils/langUrl.js, localizeHtml): /@anna на русской — /ru/@anna.
     const render = res.render;
-    res.render = function renderVaryingByLang(...args) {
+    res.render = function renderInLang(view, opts, done) {
+        if (typeof opts === 'function') { done = opts; opts = undefined; }
         this.vary('Cookie');
-        this.vary('Accept-Language');
-        return render.apply(this, args);
+        // Язык страницы с приставкой задан адресом; корень langPrefix
+        // помечает сам, когда угадывает по браузеру.
+        if (!req.urlLang) this.vary('Accept-Language');
+        // Страница ошибки («нет такого эфира»): её версий на других языках
+        // тоже нет — меню языка переводит её на месте, а не ссылками на 404.
+        if (this.statusCode >= 400) this.locals.langAlt = null;
+        const send = done || ((err, html) => (err ? req.next(err) : this.send(html)));
+        return render.call(this, view, opts, (err, html) => send(err, err ? html : localizeHtml(html, lang)));
     };
     next();
 }
 
-module.exports = { EN, langOf, tr, text, localizeMessages, pageLocals };
+module.exports = { EN, langOf, langChoice, browserLang, tr, text, pluralForm, localizeMessages, pageLocals };

@@ -28,7 +28,7 @@
         del.disabled = true;
         return api('/establishment/' + encodeURIComponent(ID), { method: 'DELETE' }).then(function () {
           toast(t('venues.deleted'), 'ok');
-          location.href = '/venues';
+          location.href = tkHref('/venues');
         });
       }).catch(function (err) { del.disabled = false; toast(err.message, 'error'); });
       return;
@@ -203,7 +203,7 @@
     api('/updateEstablishment/' + encodeURIComponent(ID), { method: 'PUT', body: data })
       .then(function (r) {
         toast(t(r.pending ? 'venue.page.sentReview' : 'venue.page.saved'), 'ok');
-        location.href = '/venue/' + encodeURIComponent(ID);
+        location.href = tkHref('/venue/' + encodeURIComponent(ID));
       })
       .catch(function (err) { button.disabled = false; toast(err.message, 'error'); });
   });

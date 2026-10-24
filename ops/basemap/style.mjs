@@ -1,7 +1,7 @@
 // Стиль карты заведений: слои Protomaps Basemap в цветах Takebana.
 //
-// Результат — server/public/map/style.ru.json и style.en.json (тёмная тема),
-// style.light.ru.json и style.light.en.json (светлая), они лежат в git.
+// Результат — server/public/map/style.<язык>.json (тёмная тема) и
+// style.light.<язык>.json (светлая) на языки сайта (utils/langs.js), они лежат в git.
 // Адресов плиток, шрифтов и значков в стиле нет: их подставляет
 // server/public/tk-map.js от адреса страницы, поэтому один стиль годится
 // и для локального запуска, и для боя.
@@ -98,7 +98,7 @@ const ATTRIBUTION = '<a href="https://www.openstreetmap.org/copyright" target="_
 const out = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'server', 'public', 'map');
 fs.mkdirSync(out, { recursive: true });
 
-for (const [suffix, flavor] of [['', dark], ['.light', light]]) for (const lang of ['ru', 'en']) {
+for (const [suffix, flavor] of [['', dark], ['.light', light]]) for (const lang of ['ru', 'en', 'es', 'pt']) {
   const style = {
     version: 8,
     name: 'Takebana',

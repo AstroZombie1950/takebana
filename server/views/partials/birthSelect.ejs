@@ -6,7 +6,7 @@
   ([data-birth] → «ГГГГ-ММ-ДД»). Настройки и форма встречи.
 %>
 <% var bYear = new Date().getUTCFullYear();
-   var bMonths = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'ru-RU', { month: 'long', timeZone: 'UTC' }); %>
+   var bMonths = new Intl.DateTimeFormat(langInfo.locale, { month: 'long', timeZone: 'UTC' }); %>
 <div class="tk-birth" data-birth role="group" aria-label="<%= ta('settings.birth') %>" data-i18n-aria="settings.birth">
   <select class="tk-field tk-select" data-birth-part="d" data-listbox-touch aria-label="<%= ta('birth.day') %>" data-i18n-aria="birth.day">
     <option value="" data-i18n="birth.day"><%- t('birth.day') %></option>

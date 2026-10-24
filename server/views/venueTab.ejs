@@ -15,7 +15,7 @@
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
 <%- include('partials/tkHead', { title: venue.name + ' — ' + ta(tabKey) + (page > 1 ? ', ' + ta('page.n', { n: page }) : '') + ' — Takebana', description: ta('venue.' + tab + 'Description', { name: venue.name }),
-      seo: { path: pageHref(page), robots: indexable ? '' : 'noindex, follow', image: venue.cover || (venue.photos || [])[0] || venue.avatar, imageAlt: venue.name,
+      seo: { path: pageHref(page), lang: venueLang(venue), robots: indexable ? '' : 'noindex, follow', image: venue.cover || (venue.photos || [])[0] || venue.avatar, imageAlt: venue.name,
              jsonld: ld.crumbs([['Takebana', '/'], [ta('app.venues'), '/venues'], [venue.name, '/venue/' + venue._id], [ta(tabKey), pageHref(1)]]) } }) %>
 <% if (page > 1) { %><link rel="prev" href="<%= pageHref(page - 1) %>"><% } %>
 <% if (page < pages) { %><link rel="next" href="<%= pageHref(page + 1) %>"><% } %>

@@ -423,6 +423,9 @@
 }
 
 @media (max-width: 480px) {
+  /* Четыре языка и три темы — в одну строку от 360px (24.10); уже — тема
+   * переносится вниз, и так же будет с новыми языками. */
+  .tk-set__lang .tk-lang__btn { min-width: 38px; padding: 0 9px; }
   .tk-set__nets { gap: 16px; }
   .tk-set__net { grid-template-columns: minmax(0, 1fr); row-gap: 6px; }
   .tk-set__net-out { grid-column: 1; margin-top: 0; }

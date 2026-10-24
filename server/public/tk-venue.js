@@ -10,12 +10,6 @@
   const tkText = (el, key, vars) => (window.tkText ? window.tkText(el, key, vars) : undefined);
   const venueId = document.querySelector('.tk-vp').dataset.venue;
 
-  // Форма слова по числу: как plural() шаблонов (utils/i18n.js).
-  function plural(n, base) {
-    const d10 = n % 10, d100 = n % 100;
-    return base + (d10 === 1 && d100 !== 11 ? 'One' : d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14) ? 'Few' : 'Many');
-  }
-
   rate.addEventListener('click', (e) => {
     const b = e.target.closest('[data-value]');
     if (!b) return;
@@ -37,8 +31,8 @@
         rate.querySelectorAll('[data-value]').forEach((x) => x.classList.toggle('is-on', Number(x.dataset.value) === r.rating));
         $('venueScore').textContent = r.average.toFixed(1);
         $('venueStars').style.setProperty('--v', r.average);
-        $('venueVotesN').textContent = r.count.toLocaleString(window.tkLang && window.tkLang() === 'en' ? 'en-US' : 'ru-RU');
-        tkText($('venueVotesWord'), plural(r.count, 'venues.votes'));
+        $('venueVotesN').textContent = r.count.toLocaleString(window.tkLocale());
+        tkText($('venueVotesWord'), window.tkPlural(r.count, 'venues.votes'));
         toast(t('venues.rateThanks'), 'ok');
       })
       .catch((err) => toast(err.message, 'error'));

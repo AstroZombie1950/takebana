@@ -246,8 +246,7 @@
       var line = r && r.counted && postOf(at).querySelector('.tk-post__views');
       if (!line) return;
       var n = (Number(JSON.parse(line.getAttribute('data-i18n-vars') || '{}').n.replace(/\D/g, '')) || 0) + 1;
-      var d10 = n % 10, d100 = n % 100;
-      var key = 'rec.views' + (d10 === 1 && d100 !== 11 ? 'One' : d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14) ? 'Few' : 'Many');
+      var key = window.tkPlural(n, 'rec.views');
       var vars = { n: num(n) };
       line.setAttribute('data-i18n', key);
       line.setAttribute('data-i18n-vars', JSON.stringify(vars));
@@ -260,5 +259,5 @@
     n.textContent = num(Math.max(0, (Number(n.textContent.replace(/\D/g, '')) || 0) + d));
   }
 
-  function num(n) { return Number(n).toLocaleString(document.documentElement.lang || 'ru'); }
+  function num(n) { return Number(n).toLocaleString(window.tkLocale()); }
 })();

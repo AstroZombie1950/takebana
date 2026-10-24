@@ -21,6 +21,7 @@ const userView = require('./userView');
 const { VENUE_AUTHOR, venueAuthor } = require('./venueAuthor');
 const privacy = require('./privacy');
 const { profileUrl } = require('./profileUrl');
+const { LANG_CODES } = require('./langs');
 const places = require('./places');
 
 const TYPES = ['people', 'streams', 'recordings', 'videos', 'venues'];
@@ -58,11 +59,11 @@ const recordingsWhere = (rx) => ({ status: 'ready', $or: [{ title: rx }, { descr
 const videosWhere = (rx) => ({ status: 'ready', $or: [{ title: rx }, { description: rx }] });
 
 // Тип и страна заведения лежат кодами справочника (utils/places.js), а ищут
-// их словом на любом из двух языков: «кафе» и «cafe» находят code: 'cafe',
+// их словом на любом языке сайта: «кафе» и «cafe» находят code: 'cafe',
 // «Сербия» и «Serbia» — rs. Вписанное владельцем («Другое») — своим текстом.
 // Город — в адресе (отдельного поля с 09.10 нет).
 const named = (kind, rx) => places.options(kind, 'ru')
-  .filter((x) => rx.test(x.text) || rx.test(places.name(kind, x.code, 'en')))
+  .filter((x) => LANG_CODES.some((l) => rx.test(places.name(kind, x.code, l))))
   .map((x) => x.code);
 
 // По описанию — с 29.09: «гриль» или «терраса» находят заведение, у которого

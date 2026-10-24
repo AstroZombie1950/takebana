@@ -79,7 +79,7 @@ router.get('/settings', requireAuth, commonDataMiddleware, async (req, res) => {
       bio: user.bio || '',
       // Дата рождения (utils/age.js): указана — строкой, нет — списки.
       birthDate: age.iso(user.birthDate),
-      birthLabel: user.birthDate ? new Intl.DateTimeFormat(res.locals.lang === 'en' ? 'en-US' : 'ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' }).format(user.birthDate) : '',
+      birthLabel: user.birthDate ? new Intl.DateTimeFormat(res.locals.langInfo.locale, { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' }).format(user.birthDate) : '',
       // Ссылки — как их показать в полях: kind → { display, url }.
       links: Object.fromEntries(profileLinks.list(user.links).map((l) => [l.kind, l])),
     },
@@ -201,7 +201,7 @@ router.post('/profile/gallery', requireAuth, requireNotBanned, async (req, res, 
     userId, url: x.url, width: x.width, height: x.height, caption: captions[i].text, createdAt: new Date(now + saved.length - i),
   })));
   const total = await GalleryPhoto.countDocuments({ userId });
-  indexNow.ping(...photos.map((p) => '/photo/' + p._id));
+  for (const p of photos) indexNow.pingItem('/photo/' + p._id, p);
 
   audit(req, 'profile.gallery.add', { targetType: 'user', targetId: userId, meta: { added: photos.length, total } });
   return res.json({ success: true, photos: photos.map((p) => ({ id: String(p._id), url: p.url })), total });

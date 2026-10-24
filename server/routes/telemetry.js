@@ -17,6 +17,8 @@ const rateLimit = require('express-rate-limit');
 const Trace = require('../models/Trace');
 const netInfo = require('../utils/netInfo');
 const errorLog = require('../utils/errorLog');
+const { audit } = require('../utils/audit');
+const { isLang } = require('../utils/langs');
 
 const limiter = rateLimit({
   windowMs: 5 * 60 * 1000,
@@ -119,6 +121,15 @@ router.post('/api/t', limiter, express.text({ limit: '8kb', type: () => true }),
     // tid при вставке. Её данные новее не намного, терять не страшно.
     if (e.code !== 11000) errorLog.server(e, 'telemetry');
   });
+});
+
+// Выбор языка в меню (public/tk-i18n.js, beacon) — в журнал действий.
+// Сам выбор живёт в cookie lang_choice, его ставит браузер.
+router.post('/api/lang', limiter, express.json({ limit: '1kb' }), (req, res) => {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  if (!isLang(body.lang)) return res.status(400).end();
+  audit(req, 'lang.pick', { meta: { lang: body.lang, from: isLang(body.from) ? body.from : '' } });
+  res.status(204).end();
 });
 
 module.exports = router;

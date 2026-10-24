@@ -29,7 +29,7 @@
 <!DOCTYPE html>
 <html lang="<%= lang %>" data-theme="<%= themeOn %>"<% if (theme === 'auto') { %> data-theme-auto<% } %>>
 <head>
-<%- include('partials/tkHead', { title: pageTitle + ' — Takebana', description: describe(rec.text, ta('seo.postDesc', { name: author.displayName, date: when })), seo: { path: base, type: 'article', image: image || undefined, imageStd: !cover && !!authorCard, imageAlt: cover ? alt : author.displayName, robots: rec.userId.banned || !ready || thin ? 'noindex, follow' : '',
+<%- include('partials/tkHead', { title: pageTitle + ' — Takebana', description: describe(rec.text, ta('seo.postDesc', { name: author.displayName, date: when })), seo: { path: base, lang: itemLang(rec, rec.userId), type: 'article', image: image || undefined, imageStd: !cover && !!authorCard, imageAlt: cover ? alt : author.displayName, robots: rec.userId.banned || !ready || thin ? 'noindex, follow' : '',
          jsonld: [ld.post({ path: base, headline: headTitle, text: said ? rec.text : '', date: rec.createdAt, author: { name: author.displayName, url: author.url }, images: shots, likes: rec.likes, comments: rec.comments }),
                   ld.crumbs([['Takebana', '/'], [author.displayName, author.url], [headTitle, base]])] } }) %>
 <link rel="stylesheet" href="<%= asset('/css/app.css') %>">

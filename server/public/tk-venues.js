@@ -68,12 +68,6 @@
     if (e.key === 'Escape' && more.open) { more.open = false; more.querySelector('summary').focus(); }
   });
 
-  // Форма слова по числу: plural(5, 'venues.count') → ключ venues.countMany.
-  function plural(n, base) {
-    const d10 = n % 10, d100 = n % 100;
-    return base + (d10 === 1 && d100 !== 11 ? 'One' : d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14) ? 'Few' : 'Many');
-  }
-
   // ── Карточки ──
   // Точки карты — из самих карточек: сервер отдаёт их один раз, разметкой.
   let cards = [];
@@ -219,7 +213,7 @@
     });
 
     const q = query.value.trim();
-    tkText(countEl.firstElementChild, plural(n, 'venues.count'), { n });
+    tkText(countEl.firstElementChild, window.tkPlural(n, 'venues.count'), { n });
     const scope = countEl.lastElementChild;
     // Страна — подписью пункта: имя из Intl с кодом (data-i18n-region,
     // переводит tk-i18n.js), у добавленных панелью — текст на языке страницы.

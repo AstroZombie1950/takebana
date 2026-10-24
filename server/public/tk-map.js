@@ -29,7 +29,7 @@
 //   выбор.world()
 //   выбор.resize() — после показа окна, иначе карта считает себя нулевой
 //
-// TKMap.setLang('ru' | 'en') — подписи всех карт страницы на другом языке;
+// TKMap.setLang('ru') — подписи всех карт страницы на другом языке;
 // на событие `tk:lang` общего переключателя этот файл подписывается сам.
 // Тема — так же: подложка светлая или тёмная по <html data-theme>, смена —
 // событием `tk:theme` (public/tk-theme.js)
@@ -38,9 +38,9 @@
   // Мир без Антарктиды и крайнего севера: так материки занимают окно.
   var WORLD = [[-170, -56], [180, 75]];
   var protocolReady = false;
-
+  // Стиль — на каждый язык сайта (ops/basemap/style.mjs).
   function lang() {
-    return window.tkLang ? window.tkLang() : 'ru';
+    return window.tkLang ? window.tkLang() : 'en';
   }
 
   function theme() {
@@ -77,14 +77,13 @@
   // Все карты страницы: смена языка проходит по ним.
   var live = [];
 
-  // Подписи на другом языке без перезагрузки. Стили ru и en отличаются только
+  // Подписи на другом языке без перезагрузки. Стили языков отличаются только
   // выражением `text-field` у десяти слоёв подписей, поэтому подменяем именно
   // их: `setStyle` перебрал бы стиль целиком и снёс наши источники, слои
   // заведений и маркеры. Раньше подписи оставались на языке, который был
   // в момент открытия страницы, и менялись только с перезагрузкой.
   function setLang(next) {
-    var l = next === 'en' ? 'en' : 'ru';
-    return loadStyle(l, theme()).then(function (s) {
+    return loadStyle(next, theme()).then(function (s) {
       live.forEach(function (map) {
         s.layers.forEach(function (layer) {
           var text = layer.layout && layer.layout['text-field'];

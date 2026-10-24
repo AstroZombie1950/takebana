@@ -722,6 +722,14 @@
   .tk-venues[data-view="map"] .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group { display: none; }
 }
 
+/* Уже 375 «Заведения» и «Список / Карта» строкой не помещаются —
+ * переключатель под заголовком (24.10). */
+@media (max-width: 374px) {
+  .tk-venues__top { grid-template-columns: minmax(0, 1fr); }
+  .tk-venues__views { grid-column: 1; grid-row: 2; justify-self: start; }
+  .tk-venues__search { grid-row: 3; }
+}
+
 @media (max-width: 639px) {
   /* Фильтры — сеткой, без прокрутки вбок (30.09: ленту, которая
    * листается пальцем, не все находили). Страна во всю ширину, под ней

@@ -11,10 +11,9 @@
   var base = watch.dataset.base;
   var k = watch.dataset.k;
   var isOwner = watch.dataset.owner === '1';
-  var lang = document.documentElement.lang === 'en' ? 'en-US' : 'ru-RU';
   var $ = function (i) { return document.getElementById(i); };
 
-  function num(n) { return Number(n || 0).toLocaleString(lang); }
+  function num(n) { return Number(n || 0).toLocaleString(window.tkLocale()); }
 
   // ── Хлебные крошки (09.10, partials/crumbs.ejs) ──
   // Пришли из «Ленты» или с «Популярного» — оно первым звеном, с тем же
@@ -44,15 +43,9 @@
     });
   }
 
-  // Форма слова по числу — как plural() в шаблонах (utils/i18n.js).
-  function pluralKey(n, base) {
-    var d10 = n % 10, d100 = n % 100;
-    return base + (d10 === 1 && d100 !== 11 ? 'One' : d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14) ? 'Few' : 'Many');
-  }
-
   // Подпись с числом, которая переживёт переключение языка.
   function setCounted(el, n, base) {
-    var key = pluralKey(n, base);
+    var key = window.tkPlural(n, base);
     var vars = { n: num(n) };
     el.setAttribute('data-i18n', key);
     el.setAttribute('data-i18n-vars', JSON.stringify(vars));

@@ -15,6 +15,8 @@
 // закрыли («Access blocked», docs/STATUS.md), так что поставщик может отпасть
 // в любой день: форма это переживает — метку всегда можно поставить рукой.
 
+const { toLang } = require('./langs');
+
 const BASE = (process.env.GEOCODER_URL || 'https://nominatim.openstreetmap.org').replace(/\/+$/, '');
 const CONTACT = process.env.GEOCODER_CONTACT || '';
 const TIMEOUT_MS = 8000;
@@ -63,7 +65,7 @@ async function ask(path, lang, params) {
     url.search = new URLSearchParams({
         format: 'jsonv2',
         addressdetails: '1',
-        'accept-language': lang === 'en' ? 'en' : 'ru',
+        'accept-language': toLang(lang),
         ...params,
     }).toString();
 

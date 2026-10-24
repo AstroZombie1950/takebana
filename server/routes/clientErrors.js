@@ -55,6 +55,15 @@ const UNLOAD_NOISE = /browsing context is going away|page was (unloaded|discarde
 // в отчёты, рядом с проверкой связи, где его и сравнивают.
 const CHECK_NAMES = /^(CallAudio|NetCheck|CallDiag)$/;
 
+// Расширения браузера. Их скрипты работают внутри нашей страницы, и их
+// ошибки ловит наш же обработчик. Первая примета — стек из адреса расширения;
+// страница её уже не шлёт (partials/tkHead.ejs), а вкладки, открытые до
+// обновления, пришлют. Вторая — то, чего наш код не делает вовсе: не читает
+// "@context" микроразметки и не грузит картинку из data:-адреса (журнал
+// 19–21.10: расширения Safari разбирали JSON-LD и перерисовывали логотип).
+const EXTENSION_STACK = /(webkit-masked-url|chrome-extension|moz-extension|safari(-web)?-extension):\/\//;
+const EXTENSION_MESSAGE = /\["@context"\]|^Unable to load image data:/;
+
 // Не загрузился файл с чужого хоста: Метрика, которую режут Safari,
 // блокировщики и VPN, или скрипт расширения со случайного домена. Наша
 // страница этого уже не шлёт (partials/tkHead.ejs), но открытые до
@@ -78,7 +87,8 @@ router.post('/api/client-error', clientErrorLimiter, express.json({ limit: '16kb
     // подробностей (см. partials/tkHead.ejs). Не пишем и её.
     const opaque = /^Script error\.?$/.test(message) && !body.source;
     const noise = UNLOAD_NOISE.test(message) || BOT_UA.test(req.get('user-agent') || '')
-        || foreignResource(cut(body.name, 100), cut(body.source, 2000), req);
+        || foreignResource(cut(body.name, 100), cut(body.source, 2000), req)
+        || EXTENSION_MESSAGE.test(message) || EXTENSION_STACK.test(cut(body.stack, 4000) + ' ' + cut(body.source, 2000));
 
     // Пустое сообщение записывать нечего: так приходят ошибки загрузки
     // сторонних файлов, у которых браузер прячет подробности.

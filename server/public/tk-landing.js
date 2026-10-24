@@ -98,7 +98,7 @@
             tip.style.top = at.y + "px";
           });
           // Заведение — в разделе, на карте рядом со списком (открыт и гостю).
-          map.on("click", function (id) { location.href = "/venues?venue=" + encodeURIComponent(id); });
+          map.on("click", function (id) { location.href = tkHref("/venues?venue=" + encodeURIComponent(id)); });
         })
         .catch(function (e) { console.error("Карта не загрузилась:", e); });
     }

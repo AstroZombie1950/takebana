@@ -27,6 +27,7 @@ const privacy = require('../../utils/privacy');
 const gallery = require('../../utils/gallery');
 const search = require('../../utils/search');
 const { profileUrl } = require('../../utils/profileUrl');
+const { profileLang } = require('../../utils/contentLang');
 const profileLinks = require('../../utils/profileLinks');
 const ogImage = require('../../utils/ogImage');
 const feed = require('../../utils/feed');
@@ -365,6 +366,8 @@ router.get('/@:nick', commonDataMiddleware, async (req, res) => {
       // Когда заведён аккаунт — по id: отдельного поля даты у User нет.
       createdAt: user._id.getTimestamp(),
       bio: user.bio || '',
+      // Язык страницы в индексе (docs/seo/LANGUAGES.md, §5.2).
+      textLang: profileLang(user),
       // Значки ссылок (utils/profileLinks.js). Сайт без nofollow — только
       // у тех, кому это включил администратор (User.linksFollow).
       // Пока ссылки выключены (profileLinks.ENABLED) — пусто: ни значков, ни sameAs.
@@ -406,7 +409,7 @@ router.get('/@:nick/gallery', (req, res) => {
 // страницу (?page=N). Адресация листалки и ограничение доступа — как
 // у вкладок галереи ниже.
 router.get('/@:nick/recordings', commonDataMiddleware, async (req, res) => {
-  const user = await byNick(req, res, 'nickname login email avatar banned');
+  const user = await byNick(req, res, 'nickname login email avatar banned bio lang');
   if (!user) return;
   const userId = String(user._id);
 
@@ -426,7 +429,7 @@ router.get('/@:nick/recordings', commonDataMiddleware, async (req, res) => {
   const items = restricted ? [] : await gallery.recordings(userId, isSelf, { skip: pg.skip, limit: gallery.PAGE });
 
   res.render('recordings', {
-    owner: { _id: user._id, displayName: userView.displayName(user), url: profileUrl(user) },
+    owner: { _id: user._id, displayName: userView.displayName(user), url: profileUrl(user), textLang: profileLang(user) },
     isSelf,
     restricted,
     // С 09.10 профиль записей не показывает — страница в индексе, когда они есть.
@@ -442,7 +445,7 @@ router.get('/@:nick/recordings', commonDataMiddleware, async (req, res) => {
 // по gallery.PAGE на страницу (?page=N). Ограничение доступа — как у профиля.
 router.get('/@:nick/:tab(photos|videos)', commonDataMiddleware, async (req, res) => {
   const tab = req.params.tab;
-  const user = await byNick(req, res, 'nickname login email avatar banned');
+  const user = await byNick(req, res, 'nickname login email avatar banned bio lang');
   if (!user) return;
   const userId = String(user._id);
 
@@ -469,7 +472,7 @@ router.get('/@:nick/:tab(photos|videos)', commonDataMiddleware, async (req, res)
 
   res.render('gallery', {
     tab,
-    owner: { _id: user._id, displayName: userView.displayName(user), url: profileUrl(user) },
+    owner: { _id: user._id, displayName: userView.displayName(user), url: profileUrl(user), textLang: profileLang(user) },
     isSelf,
     restricted,
     // С 09.10 профиль не показывает начало вкладок — в индексе, когда есть что.

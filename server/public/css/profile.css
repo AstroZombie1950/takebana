@@ -460,4 +460,6 @@
 
 @media (max-width: 374px) {
   .tk-prof__name { font-size: 23px; }
+  /* «Grabaciones», «Подписчики» не влезали и в 10px — без разрядки (24.10). */
+  .tk-prof__lbl { font-size: 9.5px; letter-spacing: 0; }
 }

@@ -106,8 +106,12 @@
 <script>
   window.TK = {
     userId: <%- JSON.stringify(guest ? '' : String(currentUser._id)) %>,
-    // Словари обоих языков: второй tk-i18n.js догружает при переключении.
-    dicts: <%- JSON.stringify({ ru: asset('/tk-i18n-ru.js'), en: asset('/tk-i18n-en.js') }) %>,
+    // Языки сайта (utils/langs.js): локаль для Intl, правило форм слов
+    // и словарь — его tk-i18n.js догружает при переключении.
+    langs: <%- JSON.stringify(Object.fromEntries(Object.keys(siteLangs).map(function (l) { return [l, { locale: siteLangs[l].locale, plural: siteLangs[l].plural, name: siteLangs[l].name, dict: asset('/tk-i18n-' + l + '.js') }]; }))) %>,
+    // Языковые адреса (utils/langUrl.js): alt — эта страница на каждом языке
+    // (у закрытой — null), rx — какие адреса публичные, base — язык корня.
+    urls: <%- JSON.stringify({ alt: langAlt, rx: publicRx, base: baseLang }).replace(/</g, '\\u003c') %>,
     // Публичный ключ VAPID: им браузер подписывается на пуши (tk-push.js).
     // Он для того и публичный — его видно в разметке, и это нормально.
     // Пусто — пуши на сервере не настроены, тумблера в настройках нет.

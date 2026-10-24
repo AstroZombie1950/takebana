@@ -15,7 +15,7 @@ const { unreadTotal } = require('../../utils/groups');
 const userView = require('../../utils/userView');
 const callLog = require('../../utils/callLog');
 const errorLog = require('../../utils/errorLog');
-const { langOf } = require('../../utils/i18n');
+const { langChoice } = require('../../utils/i18n');
 const theme = require('../../utils/theme');
 const nickname = require('../../utils/nickname');
 const { profileUrl } = require('../../utils/profileUrl');
@@ -68,10 +68,12 @@ const commonDataMiddleware = async (req, res, next) => {
         });
       }
 
-      // Язык, которым человек пользуется, — в аккаунт: рассылкам поддержки
-      // (utils/support.js) его не у кого спросить. Пишется только при смене.
-      const lang = langOf(req);
-      if (currentUser.lang !== lang) {
+      // Язык аккаунта — только выбранный рукой (меню, настройки: cookie
+      // lang_choice), не язык просмотренной страницы: по нему canonical
+      // страниц без текста (utils/contentLang.js), и один заход на /es
+      // не должен их переносить. Нужен и рассылкам поддержки (utils/support.js).
+      const lang = langChoice(req);
+      if (lang && currentUser.lang !== lang) {
         User.updateOne({ _id: currentUser._id }, { $set: { lang } }).catch((e) => errorLog.server(e, 'user.lang'));
       }
 

@@ -6,6 +6,7 @@
 // с user: сменился аккаунт на том же телефоне — запись переписывается,
 // а не заводится вторая, иначе уведомления первого поедут второму.
 const mongoose = require('mongoose');
+const { LANG_CODES } = require('../utils/langs');
 const { Schema } = mongoose;
 
 const pushSubscriptionSchema = new Schema({
@@ -27,7 +28,7 @@ const pushSubscriptionSchema = new Schema({
   live: { type: Boolean, default: true },
   // Язык уведомления. Текст собирается для спящего устройства, запроса
   // с cookie `lang` рядом нет — запоминаем язык в момент подписки.
-  lang: { type: String, enum: ['ru', 'en'], default: 'ru' },
+  lang: { type: String, enum: LANG_CODES, default: 'ru' },
   // Чтобы человек узнал своё устройство в списке, а мы — по какому браузеру
   // пришёл отказ.
   ua: { type: String, default: '' },

@@ -63,7 +63,7 @@
       })
       .then(function (data) {
         if (data.redirectUrl) {
-          window.location.href = data.redirectUrl;
+          window.location.href = tkHref(data.redirectUrl);
           return; // кнопку не возвращаем: уходим со страницы
         }
         button.innerHTML = label;
