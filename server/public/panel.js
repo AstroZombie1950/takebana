@@ -1097,7 +1097,7 @@ view.addEventListener('click', async (e) => {
 // (docs/TELEMETRY.md, models/Trace.js). Только администратору: адреса.
 const KIND_TITLE = {
   'live.view': 'эфир · зритель', 'live.host': 'эфир · ведущий', 'venue.view': 'камера · зритель',
-  'venue.host': 'камера · заведение', call: 'звонок', upload: 'загрузка', 'chat.media': 'медиа в переписке', notice: 'сбой связи',
+  'venue.host': 'камера · заведение', call: 'звонок', upload: 'загрузка', 'chat.media': 'медиа в переписке', 'chat.save': 'сохранение из переписки', notice: 'сбой связи',
 };
 // Попытка ведёт на карточку того, к чему относится: звонка, камеры.
 const KIND_LINK = {
@@ -1117,6 +1117,7 @@ const REASON_TITLE = {
   network: 'не открылось (сеть)', decode: 'не открылось (файл)', unsupported: 'запись не поддерживается', recorder: 'сбой записи',
   empty: 'пустая запись', mic_denied: 'микрофон запрещён', cam_denied: 'камера запрещена', no_mic: 'нет микрофона', no_cam: 'нет камеры',
   timeout: 'время вышло', offline: 'нет интернета', no_server: 'нет связи с сервером', server: 'ошибка сервера', busy: 'сервер занят',
+  gone: 'файла уже нет', share_failed: 'окно «Поделиться» не открылось',
 };
 const STEP_TITLE = {
   manifest: 'плейлист', frame: 'кадр', camera: 'камера', joined: 'вошёл в Daily', live: 'в эфире', slow: 'Daily грузится',
@@ -1131,6 +1132,7 @@ const STEP_TITLE = {
   video_accept: 'согласился на видео', video_decline: 'отказался от видео',
   draft: 'черновик заведён', first_chunk: 'первый кусок дошёл', uploaded: 'файл доехал', retry: 'повтор',
   offline: 'ждали сеть', resumed: 'продолжено на другой странице', sent: 'файл ушёл', processing: 'обрабатывается на сервере',
+  fetched: 'файл получен', saved: 'сохранено',
 };
 const STAT_TITLE = {
   stalls: 'подвисаний', stallMs: 'стоял, мс', resets: 'перезапусков', player: 'плеер', height: 'качество', lastErr: 'ошибка',
@@ -1141,7 +1143,7 @@ const STAT_TITLE = {
   video: 'с видео', role: 'сторона', size: 'участников', stuck: 'почему ушли с Daily', heard: 'звук через 10 с', heardEnd: 'звук в конце',
   mic: 'свой микрофон через 10 с', micEnd: 'свой микрофон в конце', eIn: 'энергия пришедшего звука', eOut: 'энергия своего микрофона',
   play: 'звук собеседника играет через 10 с', playEnd: 'звук собеседника играет в конце',
-  relay: 'реле TURN дано', turnErr: 'отказы TURN',
+  relay: 'реле TURN дано', turnErr: 'отказы TURN', via: 'как сохранили',
 };
 const sec = (ms) => (ms / 1000).toFixed(1).replace('.', ',') + ' с';
 

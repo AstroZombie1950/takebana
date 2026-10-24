@@ -32,14 +32,14 @@
   // «Мои заведения» (29.09) — только у того, у кого они есть: ссылка
   // на их список с «Добавить заведение» (routes/streaming/shared.js).
   var mine = !guest && currentUser.venuesHref
-    ? { href: currentUser.venuesHref, i18n: 'venues.mine', noteI18n: 'side.mineNote', icon: '<path d="M4 20V9l8-5 8 5v11"></path><path d="M9 20v-6h6v6"></path>' }
+    ? { href: currentUser.venuesHref, i18n: 'venues.mine', icon: '<path d="M4 20V9l8-5 8 5v11"></path><path d="M9 20v-6h6v6"></path>' }
     : null;
   var sections = [
-    { href: '/', i18n: 'cat.popular', noteI18n: 'cat.popularNote', icon: '<path d="M12 3l2.6 5.6 6.4.8-4.7 4.4 1.2 6.2L12 17l-5.5 3 1.2-6.2L3 9.4l6.4-.8L12 3Z"></path>' },
-    { href: '/feed', i18n: 'feed.h1', noteI18n: 'side.feedNote', icon: '<rect x="3" y="3" width="8" height="8"></rect><rect x="13" y="3" width="8" height="8"></rect><rect x="3" y="13" width="8" height="8"></rect><path d="M15 14.5v5l4-2.5-4-2.5Z"></path>' },
-    { href: '/venues', i18n: 'app.venues', noteI18n: 'side.venuesNote', icon: '<path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle>' },
+    { href: '/', i18n: 'cat.popular', icon: '<path d="M12 3l2.6 5.6 6.4.8-4.7 4.4 1.2 6.2L12 17l-5.5 3 1.2-6.2L3 9.4l6.4-.8L12 3Z"></path>' },
+    { href: '/feed', i18n: 'feed.h1', icon: '<rect x="3" y="3" width="8" height="8"></rect><rect x="13" y="3" width="8" height="8"></rect><rect x="3" y="13" width="8" height="8"></rect><path d="M15 14.5v5l4-2.5-4-2.5Z"></path>' },
+    { href: '/venues', i18n: 'app.venues', icon: '<path d="M12 21s7-5.6 7-10.5A7 7 0 105 10.5C5 15.4 12 21 12 21Z"></path><circle cx="12" cy="10" r="2.5"></circle>' },
     mine,
-    { href: '/about', i18n: 'nav.whatIs', noteI18n: 'side.aboutNote', icon: '<circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5v.01"></path>' }
+    { href: '/about', i18n: 'nav.whatIs', icon: '<circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5v.01"></path>' }
   ].filter(Boolean);
   // Чей пункт подсвечивать, если у страницы своего нет: категория и «Авторы» —
   // «Популярное», заявка заведения — «Заведения».
@@ -119,8 +119,7 @@
   </div>
 
   <div class="tk-aside__empty<%= subscriptions && subscriptions.length ? ' hidden' : '' %>" id="subsEmpty">
-    <span data-i18n="side.noSubs"><%- t('side.noSubs') %></span><br>
-    <span data-i18n="side.noSubsHint"><%- t('side.noSubsHint') %></span>
+    <span data-i18n="side.noSubs"><%- t('side.noSubs') %></span>
   </div>
 
   <div class="tk-aside__rule"></div>
@@ -131,10 +130,7 @@
   <% sections.forEach(function (item) { %>
   <a href="<%= item.href %>" class="tk-aside__item<%= active === item.href ? ' tk-aside__item--on' : '' %>">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><%- item.icon %></svg>
-    <span class="tk-aside__item-body">
-      <span data-i18n="<%= item.i18n %>"><%- t(item.i18n) %></span>
-      <span class="tk-aside__sub-state" data-i18n="<%= item.noteI18n %>"><%- t(item.noteI18n) %></span>
-    </span>
+    <span data-i18n="<%= item.i18n %>"><%- t(item.i18n) %></span>
   </a>
   <% }); %>
 

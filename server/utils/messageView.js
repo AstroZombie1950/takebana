@@ -65,6 +65,8 @@ function view(m, original) {
     forwardedFrom: m.forwardedFrom && m.forwardedFrom.name
       ? { name: m.forwardedFrom.name, sentAt: m.forwardedFrom.sentAt || null, batch: m.forwardedFrom.batch || null }
       : null,
+    // Альбом (utils/album.js): лента склеивает подряд идущие с одной меткой.
+    album: m.album || null,
     reply: m.replyTo ? replyView(m.replyTo, original) : null,
     share: m.share && m.share.kind
       ? { kind: m.share.kind, url: m.share.url, title: m.share.title || '', image: m.share.image || '', author: m.share.author || '' }

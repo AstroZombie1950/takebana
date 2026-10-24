@@ -125,11 +125,15 @@
     if (m.limit) return t('push.disappearing');
     if (m.forwardedFrom) return t('notify.forwarded');
     var s = String(m.content || '').replace(/\s+/g, ' ').trim();
-    // Файл без подписи — «Фото», «Голосовое» и т. п.
+    // Файл без подписи — «Фото», «Голосовое» и т. п.; пачка — «Альбом».
+    if (!s && m.album) s = t('chats.att.album');
     if (!s && m.attachments && m.attachments[0]) s = t('chats.att.' + m.attachments[0].kind);
     if (!s && m.share) s = t('chats.att.share');
     return s.length > 120 ? s.slice(0, 117) + '…' : s;
   }
+
+  // Альбом (utils/album.js) — одно уведомление и один звук на всю пачку.
+  function key(m) { return m.album ? 'a' + m.album : 'm' + m._id; }
 
   // Вкладка не на экране, а устройство подписано на пуши (tk-push.js):
   // сервер уже шлёт пуш (utils/push.js, onScreen), и своё уведомление со
@@ -143,7 +147,7 @@
     if (!d || !d.message || !d.peer || d.message.sender !== d.peer.id) return;
     var p = prefs();
     if ((!p.sndMsg && !p.sys) || pushed()) return;
-    once('m' + d.message._id, function () {
+    once(key(d.message), function () {
       if (p.sndMsg) ping();
       show(d.peer.displayName, preview(d.message), 'msg-' + d.peer.id, '/chatsPage?peer=' + d.peer.id);
     });
@@ -153,7 +157,7 @@
   function groupMessage(d) {
     var p = prefs();
     if ((!p.sndMsg && !p.sys) || pushed()) return;
-    once('m' + d.message._id, function () {
+    once(key(d.message), function () {
       if (p.sndMsg) ping();
       show(d.group.title, d.sender.displayName + ': ' + preview(d.message), 'group-' + d.groupId, '/chatsPage?group=' + d.groupId);
     });

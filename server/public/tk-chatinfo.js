@@ -316,11 +316,18 @@
     C.reveal(x.id);
   }
 
+  // Удалённое в переписке (chats.js, dropMessages) — и из вкладки.
+  document.addEventListener('tk:chat:dropped', function (e) {
+    if (!media || !media.items) return;
+    var n = media.items.length;
+    media.items = media.items.filter(function (x) { return e.detail.ids.indexOf(x.id) === -1; });
+    if (media.items.length !== n) paintTab();
+  });
+
+  // Окно просмотра листает вкладку «Медиа» — то, что в ней уже загружено.
   function openItem(x) {
-    var a = x.a;
-    var go = function () { gotoItem(x); };
-    if (a.kind === 'image') C.showImage(a.url, go);
-    else C.showVideo(a.url, a.preview, go);
+    var list = media.items.filter(function (y) { return y.a && /^(image|video)$/.test(y.a.kind); });
+    C.view(list, list.indexOf(x), gotoItem);
   }
 
   // Вкладки — одни на панель диалога и экран группы: события ловит
@@ -591,7 +598,7 @@
   document.addEventListener('tk:chat:switch', function () { if (!pane.hidden) close(); media = null; });
   document.addEventListener('tk:lang', function () { if (info && !pane.hidden) paint(); });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !pane.hidden && !document.querySelector('.tb-dialog, .tk-lightbox:not(.hidden)')) close();
+    if (e.key === 'Escape' && !pane.hidden && !document.querySelector('.tb-dialog, .tk-viewer:not(.hidden)')) close();
   });
   // Собеседник ограничил или вернул доступ — звонки и строки панели.
   document.addEventListener('tk:access:changed', function (e) {

@@ -44,6 +44,7 @@ const library = require('../../utils/library');
 const Contact = require('../../models/Contact');
 const contactNames = require('../../utils/contactNames');
 const chatInfo = require('../../utils/chatInfo');
+const albums = require('../../utils/album');
 
 // Ограничение доступа закрывает и переписку (utils/restrict.js): 403
 // с объяснением, кто кого ограничил. true — ответ уже отправлен.
@@ -152,6 +153,7 @@ function pushText(m) {
   if (m.forwardedFrom && m.forwardedFrom.name) return { previewKey: 'notify.forwarded' };
   const content = String(m.content || '').trim();
   if (content) return { preview: content };
+  if (m.album) return { previewKey: 'chats.att.album' };
   if (m.share && m.share.kind) return { previewKey: 'chats.att.share' };
   const kind = m.attachments && m.attachments[0] && m.attachments[0].kind;
   return kind ? { previewKey: 'chats.att.' + kind } : {};
@@ -183,7 +185,7 @@ function pushMessage({ message, sender, recipient, name }) {
 // Сохранить сообщение и разослать: получателю и вкладкам отправителя.
 // Общее у отправки, вложений и пересылки. ref — метка вкладки, отправившей
 // файл: по ней она меняет свою заглушку загрузки на готовое сообщение.
-async function deliver(req, { conversation, sender, recipient, content = '', attachments: files, forwardedFrom, share, ref, limit, silent, reply }) {
+async function deliver(req, { conversation, sender, recipient, content = '', attachments: files, forwardedFrom, share, ref, limit, silent, reply, album }) {
   const now = new Date();
   const message = await Message.create({
     conversationId: conversation._id,
@@ -197,6 +199,7 @@ async function deliver(req, { conversation, sender, recipient, content = '', att
     deliveredAt: isOnline(req, recipient._id) ? now : null,
     forwardedFrom,
     share,
+    album,
     replyTo: reply ? reply._id : null,
   });
 
@@ -302,7 +305,7 @@ async function dialogPage(me, before, { requests = false } = {}) {
           id: String(last._id),
           // У сообщения с ограничением текст закрыт — в списке только вид.
           content: last.limit && last.limit.mode ? '' : last.content || '',
-          kind: last.attachments && last.attachments[0] ? last.attachments[0].kind : last.share && last.share.kind ? 'share' : '',
+          kind: last.album ? 'album' : last.attachments && last.attachments[0] ? last.attachments[0].kind : last.share && last.share.kind ? 'share' : '',
           limited: !!(last.limit && last.limit.mode),
           expired: !!last.expiredAt,
           mine: String(last.sender) === String(me),
@@ -352,7 +355,7 @@ async function groupRows(me, before) {
       ...(mine && mine.mutedUntil > new Date() ? { muted: true } : {}),
       last: last && {
         content: last.content || '',
-        kind: last.attachments && last.attachments[0] ? last.attachments[0].kind : last.share && last.share.kind ? 'share' : '',
+        kind: last.album ? 'album' : last.attachments && last.attachments[0] ? last.attachments[0].kind : last.share && last.share.kind ? 'share' : '',
         system: last.system && last.system.kind ? view(last).system : null,
         mine: String(last.sender) === String(me),
         author: nameOf.get(String(last.sender)) || '',
@@ -593,6 +596,8 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
   const replyTo = req.body.replyTo || undefined;
   // В группу (routes/groups.js) — groupId вместо собеседника.
   const groupId = req.body.groupId || undefined;
+  // Альбом (utils/album.js): метка пачки; у исчезающего альбома нет.
+  const albumId = option ? undefined : albums.parse(req.body.album);
   const me = req.session.userId;
 
   if (!file) return res.status(400).json({ message: 'Файл не пришёл' });
@@ -652,7 +657,7 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
     result, targetType: groupId ? 'group' : 'user', targetId: groupId ? conversation._id : recipient._id,
     meta: {
       kind: special || 'file', ext: String(file.originalname || '').split('.').pop().slice(0, 8).toLowerCase(),
-      mb: +(file.size / 1048576).toFixed(2), ms: Date.now() - startedAt, ...extra,
+      mb: +(file.size / 1048576).toFixed(2), ms: Date.now() - startedAt, ...(albumId ? { album: true } : {}), ...extra,
     },
   });
 
@@ -670,6 +675,8 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
   // в корзину. Текст уходит отдельным обычным сообщением перед ним.
   // Ответ — на первом из ушедших: на подписи, если она идёт отдельно.
   const limit = limits.parse(option, info.kind);
+  // В альбом — только фото и видео: документ из той же пачки идёт сам по себе.
+  const album = albums.KINDS.has(info.kind) ? albumId : undefined;
   let reply;
   try {
     reply = await replyOf(conversation, replyTo);
@@ -685,7 +692,10 @@ router.post('/messages/attach', requireAuthApi, requireNotBanned, attachLimiter,
   }
   const send = async () => {
     const stored = await attachments.store(info, conversation._id);
-    return post({ content: limit ? '' : content, attachments: [stored], ref, limit, reply });
+    // Пуш — один на альбом: у первого дошедшего до базы (видео приходят
+    // позже фото — пережатие).
+    const silent = !(await albums.opens(conversation._id, album));
+    return post({ content: limit ? '' : content, attachments: [stored], ref, limit, reply, album, silent });
   };
 
   if (!attachments.SLOW.has(info.kind)) {
@@ -769,11 +779,13 @@ router.post('/messages/library', requireAuthApi, requireNotBanned, sendLimiter, 
     ? groups.deliver(req, conversation, sender, fields)
     : deliver(req, { conversation, sender, recipient, ...fields }));
 
+  // Больше одного — альбомом (utils/album.js); SEND_MAX = album.MAX.
+  const album = files.length > 1 ? albums.fresh() : undefined;
   const out = [];
   for (const [i, file] of files.entries()) {
-    out.push(await post({ content: i ? '' : content, attachments: [file], reply: i ? null : reply, silent: i < files.length - 1 }));
+    out.push(await post({ content: i ? '' : content, attachments: [file], reply: i ? null : reply, silent: i < files.length - 1, album }));
   }
-  audit(req, 'msg.library', { targetType: groupId ? 'group' : 'user', targetId: groupId || recipientId, meta: { n: files.length } });
+  audit(req, 'msg.library', { targetType: groupId ? 'group' : 'user', targetId: groupId || recipientId, meta: { n: files.length, ...(album ? { album: true } : {}) } });
   res.json({ messages: out });
 });
 
@@ -845,6 +857,7 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, sendLimiter, 
   // Группы, где пересылающий состоит (routes/groups.js).
   groupIds: { type: 'array', default: [], max: 20, of: { type: 'objectId' }, label: 'Кому' },
   comment: { type: 'string', max: 5000, default: '', label: 'Комментарий' },
+  from: { type: 'string', max: 8, default: '', label: 'Откуда' },
 }), async (req, res) => {
   const me = String(req.session.userId);
   const { comment } = req.body;
@@ -888,10 +901,15 @@ router.post('/messages/forward', requireAuthApi, requireNotBanned, sendLimiter, 
       ? { user: author._id, name: userView.displayName(author), sentAt: m.sentAt, batch: batchId }
       : { user: m.sender, name: '#' + id.slice(-6), sentAt: m.sentAt, batch: batchId };
   };
+  const albumOf = albums.remap();
   const batch = [];
-  for (const m of originals) batch.push({ content: m.content, attachments: m.attachments, share: m.share, forwardedFrom: await origin(m) });
+  for (const m of originals) batch.push({ content: m.content, attachments: m.attachments, share: m.share, forwardedFrom: await origin(m), album: albumOf(m) });
 
   const out = await fanOut(req, { chosen, targetGroups, batch, comment });
+  // from — откуда переслали: окно просмотра фото (23.10) или лента.
+  const from = req.body.from === 'viewer' ? 'viewer' : 'chat';
+  audit(req, 'msg.forward', { result: out.error ? 'fail' : 'ok',
+    meta: { n: originals.length, to: chosen.length + targetGroups.length, from, ...(out.error ? { status: out.error.status } : { sent: out.sent.length, skipped: out.skipped }) } });
   if (out.error) return res.status(out.error.status).json(out.error.body);
   res.json({ success: true, messages: out.sent, skipped: out.skipped });
 });
@@ -989,6 +1007,30 @@ router.get('/messages/:id/file', requireAuthApi, async (req, res) => {
   await limits.pipe(req, res, m, req.query.part === 'preview' ? 'preview' : 'main');
 });
 
+// «Сохранить» из окна просмотра (23.10): фото или видео переписки нашим
+// адресом и как вложение. На телефоне браузер отдаёт файл системному окну
+// «Поделиться» («Сохранить изображение» — в галерею), на компьютере это
+// обычная загрузка. С CDN так нельзя: чужой домен без CORS браузер в файл
+// не отдаёт. Только то, что я вижу: своё, мне или в моей группе;
+// исчезающее не сохраняется. Знак уже в файле (utils/watermark.js).
+router.get('/messages/:id/save', requireAuthApi, async (req, res) => {
+  if (!ObjectId.isValid(req.params.id)) return res.status(404).end();
+  const me = String(req.session.userId);
+  const m = await Message.findOne({ _id: req.params.id, deletedFor: { $ne: me }, expiredAt: null, 'limit.mode': { $exists: false } })
+    .select('sender recipient conversationId attachments sentAt').lean();
+  const a = m && m.attachments[0];
+  if (!a || !albums.KINDS.has(a.kind)) return res.status(404).end();
+  const mine = m.recipient
+    ? String(m.sender) === me || String(m.recipient) === me
+    : await Group.exists({ _id: m.conversationId, 'members.user': me });
+  if (!mine) return res.status(404).end();
+  // Имя — по времени отправки, расширение — как у файла в хранилище
+  // (фото там всегда jpg/png/webp/gif после знака, видео — mp4).
+  const ext = (/\.(\w{2,5})(?:\?|$)/.exec(a.url) || [])[1] || (a.kind === 'video' ? 'mp4' : 'jpg');
+  const stamp = new Date(m.sentAt).toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-');
+  await attachments.pipe(req, res, a.url, { name: `takebana-${stamp}.${ext}`, disposition: 'attachment' });
+});
+
 
 // Диалог открыт — входящие в нём прочитаны. Отправителю уходит «прочитано»,
 // уведомления об этом диалоге снимаются. В ответе — остались ли другие
@@ -1030,9 +1072,12 @@ router.post('/messages/read', requireAuthApi, validate({
 router.post('/messages/delete', requireAuthApi, validate({
   ids: { type: 'array', required: true, max: 100, of: { type: 'objectId' }, label: 'Сообщения' },
   forAll: { type: 'bool', default: false, label: 'У всех' },
+  from: { type: 'string', max: 8, default: '', label: 'Откуда' },
 }), async (req, res) => {
   const me = String(req.session.userId);
   const { ids, forAll } = req.body;
+  // В журнал — с тем, откуда: окно просмотра фото (23.10) или лента.
+  audit(req, 'msg.delete', { meta: { n: ids.length, forAll, from: req.body.from === 'viewer' ? 'viewer' : 'chat' } });
 
   // Только то, что я вижу: удалённое у себя больше не моё, чтобы стирать
   // его у собеседника (в Telegram его тоже уже не достать). Сообщения

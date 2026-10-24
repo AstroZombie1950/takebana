@@ -20,12 +20,10 @@
 // на CDN у получателя нет. Исчерпано — текст и файлы стираются, сообщение
 // остаётся заглушкой с expiredAt, обоим уходит message:expired.
 
-const fs = require('fs');
-const path = require('path');
-const { Readable } = require('stream');
 const Message = require('../models/Message');
 const errorLog = require('./errorLog');
-const { release } = require('./attachments');
+const attachments = require('./attachments');
+const { release } = attachments;
 const { view: viewOf } = require('./messageView');
 
 const LIFETIME_MS = 7 * 24 * 3600 * 1000;
@@ -34,7 +32,6 @@ const PLAY_SLACK_SEC = 15;
 const TIMERS = { t10: 10, t60: 60, t600: 600, t3600: 3600 };
 const COUNTS = { n1: 1, n2: 2, n3: 3 };
 const OPTIONS = ['', ...Object.keys(COUNTS), ...Object.keys(TIMERS)];
-const UPLOADS = path.join(__dirname, '..', 'public', 'uploads');
 
 // Сколько после открытия отдаём файл одного просмотра: картинку смотрят,
 // сколько хотят, пока окно открыто; видео и звук — длительность с запасом.
@@ -162,36 +159,13 @@ async function close(id, me) {
   emit(r.recipient, 'message:limit', { id: String(id), limit });
 }
 
-// Отдать файл открытого сообщения, пока идёт окно выдачи. С Range — видео
-// и звук перематываются. Кэшировать запрещаем: второй раз за этим адресом
-// браузер должен прийти к нам, а не в свой кэш.
-async function pipe(req, res, m, part) {
+// Отдать файл открытого сообщения, пока идёт окно выдачи. Второй раз
+// за этим адресом браузер должен прийти к нам, а не в свой кэш —
+// attachments.pipe кэш запрещает.
+function pipe(req, res, m, part) {
   const att = m.attachments[0];
-  const url = part === 'preview' ? att.preview : att.url;
-  if (!url) return res.status(404).end();
-  res.set('Cache-Control', 'private, no-store');
-  res.set('X-Content-Type-Options', 'nosniff');
-  const disposition = m.limit.mode === 'downloads' ? 'attachment' : 'inline';
-  res.set('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(att.name || 'file')}`);
-
-  if (url.startsWith('/uploads/')) {
-    const file = path.join(UPLOADS, url.slice('/uploads/'.length));
-    if (!file.startsWith(UPLOADS + path.sep) || !fs.existsSync(file)) return res.status(404).end();
-    return new Promise((resolve) => res.sendFile(file, { headers: { 'Cache-Control': 'private, no-store' }, lastModified: false, etag: false }, () => resolve()));
-  }
-
-  const ctrl = new AbortController();
-  res.on('close', () => ctrl.abort());
-  const up = await fetch(url, { headers: req.headers.range ? { Range: req.headers.range } : {}, signal: ctrl.signal });
-  res.status(up.status);
-  for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
-    const v = up.headers.get(h);
-    if (v) res.set(h, v);
-  }
-  if (!up.body) return res.end();
-  return new Promise((resolve) => {
-    Readable.fromWeb(up.body).on('error', () => res.destroy()).pipe(res).on('finish', resolve).on('close', resolve);
-  });
+  return attachments.pipe(req, res, part === 'preview' ? att.preview : att.url,
+    { name: att.name, disposition: m.limit.mode === 'downloads' ? 'attachment' : 'inline' });
 }
 
 // Уборка: исчерпанные и просроченные — раз в 20 секунд, пачками.

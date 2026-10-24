@@ -120,7 +120,12 @@ const messageSchema = new Schema({
     // пачки лента собирает в общую рамку «Переслано» (public/chats.js).
     sentAt: Date,
     batch: String
-  }
+  },
+  // Альбом (23.10): фото и видео, отправленные одной пачкой, — каждое своим
+  // сообщением с общей меткой, как в Telegram. Лента склеивает подряд идущие
+  // с одной меткой в мозаику (public/chats.js); удалить и переслать можно
+  // и одно из альбома. Метку ставит браузер (utils/album.js).
+  album: { type: String, default: undefined }
 }, {
   timestamps: true // Автоматически добавляет поля createdAt и updatedAt
 });
@@ -142,6 +147,8 @@ messageSchema.index({ conversationId: 1, 'attachments.kind': 1, sentAt: -1 }, { 
 // Ключ не совпадает с лентой выше: два индекса с одним ключом база
 // различает по фильтру не во всех версиях.
 messageSchema.index({ conversationId: 1, sentAt: -1, 'share.kind': 1 }, { partialFilterExpression: { 'share.kind': { $exists: true } } });
+// Пуш — один на альбом: первое сообщение с меткой будит, остальные молчат.
+messageSchema.index({ conversationId: 1, album: 1 }, { partialFilterExpression: { album: { $exists: true } } });
 // Уборка исчерпанных и просроченных сообщений с ограничением.
 messageSchema.index({ 'limit.expiresAt': 1 }, { partialFilterExpression: { 'limit.expiresAt': { $exists: true } } });
 

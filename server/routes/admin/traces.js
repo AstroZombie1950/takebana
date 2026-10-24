@@ -121,7 +121,7 @@ csvRoute(router, '/traces', requireAdmin, 'traces', loadTraces, [
 
 // Сводка за сутки по направлениям: доля успешных и медиана до результата.
 // Результат у эфира зрителя — первый кадр, у ведущего — выход в эфир.
-const DONE_STEP = { 'live.view': 'frame', 'live.host': 'live', 'venue.view': 'frame', 'venue.host': 'live', call: 'connected', upload: 'done', 'chat.media': 'done' };
+const DONE_STEP = { 'live.view': 'frame', 'live.host': 'live', 'venue.view': 'frame', 'venue.host': 'live', call: 'connected', upload: 'done', 'chat.media': 'done', 'chat.save': 'saved' };
 router.get('/traces/summary', requireAdmin, async (req, res) => {
   const from = new Date(Date.now() - 86400000);
   const rows = await Trace.find({ startedAt: { $gte: from } }).select('kind outcome route steps').lean();

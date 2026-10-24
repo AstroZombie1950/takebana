@@ -296,7 +296,7 @@
         '<img src="' + escapeHtml(src(a.preview || a.url)) + '" alt="" loading="lazy" decoding="async"></button>';
     }
     if (a.kind === 'video') {
-      return '<button type="button" class="tk-att tk-att--media" data-video="' + escapeHtml(a.url) + '" data-poster="' + escapeHtml(a.preview || '') + '" aria-label="' + escapeHtml(t('chats.openVideo')) + '"' + frame(a) + '>' +
+      return '<button type="button" class="tk-att tk-att--media" data-video="' + escapeHtml(a.url) + '" aria-label="' + escapeHtml(t('chats.openVideo')) + '"' + frame(a) + '>' +
         (a.preview ? '<img src="' + escapeHtml(src(a.preview)) + '" alt="" loading="lazy" decoding="async">' : '') +
         '<span class="tk-att__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28">' + PLAY + '</svg></span>' +
         (a.duration ? '<span class="tk-att__len">' + clock(a.duration) + '</span>' : '') + '</button>';
@@ -337,6 +337,32 @@
       '<svg class="tk-file__dl" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg></a>';
   }
 
+  // ── Альбом (utils/album.js) ───────────────────────────────────────────
+  // Фото и видео одной пачкой: каждое — своё сообщение с общей меткой.
+  // Подряд идущие от одного отправителя лента собирает в один пузырь-мозаику
+  // (albumItems); раскладку по числу задаёт класс (chats.css). Плитка знает
+  // своё сообщение (data-album-mid): по нему окно просмотра и переход к нему.
+  function inAlbum(m) {
+    return !!m.album && !m.limit && !m.expired && !!m.attachments.length && /^(image|video)$/.test(m.attachments[0].kind);
+  }
+
+  function albumGrid(tiles) {
+    return '<div class="tk-album tk-album--n' + tiles.length + '">' + tiles.join('') + '</div>';
+  }
+
+  function tileHtml(m) {
+    var a = m.attachments[0];
+    var id = ' data-album-mid="' + escapeHtml(m._id) + '"';
+    if (a.kind === 'image') {
+      return '<button type="button" class="tk-album__tile" data-img="' + escapeHtml(a.url) + '"' + id + ' aria-label="' + escapeHtml(t('chats.openImage')) + '">' +
+        '<img src="' + escapeHtml(src(a.preview || a.url)) + '" alt="" loading="lazy" decoding="async"></button>';
+    }
+    return '<button type="button" class="tk-album__tile" data-video="' + escapeHtml(a.url) + '"' + id + ' aria-label="' + escapeHtml(t('chats.openVideo')) + '">' +
+      (a.preview ? '<img src="' + escapeHtml(src(a.preview)) + '" alt="" loading="lazy" decoding="async">' : '') +
+      '<span class="tk-att__play" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20">' + PLAY + '</svg></span>' +
+      (a.duration ? '<span class="tk-att__len">' + clock(a.duration) + '</span>' : '') + '</button>';
+  }
+
   // Публикация, которой поделились (05.10, utils/share.js): карточка
   // с картинкой, видом и автором — ведёт на страницу публикации.
   // Названия нет — подпись видом: «Фото», «Видео», «Запись эфира».
@@ -372,8 +398,9 @@
     return (k ? t('chats.att.' + k) + (text ? ' · ' : '') : '') + text;
   }
 
-  // Вид для подписи: вложение или публикация («Публикация»).
+  // Вид для подписи: альбом, вложение или публикация («Публикация»).
   function attKind(m) {
+    if (m.album) return 'album';
     var a = m.attachments && m.attachments[0];
     return a ? a.kind : m.share ? 'share' : '';
   }
@@ -459,9 +486,17 @@
       : '<button type="button" class="tk-quote" data-goto="' + escapeHtml(r.id) + '" aria-label="' + escapeHtml(t('chats.replyGoto')) + '">' + quoteInner(r) + '</button>';
   }
 
-  function messageHtml(m, g) {
+  // list — альбом, который начинается с m (albumItems), pending — его файлы,
+  // которые ещё грузятся: они встают плитками в ту же мозаику.
+  function messageHtml(m, g, list, pending) {
     if (m.system) return sysHtml(m);
     var out = m.sender === ME;
+    pending = pending || [];
+    var album = list && list.length + pending.length > 1 ? list : null;
+    // Подпись альбома — у того, к кому её написали (первый файл пачки),
+    // время и галочки — последнего: он дошёл позже всех.
+    var content = album ? (album.find(function (x) { return x.content; }) || {}).content || '' : m.content;
+    var tailMsg = album ? album[album.length - 1] : m;
     var f = m.forwardedFrom;
     g = g || { first: true, last: true, name: null, author: true, tail: true };
     var head = '';
@@ -484,12 +519,13 @@
     else if (m.limit && revealed[m._id]) body = revealedHtml(m, revealed[m._id]);
     else if (m.limit) body = sealedHtml(m);
     else {
-      var att = (m.attachments || []).map(attachmentHtml).join('') + (m.share ? shareHtml(m.share) : '');
-      // Картинка, видео или кружок без подписи — пузырь без полей.
-      bare = att && !m.content && !head && m.attachments.length && /^(image|video|round)$/.test(m.attachments[0].kind);
-      var text = escapeHtml(m.content || '');
+      var att = album ? albumGrid(album.map(tileHtml).concat(pending.map(uploadHtml)))
+        : (m.attachments || []).map(attachmentHtml).join('') + (m.share ? shareHtml(m.share) : '');
+      // Картинка, видео, кружок или альбом без подписи — пузырь без полей.
+      bare = att && !content && !head && m.attachments.length && /^(image|video|round)$/.test(m.attachments[0].kind);
+      var text = escapeHtml(content || '');
       if (!out && !group && peer && peer.official) text = linkify(text);
-      body = att + (m.content ? '<p class="tk-msg__text">' + text + '</p>' : '');
+      body = att + (content ? '<p class="tk-msg__text">' + text + '</p>' : '');
     }
     var special = m.expired || m.limit || (m.attachments && m.attachments.length) || m.share;
     // Хвостик — у последнего пузыря серии, в сторону автора (chats.css).
@@ -497,14 +533,14 @@
     var tail = g.tail && !f && !bare;
     var bubble = '<div class="tk-msg__bubble' + (special ? ' has-att' : '') + (bare ? ' is-bare' : '') + (m.limit || m.expired ? ' is-sealed' : '') + (tail ? ' has-tail' : '') + '" tabindex="0" role="button" aria-haspopup="menu" aria-label="' + escapeHtml(t('chats.actions')) + '">' +
       head + body + '</div>';
-    var when = '<time>' + escapeHtml(tkDate(m.sentAt)) + '</time>';
+    var when = '<time>' + escapeHtml(tkDate(tailMsg.sentAt)) + '</time>';
     if (out) {
-      var s = status(m);
+      var s = status(tailMsg);
       // Статус сменился с прошлой отрисовки — галочка меняется анимацией:
       // вторая дорисовывается, зелёный проявляется (chats.css, is-fresh).
       // Класс только в той отрисовке, где смена замечена впервые.
-      var was = ticks[m._id];
-      ticks[m._id] = s.key;
+      var was = ticks[tailMsg._id];
+      ticks[tailMsg._id] = s.key;
       var fresh = was && was !== s.key ? ' is-fresh' + (was === 'chats.status.sent' ? ' is-drawn' : '') : '';
       when += ' <svg class="tk-msg__tick ' + s.cls + fresh + '" viewBox="0 0 22 24" width="17" height="16" fill="none" stroke="currentColor" stroke-width="2" role="img" aria-label="' +
         escapeHtml(t(s.key)) + '"><title>' + escapeHtml(t(s.key)) + '</title>' + s.icon + '</svg>';
@@ -580,17 +616,70 @@
       '<time>' + escapeHtml(tkDate(c.startedAt, CALL_TIME)) + '</time></div>';
   }
 
+  // Альбомы ленты: сообщения с одной меткой от одного отправителя — одна
+  // строка с list. Видео доходит позже фото (пережатие), и документ из той же
+  // пачки успевает встать между ними: свои сообщения посередине альбом не
+  // рвут, они идут после него. Звонок, служебная строка или чужое
+  // сообщение — рвут: порядок разговора важнее. Файлы своего альбома,
+  // которые ещё грузятся, встают плитками в последний его кусок.
+  // albumKeys — ключ строки → ключи всех её сообщений: выделение и меню
+  // держат голову, а действия раскрываются на весь альбом (pickedMessages).
+  var albumKeys = {};
+
+  function albumItems(items, mine) {
+    var out = [];
+    items.forEach(function (x) {
+      if (!x.m || !inAlbum(x.m)) return out.push(x);
+      for (var j = out.length - 1; j >= 0; j--) {
+        var y = out[j];
+        if (y.list && y.m.album === x.m.album && y.m.sender === x.m.sender) return y.list.push(x.m);
+        if (!y.m || y.m.system || y.m.sender !== x.m.sender) break;
+      }
+      x.list = [x.m];
+      out.push(x);
+    });
+    albumKeys = {};
+    var placed = {};
+    for (var i = out.length - 1; i >= 0; i--) {
+      var x = out[i];
+      if (!x.list) continue;
+      if (x.m.sender === ME && !placed[x.m.album]) {
+        placed[x.m.album] = true;
+        x.pending = mine.filter(function (u) { return u.album === x.m.album; });
+      }
+      albumKeys['m:' + x.m._id] = x.list.map(function (m) { return 'm:' + m._id; });
+    }
+    return { items: out, placed: placed };
+  }
+
+  // Заглушки загрузки в конце ленты. Альбом, у которого ещё ничего
+  // не дошло, — одной мозаикой с подписью.
+  function waitingHtml(mine, placed) {
+    var seen = {};
+    return mine.map(function (u) {
+      if (!u.album) return uploadHtml(u);
+      if (placed[u.album] || seen[u.album]) return '';
+      seen[u.album] = true;
+      var list = mine.filter(function (y) { return y.album === u.album; });
+      var caption = (list.find(function (y) { return y.caption; }) || {}).caption;
+      return '<div class="tk-msg tk-msg--out tk-msg--pending"><div class="tk-msg__bubble has-att' + (caption ? '' : ' is-bare') + '">' +
+        albumGrid(list.map(uploadHtml)) + (caption ? '<p class="tk-msg__text">' + escapeHtml(caption) + '</p>' : '') + '</div></div>';
+    }).join('');
+  }
+
   function render() {
-    var waiting = uploads.filter(function (u) { return u.chat === chatKey(); }).map(uploadHtml).join('');
+    var mine = uploads.filter(function (u) { return u.chat === chatKey(); });
     if (!messages.length && !calls.length) {
-      feed.innerHTML = waiting || '<p class="tk-note tk-note--center">' + escapeHtml(t('chats.dialogEmpty')) + '</p>';
+      albumKeys = {};
+      feed.innerHTML = waitingHtml(mine, {}) || '<p class="tk-note tk-note--center">' + escapeHtml(t('chats.dialogEmpty')) + '</p>';
       return;
     }
     var items = messages.map(function (m) { return { at: m.sentAt, m: m }; })
       .concat(calls.map(function (c) { return { at: c.startedAt, c: c }; }));
     items.sort(function (a, b) { return new Date(a.at) - new Date(b.at); });
-    groups(items);
-    feed.innerHTML = items.map(function (x) { return x.m ? messageHtml(x.m, x.g) : callNoteHtml(x.c); }).join('') + waiting;
+    var rows = albumItems(items, mine);
+    groups(rows.items);
+    feed.innerHTML = rows.items.map(function (x) { return x.m ? messageHtml(x.m, x.g, x.list, x.pending) : callNoteHtml(x.c); }).join('') + waitingHtml(mine, rows.placed);
     if (sound.el) relinkSound();
     if (roundPlayer.url) relinkRound();
   }
@@ -749,8 +838,12 @@
   // страницами, пока не дойдёт, — к сообщению годичной давности десятки
   // запросов). Сообщения уже нет — так и говорим.
   var jumping = null;
+  // Фото из альбома — своя плитка в общем пузыре.
+  function messageEl(id) {
+    return feed.querySelector('[data-mid="' + CSS.escape(id) + '"]') || feed.querySelector('[data-album-mid="' + CSS.escape(id) + '"]');
+  }
   function revealMessage(id) {
-    var el = feed.querySelector('[data-mid="' + CSS.escape(id) + '"]');
+    var el = messageEl(id);
     if (el) return Promise.resolve(flash(el));
     if (!chatKey()) return Promise.resolve();
     if (jumping) return jumping;
@@ -762,7 +855,7 @@
       allLoaded = !page.older;
       newer = !!page.newer;
       render();
-      var found = feed.querySelector('[data-mid="' + CSS.escape(id) + '"]');
+      var found = messageEl(id);
       if (found) {
         found.scrollIntoView({ block: 'center' });
         flash(found);
@@ -1323,6 +1416,12 @@
   }
 
   window.addEventListener('popstate', function (e) {
+    // Окно просмотра — своя запись (openViewer): «Назад» закрывает его,
+    // и только его. Закрыли кнопкой — запись снята нами же (closeViewers).
+    if (vw.skipPop) { vw.skipPop = false; return; }
+    if (viewerOpen()) { vw.pushed = false; closeViewers(); return; }
+    // «Вперёд» в уже закрытое окно — мимо.
+    if (e.state && e.state.tkViewer) { vw.skipPop = true; history.back(); return; }
     if (e.state && e.state.tkDialog) {
       // «Вперёд» обратно в диалог.
       var q = new URLSearchParams(location.search);
@@ -1607,6 +1706,7 @@
     tr.set('kb', Math.round(u.file.size / 1024));
     tr.set('type', u.file.type || '');
     if (u.groupId) tr.set('group', true);
+    if (u.album) tr.set('album', true);
     if (u.tries) tr.set('retry', u.tries);
     return tr;
   }
@@ -1614,6 +1714,20 @@
     if (!u.tr) return;
     u.tr.end(outcome, reason);
     u.tr = null;
+  }
+
+  // Плитка альбома, который ещё грузится (albumGrid): снимок с устройства,
+  // полоса и крестик поверх. Те же классы, что у заглушки ниже: прогресс
+  // обновляет один и тот же код (pump).
+  function tileUploadHtml(u, state) {
+    var failed = u.state === 'failed';
+    return '<div class="tk-album__tile is-pending' + (failed ? ' is-failed' : '') + '" data-ref="' + escapeHtml(u.ref) + '">' +
+      (u.thumb ? '<img src="' + escapeHtml(u.thumb) + '" alt="">' : '') +
+      '<span class="tk-upload__state">' + state + '</span>' +
+      (failed ? '' : '<span class="tk-upload__bar' + (u.state === 'processing' ? ' is-busy' : '') + '"><i style="width:' + (u.state === 'uploading' ? u.pct : 100) + '%"></i></span>') +
+      (u.state === 'processing' ? '' : '<button type="button" class="tk-upload__x" data-drop-upload="' + escapeHtml(u.ref) + '" aria-label="' + escapeHtml(t('chats.uploadCancel')) + '">' +
+        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>') +
+      '</div>';
   }
 
   function uploadHtml(u) {
@@ -1627,6 +1741,8 @@
     // Файл ещё в памяти — его можно отправить снова. После 202 его нет:
     // не пережалось на сервере — заново только выбором файла.
     if (u.state === 'failed' && u.file) state += ' <button type="button" class="tk-upload__again" data-retry-upload="' + escapeHtml(u.ref) + '">' + escapeHtml(t('chats.uploadRetry')) + '</button>';
+    // На плитке места мало — у загрузки только проценты.
+    if (u.album) return tileUploadHtml(u, u.state === 'uploading' || u.state === 'queued' ? u.pct + '%' : state);
     return '<div class="tk-msg tk-msg--out tk-msg--pending' + (u.state === 'failed' ? ' is-failed' : '') + '" data-ref="' + escapeHtml(u.ref) + '">' +
       '<div class="tk-msg__bubble has-att"><div class="tk-upload">' +
         '<span class="tk-upload__name">' + escapeHtml(u.name) + '</span>' +
@@ -1649,10 +1765,18 @@
     uploads = uploads.filter(function (u) {
       if (u.ref !== ref) return true;
       if (u.watch) clearInterval(u.watch);
+      if (u.thumb) URL.revokeObjectURL(u.thumb);
       return false;
     });
     var el = uploadEl(ref);
-    if (el) el.remove();
+    if (!el) return;
+    // Плитка альбома: мозаика перестраивается под оставшихся, пустая
+    // заглушка уходит целиком.
+    var grid = el.parentNode;
+    el.remove();
+    if (!grid.classList.contains('tk-album')) return;
+    if (grid.children.length) grid.className = 'tk-album tk-album--n' + grid.children.length;
+    else if (grid.closest('.tk-msg--pending')) grid.closest('.tk-msg--pending').remove();
   }
 
   // Видео и кружок сервер пережимает в фоне: в ответ приходит 202, а готовое
@@ -1699,6 +1823,22 @@
     return /^image\//.test(type) ? 'image' : /^video\//.test(type) ? 'video' : /^audio\//.test(type) ? 'audio' : 'file';
   }
 
+  // Фото и видео пачки — альбомами по ALBUM_MAX (utils/album.js): у каждого
+  // файла общая метка, сервер сохраняет её в сообщение. Документы из той же
+  // пачки, записанное на странице и исчезающее — по одному, без альбома.
+  var ALBUM_MAX = 10;
+  function albumsOf(files, special, limit) {
+    var ids = [];
+    if (special || limit) return ids;
+    var media = [];
+    files.forEach(function (f, i) { if (/^(image|video)$/.test(kindOf(f))) media.push(i); });
+    for (var j = 0; j + 1 < media.length; j += ALBUM_MAX) {
+      var id = 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      media.slice(j, j + ALBUM_MAX).forEach(function (i) { ids[i] = id; });
+    }
+    return ids;
+  }
+
   // special — 'voice' или 'round': записанное на странице. Выбранное
   // ограничение действует на всю пачку и после неё сбрасывается.
   function queueFiles(files, special) {
@@ -1706,15 +1846,18 @@
     var caption = input.value.trim();
     var limit = limitOpt;
     var reply = takeReply();
+    var albums = albumsOf(files, special, limit);
     input.value = '';
     fitInput();
     setLimit('');
-    Array.prototype.forEach.call(files, function (file, i) {
+    files.forEach(function (file, i) {
       uploads.push({
         ref: 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
         chat: chatKey(), peerId: peer ? peer.id : '', groupId: group ? group.id : '',
         file: file, special: special || '', limit: limit, caption: i === 0 ? caption : '', replyTo: i === 0 ? reply : '',
-        name: special ? t('chats.att.' + special) : file.name, kind: kindOf(file, special), pct: 0, state: 'queued'
+        name: special ? t('chats.att.' + special) : file.name, kind: kindOf(file, special), pct: 0, state: 'queued',
+        // Плитка альбома, пока грузится, — со своим снимком с устройства.
+        album: albums[i] || '', thumb: albums[i] && /^image\//.test(file.type) ? URL.createObjectURL(file) : ''
       });
     });
     render();
@@ -1737,6 +1880,7 @@
     if (u.special) form.append('special', u.special);
     if (u.limit) form.append('limit', u.limit);
     if (u.replyTo) form.append('replyTo', u.replyTo);
+    if (u.album) form.append('album', u.album);
     form.append('file', u.file, u.file.name);
     if (!u.tr) u.tr = traceUpload(u);
     var sentAt = u.sentAt = Date.now();
@@ -1762,7 +1906,7 @@
       var bar = uploadEl(u.ref);
       if (!bar) return;
       bar.querySelector('.tk-upload__bar i').style.width = pct + '%';
-      bar.querySelector('.tk-upload__state').textContent = t('chats.uploading') + ' ' + pct + '%';
+      bar.querySelector('.tk-upload__state').textContent = (u.album ? '' : t('chats.uploading') + ' ') + pct + '%';
     };
     xhr.onload = function () {
       var data = xhr.response || {};
@@ -2451,31 +2595,133 @@
     sound.audio.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * sound.audio.duration;
   }
 
-  // ── Просмотр фото и видео ─────────────────────────────────────────────
-  var box = $('lightbox');
-  var videoBox = $('videoBox');
+  // ── Просмотр фото и видео (23.10, как в Telegram) ─────────────────────
+  // Одно окно на фото и видео: сверху назад (на компьютере — крестик),
+  // кто прислал и когда, «Сохранить», «Переслать», ещё — «Показать в чате»
+  // и «Удалить». Листается стрелками, клавишами и смахиванием по всем фото
+  // и видео переписки, у начала загруженного догружает историю (loadOlder).
+  // Из панели диалога (tk-chatinfo.js) — по её списку. Исчезающее — одно
+  // и без действий: его не сохранить и не переслать.
+  var viewer = $('viewer');
+  var viewerImg = $('viewerImg');
+  var viewerVideo = viewer.querySelector('.tk-viewer__video');
+  var viewerStage = $('viewerStage');
+  var viewerMenu = $('viewerMenu');
   var player = null;
   var playerLoading = null;
+  // list — [{ id, a, sender, sentAt }], i — открытое; more — раньше
+  // первого: { can() — есть ли ещё, load() — промис нового списка };
+  // goto — «Показать в чате»; ready — файл, ждущий второго нажатия (saveItem).
+  var vw = { list: [], i: 0, more: null, goto: null, sealed: false, pushed: false, skipPop: false, ready: null, shown: '' };
 
-  // quiet — окно закрыл сервер (сообщение истекло): говорить ему «закрыто»
-  // уже незачем.
-  function closeViewers(quiet) {
-    var was = !box.classList.contains('hidden') || !videoBox.classList.contains('hidden');
-    viewerGoto(null);
-    box.classList.add('hidden');
-    if (!videoBox.classList.contains('hidden')) {
-      videoBox.classList.add('hidden');
-      if (player) player.stop();
+  function viewerOpen() { return !viewer.classList.contains('hidden'); }
+  function vbtn(name) { return viewer.querySelector('[data-v="' + name + '"]'); }
+
+  // Фото и видео загруженной ленты — в её порядке. Исчезающее и исчезнувшее
+  // сюда не входят.
+  function feedMedia() {
+    return messages.filter(function (m) {
+      var a = m.attachments && m.attachments[0];
+      return a && a.url && /^(image|video)$/.test(a.kind) && !m.limit && !m.expired;
+    }).map(function (m) { return { id: m._id, a: m.attachments[0], sender: m.sender, sentAt: m.sentAt }; });
+  }
+
+  function senderName(id) {
+    return id === ME ? t('chats.replyYou') : peer && peer.id === id ? peer.name : personOf(id).name;
+  }
+
+  function openViewer(list, i, opts) {
+    opts = opts || {};
+    closeViewerMenu();
+    vw.list = list;
+    vw.i = Math.max(0, i);
+    vw.more = opts.more || null;
+    vw.goto = opts.goto || null;
+    vw.sealed = !!opts.sealed;
+    viewer.classList.remove('hidden');
+    // «Назад» браузера и жест на телефоне закрывают окно, а не уводят
+    // из диалога: у окна своя запись в истории (popstate выше).
+    if (!vw.pushed) {
+      history.pushState({ tkViewer: 1 }, '');
+      vw.pushed = true;
     }
-    if (viewing) {
-      // Исчезающее не оставляем в окне: адрес уже не отдаст файл.
-      $('lightboxImg').removeAttribute('src');
-      var id = viewing;
-      viewing = null;
-      onceTimer.hidden = true;
-      if (quiet !== true) closeSealed(id);
+    showItem();
+  }
+
+  // Из ленты: список — фото и видео переписки, у начала догружается история.
+  function openFromFeed(id) {
+    var list = feedMedia();
+    var i = list.findIndex(function (x) { return x.id === id; });
+    if (i === -1) return;
+    openViewer(list, i, {
+      more: { can: function () { return !allLoaded; }, load: function () { return loadingOld ? null : loadOlder().then(feedMedia); } },
+      goto: function (x) { revealMessage(x.id); }
+    });
+  }
+
+  function showItem() {
+    var x = vw.list[vw.i];
+    if (!x) return closeViewers();
+    $('viewerName').textContent = senderName(x.sender);
+    $('viewerWhen').textContent = x.sentAt ? tkDate(x.sentAt) : '';
+    ['save', 'forward', 'more'].forEach(function (n) { vbtn(n).hidden = vw.sealed; });
+    vbtn('save').classList.toggle('is-ready', !!(vw.ready && vw.ready.id === x.id));
+    vbtn('prev').hidden = vw.sealed || (vw.i === 0 && !(vw.more && vw.more.can()));
+    vbtn('next').hidden = vw.sealed || vw.i >= vw.list.length - 1;
+    if (x.a.kind === 'image') {
+      stopVideo();
+      showImage(x.a);
+    } else {
+      viewerImg.hidden = true;
+      viewerImg.removeAttribute('src');
+      vw.shown = '';
+      playVideo(src(x.a.url), x.a.preview ? src(x.a.preview) : '');
     }
-    return was;
+    // Соседние фото — заранее: листается без ожидания.
+    [vw.list[vw.i - 1], vw.list[vw.i + 1]].forEach(function (y) {
+      if (y && y.a.kind === 'image') new Image().src = src(y.a.url);
+    });
+  }
+
+  // Сразу — уменьшенная копия из ленты (она уже в кэше), поверх неё —
+  // полное фото, когда дойдёт. Не дошло — сказать и записать.
+  function showImage(a) {
+    var full = src(a.url);
+    vw.shown = full;
+    viewerImg.hidden = false;
+    viewerImg.src = a.preview ? src(a.preview) : full;
+    var img = new Image();
+    img.onload = function () { if (vw.shown === full) viewerImg.src = full; };
+    img.onerror = function () {
+      if (vw.shown !== full) return;
+      viewTrace(viewerImg, a.url, 'fail', 'network');
+      toast(t('chats.mediaFailed'), 'error');
+    };
+    img.src = full;
+  }
+
+  // Шаг по списку. Раньше первого — догрузить историю и встать туда же.
+  function stepViewer(d) {
+    if (vw.sealed || !viewerOpen()) return;
+    var j = vw.i + d;
+    if (j >= 0 && j < vw.list.length) {
+      vw.i = j;
+      return showItem();
+    }
+    if (j >= 0 || !vw.more || !vw.more.can()) return;
+    var id = vw.list[vw.i].id;
+    var more = vw.more.load();
+    if (!more) return;
+    // На догруженной странице фото может не оказаться — тогда стоим, где
+    // стояли, а «назад» гаснет, когда история кончилась.
+    more.then(function (list) {
+      if (!viewerOpen() || vw.list[vw.i].id !== id) return;
+      var k = list.findIndex(function (x) { return x.id === id; });
+      if (k === -1) return;
+      vw.list = list;
+      vw.i = k > 0 ? k - 1 : 0;
+      showItem();
+    }).catch(function (e) { toast(t('chatinfo.loadFailed', { why: e.message }), 'error'); });
   }
 
   // Плеер Takebana — только когда впервые понадобился: скрипт и стили.
@@ -2485,10 +2731,10 @@
     playerLoading = new Promise(function (resolve, reject) {
       var css = document.createElement('link');
       css.rel = 'stylesheet';
-      css.href = videoBox.getAttribute('data-player-css');
+      css.href = viewer.getAttribute('data-player-css');
       document.head.appendChild(css);
       var js = document.createElement('script');
-      js.src = videoBox.getAttribute('data-player-js');
+      js.src = viewer.getAttribute('data-player-js');
       js.onload = resolve;
       js.onerror = function () { playerLoading = null; reject(new Error('player')); };
       document.head.appendChild(js);
@@ -2496,12 +2742,12 @@
     return playerLoading;
   }
 
-  function openVideo(url, poster) {
-    videoBox.classList.remove('hidden');
+  function playVideo(url, poster) {
+    viewerVideo.hidden = false;
     loadPlayer().then(function () {
-      if (videoBox.classList.contains('hidden')) return;
+      if (!viewerOpen() || viewerVideo.hidden) return;
       if (!player) {
-        player = TKPlayer.mount(videoBox.querySelector('.tk-player'));
+        player = TKPlayer.mount(viewerVideo.querySelector('.tk-player'));
         // Исчезающее видео с таймером досмотрено — сервер оставляет ему
         // последние секунды таймера (utils/messageLimit.js, close); окно
         // само закроется, когда они выйдут (tickSealed).
@@ -2511,37 +2757,253 @@
         });
       }
       player.load(url, poster);
-    }).catch(function () { videoBox.classList.add('hidden'); toast(t('player.error'), 'error'); });
+    }).catch(function () { viewerVideo.hidden = true; toast(t('player.error'), 'error'); });
   }
 
-  // «Показать в чате» в окне просмотра — у открытого из панели диалога
-  // (tk-chatinfo.js): go закрывает окно и ведёт к сообщению.
-  var gotoFn = null;
-  function viewerGoto(go) {
-    gotoFn = go || null;
-    $('lightboxGoto').hidden = !gotoFn;
-    $('videoBoxGoto').hidden = !gotoFn;
+  function stopVideo() {
+    if (viewerVideo.hidden) return;
+    viewerVideo.hidden = true;
+    if (player) player.stop();
   }
-  ['lightboxGoto', 'videoBoxGoto'].forEach(function (id) {
-    $(id).addEventListener('click', function () {
-      var go = gotoFn;
+
+  // quiet — окно закрыл сервер (сообщение истекло): говорить ему «закрыто»
+  // уже незачем.
+  function closeViewers(quiet) {
+    var was = viewerOpen();
+    closeViewerMenu();
+    viewer.classList.add('hidden');
+    stopVideo();
+    viewerImg.removeAttribute('src');
+    vw.shown = '';
+    vw.list = [];
+    vw.more = vw.goto = null;
+    if (vw.pushed) {
+      vw.pushed = false;
+      vw.skipPop = true;
+      history.back();
+    }
+    if (viewing) {
+      // Исчезающее не оставляем в окне: адрес уже не отдаст файл.
+      var id = viewing;
+      viewing = null;
+      onceTimer.hidden = true;
+      if (quiet !== true) closeSealed(id);
+    }
+    return was;
+  }
+
+  function closeViewerMenu() {
+    viewerMenu.hidden = true;
+    vbtn('more').setAttribute('aria-expanded', 'false');
+  }
+
+  // Сообщение открытого — из ленты, а открытого из панели в ленте может
+  // не быть: пересылке и удалению хватает id, автора и вложения.
+  function viewerMessage(x) {
+    return findMessage(x.id) || { _id: x.id, sender: x.sender, sentAt: x.sentAt, content: '', attachments: [x.a] };
+  }
+
+  viewer.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-v]');
+    var act = b && b.getAttribute('data-v');
+    if (act !== 'more') closeViewerMenu();
+    if (!b) {
+      // Мимо картинки и плеера — закрыть, как раньше.
+      if (e.target === viewerStage) closeViewers();
+      return;
+    }
+    var x = vw.list[vw.i];
+    if (act === 'close') return closeViewers();
+    if (act === 'prev' || act === 'next') return stepViewer(act === 'prev' ? -1 : 1);
+    if (!x) return;
+    if (act === 'more') {
+      var open = viewerMenu.hidden;
+      viewerMenu.hidden = !open;
+      b.setAttribute('aria-expanded', String(open));
+      viewerMenu.querySelector('[data-v="goto"]').hidden = !vw.goto;
+      if (open) viewerMenu.querySelector('button:not([hidden])').focus();
+    } else if (act === 'save') {
+      saveItem(x);
+    } else if (act === 'forward') {
+      openForward(null, [viewerMessage(x)], 'viewer');
+    } else if (act === 'goto') {
+      var go = vw.goto;
       closeViewers();
-      if (go) go();
-    });
+      go(x);
+    } else if (act === 'delete') {
+      removeMessages([viewerMessage(x)], [], 'viewer').then(function (done) {
+        if (!done || !viewerOpen()) return;
+        vw.list.splice(vw.i, 1);
+        if (!vw.list.length) return closeViewers();
+        vw.i = Math.min(vw.i, vw.list.length - 1);
+        showItem();
+      });
+    }
   });
 
-  $('lightboxClose').addEventListener('click', function () { closeViewers(); });
-  $('videoBoxClose').addEventListener('click', function () { closeViewers(); });
-  box.addEventListener('click', function (e) { if (e.target === box) closeViewers(); });
-  videoBox.addEventListener('click', function (e) { if (e.target === videoBox) closeViewers(); });
+  // Клавиши: стрелки листают, Escape закрывает меню окна. У плеера в фокусе
+  // стрелки — его (перемотка).
+  document.addEventListener('keydown', function (e) {
+    if (!viewerOpen()) return;
+    if (e.key === 'Escape' && !viewerMenu.hidden) {
+      e.stopImmediatePropagation();
+      closeViewerMenu();
+      vbtn('more').focus();
+      return;
+    }
+    if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || (e.target.closest && e.target.closest('.tk-player, .tk-modal'))) return;
+    e.preventDefault();
+    stepViewer(e.key === 'ArrowLeft' ? -1 : 1);
+  }, true);
 
-  // Клик по вложению: вне режима выбора — открыть или играть. В режиме
-  // выбора клик отмечает сообщение (обработчик ниже), ссылка на файл
-  // тоже не открывается.
+  // Смахнуть вбок — соседнее, вниз — закрыть, как в Telegram. Пока фото
+  // увеличено щипком, палец его двигает — жесты не наши. Полоса плеера —
+  // его перемотка.
+  var vdrag = null;
+  viewerStage.addEventListener('touchstart', function (e) {
+    vdrag = null;
+    if (e.touches.length !== 1 || (window.visualViewport && visualViewport.scale > 1.01)) return;
+    if (e.target.closest('.tk-player__bar')) return;
+    vdrag = { x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0, dy: 0, dir: '' };
+  }, { passive: true });
+  viewerStage.addEventListener('touchmove', function (e) {
+    if (!vdrag) return;
+    if (e.touches.length !== 1) { endDrag(false); return; }
+    vdrag.dx = e.touches[0].clientX - vdrag.x;
+    vdrag.dy = e.touches[0].clientY - vdrag.y;
+    if (!vdrag.dir) {
+      if (Math.abs(vdrag.dx) < 10 && Math.abs(vdrag.dy) < 10) return;
+      vdrag.dir = Math.abs(vdrag.dx) > Math.abs(vdrag.dy) ? 'x' : vdrag.dy > 0 ? 'y' : 'no';
+      viewerStage.classList.add('is-dragging');
+    }
+    if (vdrag.dir === 'x' && !vw.sealed) viewerStage.style.transform = 'translateX(' + vdrag.dx + 'px)';
+    else if (vdrag.dir === 'y') {
+      viewerStage.style.transform = 'translateY(' + Math.max(0, vdrag.dy) + 'px)';
+      viewerStage.style.opacity = String(Math.max(.3, 1 - vdrag.dy / 400));
+    }
+  }, { passive: true });
+  function endDrag(apply) {
+    var d = vdrag;
+    vdrag = null;
+    viewerStage.classList.remove('is-dragging');
+    viewerStage.style.transform = '';
+    viewerStage.style.opacity = '';
+    if (!apply || !d) return;
+    if (d.dir === 'x' && Math.abs(d.dx) > 60) stepViewer(d.dx < 0 ? 1 : -1);
+    else if (d.dir === 'y' && d.dy > 100) closeViewers();
+  }
+  viewerStage.addEventListener('touchend', function () { endDrag(true); });
+  viewerStage.addEventListener('touchcancel', function () { endDrag(false); });
+
+  // ── «Сохранить» ──
+  // Файл берём нашим адресом (/messages/:id/save): с CDN браузер файл
+  // в руки не даёт. На телефоне — системное окно «Поделиться»: в нём
+  // «Сохранить изображение» кладёт фото в галерею (на iPhone другой дороги
+  // в «Фото» у сайта нет). На компьютере — обычная загрузка; видео — сразу
+  // ссылкой: браузер ведёт её сам, с полосой, не держа файл во вкладке.
+  // Каждая попытка — в телеметрию (chat.save, docs/TELEMETRY.md).
+  var touchScreen = matchMedia('(pointer: coarse)');
+  var SAVE_MS = 120000;
+
+  function handOver(file) {
+    if (touchScreen.matches && navigator.canShare && navigator.canShare({ files: [file] })) {
+      return navigator.share({ files: [file] }).then(function () { return 'share'; });
+    }
+    var url = URL.createObjectURL(file);
+    clickLink(url, file.name);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    return Promise.resolve('download');
+  }
+
+  function clickLink(href, name) {
+    var link = document.createElement('a');
+    link.href = href;
+    link.download = name || '';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  function saveItem(x) {
+    var btn = vbtn('save');
+    var ready = vw.ready && vw.ready.id === x.id ? vw.ready : null;
+    var tr = ready ? ready.tr : window.TKTrace ? TKTrace.start('chat.save', x.id) : null;
+    if (tr && !ready) tr.set('what', x.a.kind);
+    var sharing = false;
+    var done = function (via) {
+      if (!tr) return;
+      tr.set('via', via);
+      tr.step('saved');
+      tr.end('ok');
+    };
+    var failed = function (e) {
+      // Окно «Поделиться» без свежего нажатия не открывается (iOS, после
+      // загрузки файла): файл готов — следующее нажатие отдаёт его сразу.
+      if (e && e.name === 'NotAllowedError' && sharing && e.file) {
+        vw.ready = { id: x.id, file: e.file, tr: tr };
+        btn.classList.add('is-ready');
+        toast(t('viewer.saveReady'));
+        if (tr) tr.mark('notice_ready');
+        return;
+      }
+      // Закрыл окно «Поделиться» сам — не сбой.
+      if (e && e.name === 'AbortError' && sharing) { if (tr) tr.end('gave_up', 'canceled'); return; }
+      var reason = sharing ? 'share_failed' : e.reason || (e.status === 404 ? 'gone' : 'server');
+      if (tr) tr.end('fail', reason);
+      toast(t('viewer.saveFailed', { why: reason === 'gone' ? t('viewer.gone') : reason === 'share_failed' ? t('viewer.shareFailed') : e.message }), 'error');
+    };
+
+    if (ready) {
+      vw.ready = null;
+      btn.classList.remove('is-ready');
+      sharing = true;
+      return handOver(ready.file).then(done, failed);
+    }
+    var url = '/messages/' + encodeURIComponent(x.id) + '/save';
+    if (x.a.kind === 'video' && !touchScreen.matches) {
+      clickLink(url);
+      return done('link');
+    }
+    btn.classList.add('is-busy');
+    // Заголовки пришли, а файл ещё идёт (видео с телефона) — сказать, что ждём.
+    var slow = null;
+    tkFetch(url, { timeout: SAVE_MS, button: btn })
+      .then(function (r) {
+        if (!r.ok) {
+          var err = new Error(TKNet.explain(r));
+          err.status = r.status;
+          throw err;
+        }
+        slow = setTimeout(function () { toast(t('viewer.saving')); if (tr) tr.mark('notice_slow'); }, 2000);
+        var m = /filename\*=UTF-8''([^;]+)/i.exec(r.headers.get('content-disposition') || '');
+        var name = m ? decodeURIComponent(m[1]) : 'takebana.' + (x.a.kind === 'video' ? 'mp4' : 'jpg');
+        return r.blob().then(function (b) { return new File([b], name, { type: b.type }); });
+      })
+      .then(function (file) {
+        clearTimeout(slow);
+        btn.classList.remove('is-busy');
+        if (tr) {
+          tr.step('fetched');
+          tr.set('kb', Math.round(file.size / 1024));
+        }
+        sharing = true;
+        return handOver(file).catch(function (e) {
+          if (e) e.file = file;
+          throw e;
+        });
+      })
+      .then(done, function (e) {
+        clearTimeout(slow);
+        btn.classList.remove('is-busy');
+        failed(e || new Error(''));
+      });
+  }
+
+  // Клик по фото или видео в ленте — окно просмотра. В режиме выбора клик
+  // отмечает сообщение (обработчик ниже), ссылка на файл тоже не открывается.
   feed.addEventListener('click', function (e) {
     if (picking || longPressed) return;
-    var img = e.target.closest('[data-img]');
-    var vid = e.target.closest('[data-video]');
+    var media = e.target.closest('[data-img], [data-video]');
     var aud = e.target.closest('[data-audio]');
     var round = e.target.closest('[data-round]');
     var seal = e.target.closest('[data-open-sealed]');
@@ -2549,11 +3011,9 @@
     if (seal) return openSealed(seal.getAttribute('data-open-sealed'));
     if (hide) return closeSealed(hide.getAttribute('data-hide-sealed'));
     if (round) return playRound(round);
-    if (img) {
-      $('lightboxImg').src = src(img.getAttribute('data-img'));
-      box.classList.remove('hidden');
-    } else if (vid) {
-      openVideo(src(vid.getAttribute('data-video')), src(vid.getAttribute('data-poster')));
+    if (media) {
+      var row = media.closest('[data-mid]');
+      openFromFeed(media.getAttribute('data-album-mid') || (row && row.getAttribute('data-mid')));
     } else if (aud) {
       if (e.target.closest('[data-play]')) playSound(aud);
       else if (e.target.closest('[data-seek]')) seekSound(aud, e);
@@ -2677,12 +3137,9 @@
         }
         if (kind === 'image' || kind === 'video') {
           viewing = id;
-          if (kind === 'image') {
-            $('lightboxImg').src = src(a.url);
-            box.classList.remove('hidden');
-          } else {
-            openVideo(src(a.url), src(a.preview));
-          }
+          // Фото — сразу целиком: каждый запрос к выдаче идёт через сервер,
+          // уменьшенная копия была бы лишним.
+          openViewer([{ id: id, a: { kind: kind, url: a.url, preview: kind === 'video' ? a.preview : '' }, sender: m.sender, sentAt: m.sentAt }], 0, { sealed: true });
           showOnceTimer(until);
           render();
           return;
@@ -3696,7 +4153,8 @@
   function updatePickBar() {
     var keys = pickedKeys();
     if (!keys.length) return stopPicking();
-    $('pickCount').textContent = t('chats.picked', { n: keys.length });
+    // Альбом считается по своим фото, как в Telegram.
+    $('pickCount').textContent = t('chats.picked', { n: keys.reduce(function (n, k) { return n + (albumKeys[k] ? albumKeys[k].length : 1); }, 0) });
     var hasText = keys.some(function (k) { var x = k[0] === 'm' && resolve(k).m; return x && plain(x); });
     document.querySelectorAll('#pickBar [data-pick="forward"], #pickBar [data-pick="copy"]').forEach(function (b) { b.disabled = !hasText; });
   }
@@ -3895,9 +4353,11 @@
 
   function plain(m) { return !m.limit && !m.expired; }
 
-  // Сообщения выбранного — в порядке ленты, без звонков.
+  // Сообщения выбранного — в порядке ленты, без звонков. Альбом выделен
+  // своей головой — в действие идёт целиком (albumKeys).
   function pickedMessages(keys) {
     return keys.filter(function (k) { return k[0] === 'm'; })
+      .reduce(function (all, k) { return all.concat(albumKeys[k] || [k]); }, [])
       .map(function (k) { return resolve(k).m; })
       .filter(Boolean)
       .sort(function (a, b) { return new Date(a.sentAt) - new Date(b.sentAt); });
@@ -3915,10 +4375,14 @@
   // можно убрать у всех, как в Telegram; звонок — только у себя: запись
   // о нём общая. Если выбраны и сообщения, и звонки, в вопросе об этом сказано.
   function removeItems(keys) {
-    var msgs = pickedMessages(keys);
-    var callIds = keys.filter(function (k) { return k[0] === 'c'; }).map(function (k) { return k.slice(2); });
+    removeMessages(pickedMessages(keys), keys.filter(function (k) { return k[0] === 'c'; }).map(function (k) { return k.slice(2); }), 'chat');
+  }
+
+  // Общее у ленты и окна просмотра (from = 'viewer', в журнал msg.delete).
+  // Промис — удалили ли: окно переходит к соседнему.
+  function removeMessages(msgs, callIds, from) {
     var n = msgs.length + callIds.length;
-    if (!n) return;
+    if (!n) return Promise.resolve(false);
 
     var q = n > 1 ? t('chats.deleteManyQ', { n: n }) : msgs.length ? t('chats.deleteMsgQ') : t('chats.deleteCallQ');
     if (msgs.length && callIds.length) q += ' ' + t('chats.deleteMixedNote');
@@ -3929,17 +4393,21 @@
       ? [{ value: 'me', text: t('chats.deleteForMe'), danger: false }, { value: 'all', text: t('chats.deleteForAll') }]
       : [{ value: 'me', text: msgs.length ? t('chats.deleteForMe') : t('chats.delete') }];
 
-    chooseDialog(q, choices).then(function (v) {
-      if (!v) return;
+    return chooseDialog(q, choices).then(function (v) {
+      if (!v) return false;
       var jobs = [];
-      if (msgs.length) jobs.push(post('/messages/delete', { ids: msgs.map(function (m) { return m._id; }), forAll: v === 'all' }));
+      if (msgs.length) jobs.push(post('/messages/delete', { ids: msgs.map(function (m) { return m._id; }), forAll: v === 'all', from: from }));
       if (callIds.length) jobs.push(post('/api/calls/delete', { ids: callIds }).then(afterCallsDeleted.bind(null, callIds)));
       return Promise.all(jobs).then(function () {
         // Сокет пришлёт то же самое, но лента не должна ждать его.
         dropMessages(msgs.map(function (m) { return m._id; }));
         stopPicking();
+        return true;
       });
-    }).catch(function (e) { toast(t('chats.deleteFailed') + ': ' + e.message, 'error'); });
+    }).catch(function (e) {
+      toast(t('chats.deleteFailed') + ': ' + e.message, 'error');
+      return false;
+    });
   }
 
   // Цитаты удалённых или исчезнувших — «Сообщение удалено»; полоса ответа
@@ -3955,6 +4423,9 @@
 
   function dropMessages(ids) {
     if (!ids.length) return;
+    // Панель диалога (tk-chatinfo.js) убирает их из своих вкладок: удалить
+    // можно и из окна просмотра, открытого из «Медиа».
+    document.dispatchEvent(new CustomEvent('tk:chat:dropped', { detail: { ids: ids } }));
     var before = messages.length;
     messages = messages.filter(function (m) { return ids.indexOf(m._id) === -1; });
     ids.forEach(function (id) { delete picked['m:' + id]; });
@@ -4196,8 +4667,12 @@
     $('forwardCount').textContent = n ? '\u00a0(' + n + ')' : '';
   }
 
-  function openForward(keys) {
-    fwdMessages = pickedMessages(keys).filter(plain);
+  // list — уже собранные сообщения (окно просмотра, from = 'viewer'),
+  // иначе — выбранное в ленте по ключам. from уходит в журнал (msg.forward).
+  var fwdFrom = 'chat';
+  function openForward(keys, list, from) {
+    fwdMessages = (list || pickedMessages(keys)).filter(plain);
+    fwdFrom = from || 'chat';
     if (!fwdMessages.length) return;
     fwdPicked = {};
     fwdSearch.value = '';
@@ -4259,7 +4734,8 @@
       messageIds: fwdMessages.map(function (m) { return m._id; }),
       recipientIds: Object.keys(fwdPicked).filter(function (k) { return k.indexOf('g:') !== 0; }),
       groupIds: Object.keys(fwdPicked).filter(function (k) { return k.indexOf('g:') === 0; }).map(function (k) { return k.slice(2); }),
-      comment: fwdComment.value.trim()
+      comment: fwdComment.value.trim(),
+      from: fwdFrom
     })
       .then(function (r) {
         if (r && r.skipped) toast(t('chats.forwardPartial', { n: r.skipped }), 'error');
@@ -4320,8 +4796,9 @@
     deleteChat: function () { return deleteConversation(peer); },
     call: function (type) { if (peer) callPeer(peer, type); },
     reveal: revealMessage,
-    showImage: function (url, go) { $('lightboxImg').src = src(url); box.classList.remove('hidden'); viewerGoto(go); },
-    showVideo: function (url, poster, go) { openVideo(src(url), poster ? src(poster) : ''); viewerGoto(go); },
+    // Окно просмотра по списку панели: [{ id, a, sender, sentAt }], goto(x) —
+    // «Показать в чате».
+    view: function (list, i, goto) { openViewer(list, i, { goto: goto }); },
     src: src,
     fileSize: fileSize,
     clock: clock

@@ -26,6 +26,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { Readable } = require('stream');
 const { stamp } = require('./watermark');
 const storage = require('./storage');
 const limits = require('./limits');
@@ -326,7 +327,40 @@ async function deleteMessages(filter) {
   return result;
 }
 
+// Файл вложения — через сервер, своим адресом: исчезающее (utils/messageLimit.js,
+// пока идёт окно выдачи) и «Сохранить» из окна просмотра (23.10) — браузеру
+// нужен файл с нашего домена, чтобы отдать его системному окну «Поделиться»
+// на телефоне. С Range — видео перематывается. Кэш запрещён: доступ
+// проверяется на каждый запрос.
+const UPLOADS = path.join(__dirname, '..', 'public', 'uploads');
+
+async function pipe(req, res, url, { name, disposition }) {
+  if (!url) return res.status(404).end();
+  res.set('Cache-Control', 'private, no-store');
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(name || 'file')}`);
+
+  if (url.startsWith('/uploads/')) {
+    const file = path.join(UPLOADS, url.slice('/uploads/'.length));
+    if (!file.startsWith(UPLOADS + path.sep) || !fs.existsSync(file)) return res.status(404).end();
+    return new Promise((resolve) => res.sendFile(file, { headers: { 'Cache-Control': 'private, no-store' }, lastModified: false, etag: false }, () => resolve()));
+  }
+
+  const ctrl = new AbortController();
+  res.on('close', () => ctrl.abort());
+  const up = await fetch(url, { headers: req.headers.range ? { Range: req.headers.range } : {}, signal: ctrl.signal });
+  res.status(up.status);
+  for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
+    const v = up.headers.get(h);
+    if (v) res.set(h, v);
+  }
+  if (!up.body) return res.end();
+  return new Promise((resolve) => {
+    Readable.fromWeb(up.body).on('error', () => res.destroy()).pipe(res).on('finish', resolve).on('close', resolve);
+  });
+}
+
 // Пережимается минуту-другую — отвечаем 202, сообщение приходит сокетом.
 const SLOW = new Set(['video', 'round']);
 
-module.exports = { enabled: storage.enabled, SLOW, inspect, store, release, deleteMessages };
+module.exports = { enabled: storage.enabled, SLOW, inspect, store, release, deleteMessages, pipe };

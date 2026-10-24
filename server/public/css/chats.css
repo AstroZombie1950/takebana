@@ -1196,9 +1196,102 @@
 .tk-msg--pending.is-failed .tk-msg__bubble { background: none; border: 1px solid var(--tk-accent); color: var(--tk-fg); }
 .tk-msg--pending.is-failed .tk-upload__state { color: var(--tk-accent-text); }
 
+/* ── Альбом (23.10): фото и видео одной пачкой — мозаикой ──
+ * Сетка в шесть колонок, плитки квадратные: в ряду по три — треть, по два —
+ * половина. Ряды по числу, как в Telegram: 5 = 2 + 3, 7 = 2 + 2 + 3,
+ * 8 = 2 + 3 + 3, 10 = 2 + 2 + 3 + 3; три — большая слева и две справа.
+ * Раскладка — только классом числа: заглушку загрузки chats.js
+ * перерисовывает на месте, не зная, какая она по счёту. */
+.tk-album {
+  width: 320px;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+}
+
+.tk-album__tile {
+  position: relative;
+  grid-column: span 2;
+  aspect-ratio: 1;
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  background: rgba(144, 113, 99, .2);
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: zoom-in;
+}
+
+.tk-album__tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tk-album__tile[data-video] { cursor: pointer; }
+.tk-album__tile .tk-att__play { width: 40px; height: 40px; margin: -20px 0 0 -20px; }
+
+.tk-album--n1 > * { grid-column: span 6; }
+.tk-album--n2 > *,
+.tk-album--n4 > *,
+.tk-album--n5 > :nth-child(-n+2),
+.tk-album--n8 > :nth-child(-n+2),
+.tk-album--n7 > :nth-child(-n+4),
+.tk-album--n10 > :nth-child(-n+4) { grid-column: span 3; }
+.tk-album--n3 > :first-child { grid-column: span 4; grid-row: span 2; aspect-ratio: auto; }
+
+/* Переход к фото из альбома (цитата, панель): подсветка плитки поверх картинки. */
+.tk-album__tile.is-flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  animation: tk-tile-flash 1.4s ease-out forwards;
+}
+
+@keyframes tk-tile-flash {
+  from { background: rgba(227, 66, 52, .45); }
+  to { background: transparent; }
+}
+
+/* Плитка, которая ещё грузится: своя полоса и крестик поверх. */
+.tk-album__tile.is-pending { cursor: default; }
+.tk-album__tile.is-failed { outline: 1px solid var(--tk-accent); outline-offset: -1px; }
+
+.tk-album__tile .tk-upload__bar {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  background: rgba(10, 10, 10, .45);
+}
+
+.tk-album__tile .tk-upload__bar i { background: var(--tk-paper); }
+
+.tk-album__tile .tk-upload__state {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  max-width: calc(100% - 46px);
+  padding: 2px 6px;
+  background: rgba(10, 10, 10, .72);
+  color: var(--tk-paper);
+  font-size: 11px;
+  text-align: left;
+}
+
+.tk-album__tile.is-failed .tk-upload__state { color: var(--tk-paper); background: var(--tk-accent); }
+.tk-album__tile .tk-upload__again { color: inherit; }
+
+.tk-album__tile .tk-upload__x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(10, 10, 10, .72);
+  border-color: transparent;
+  color: var(--tk-paper);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tk-rec__dot,
   .tk-upload__bar.is-busy i,
+  .tk-album__tile.is-flash::after,
   .tk-msg__tick.is-fresh,
   .tk-msg__tick.is-drawn path + path { animation: none; }
   .tk-round { transition: none; }
@@ -1514,10 +1607,165 @@ button.tk-sealed:hover .tk-sealed__icon { border-style: solid; }
   cursor: pointer;
 }
 
-/* Осталось у исчезающего в окне просмотра — поверх окна. */
+/* ── Окно просмотра фото и видео (23.10, как в Telegram) ──
+ * Тёмное в любой теме (.tk-dark): поверх медиа. Полоса сверху лежит поверх
+ * картинки с затемнением — картинка во весь экран. Вырезы экрана — полосе
+ * и стрелкам. */
+.tk-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  /* Сплошной: сквозь просвет лента под окном мешала смотреть. */
+  background: var(--tk-bg);
+}
+
+.tk-viewer:not(.hidden) { display: flex; flex-direction: column; }
+
+.tk-viewer__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: calc(6px + var(--tk-safe-t)) calc(8px + var(--tk-safe-r)) 18px calc(8px + var(--tk-safe-l));
+  background: linear-gradient(rgb(var(--tk-bg-rgb) / .78), rgb(var(--tk-bg-rgb) / 0));
+}
+
+.tk-viewer__btn {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--tk-fg-2);
+  cursor: pointer;
+  transition: color .18s ease;
+}
+
+.tk-viewer__btn:hover,
+.tk-viewer__btn:focus-visible,
+.tk-viewer__btn[aria-expanded="true"] { color: var(--tk-fg); }
+.tk-viewer__btn[hidden] { display: none; }
+.tk-viewer__btn.is-busy { opacity: .5; pointer-events: none; }
+.tk-viewer__btn.is-ready { color: var(--tk-accent-text); }
+
+/* Назад — на телефоне слева, как в Telegram; на компьютере — крестик справа. */
+.tk-viewer__close { display: none; }
+
+.tk-viewer__who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 6px;
+}
+
+.tk-viewer__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tk-fg);
+}
+
+.tk-viewer__when {
+  font-family: Oswald, 'Oswald Fallback', sans-serif;
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: var(--tk-muted);
+}
+
+.tk-viewer__menu {
+  position: absolute;
+  z-index: 3;
+  top: calc(52px + var(--tk-safe-t));
+  right: calc(8px + var(--tk-safe-r));
+}
+
+/* Сцена: картинка вписана целиком; смахивание ведём сами (chats.js), браузеру
+ * остаётся только щипок — увеличить. */
+.tk-viewer__stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: pinch-zoom;
+  transition: transform .2s ease, opacity .2s ease;
+}
+
+.tk-viewer__stage.is-dragging { transition: none; }
+
+.tk-viewer__img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.tk-viewer__img[hidden],
+.tk-viewer__video[hidden] { display: none; }
+
+/* Видео: плеер 16:9, ниже полосы и над «домом». */
+.tk-viewer__video {
+  position: relative;
+  width: min(100vw - var(--tk-safe-l) - var(--tk-safe-r), (100dvh - 120px) * 16 / 9);
+  aspect-ratio: 16 / 9;
+}
+
+/* Стрелки — у мыши; на сенсорном экране листают смахиванием. */
+.tk-viewer__nav {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 52px;
+  height: 84px;
+  margin-top: -42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgb(var(--tk-bg-rgb) / .4);
+  border: 0;
+  color: var(--tk-fg-2);
+  cursor: pointer;
+  transition: color .18s ease, background-color .18s ease;
+}
+
+.tk-viewer__nav:hover { color: var(--tk-fg); background: rgb(var(--tk-bg-rgb) / .7); }
+.tk-viewer__nav[hidden] { display: none; }
+.tk-viewer__nav--prev { left: calc(12px + var(--tk-safe-l)); }
+.tk-viewer__nav--next { right: calc(12px + var(--tk-safe-r)); }
+
+@media (hover: none) {
+  .tk-viewer__nav { display: none; }
+}
+
+@media (min-width: 768px) {
+  .tk-viewer__back { display: none; }
+  .tk-viewer__close { display: flex; }
+  .tk-viewer__bar { padding-left: calc(20px + var(--tk-safe-l)); padding-right: calc(16px + var(--tk-safe-r)); }
+  .tk-viewer__who { order: -1; padding: 0; }
+}
+
+/* «Переслать» из окна просмотра — поверх окна, и после отправки окно
+ * остаётся там же. */
+#forwardModal { z-index: 97; }
+
+/* Осталось у исчезающего в окне просмотра — поверх окна, под его полосой. */
 .tk-oncetimer {
   position: fixed;
-  top: calc(20px + var(--tk-safe-t));
+  top: calc(72px + var(--tk-safe-t));
   left: 50%;
   z-index: 96;
   transform: translateX(-50%);

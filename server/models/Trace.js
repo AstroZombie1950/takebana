@@ -17,7 +17,8 @@ const TTL_DAYS = 30;
 // Направления — docs/TELEMETRY.md, «Что меряем». Новое направление
 // добавляется сюда и в routes/telemetry.js.
 // notice — сбои связи и запросов на странице (public/tk-net.js, docs/NOTICES.md).
-const KINDS = ['live.view', 'live.host', 'venue.view', 'venue.host', 'call', 'upload', 'chat.media', 'notice'];
+// chat.save — «Сохранить» в окне просмотра фото и видео переписки (23.10).
+const KINDS = ['live.view', 'live.host', 'venue.view', 'venue.host', 'call', 'upload', 'chat.media', 'chat.save', 'notice'];
 
 const TraceSchema = new mongoose.Schema({
   // Создаёт браузер, им же досылает продолжения.
